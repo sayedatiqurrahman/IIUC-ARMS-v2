@@ -446,7 +446,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadRoutine: async () => {
     set({ routineLoading: true });
     try {
-      const res = await fetch(`https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/routine.json`);
+      const res = await fetch('/routine.json');
       if (res.ok) {
         const data = await res.json();
         set({ routineData: data });

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAppStore } from '@/lib/store';
@@ -9,6 +10,13 @@ export default function ContributorsView() {
   const router = useRouter();
   const contributors = useAppStore(s => s.contributors);
   const contributorsLoading = useAppStore(s => s.contributorsLoading);
+  const loadContributors = useAppStore(s => s.loadContributors);
+
+  useEffect(() => {
+    if (contributors.length === 0 && !contributorsLoading) {
+      loadContributors();
+    }
+  }, [contributors.length, contributorsLoading, loadContributors]);
 
   return (
     <section className="mb-5">

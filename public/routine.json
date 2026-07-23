@@ -1,0 +1,14 @@
+[
+  { "day": "Saturday", "time": "8:00 AM - 9:20 AM", "courseCode": "FSC-1201", "courseTitle": "Quran & Tafsir", "teacher": "Dr. Ahmad Hassan", "room": "Room 301" },
+  { "day": "Saturday", "time": "9:30 AM - 10:50 AM", "courseCode": "FSC-1202", "courseTitle": "Hadith Studies", "teacher": "Dr. Mohammad Ali", "room": "Room 302" },
+  { "day": "Saturday", "time": "11:00 AM - 12:20 PM", "courseCode": "FSC-1203", "courseTitle": "Islamic Fiqh", "teacher": "Dr. Omar Farooq", "room": "Room 303" },
+  { "day": "Sunday", "time": "8:00 AM - 9:20 AM", "courseCode": "FSC-1204", "courseTitle": "Arabic Language", "teacher": "Prof. Salahuddin", "room": "Room 301" },
+  { "day": "Sunday", "time": "9:30 AM - 10:50 AM", "courseCode": "FSC-1205", "courseTitle": "Aqeedah & Tasawwuf", "teacher": "Dr. Yunus Ahmed", "room": "Room 304" },
+  { "day": "Monday", "time": "8:00 AM - 9:20 AM", "courseCode": "FSC-1206", "courseTitle": "Seerah & Islamic History", "teacher": "Dr. Rashid Khan", "room": "Room 302" },
+  { "day": "Monday", "time": "11:00 AM - 12:20 PM", "courseCode": "FSC-1201", "courseTitle": "Quran & Tafsir", "teacher": "Dr. Ahmad Hassan", "room": "Room 301" },
+  { "day": "Tuesday", "time": "9:30 AM - 10:50 AM", "courseCode": "FSC-1203", "courseTitle": "Islamic Fiqh", "teacher": "Dr. Omar Farooq", "room": "Room 303" },
+  { "day": "Tuesday", "time": "2:00 PM - 3:20 PM", "courseCode": "FSC-1207", "courseTitle": "Research Methodology", "teacher": "Dr. Fatima Begum", "room": "Room 305" },
+  { "day": "Wednesday", "time": "8:00 AM - 9:20 AM", "courseCode": "FSC-1202", "courseTitle": "Hadith Studies", "teacher": "Dr. Mohammad Ali", "room": "Room 302" },
+  { "day": "Wednesday", "time": "11:00 AM - 12:20 PM", "courseCode": "FSC-1205", "courseTitle": "Aqeedah & Tasawwuf", "teacher": "Dr. Yunus Ahmed", "room": "Room 304" },
+  { "day": "Wednesday", "time": "3:30 PM - 4:50 PM", "courseCode": "FSC-1208", "courseTitle": "Islamic Banking & Finance", "teacher": "Mr. Karim Ullah", "room": "Room 306" }
+]
