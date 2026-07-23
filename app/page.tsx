@@ -49,7 +49,14 @@ export default function BrowsePage() {
   const uploadTree = getUploadTree();
 
   const filteredSemesters = semesters.filter(sem => {
-    const matchSearch = !searchQuery || sem.label.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchLabel = !searchQuery || sem.label.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchSearch = matchLabel || uploadTree.some((item: any) => {
+      if (item.type !== 'blob') return false;
+      const parts = item.path.split('/');
+      if (parts[0] !== sem.id) return false;
+      const fileName = parts[parts.length - 1] || '';
+      return fileName.toLowerCase().includes(searchQuery.toLowerCase());
+    });
     if (!matchSearch) return false;
     if (fileTypeFilter !== 'all') {
       const semFiles = uploadTree.filter((item: any) => {
@@ -76,9 +83,17 @@ export default function BrowsePage() {
 
   const filteredCategories = categories.filter(ce => {
     const catConfig = config.categories[ce.cat as keyof typeof config.categories] || config.categories.other;
-    const matchSearch = !searchQuery || catConfig.label.toLowerCase().includes(searchQuery.toLowerCase()) || ce.folders.some(f => f.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchLabel = !searchQuery || catConfig.label.toLowerCase().includes(searchQuery.toLowerCase()) || ce.folders.some(f => f.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchSearch = matchLabel || uploadTree.some((item: any) => {
+      if (item.type !== 'blob') return false;
+      const parts = item.path.split('/');
+      if (parts[0] !== currentSem) return false;
+      if (!ce.folders.includes(parts[1])) return false;
+      const fileName = parts[parts.length - 1] || '';
+      return fileName.toLowerCase().includes(searchQuery.toLowerCase());
+    });
     if (!matchSearch) return false;
-    if (fileTypeFilter !== 'all' && currentSem === config.relatedKitabsFolder) {
+    if (fileTypeFilter !== 'all') {
       const matchingFiles = uploadTree.filter((item: any) => {
         if (item.type !== 'blob') return false;
         const parts = item.path.split('/');
@@ -88,11 +103,26 @@ export default function BrowsePage() {
       });
       if (matchingFiles.length === 0) return false;
     }
+    if (searchYear) {
+      const matchingFiles = uploadTree.filter((item: any) => {
+        if (item.type !== 'blob') return false;
+        const parts = item.path.split('/');
+        if (parts[0] !== currentSem) return false;
+        if (!ce.folders.includes(parts[1])) return false;
+        const fileName = parts[parts.length - 1] || '';
+        return extractYear(fileName) === searchYear;
+      });
+      if (matchingFiles.length === 0) return false;
+    }
     return true;
   });
 
   const filteredCourses = courses.filter(([name, files]) => {
-    const matchSearch = !searchQuery || name.toLowerCase().includes(searchQuery.toLowerCase()) || files.some((f: any) => f.path.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchName = !searchQuery || name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchSearch = matchName || files.some((f: any) => {
+      const fileName = f.path.split('/').pop() || '';
+      return fileName.toLowerCase().includes(searchQuery.toLowerCase());
+    });
     const matchType = fileTypeFilter === 'all' || files.some((f: any) => {
       const ext = f.path.split('.').pop()?.toLowerCase() || '';
       return getMimeFromExt(ext) === fileTypeFilter;

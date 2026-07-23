@@ -39,9 +39,9 @@ function getMimeFromExt(ext: string) {
   const e = ext.toLowerCase();
   if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(e)) return 'image';
   if (e === 'pdf') return 'pdf';
-  if (['doc', 'docx'].includes(e)) return 'doc';
-  if (['xls', 'xlsx', 'csv'].includes(e)) return 'sheet';
-  if (['ppt', 'pptx'].includes(e)) return 'ppt';
+  if (['doc', 'docx'].includes(e)) return 'word';
+  if (['xls', 'xlsx', 'csv'].includes(e)) return 'excel';
+  if (['ppt', 'pptx'].includes(e)) return 'powerpoint';
   return 'other';
 }
 
@@ -364,11 +364,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   goBack: () => {
     const { view, currentSem, currentCat, breadcrumbs } = get();
     if (view === 'files') {
-      set({ view: 'courses', breadcrumbs: breadcrumbs.slice(0, -1) });
-    } else if (view === 'courses') {
       get().navigateToCategory(currentSem, currentCat);
-    } else if (view === 'history' || view === 'contributors' || view === 'routine' || view === 'dashboard') {
-      get().goHome();
+    } else if (view === 'courses') {
+      if (currentSem) {
+        get().navigateToSemester(currentSem);
+      } else {
+        get().goHome();
+      }
     } else {
       get().goHome();
     }

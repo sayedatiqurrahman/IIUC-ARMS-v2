@@ -22,9 +22,9 @@ export function getMimeFromExt(ext: string) {
 export function getFileIconByType(mime: string) {
   if (mime === 'image') return <i className="fas fa-file-image" style={{color:'#34d399'}}></i>;
   if (mime === 'pdf') return <i className="fas fa-file-pdf" style={{color:'#ef4444'}}></i>;
-  if (mime === 'doc') return <i className="fas fa-file-word" style={{color:'#3b82f6'}}></i>;
-  if (mime === 'sheet') return <i className="fas fa-file-excel" style={{color:'#22c55e'}}></i>;
-  if (mime === 'ppt') return <i className="fas fa-file-powerpoint" style={{color:'#f97316'}}></i>;
+  if (mime === 'word') return <i className="fas fa-file-word" style={{color:'#3b82f6'}}></i>;
+  if (mime === 'excel') return <i className="fas fa-file-excel" style={{color:'#22c55e'}}></i>;
+  if (mime === 'powerpoint') return <i className="fas fa-file-powerpoint" style={{color:'#f97316'}}></i>;
   return <i className="fas fa-file" style={{color:'#94a3b8'}}></i>;
 }
 

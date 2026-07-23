@@ -242,7 +242,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex-1 overflow-hidden">
               {viewerItem.mimeType === 'pdf' && <PdfViewer url={viewerItem.rawUrl} name={viewerItem.name} filePath={viewerItem.path} onClose={closeViewer} />}
               {viewerItem.mimeType === 'image' && <ImageViewer item={viewerItem} onClose={closeViewer} />}
-              {(viewerItem.mimeType === 'doc' || viewerItem.mimeType === 'sheet' || viewerItem.mimeType === 'ppt') && (
+              {(viewerItem.mimeType === 'word' || viewerItem.mimeType === 'excel' || viewerItem.mimeType === 'powerpoint') && (
                 <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(viewerItem.rawUrl)}`} className="w-full border-none" style={{minHeight:'calc(100vh - 50px)'}}></iframe>
               )}
               {viewerItem.mimeType === 'other' && (
