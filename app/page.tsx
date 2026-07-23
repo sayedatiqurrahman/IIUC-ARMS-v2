@@ -804,23 +804,45 @@ export default function Home() {
                     </div>
 
                     {/* Footer */}
-                    <div className="px-5 py-3 border-t border-dark-border flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        {c.contributions > 0 && (
-                          <span className="text-[0.72rem] text-dark-text2">
-                            <i className="fas fa-code-commit mr-1 text-qsis"></i>
-                            {c.contributions} commit{c.contributions !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                        {c.source === 'db' && (
-                          <span className="text-[0.72rem] text-dark-text2">
-                            <i className="fas fa-file-upload mr-1 text-accent"></i>PR Contributor
-                          </span>
-                        )}
+                    <div className="px-5 py-3 border-t border-dark-border">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5">
+                          {c.contributions > 0 && (
+                            <span className="text-[0.72rem] text-dark-text2">
+                              <i className="fas fa-code-commit mr-1 text-qsis"></i>
+                              {c.contributions} commit{c.contributions !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {c.prCount > 0 && (
+                            <span className="text-[0.72rem] text-dark-text2">
+                              <i className="fas fa-code-branch mr-1 text-accent"></i>
+                              {c.prCount} PR{c.prCount !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {c.source === 'db' && !c.prCount && !c.contributions && (
+                            <span className="text-[0.72rem] text-dark-text2">
+                              <i className="fas fa-file-upload mr-1 text-accent"></i>PR Contributor
+                            </span>
+                          )}
+                        </div>
+                        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="View GitHub Profile">
+                          <i className="fab fa-github text-[0.9rem]"></i>
+                        </a>
                       </div>
-                      <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="View GitHub Profile">
-                        <i className="fab fa-github text-[0.9rem]"></i>
-                      </a>
+                      {(c.v2Contributions > 0 || c.dataContributions > 0) && (
+                        <div className="flex items-center gap-3 mt-1.5">
+                          {c.v2Contributions > 0 && (
+                            <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                              <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions} Web App
+                            </span>
+                          )}
+                          {c.dataContributions > 0 && (
+                            <span className="text-[0.65rem] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
+                              <i className="fas fa-book-open mr-1"></i>{c.dataContributions} Data
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )})}
