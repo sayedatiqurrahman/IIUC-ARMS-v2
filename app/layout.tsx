@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
+import { Analytics } from '@vercel/analytics/next';
 import Providers from '@/components/Providers';
 import AppShell from '@/components/AppShell';
 import './globals.css';
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AppShell>{children}</AppShell>
         </Providers>
         <div id="toast" className="toast"></div>
+        <Analytics />
       </body>
     </html>
   );
