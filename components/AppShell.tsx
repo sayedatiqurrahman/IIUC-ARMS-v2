@@ -8,6 +8,7 @@ import { useAppStore, getSavedPdfPage, savePdfPage } from '@/lib/store';
 import LoginModal from '@/components/LoginModal';
 import UploadModal from '@/components/UploadModal';
 import { useState, useEffect, useRef } from 'react';
+import { signOut } from 'next-auth/react';
 import { config } from '@/lib/config';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -15,6 +16,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const goHome = useAppStore(s => s.goHome);
   const setUploadOpen = useAppStore(s => s.setUploadOpen);
@@ -32,6 +35,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     loadTree(session?.accessToken || '');
     loadRecentReads();
     loadProfile();
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const isBrowse = pathname === '/' || pathname.startsWith('/semester');
@@ -62,9 +75,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/contributors" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/contributors') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
               <i className="fas fa-users"></i> Contributors
             </Link>
-            <Link href="/dashboard" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/dashboard') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
-              <i className="fas fa-th-large"></i> Dashboard
-            </Link>
           </div>
           <div className="flex items-center gap-2">
             <button className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-qsis/30 bg-qsis/10 text-qsis cursor-pointer hover:bg-qsis/20 transition-all" onClick={() => setUploadOpen(true)}>
@@ -73,9 +83,34 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {status === 'loading' ? (
               <div className="w-9 h-9 rounded-full bg-dark-bg3 animate-pulse"></div>
             ) : session ? (
-              <button onClick={() => router.push('/dashboard')} className="cursor-pointer bg-transparent border-none p-0">
-                <Image src={(session as any)?.user?.image || ''} alt="" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-dark-border hover:border-qsis transition-all" />
-              </button>
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="cursor-pointer bg-transparent border-none p-0"
+                >
+                  <Image src={(session as any)?.user?.image || ''} alt="" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-dark-border hover:border-qsis transition-all" />
+                </button>
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-dark-bg2 border border-dark-border rounded-xl shadow-lg py-2 z-[110]">
+                    <div className="px-4 py-2 border-b border-dark-border">
+                      <p className="text-[0.78rem] font-semibold text-dark-text truncate">{(session as any)?.user?.name || 'User'}</p>
+                      <p className="text-[0.68rem] text-dark-text2 truncate">{(session as any)?.user?.email || ''}</p>
+                    </div>
+                    <button
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-dark-text hover:bg-dark-bg3 cursor-pointer bg-transparent border-none text-left transition-colors"
+                      onClick={() => { setProfileDropdownOpen(false); router.push('/dashboard'); }}
+                    >
+                      <i className="fas fa-th-large w-4 text-center text-dark-text2"></i> Dashboard
+                    </button>
+                    <button
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-red-400 hover:bg-red-500/10 cursor-pointer bg-transparent border-none text-left transition-colors"
+                      onClick={() => { setProfileDropdownOpen(false); signOut({ callbackUrl: '/' }); }}
+                    >
+                      <i className="fas fa-sign-out-alt w-4 text-center"></i> Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <button className="px-3 py-1.5 rounded-lg text-[0.78rem] font-medium bg-qsis text-white border-none cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setLoginModalOpen(true)}>
                 <i className="fas fa-sign-in-alt mr-1.5"></i> Sign In
