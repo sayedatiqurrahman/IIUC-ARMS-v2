@@ -33,7 +33,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean } | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
-  const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!githubToken;
+  const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!githubToken || !!profile.githubToken;
 
   const totalFiles = courses.reduce((sum, c) => sum + c.files.length, 0);
   const totalSizeMB = courses.reduce((sum, c) => sum + c.files.reduce((s, f) => s + f.size, 0), 0) / (1024 * 1024);
@@ -123,7 +123,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       return;
     }
 
-    const token = githubToken || (session as any)?.accessToken || '';
+    const token = githubToken || profile.githubToken || (session as any)?.accessToken || '';
     if (!token) {
       setResult({ success: false, error: 'GitHub not connected. Please connect GitHub first.', tokenExpired: true });
       return;

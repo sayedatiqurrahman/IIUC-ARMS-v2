@@ -2,7 +2,6 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
@@ -425,7 +424,7 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
         <div className="routine-header-inner">
           <div className="routine-header-top">
             <div className="routine-logo-wrapper">
-              <Image src="/iiuc-logo.png" alt="IIUC" width={80} height={80} className="routine-logo" priority />
+              <img src="/iiuc-logo.png" alt="IIUC" width={80} height={80} className="routine-logo" style={{ display: 'block' }} />
             </div>
             <div className="routine-header-text">
               <h1 className="routine-university-name">{routine.university}</h1>

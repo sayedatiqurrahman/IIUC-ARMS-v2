@@ -211,7 +211,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await fetch('/api/profile');
       if (res.ok) {
         const data = await res.json();
-        set({ profile: { ...defaultProfile, ...data } });
+        const updates: Record<string, any> = { profile: { ...defaultProfile, ...data } };
+        if (data.githubToken) updates.githubToken = data.githubToken;
+        set(updates);
       } else {
         const err = await res.json().catch(() => ({ error: res.statusText }));
         console.error('[Profile] Load failed:', res.status, err);
