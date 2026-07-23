@@ -83,9 +83,20 @@ export interface Profile {
   whatsapp: string;
   semester: string;
   image: string;
+  githubLogin: string;
+  facebook: string;
+  twitter: string;
+  linkedin: string;
+  website: string;
+  hideWhatsapp: boolean;
+  hideUniversityId: boolean;
 }
 
-const defaultProfile: Profile = { universityId: '', name: '', email: '', whatsapp: '', semester: '', image: '' };
+const defaultProfile: Profile = {
+  universityId: '', name: '', email: '', whatsapp: '', semester: '', image: '',
+  githubLogin: '', facebook: '', twitter: '', linkedin: '', website: '',
+  hideWhatsapp: false, hideUniversityId: false,
+};
 
 /* ─── store ─── */
 interface AppState {

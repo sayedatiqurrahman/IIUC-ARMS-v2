@@ -17,6 +17,12 @@ interface Contributor {
   universityId: string;
   whatsapp: string;
   semester: string;
+  facebook: string;
+  twitter: string;
+  linkedin: string;
+  website: string;
+  hideWhatsapp: boolean;
+  hideUniversityId: boolean;
   profileComplete: boolean;
   source: 'github' | 'db' | 'both';
 }
@@ -39,7 +45,6 @@ async function getDbProfiles(): Promise<any[]> {
 export async function GET() {
   const dbProfiles = await getDbProfiles();
 
-  // Fetch commits + PRs from BOTH repos
   const [v2Res, dataRes, v2PrRes, dataPrRes] = await Promise.all([
     fetch(`https://api.github.com/repos/${config.owner}/QSIS-ARMS-v2/contributors?per_page=100`, { next: { revalidate: 300 } }).catch(() => null),
     fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contributors?per_page=100`, { next: { revalidate: 300 } }).catch(() => null),
@@ -61,13 +66,14 @@ export async function GET() {
       contributions: 0, v2Contributions: 0, dataContributions: 0, prCount: 0,
       role: 'Contributor', roleType: 'developer',
       universityId: '', whatsapp: '', semester: '',
+      facebook: '', twitter: '', linkedin: '', website: '',
+      hideWhatsapp: false, hideUniversityId: false,
       profileComplete: false, source: 'github',
     };
     map.set(login, c);
     return c;
   }
 
-  // Direct commit contributors
   for (const gh of v2Contributors) {
     if (gh.type === 'Bot' || gh.login === 'github-actions[bot]') continue;
     const c = ensure(gh.login, gh.avatar_url, gh.html_url, String(gh.id));
@@ -87,7 +93,6 @@ export async function GET() {
     c.roleType = c.v2Contributions > 0 ? 'both' : 'resource_provider';
   }
 
-  // PR authors — show anyone who opened a PR
   for (const pr of [...v2Prs, ...dataPrs]) {
     if (pr.user?.type === 'Bot') continue;
     const u = pr.user;
@@ -107,30 +112,52 @@ export async function GET() {
     else if (isData) c.roleType = 'resource_provider';
   }
 
-  // Merge DB profiles
+  // Merge DB profiles by githubLogin first, then by email
   for (const p of dbProfiles) {
-    const login = p.email?.split('@')[0] || p.userId?.split('@')[0] || '';
-    if (!login) continue;
-    const existing = map.get(login);
+    let matchedContributor: Contributor | undefined;
+
+    // Match by githubLogin
+    if (p.githubLogin) {
+      matchedContributor = map.get(p.githubLogin);
+    }
+
+    // Match by email prefix as fallback
+    if (!matchedContributor && p.email) {
+      const loginFromEmail = p.email.split('@')[0];
+      matchedContributor = map.get(loginFromEmail);
+    }
+
     const profileComplete = !!(p.universityId && p.whatsapp && p.semester);
 
-    if (existing) {
-      existing.email = p.email || existing.email;
-      existing.name = p.name || existing.name;
-      existing.universityId = p.universityId || existing.universityId;
-      existing.whatsapp = p.whatsapp || existing.whatsapp;
-      existing.semester = p.semester || existing.semester;
-      existing.profileComplete = profileComplete;
-      existing.source = 'both';
+    if (matchedContributor) {
+      matchedContributor.email = p.email || matchedContributor.email;
+      matchedContributor.name = p.name || matchedContributor.name;
+      matchedContributor.universityId = p.universityId || matchedContributor.universityId;
+      matchedContributor.whatsapp = p.whatsapp || matchedContributor.whatsapp;
+      matchedContributor.semester = p.semester || matchedContributor.semester;
+      matchedContributor.facebook = p.facebook || '';
+      matchedContributor.twitter = p.twitter || '';
+      matchedContributor.linkedin = p.linkedin || '';
+      matchedContributor.website = p.website || '';
+      matchedContributor.hideWhatsapp = !!p.hideWhatsapp;
+      matchedContributor.hideUniversityId = !!p.hideUniversityId;
+      matchedContributor.profileComplete = profileComplete;
+      matchedContributor.source = 'both';
     } else {
+      // DB-only user (no GitHub activity)
+      const login = p.githubLogin || p.email?.split('@')[0] || p.userId?.split('@')[0] || '';
+      if (!login) continue;
+      if (map.has(login)) continue;
       map.set(login, {
         id: p.userId, login, name: p.name || login, email: p.email || '',
-        avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || login)}&background=22c55e&color=fff&bold=true&size=200`,
+        avatar_url: p.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || login)}&background=22c55e&color=fff&bold=true&size=200`,
         html_url: `https://github.com/${login}`,
         contributions: 0, v2Contributions: 0, dataContributions: 0, prCount: 0,
         role: OWNER_EMAILS.includes(p.email) ? 'Founder & Lead' : 'Resource Provider',
         roleType: OWNER_EMAILS.includes(p.email) ? 'developer' : 'resource_provider',
         universityId: p.universityId || '', whatsapp: p.whatsapp || '', semester: p.semester || '',
+        facebook: p.facebook || '', twitter: p.twitter || '', linkedin: p.linkedin || '', website: p.website || '',
+        hideWhatsapp: !!p.hideWhatsapp, hideUniversityId: !!p.hideUniversityId,
         profileComplete, source: 'db',
       });
     }

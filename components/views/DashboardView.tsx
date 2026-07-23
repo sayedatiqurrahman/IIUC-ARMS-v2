@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 import Image from 'next/image';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
@@ -16,12 +16,16 @@ export default function DashboardView() {
   const recentReads = useAppStore(s => s.recentReads);
   const openRecentFile = useAppStore(s => s.openRecentFile);
   const setUploadOpen = useAppStore(s => s.setUploadOpen);
-  const navigateToRoutine = useAppStore(s => s.navigateToRoutine);
-  const navigateToHistory = useAppStore(s => s.navigateToHistory);
-  const navigateToContributors = useAppStore(s => s.navigateToContributors);
 
   const [editingProfile, setEditingProfile] = useState(false);
-  const [profileForm, setProfileForm] = useState({ universityId: '', name: '', whatsapp: '', semester: '' });
+  const [editingSocials, setEditingSocials] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    universityId: '', name: '', whatsapp: '', semester: '',
+    facebook: '', twitter: '', linkedin: '', website: '',
+    hideWhatsapp: false, hideUniversityId: false,
+  });
+
+  const hasGitHub = !!(session as any)?.accessToken;
 
   return (
     <section className="mb-5">
@@ -40,11 +44,25 @@ export default function DashboardView() {
             <div>
               <h4 className="text-[1.1rem] font-bold">{(session as any)?.user?.name || profile.name || 'User'}</h4>
               <p className="text-[0.82rem] text-dark-text2">{session?.user?.email || profile.email || ''}</p>
+              {profile.githubLogin && (
+                <p className="text-[0.72rem] text-dark-text2"><i className="fab fa-github mr-1"></i>@{profile.githubLogin}</p>
+              )}
             </div>
           </div>
           {!editingProfile && (
             <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={() => {
-              setProfileForm({ universityId: profile.universityId, name: profile.name || (session as any)?.user?.name || '', whatsapp: profile.whatsapp, semester: profile.semester });
+              setProfileForm({
+                universityId: profile.universityId,
+                name: profile.name || (session as any)?.user?.name || '',
+                whatsapp: profile.whatsapp,
+                semester: profile.semester,
+                facebook: profile.facebook,
+                twitter: profile.twitter,
+                linkedin: profile.linkedin,
+                website: profile.website,
+                hideWhatsapp: profile.hideWhatsapp,
+                hideUniversityId: profile.hideUniversityId,
+              });
               setEditingProfile(true);
             }}>
               <i className="fas fa-pen mr-1"></i> Edit Profile
@@ -74,12 +92,12 @@ export default function DashboardView() {
             <h5 className="text-[0.85rem] font-semibold mb-3"><i className="fas fa-user-edit text-qsis mr-2"></i>Edit Profile</h5>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">University ID *</label>
-                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Q233099" value={profileForm.universityId} onChange={e => setProfileForm(p => ({ ...p, universityId: e.target.value }))} />
-              </div>
-              <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name *</label>
                 <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Sayed Atiqur Rahman" value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1">University ID</label>
+                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Q233099" value={profileForm.universityId} onChange={e => setProfileForm(p => ({ ...p, universityId: e.target.value }))} />
               </div>
               <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">WhatsApp</label>
@@ -93,6 +111,20 @@ export default function DashboardView() {
                 </select>
               </div>
             </div>
+
+            {/* Privacy Toggles */}
+            <div className="mb-3 p-3 rounded-lg bg-dark-bg border border-dark-border">
+              <p className="text-[0.72rem] text-dark-text2 mb-2"><i className="fas fa-eye-slash mr-1"></i>Privacy Settings</p>
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <input type="checkbox" checked={profileForm.hideUniversityId} onChange={e => setProfileForm(p => ({ ...p, hideUniversityId: e.target.checked }))} className="accent-qsis" />
+                <span className="text-[0.78rem] text-dark-text">Hide University ID from public profile</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={profileForm.hideWhatsapp} onChange={e => setProfileForm(p => ({ ...p, hideWhatsapp: e.target.checked }))} className="accent-qsis" />
+                <span className="text-[0.78rem] text-dark-text">Hide WhatsApp from public profile</span>
+              </label>
+            </div>
+
             <div className="flex gap-2">
               <button className="px-4 py-2 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.8rem] cursor-pointer hover:opacity-90 transition-opacity" onClick={() => {
                 updateProfile(profileForm);
@@ -107,23 +139,87 @@ export default function DashboardView() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-              <span className="text-[0.7rem] text-dark-text2 block mb-1">University ID</span>
-              <span className={`text-[0.85rem] font-semibold ${profile.universityId ? 'text-qsis' : 'text-dark-text2'}`}>{profile.universityId || 'Not set'}</span>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                <span className="text-[0.7rem] text-dark-text2 block mb-1">University ID</span>
+                <span className={`text-[0.85rem] font-semibold ${profile.universityId ? 'text-qsis' : 'text-dark-text2'}`}>
+                  {profile.universityId ? (profile.hideUniversityId ? '***' : profile.universityId) : 'Not set'}
+                </span>
+              </div>
+              <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                <span className="text-[0.7rem] text-dark-text2 block mb-1">Department</span>
+                <span className="text-[0.85rem] font-semibold">Qur&apos;anic Sciences &amp; Islamic Studies</span>
+              </div>
+              <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                <span className="text-[0.7rem] text-dark-text2 block mb-1">WhatsApp</span>
+                <span className={`text-[0.85rem] font-semibold ${profile.whatsapp ? '' : 'text-dark-text2'}`}>
+                  {profile.whatsapp ? (profile.hideWhatsapp ? '***' : profile.whatsapp) : 'Not set'}
+                </span>
+              </div>
+              <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                <span className="text-[0.7rem] text-dark-text2 block mb-1">Semester</span>
+                <span className={`text-[0.85rem] font-semibold ${profile.semester ? '' : 'text-dark-text2'}`}>{profile.semester ? config.semesters.find(s => s.id === profile.semester)?.label || profile.semester : 'Not set'}</span>
+              </div>
             </div>
-            <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-              <span className="text-[0.7rem] text-dark-text2 block mb-1">Department</span>
-              <span className="text-[0.85rem] font-semibold">Qur&apos;anic Sciences &amp; Islamic Studies</span>
-            </div>
-            <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-              <span className="text-[0.7rem] text-dark-text2 block mb-1">WhatsApp</span>
-              <span className={`text-[0.85rem] font-semibold ${profile.whatsapp ? '' : 'text-dark-text2'}`}>{profile.whatsapp || 'Not set'}</span>
-            </div>
-            <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-              <span className="text-[0.7rem] text-dark-text2 block mb-1">Semester</span>
-              <span className={`text-[0.85rem] font-semibold ${profile.semester ? '' : 'text-dark-text2'}`}>{profile.semester ? config.semesters.find(s => s.id === profile.semester)?.label || profile.semester : 'Not set'}</span>
-            </div>
+
+            {/* Social Links */}
+            {(profile.facebook || profile.twitter || profile.linkedin || profile.website) && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {profile.facebook && <a href={profile.facebook} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all"><i className="fab fa-facebook"></i> Facebook</a>}
+                {profile.twitter && <a href={profile.twitter} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all"><i className="fab fa-twitter"></i> Twitter</a>}
+                {profile.linkedin && <a href={profile.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all"><i className="fab fa-linkedin"></i> LinkedIn</a>}
+                {profile.website && <a href={profile.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all"><i className="fas fa-globe"></i> Website</a>}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Edit Social Links */}
+        {!editingProfile && (
+          <div className="mt-3">
+            {editingSocials ? (
+              <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
+                <h5 className="text-[0.85rem] font-semibold mb-3"><i className="fas fa-share-alt text-qsis mr-2"></i>Social Links</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-facebook mr-1"></i>Facebook URL</label>
+                    <input type="url" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="https://facebook.com/..." value={profileForm.facebook} onChange={e => setProfileForm(p => ({ ...p, facebook: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-twitter mr-1"></i>Twitter URL</label>
+                    <input type="url" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="https://twitter.com/..." value={profileForm.twitter} onChange={e => setProfileForm(p => ({ ...p, twitter: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-linkedin mr-1"></i>LinkedIn URL</label>
+                    <input type="url" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="https://linkedin.com/in/..." value={profileForm.linkedin} onChange={e => setProfileForm(p => ({ ...p, linkedin: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-globe mr-1"></i>Website URL</label>
+                    <input type="url" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="https://..." value={profileForm.website} onChange={e => setProfileForm(p => ({ ...p, website: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button className="px-4 py-2 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.8rem] cursor-pointer hover:opacity-90 transition-opacity" onClick={() => {
+                    updateProfile(profileForm);
+                    setEditingSocials(false);
+                    showToast('Social links saved!', 'success');
+                  }}>
+                    <i className="fas fa-save mr-1"></i> Save
+                  </button>
+                  <button className="px-4 py-2 rounded-xl border border-dark-border bg-dark-bg text-dark-text font-semibold text-[0.8rem] cursor-pointer hover:border-qsis transition-all" onClick={() => setEditingSocials(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button className="text-[0.75rem] text-dark-text2 hover:text-qsis bg-transparent border-none cursor-pointer hover:underline" onClick={() => {
+                setProfileForm(p => ({ ...p, facebook: profile.facebook, twitter: profile.twitter, linkedin: profile.linkedin, website: profile.website }));
+                setEditingSocials(true);
+              }}>
+                <i className="fas fa-share-alt mr-1"></i> Edit Social Links
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -134,15 +230,15 @@ export default function DashboardView() {
           <i className="fab fa-github"></i> GitHub Connection
         </h4>
         <div className="flex items-center gap-3 p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-          <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-            <i className="fas fa-check-circle text-green-500"></i>
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasGitHub ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+            <i className={`fas ${hasGitHub ? 'fa-check-circle text-green-500' : 'fa-times-circle text-red-500'}`}></i>
           </div>
           <div className="flex-1">
-            <span className="text-[0.85rem] font-semibold block">Connected</span>
-            <span className="text-[0.72rem] text-dark-text2">You can upload and create PRs</span>
+            <span className="text-[0.85rem] font-semibold block">{hasGitHub ? 'Connected' : 'Not Connected'}</span>
+            <span className="text-[0.72rem] text-dark-text2">{hasGitHub ? 'You can upload and create PRs' : 'Connect GitHub to upload files'}</span>
           </div>
-          <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all">
-            Manage
+          <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={() => signIn('github', { callbackUrl: '/dashboard' })}>
+            {hasGitHub ? 'Reconnect' : 'Connect'}
           </button>
         </div>
       </div>

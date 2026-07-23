@@ -7,14 +7,24 @@ datasource db {
 }
 
 model Profile {
-  id            String  @id @default(cuid())
-  userId        String  @unique
-  email         String?
-  name          String?
-  universityId  String?
-  whatsapp      String?
-  semester      String?
-  image         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  email           String?
+  name            String?
+  universityId    String?
+  whatsapp        String?
+  semester        String?
+  image           String?
+  githubLogin     String?
+  facebook        String?
+  twitter         String?
+  linkedin        String?
+  website         String?
+  hideWhatsapp    Boolean  @default(false)
+  hideUniversityId Boolean @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([githubLogin])
+  @@index([email])
 }
