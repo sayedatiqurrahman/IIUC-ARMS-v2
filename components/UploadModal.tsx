@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { signIn } from 'next-auth/react';
 import { config } from '@/lib/config';
 import type { Profile } from '@/lib/store';
+import { connectGitHubPopup } from '@/lib/github-connect';
 
 interface CourseGroup {
   id: number;
@@ -241,7 +241,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                 Create one free at github.com/signup <i className="fas fa-external-link-alt text-[0.65rem] ml-1"></i>
               </a>
             </div>
-            <button className="w-full py-3 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity" onClick={() => signIn('github', { callbackUrl: '/' })}>
+            <button className="w-full py-3 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity" onClick={async () => {
+              const email = profile.email || session?.user?.email || '';
+              const connected = await connectGitHubPopup(email);
+              if (connected) window.location.reload();
+            }}>
               <i className="fab fa-github mr-2"></i> Connect GitHub Account
             </button>
             <div className="mt-4 p-3 rounded-lg bg-qsis/5 border border-qsis/10">
@@ -312,7 +316,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
               </div>
 
               {/* Course Groups */}
-              {courses.map((course, idx) => (
+              {courses.map((course, idx) => {
+                const folderPreview = course.code.trim()
+                  ? (course.title.trim() ? `${course.code.trim()}-${course.title.trim()}` : course.code.trim())
+                  : '';
+                return (
                 <div key={course.id} className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-3">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[0.78rem] font-semibold text-qsis">
@@ -325,7 +333,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div className="grid grid-cols-2 gap-2 mb-2">
                     <div>
                       <label className="text-[0.72rem] text-dark-text2 block mb-1">Course Code *</label>
                       <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. FSC-1208" value={course.code} onChange={e => updateCourse(course.id, { code: e.target.value })} />
@@ -335,6 +343,14 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                       <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. Islamic Studies" value={course.title} onChange={e => updateCourse(course.id, { title: e.target.value })} />
                     </div>
                   </div>
+
+                  {folderPreview && semester && category && (
+                    <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-qsis/5 border border-qsis/10">
+                      <span className="text-[0.62rem] text-qsis font-mono">
+                        <i className="fas fa-folder mr-1"></i>{semester}/{category}/{folderPreview}/<span className="text-dark-text2">*.{/* files go here */}</span>
+                      </span>
+                    </div>
+                  )}
 
                   {/* File picker for this course */}
                   <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv" onChange={e => handleFilesForCourse(course.id, e)} />
@@ -346,22 +362,31 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
                   {course.files.length > 0 && (
                     <div className="mt-2 flex flex-col gap-1.5">
-                      {course.files.map((file, fi) => (
-                        <div key={fi} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border">
-                          <div className="text-[0.95rem] flex-shrink-0">{getFileIcon(file.name)}</div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[0.75rem] font-semibold truncate">{file.name}</div>
-                            <div className="text-[0.65rem] text-dark-text2">{formatSize(file.size)}</div>
-                          </div>
+                      {course.files.map((file, fi) => {
+                        const folderName = course.title.trim()
+                          ? `${course.code.trim()}-${course.title.trim()}`
+                          : course.code.trim() || 'untitled';
+                        const fullPath = `${semester || '...'}/${category || '...'}/${folderName}/${file.name}`;
+                        return (
+                          <div key={fi} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border">
+                            <div className="text-[0.95rem] flex-shrink-0">{getFileIcon(file.name)}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[0.75rem] font-semibold truncate">{file.name}</div>
+                              <div className="text-[0.62rem] text-qsis font-mono truncate mt-0.5">
+                                <i className="fas fa-folder-open mr-1 text-[0.55rem]"></i>{fullPath}
+                              </div>
+                            </div>
+                            <div className="text-[0.62rem] text-dark-text2 flex-shrink-0">{formatSize(file.size)}</div>
                           <button className="w-5 h-5 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.65rem] hover:bg-red-500/20" onClick={() => removeFileFromCourse(course.id, fi)}>
                             <i className="fas fa-times"></i>
                           </button>
                         </div>
-                      ))}
+                      )})}
                     </div>
                   )}
                 </div>
-              ))}
+              );
+              })}
 
               {/* Add another course */}
               {courses.length < 5 && (
@@ -399,7 +424,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                 <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
                   <i className="fas fa-exclamation-circle mr-2"></i>{result.error}
                   {result.tokenExpired && (
-                    <button className="mt-3 w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer" onClick={() => { onClose(); signIn('github', { callbackUrl: '/' }); }}>
+                    <button className="mt-3 w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer" onClick={async () => {
+                      const email = profile.email || session?.user?.email || '';
+                      const connected = await connectGitHubPopup(email);
+                      if (connected) window.location.reload();
+                    }}>
                       <i className="fab fa-github mr-2"></i>Reconnect GitHub
                     </button>
                   )}

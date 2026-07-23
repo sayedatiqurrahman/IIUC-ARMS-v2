@@ -93,7 +93,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                   className="cursor-pointer bg-transparent border-none p-0"
                 >
-                  <Image src={(session as any)?.user?.image || ''} alt="" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-dark-border hover:border-qsis transition-all" />
+                  <Image src={profile.image || (session as any)?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent((session as any)?.user?.name || 'User')}&background=22c55e&color=fff&bold=true&size=80`} alt="" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-dark-border hover:border-qsis transition-all object-cover" />
                 </button>
                 {profileDropdownOpen && (
                   <div className="absolute right-0 top-full mt-2 w-48 bg-dark-bg2 border border-dark-border rounded-xl shadow-lg py-2 z-[110]">

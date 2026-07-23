@@ -2,12 +2,13 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession, signIn } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { getFileIconByType, showToast, timeAgo } from '@/lib/utils';
 import { updateUserProfile } from '@/lib/firebase';
+import { connectGitHubPopup } from '@/lib/github-connect';
 
 export default function DashboardView() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function DashboardView() {
   const recentReads = useAppStore(s => s.recentReads);
   const openRecentFile = useAppStore(s => s.openRecentFile);
   const setUploadOpen = useAppStore(s => s.setUploadOpen);
+  const loadProfile = useAppStore(s => s.loadProfile);
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [editingSocials, setEditingSocials] = useState(false);
@@ -290,7 +292,15 @@ export default function DashboardView() {
             <span className="text-[0.85rem] font-semibold block">{hasGitHub ? 'Connected' : 'Not Connected'}</span>
             <span className="text-[0.72rem] text-dark-text2">{hasGitHub ? 'You can upload and create PRs' : 'Connect GitHub to upload files'}</span>
           </div>
-          <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={() => signIn('github', { callbackUrl: '/dashboard' })}>
+          <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={async () => {
+            const email = profile.email || session?.user?.email || '';
+            if (!email) { showToast('Please save your profile first', 'error'); return; }
+            const connected = await connectGitHubPopup(email);
+            if (connected) {
+              loadProfile();
+              showToast('GitHub connected!', 'success');
+            }
+          }}>
             {hasGitHub ? 'Reconnect' : 'Connect'}
           </button>
         </div>
