@@ -211,14 +211,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         const data = await res.json();
         set({ profile: { ...defaultProfile, ...data } });
       } else {
-        console.warn('[Profile] Load failed:', res.status, res.statusText);
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        console.error('[Profile] Load failed:', res.status, err);
       }
     } catch (err) {
-      console.warn('[Profile] Load error:', err);
+      console.error('[Profile] Load error:', err);
     }
   },
   updateProfile: async (p) => {
     const current = get().profile;
+    const snapshot = { ...current };
     const updated = { ...current, ...p };
     set({ profile: updated });
     try {
@@ -231,10 +233,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         const data = await res.json();
         set({ profile: { ...defaultProfile, ...data } });
       } else {
-        console.warn('[Profile] Save failed:', res.status, await res.text());
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        console.error('[Profile] Save failed:', res.status, err);
+        set({ profile: snapshot });
+        if (typeof window !== 'undefined') {
+          const { showToast } = await import('@/lib/utils');
+          showToast(`Failed to save: ${err.error || 'Unknown error'}`, 'error');
+        }
       }
     } catch (err) {
-      console.warn('[Profile] Save error:', err);
+      console.error('[Profile] Save error:', err);
+      set({ profile: snapshot });
     }
   },
 

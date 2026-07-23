@@ -295,10 +295,13 @@ export default function DashboardView() {
           <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={async () => {
             const email = profile.email || session?.user?.email || '';
             if (!email) { showToast('Please save your profile first', 'error'); return; }
+            showToast('Opening GitHub...', 'info');
             const connected = await connectGitHubPopup(email);
             if (connected) {
               await loadProfile();
               showToast('GitHub connected!', 'success');
+            } else {
+              showToast('GitHub connection cancelled or failed', 'error');
             }
           }}>
             {hasGitHub ? 'Reconnect' : 'Connect'}

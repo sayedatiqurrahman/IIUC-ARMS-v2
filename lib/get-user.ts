@@ -10,8 +10,14 @@ export async function getUserEmail(req?: NextRequest): Promise<string | null> {
   // Try NextAuth session first
   try {
     const session = await getServerSession(authOptions);
-    if (session?.user?.email) return session.user.email;
-  } catch {}
+    if (session?.user?.email) {
+      console.log('[getUserEmail] Found via NextAuth session:', session.user.email);
+      return session.user.email;
+    }
+    console.warn('[getUserEmail] NextAuth session returned but no email:', session);
+  } catch (err: any) {
+    console.error('[getUserEmail] NextAuth getServerSession failed:', err.message);
+  }
 
   // Fallback: try Firebase ID token from HttpOnly cookie
   if (req) {
@@ -20,10 +26,20 @@ export async function getUserEmail(req?: NextRequest): Promise<string | null> {
       try {
         const { adminAuth } = await import('@/lib/firebase-admin');
         const decoded = await adminAuth.verifyIdToken(idToken);
-        if (decoded.email) return decoded.email;
-      } catch {}
+        if (decoded.email) {
+          console.log('[getUserEmail] Found via Firebase token:', decoded.email);
+          return decoded.email;
+        }
+      } catch (err: any) {
+        console.error('[getUserEmail] Firebase token verification failed:', err.message);
+      }
+    } else {
+      console.warn('[getUserEmail] No fb_id_token cookie found');
     }
+  } else {
+    console.warn('[getUserEmail] No request object provided');
   }
 
+  console.error('[getUserEmail] All auth methods failed — returning null');
   return null;
 }

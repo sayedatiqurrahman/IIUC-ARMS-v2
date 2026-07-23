@@ -127,7 +127,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* MAIN CONTENT */}
-      <main className="max-w-[1200px] min-h-screen mx-auto px-5 py-5 pb-24 md:pb-5">
+      <main className="max-w-[1200px] min-h-[calc(100vh-120px)] mx-auto px-5 py-5 pb-24 md:pb-5">
         {children}
       </main>
 
