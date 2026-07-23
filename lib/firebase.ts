@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile as firebaseUpdateProfile } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -38,4 +38,14 @@ export async function signUpWithEmail(email: string, password: string) {
 
 export async function resetPassword(email: string) {
   await sendPasswordResetEmail(auth, email);
+}
+
+export async function updateUserProfile(displayName?: string, photoURL?: string) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  const updates: { displayName?: string; photoURL?: string } = {};
+  if (displayName !== undefined) updates.displayName = displayName;
+  if (photoURL !== undefined) updates.photoURL = photoURL;
+  await firebaseUpdateProfile(user, updates);
+  return user;
 }

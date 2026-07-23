@@ -70,7 +70,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       if (isSignUp) {
         const result = await signUpWithEmail(email, password);
         user = result.user;
-        setSuccess('Account created! A verification email has been sent to your inbox. Please verify your email before signing in.');
+        setSuccess('Account created! A verification email has been sent to your inbox. Please verify your email before signing in. Check your spam/junk folder if you don\'t see it.');
         setIsSignUp(false);
         setLoading(false);
         return;

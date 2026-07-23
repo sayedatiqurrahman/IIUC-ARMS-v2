@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import Image from 'next/image';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { getFileIconByType, showToast, timeAgo } from '@/lib/utils';
+import { updateUserProfile } from '@/lib/firebase';
 
 export default function DashboardView() {
   const router = useRouter();
@@ -19,6 +20,8 @@ export default function DashboardView() {
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [editingSocials, setEditingSocials] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
     universityId: '', name: '', whatsapp: '', semester: '',
     facebook: '', twitter: '', linkedin: '', website: '',
@@ -26,6 +29,45 @@ export default function DashboardView() {
   });
 
   const hasGitHub = !!(session as any)?.accessToken;
+
+  // Primary info: profile DB > session (Firebase/Google)
+  const displayName = profile.name || (session as any)?.user?.name || 'User';
+  const displayEmail = profile.email || session?.user?.email || '';
+  const displayImage = profile.image || (session as any)?.user?.image || '';
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image must be under 2MB.');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const base64 = await file.arrayBuffer().then(buf => {
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        return 'data:image/jpeg;base64,' + btoa(binary);
+      });
+
+      // Save to our DB
+      await updateProfile({ image: base64 });
+
+      // Also update Firebase Auth profile
+      try {
+        await updateUserProfile(undefined, base64);
+      } catch {}
+
+      showToast('Profile picture updated!', 'success');
+    } catch {
+      showToast('Failed to update picture', 'error');
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  }
 
   return (
     <section className="mb-5">
@@ -40,10 +82,21 @@ export default function DashboardView() {
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
-            <Image src={(session as any)?.user?.image || profile.image || ''} alt="" width={64} height={64} className="w-16 h-16 rounded-full border-2 border-qsis" />
+            {/* Avatar with upload */}
+            <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
+              <Image src={displayImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=22c55e&color=fff&bold=true&size=200`} alt="" width={64} height={64} className="w-16 h-16 rounded-full border-2 border-qsis object-cover" />
+              <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                {uploadingAvatar ? (
+                  <i className="fas fa-spinner fa-spin text-white text-sm"></i>
+                ) : (
+                  <i className="fas fa-camera text-white text-sm"></i>
+                )}
+              </div>
+              <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+            </div>
             <div>
-              <h4 className="text-[1.1rem] font-bold">{(session as any)?.user?.name || profile.name || 'User'}</h4>
-              <p className="text-[0.82rem] text-dark-text2">{session?.user?.email || profile.email || ''}</p>
+              <h4 className="text-[1.1rem] font-bold">{displayName}</h4>
+              <p className="text-[0.82rem] text-dark-text2">{displayEmail}</p>
               {profile.githubLogin && (
                 <p className="text-[0.72rem] text-dark-text2"><i className="fab fa-github mr-1"></i>@{profile.githubLogin}</p>
               )}
@@ -53,7 +106,7 @@ export default function DashboardView() {
             <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={() => {
               setProfileForm({
                 universityId: profile.universityId,
-                name: profile.name || (session as any)?.user?.name || '',
+                name: profile.name || '',
                 whatsapp: profile.whatsapp,
                 semester: profile.semester,
                 facebook: profile.facebook,
@@ -72,7 +125,7 @@ export default function DashboardView() {
 
         {/* Profile Completion */}
         {(() => {
-          const filled = [profile.universityId, profile.name || (session as any)?.user?.name, profile.whatsapp, profile.semester].filter(Boolean).length;
+          const filled = [profile.universityId, profile.name, profile.whatsapp, profile.semester].filter(Boolean).length;
           const pct = Math.round((filled / 4) * 100);
           return (
             <div className="mb-4">
@@ -92,7 +145,7 @@ export default function DashboardView() {
             <h5 className="text-[0.85rem] font-semibold mb-3"><i className="fas fa-user-edit text-qsis mr-2"></i>Edit Profile</h5>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name *</label>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
                 <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Sayed Atiqur Rahman" value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} />
               </div>
               <div>

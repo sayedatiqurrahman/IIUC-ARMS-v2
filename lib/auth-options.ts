@@ -59,7 +59,7 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      // For GitHub, check that user has a matching IIUC email
+      // For GitHub, save githubLogin to profile DB
       if (account?.provider === 'github') {
         try {
           const token = account.access_token;
@@ -74,6 +74,21 @@ export const authOptions: NextAuthOptions = {
             } else {
               return '/auth/error?error=invalid-email';
             }
+          }
+
+          // Save GitHub login to profile DB
+          const githubLogin = (profile as any)?.login || user.name || '';
+          if (githubLogin && user.email) {
+            try {
+              const { PrismaClient } = await import('@prisma/client');
+              const prisma = new PrismaClient();
+              await prisma.profile.upsert({
+                where: { userId: user.email },
+                update: { githubLogin },
+                create: { userId: user.email, email: user.email, githubLogin },
+              });
+              await prisma.$disconnect();
+            } catch {}
           }
         } catch {
           // Allow sign-in if we can't verify (fallback)
