@@ -608,16 +608,16 @@ button { font-family: inherit; }
 }
 
 .routine-header-top {
-  display: table;
-  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
   margin-bottom: 14px;
 }
 
 .routine-logo-wrapper {
-  display: table-cell;
-  vertical-align: middle;
-  width: 96px;
-  padding-right: 16px;
+  flex-shrink: 0;
+  line-height: 0;
 }
 
 .routine-logo {
@@ -634,8 +634,6 @@ button { font-family: inherit; }
 }
 
 .routine-header-text {
-  display: table-cell;
-  vertical-align: middle;
   text-align: left;
 }
 
@@ -670,23 +668,21 @@ button { font-family: inherit; }
 }
 
 .routine-title-bar {
-  display: table;
-  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
   margin-bottom: 14px;
 }
 
 .routine-title-accent {
-  display: table-cell;
-  vertical-align: middle;
-  width: 80px;
+  flex: 1;
+  max-width: 80px;
   height: 2px;
   background: linear-gradient(90deg, transparent, #facc15, transparent);
 }
 
 .routine-title {
-  display: table-cell;
-  vertical-align: middle;
-  text-align: center;
   font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: 2px;
@@ -699,21 +695,23 @@ button { font-family: inherit; }
 }
 
 .routine-badges {
-  text-align: center;
-  margin-bottom: 2px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .routine-badge {
-  display: inline-block;
-  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.72rem;
   font-weight: 600;
   padding: 4px 14px;
   border-radius: 20px;
-  margin: 2px 4px;
 }
 
-.routine-badge i { font-size: 0.65rem; margin-right: 4px; }
+.routine-badge i { font-size: 0.65rem; }
 
 .routine-badge-semester {
   background: linear-gradient(135deg, #facc15, #eab308);

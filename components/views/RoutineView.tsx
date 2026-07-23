@@ -200,8 +200,29 @@ export default function RoutineView() {
     if (!printRef.current) return;
     setExporting(true);
     try {
+      const el = printRef.current;
+
+      const flexFixes: { el: HTMLElement; orig: string }[] = [];
+      el.querySelectorAll<HTMLElement>('.routine-header-top, .routine-title-bar, .routine-badges').forEach(flexEl => {
+        const orig = flexEl.style.cssText;
+        flexEl.style.cssText += ';display:table;width:100%;gap:0';
+        flexFixes.push({ el: flexEl, orig });
+      });
+      el.querySelectorAll<HTMLElement>('.routine-logo-wrapper, .routine-header-text, .routine-title-accent, .routine-title').forEach(cell => {
+        const orig = cell.style.cssText;
+        cell.style.cssText += ';display:table-cell;vertical-align:middle';
+        flexFixes.push({ el: cell, orig });
+      });
+      el.querySelectorAll<HTMLElement>('.routine-badge').forEach(badge => {
+        const orig = badge.style.cssText;
+        badge.style.cssText += ';display:inline-block;vertical-align:middle';
+        flexFixes.push({ el: badge, orig });
+      });
+
       const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(printRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: printRef.current.scrollWidth, windowHeight: printRef.current.scrollHeight });
+      const canvas = await html2canvas(el, { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: el.scrollWidth, windowHeight: el.scrollHeight });
+
+      flexFixes.forEach(f => { f.el.style.cssText = f.orig; });
       if (format === 'pdf') {
         const { jsPDF } = await import('jspdf');
         const pdf = new jsPDF('p', 'mm', 'a4');
@@ -236,7 +257,12 @@ export default function RoutineView() {
         link.click();
       }
     } catch (err) { console.error('Export failed:', err); }
-    finally { setExporting(false); }
+    finally {
+      if (printRef.current) {
+        printRef.current.querySelectorAll<HTMLElement>('.routine-header-top, .routine-title-bar, .routine-badges, .routine-logo-wrapper, .routine-header-text, .routine-title-accent, .routine-title, .routine-badge').forEach(e => { e.style.cssText = ''; });
+      }
+      setExporting(false);
+    }
   }, [currentPreview]);
 
   const handleSaveBuilder = useCallback((routine: RoutineItem) => {
