@@ -1,0 +1,411 @@
+'use client';
+
+import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import Image from 'next/image';
+import { useAppStore, getSavedPdfPage, savePdfPage } from '@/lib/store';
+import LoginModal from '@/components/LoginModal';
+import UploadModal from '@/components/UploadModal';
+import { useState, useEffect, useRef } from 'react';
+import { config } from '@/lib/config';
+
+export default function AppShell({ children }: { children: React.ReactNode }) {
+  const { data: session, status } = useSession();
+  const pathname = usePathname();
+  const router = useRouter();
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+
+  const goHome = useAppStore(s => s.goHome);
+  const setUploadOpen = useAppStore(s => s.setUploadOpen);
+  const uploadOpen = useAppStore(s => s.uploadOpen);
+  const viewerOpen = useAppStore(s => s.viewerOpen);
+  const viewerItem = useAppStore(s => s.viewerItem);
+  const closeViewer = useAppStore(s => s.closeViewer);
+  const profile = useAppStore(s => s.profile);
+  const loadTree = useAppStore(s => s.loadTree);
+  const loadProfile = useAppStore(s => s.loadProfile);
+  const loadRecentReads = useAppStore(s => s.loadRecentReads);
+  const navigateToDashboard = useAppStore(s => s.navigateToDashboard);
+
+  useEffect(() => {
+    loadTree(session?.accessToken || '');
+    loadRecentReads();
+    loadProfile();
+  }, []);
+
+  const isBrowse = pathname === '/' || pathname.startsWith('/semester');
+  const isActive = (path: string) => pathname === path;
+
+  return (
+    <div className="min-h-screen bg-dark-bg text-dark-text">
+      {/* NAVBAR */}
+      <nav className="sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border">
+        <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-3 no-underline" onClick={(e) => { e.preventDefault(); goHome(); router.push('/'); }}>
+            <Image src="/arms-logo.png" alt="QSIS-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white" priority />
+            <div>
+              <h1 className="text-[1.1rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">QSIS-ARMS</h1>
+              <span className="text-[0.7rem] text-dark-text2 hidden md:block">Academic Resource System</span>
+            </div>
+          </Link>
+          <div className="hidden md:flex items-center gap-1">
+            <Link href="/" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isBrowse ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
+              <i className="fas fa-book-open"></i> Browse
+            </Link>
+            <Link href="/history" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/history') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
+              <i className="fas fa-history"></i> History
+            </Link>
+            <Link href="/routine" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/routine') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
+              <i className="fas fa-calendar-alt"></i> Routine
+            </Link>
+            <Link href="/contributors" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/contributors') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
+              <i className="fas fa-users"></i> Contributors
+            </Link>
+            <Link href="/dashboard" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/dashboard') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
+              <i className="fas fa-th-large"></i> Dashboard
+            </Link>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-qsis/30 bg-qsis/10 text-qsis cursor-pointer hover:bg-qsis/20 transition-all" onClick={() => setUploadOpen(true)}>
+              <i className="fas fa-upload"></i> Upload
+            </button>
+            {status === 'loading' ? (
+              <div className="w-9 h-9 rounded-full bg-dark-bg3 animate-pulse"></div>
+            ) : session ? (
+              <button onClick={() => router.push('/dashboard')} className="cursor-pointer bg-transparent border-none p-0">
+                <Image src={(session as any)?.user?.image || ''} alt="" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-dark-border hover:border-qsis transition-all" />
+              </button>
+            ) : (
+              <button className="px-3 py-1.5 rounded-lg text-[0.78rem] font-medium bg-qsis text-white border-none cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setLoginModalOpen(true)}>
+                <i className="fas fa-sign-in-alt mr-1.5"></i> Sign In
+              </button>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      {/* MAIN CONTENT */}
+      <main className="max-w-[1200px] mx-auto px-5 py-5 pb-24 md:pb-5">
+        {children}
+      </main>
+
+      {/* MOBILE BOTTOM NAV */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-dark-bg2 border-t border-dark-border safe-bottom">
+        <div className="flex items-center justify-around py-2 px-1">
+          <Link href="/" className={`flex flex-col items-center gap-[2px] px-3 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isBrowse ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+            <i className="fas fa-book-open text-[1rem]"></i>
+            <span className="text-[0.62rem] font-medium">Browse</span>
+          </Link>
+          <Link href="/history" className={`flex flex-col items-center gap-[2px] px-3 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/history') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+            <i className="fas fa-history text-[1rem]"></i>
+            <span className="text-[0.62rem] font-medium">History</span>
+          </Link>
+          <Link href="/routine" className={`flex flex-col items-center gap-[2px] px-3 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/routine') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+            <i className="fas fa-calendar-alt text-[1rem]"></i>
+            <span className="text-[0.62rem] font-medium">Routine</span>
+          </Link>
+          <Link href="/contributors" className={`flex flex-col items-center gap-[2px] px-3 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/contributors') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+            <i className="fas fa-users text-[1rem]"></i>
+            <span className="text-[0.62rem] font-medium">Team</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* FOOTER */}
+      <footer className="bg-dark-bg2 border-t border-dark-border mt-8">
+        <div className="max-w-[1200px] mx-auto px-5 py-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <Image src="/arms-logo.png" alt="QSIS-ARMS" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-qsis object-contain bg-white" />
+                <div>
+                  <h3 className="text-[0.95rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">QSIS-ARMS</h3>
+                  <span className="text-[0.68rem] text-dark-text2">Academic Resource System</span>
+                </div>
+              </div>
+              <p className="text-[0.8rem] text-dark-text2 leading-relaxed">A centralized platform for managing and sharing academic resources for the Department of Qur&apos;anic Sciences &amp; Islamic Studies, IIUC.</p>
+            </div>
+            <div>
+              <h4 className="text-[0.85rem] font-semibold text-dark-text mb-3">Quick Links</h4>
+              <div className="flex flex-col gap-2">
+                <Link href="/" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-home mr-2"></i>Dashboard</Link>
+                <button className="text-[0.8rem] text-dark-text2 hover:text-qsis text-left bg-transparent border-none cursor-pointer transition-colors" onClick={() => setUploadOpen(true)}><i className="fas fa-upload mr-2"></i>Upload Files</button>
+                <Link href="/history" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-history mr-2"></i>History</Link>
+                <Link href="/routine" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-calendar-alt mr-2"></i>Routine</Link>
+                <Link href="/contributors" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2"></i>Contributors</Link>
+                <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" className="text-[0.8rem] text-dark-text2 hover:text-qsis transition-colors"><i className="fab fa-github mr-2"></i>GitHub Repo</a>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-[0.85rem] font-semibold text-dark-text mb-3">Organizations</h4>
+              <div className="flex flex-col gap-2.5">
+                <a href="https://www.iiuc.ac.bd/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
+                  <Image src="/iiuc-logo.png" alt="IIUC" width={28} height={28} className="w-7 h-7 rounded-md object-contain bg-white" />
+                  <span className="text-[0.78rem] text-dark-text2 group-hover:text-qsis transition-colors">International Islamic University Chittagong</span>
+                </a>
+                <a href="https://www.facebook.com/DQSIS" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
+                  <Image src="/qsis-logo.jpg" alt="Qur&apos;anic Sciences Club" width={28} height={28} className="w-7 h-7 rounded-md object-contain bg-white" />
+                  <span className="text-[0.78rem] text-dark-text2 group-hover:text-qsis transition-colors">Qur&apos;anic Sciences Club, IIUC</span>
+                </a>
+              </div>
+              <div className="mt-4 pt-3 border-t border-dark-border">
+                <a href="https://programming-light.eu.cc" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
+                  <Image src="/pl-logo.png" alt="Programming Light" width={28} height={28} className="w-7 h-7 rounded-md object-contain bg-white" />
+                  <span className="text-[0.78rem] text-dark-text2 group-hover:text-qsis transition-colors">Presented by <strong className="text-qsis">Programming Light</strong></span>
+                </a>
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-dark-border mt-6 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-[0.72rem] text-dark-text2">&copy; {new Date().getFullYear()} QSIS-ARMS. All rights reserved.</p>
+            <div className="flex items-center gap-3">
+              <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+                <i className="fas fa-star text-yellow-500"></i> Star Files Repo
+              </a>
+              <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+                <i className="fas fa-code-fork text-qsis"></i> Fork to Contribute
+              </a>
+              <a href="https://github.com/sayedatiqurrahman/QSIS-ARMS-v2" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+                <i className="fab fa-github"></i> Source Code
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+      {/* UPLOAD MODAL */}
+      {uploadOpen && <UploadModal
+        session={session}
+        status={status}
+        profile={profile}
+        onLogin={() => { setUploadOpen(false); setLoginModalOpen(true); }}
+        onClose={() => setUploadOpen(false)}
+      />}
+
+      {/* VIEWER OVERLAY */}
+      {viewerOpen && viewerItem && (
+        <div className="viewer-overlay active">
+          <div className="viewer-container">
+            {viewerItem.mimeType !== 'pdf' && viewerItem.mimeType !== 'image' && (
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-dark-border bg-dark-bg3">
+                <div className="flex items-center gap-2 font-semibold text-sm truncate flex-1">
+                  <i className="fas fa-file"></i>
+                  <span className="truncate">{viewerItem.name}</span>
+                </div>
+                <button className="ml-3 w-7 h-7 rounded-lg bg-red-500 text-white border-none cursor-pointer flex items-center justify-center text-sm hover:bg-red-600" onClick={closeViewer}>
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
+            )}
+            <div className="flex-1 overflow-hidden">
+              {viewerItem.mimeType === 'pdf' && <PdfViewer item={viewerItem} onClose={closeViewer} />}
+              {viewerItem.mimeType === 'image' && <ImageViewer item={viewerItem} onClose={closeViewer} />}
+              {(viewerItem.mimeType === 'doc' || viewerItem.mimeType === 'sheet' || viewerItem.mimeType === 'ppt') && (
+                <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(viewerItem.rawUrl)}`} className="w-full border-none" style={{minHeight:'calc(100vh - 50px)'}}></iframe>
+              )}
+              {viewerItem.mimeType === 'other' && (
+                <div className="flex flex-col items-center justify-center min-h-[calc(100vh-50px)] text-dark-text2">
+                  <i className="fas fa-file text-4xl mb-4"></i>
+                  <p>Preview not available for this file type.</p>
+                  <a href={viewerItem.rawUrl} target="_blank" className="mt-3 px-4 py-2 rounded-xl bg-qsis text-white text-sm font-semibold no-underline">
+                    <i className="fas fa-external-link-alt"></i> Open in new tab
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LOGIN MODAL */}
+      <LoginModal isOpen={loginModalOpen} onClose={() => setLoginModalOpen(false)} />
+    </div>
+  );
+}
+
+/* ─── PDF Viewer (inline) ─── */
+
+function PdfViewer({ item, onClose }: { item: any; onClose: () => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const divId = 'adobe-pdf-' + Date.now();
+    const container = containerRef.current;
+    container.innerHTML = `<div id="${divId}" style="width:100%;height:100%;position:relative"></div>`;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.title = 'Close PDF';
+    closeBtn.style.cssText = 'position:fixed;top:9px;left:19px;z-index:2147483647;width:27px;height:27px;border-radius:7px;background:#eb0e00;color:rgb(255,256,255);border:2px solid rgb(255,255,255);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.85rem;box-shadow:rgba(0,0,0,0.5) 0px 4px 16px;transition:0.15s;transform:scale(1)';
+    closeBtn.innerHTML = '<i class="fas fa-times" style="font-size:0.75rem"></i>';
+    closeBtn.onmouseover = function() { closeBtn.style.background = '#dc2626'; closeBtn.style.transform = 'scale(1.15)'; };
+    closeBtn.onmouseout = function() { closeBtn.style.background = '#ef4444'; closeBtn.style.transform = 'scale(1)'; };
+    closeBtn.onclick = onClose;
+    document.body.appendChild(closeBtn);
+
+    const savedPage = getSavedPdfPage(item.path);
+
+    function initAdobe() {
+      if (typeof (window as any).AdobeDC !== 'undefined') {
+        try {
+          const adobeDCView = new (window as any).AdobeDC.View({ clientId: config.adobeClientId, divId: divId });
+          adobeDCView.previewFile({
+            content: { location: { url: item.rawUrl } },
+            metaData: { fileName: item.name }
+          }, {}).then((adobeViewer: any) => {
+            adobeViewer.getAPIs().then((apis: any) => {
+              if (savedPage > 1) apis.gotoLocation(savedPage).catch(() => {});
+              let lastSaved = savedPage;
+              setInterval(() => {
+                apis.getCurrentPage().then((page: number) => {
+                  if (page && page !== lastSaved) { lastSaved = page; savePdfPage(item.path, page); }
+                }).catch(() => {});
+              }, 2000);
+            }).catch(() => {});
+          }).catch(() => {
+            fallbackPdf(container, item);
+          });
+        } catch {
+          fallbackPdf(container, item);
+        }
+      } else {
+        document.addEventListener('adobe_dc_view_sdk.ready', function handler() {
+          document.removeEventListener('adobe_dc_view_sdk.ready', handler);
+          initAdobe();
+        });
+        setTimeout(() => {
+          if (typeof (window as any).AdobeDC === 'undefined') fallbackPdf(container, item);
+        }, 8000);
+      }
+    }
+
+    initAdobe();
+
+    return () => {
+      closeBtn.remove();
+      container.innerHTML = '';
+    };
+  }, [item]);
+
+  return <div ref={containerRef} className="w-full h-full"></div>;
+}
+
+function fallbackPdf(container: HTMLElement, item: any) {
+  container.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;color:#94a3b8">
+      <i class="fas fa-file-pdf" style="font-size:3rem;color:#ef4444"></i>
+      <p>PDF viewer unavailable.</p>
+      <a href="${item.rawUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:12px;background:linear-gradient(135deg,#22c55e,#16a34a);color:white;text-decoration:none;font-weight:600;font-size:0.85rem">
+        <i class="fas fa-external-link-alt"></i> Open in new tab
+      </a>
+    </div>`;
+}
+
+/* ─── Image Viewer (inline) ─── */
+function ImageViewer({ item, onClose }: { item: any; onClose: () => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const panRef = useRef({x:0,y:0});
+  const dragRef = useRef({dragging:false,startX:0,startY:0});
+
+  const zoom = useAppStore(s => s.imgZoom);
+  const rotation = useAppStore(s => s.imgRotation);
+  const setZoom = useAppStore(s => s.setImgZoom);
+  const setRotation = useAppStore(s => s.setImgRotation);
+
+  function applyTransform(z: number, r: number) {
+    const img = imgRef.current;
+    if (img) img.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${z/100}) rotate(${r}deg)`;
+  }
+
+  function zoomIn() {
+    const z = Math.min(zoom + 15, 400);
+    setZoom(z);
+    applyTransform(z, rotation);
+  }
+
+  function zoomOut() {
+    const z = Math.max(zoom - 15, 20);
+    setZoom(z);
+    if (z <= 100) { panRef.current = {x:0,y:0}; applyTransform(z, rotation); }
+    else applyTransform(z, rotation);
+  }
+
+  function fit() {
+    setZoom(100); setRotation(0); panRef.current = {x:0,y:0};
+    applyTransform(100, 0);
+  }
+
+  function rotate() {
+    const r = (rotation + 90) % 360;
+    setRotation(r);
+    applyTransform(zoom, r);
+  }
+
+  function handToggle() {
+    const z = zoom <= 100 ? 150 : zoom;
+    setZoom(z);
+    applyTransform(z, rotation);
+  }
+
+  useEffect(() => {
+    const scrollArea = scrollRef.current;
+    if (!scrollArea) return;
+
+    function onMouseDown(e: MouseEvent) {
+      if (zoom <= 100) return;
+      e.preventDefault();
+      dragRef.current = { dragging: true, startX: e.clientX - panRef.current.x, startY: e.clientY - panRef.current.y };
+      scrollArea!.style.cursor = 'grabbing';
+    }
+    function onMouseMove(e: MouseEvent) {
+      if (!dragRef.current.dragging) return;
+      panRef.current = { x: e.clientX - dragRef.current.startX, y: e.clientY - dragRef.current.startY };
+      applyTransform(zoom, rotation);
+    }
+    function onMouseUp() {
+      if (dragRef.current.dragging) {
+        dragRef.current.dragging = false;
+        if (scrollArea) scrollArea.style.cursor = zoom > 100 ? 'grab' : 'default';
+      }
+    }
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      if (e.deltaY < 0) zoomIn(); else zoomOut();
+    }
+
+    scrollArea.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    scrollArea.addEventListener('wheel', onWheel, { passive: false });
+
+    return () => {
+      scrollArea.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      scrollArea.removeEventListener('wheel', onWheel);
+    };
+  }, [zoom, rotation]);
+
+  return (
+    <div className="image-viewer-container">
+      <div className="image-toolbar">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <i className="fas fa-image text-qsis flex-shrink-0"></i>
+          <span className="text-[0.85rem] font-semibold truncate">{item.name}</span>
+        </div>
+        <button className="pdf-btn" onClick={zoomOut} title="Zoom Out"><i className="fas fa-minus"></i></button>
+        <span className="text-[0.8rem] font-semibold min-w-[40px] text-center">{zoom}%</span>
+        <button className="pdf-btn" onClick={zoomIn} title="Zoom In"><i className="fas fa-plus"></i></button>
+        <button className="pdf-btn" onClick={fit} title="Fit"><i className="fas fa-expand"></i> Fit</button>
+        <button className="pdf-btn" onClick={rotate} title="Rotate"><i className="fas fa-redo"></i></button>
+        <button className="pdf-btn" onClick={handToggle} title="Hand/Pan"><i className="fas fa-hand-paper"></i></button>
+        <button className="pdf-btn" onClick={onClose} title="Close" style={{background:'#ef4444',color:'white',borderRadius:'7px'}}><i className="fas fa-times"></i></button>
+      </div>
+      <div className="image-scroll-area" ref={scrollRef} style={{cursor: zoom > 100 ? 'grab' : 'default'}}>
+        <img ref={imgRef} src={item.rawUrl} alt={item.name} draggable={false} className="max-w-full max-h-full object-contain rounded transition-transform" />
+      </div>
+    </div>
+  );
+}
