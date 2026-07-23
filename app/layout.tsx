@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen">
         <Script src="https://www.google.com/recaptcha/enterprise.js?render=6LcR-WAtAAAAAJhcElM2R7BVtnipP88bqio0AKUs" strategy="beforeInteractive" />
-        <Providers>
+        <Providers >
           <AppShell>{children}</AppShell>
         </Providers>
         <div id="toast" className="toast"></div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 
 const GITHUB_API = 'https://api.github.com';
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     let token = '';
     let contributorLogin = '';
 
-    // Try session first
+    // Try NextAuth session first (works when NEXTAUTH_URL matches)
     try {
       const session = await getServerSession(authOptions);
       if (session?.accessToken) {
@@ -31,13 +32,13 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
-    // Fallback to stored GitHub token from popup connect
+    // Fallback: get email from Firebase cookie, then load profile.githubToken from DB
     if (!token) {
       try {
-        const session = await getServerSession(authOptions);
-        if (session?.user?.email) {
+        const email = await getUserEmail(req);
+        if (email) {
           const { prisma } = await import('@/lib/prisma');
-          const profile = await prisma.profile.findUnique({ where: { userId: session.user.email } });
+          const profile = await prisma.profile.findUnique({ where: { userId: email } });
           if (profile?.githubToken) {
             token = profile.githubToken;
             contributorLogin = profile.githubLogin || '';
