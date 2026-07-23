@@ -272,3 +272,408 @@ button { font-family: inherit; }
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ROUTINE EXPORT STYLES — Official IIUC University Design
+   ═══════════════════════════════════════════════════════════ */
+
+.routine-export {
+  background: #ffffff;
+  color: #000000;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #166534;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ─── HEADER ─── */
+.routine-header {
+  background: linear-gradient(135deg, #166534 0%, #14532d 100%);
+  padding: 24px 20px 18px;
+  text-align: center;
+  color: #ffffff;
+}
+
+.routine-logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  border: 3px solid #facc15;
+  object-fit: contain;
+  background: #ffffff;
+  display: block;
+}
+
+.routine-university-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.routine-arabic-name {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  direction: rtl;
+  font-family: 'Traditional Arabic', 'Scheherazade', serif;
+  margin-bottom: 4px;
+}
+
+.routine-dept-name {
+  font-size: 0.78rem;
+  opacity: 0.85;
+  margin-bottom: 12px;
+}
+
+.routine-title-bar {
+  margin-bottom: 10px;
+}
+
+.routine-title {
+  display: inline-block;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.15);
+  padding: 6px 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.25);
+}
+
+.routine-badges {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.routine-badge-semester {
+  display: inline-block;
+  background: linear-gradient(135deg, #facc15, #eab308);
+  color: #14532d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 16px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+}
+
+.routine-badge-session {
+  display: inline-block;
+  background: rgba(255,255,255,0.2);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* ─── TABLE ─── */
+.routine-table-wrapper {
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.routine-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1.5px solid #166534;
+  border-radius: 8px;
+  overflow: hidden;
+  table-layout: fixed;
+}
+
+.routine-th {
+  background: #166534;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 10px 6px;
+  text-align: center;
+  letter-spacing: 0.3px;
+  border: 1px solid #14532d;
+  font-family: system-ui, sans-serif;
+}
+
+.routine-th-time {
+  width: 110px;
+  background: #14532d;
+}
+
+.routine-td {
+  border: 1px solid #bbf7d0;
+  padding: 6px 5px;
+  vertical-align: top;
+  height: 80px;
+  text-align: center;
+  background: #ffffff;
+  font-family: system-ui, sans-serif;
+}
+
+.routine-td:nth-child(even) {
+  background: #f0fdf4;
+}
+
+.routine-td-time {
+  background: #f0fdf4 !important;
+  vertical-align: middle;
+  padding: 6px 4px;
+  border-right: 2px solid #166534;
+}
+
+.routine-time-text {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #166534;
+  line-height: 1.2;
+}
+
+.routine-time-sub {
+  font-size: 0.6rem;
+  color: #16a34a;
+  line-height: 1.2;
+}
+
+.routine-course {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.routine-course-code {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #166534;
+  line-height: 1.2;
+}
+
+.routine-course-title {
+  font-size: 0.65rem;
+  color: #374151;
+  line-height: 1.2;
+  max-width: 100%;
+  word-wrap: break-word;
+}
+
+.routine-teacher {
+  font-size: 0.6rem;
+  color: #6b7280;
+  line-height: 1.2;
+}
+
+.routine-room {
+  display: inline-block;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.58rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid #bbf7d0;
+  margin-top: 1px;
+}
+
+.routine-empty {
+  color: #d1d5db;
+  font-size: 0.8rem;
+}
+
+/* ─── FOOTER ─── */
+.routine-footer {
+  border-top: 2px solid #166534;
+  padding: 16px 20px 0;
+}
+
+.routine-footer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.routine-footer-notes h4,
+.routine-footer-timing h4 {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #166534;
+  margin-bottom: 6px;
+  font-family: system-ui, sans-serif;
+}
+
+.routine-footer-notes ul {
+  list-style: none;
+  padding: 0;
+}
+
+.routine-footer-notes li {
+  font-size: 0.62rem;
+  color: #374151;
+  padding: 1px 0;
+  padding-left: 10px;
+  position: relative;
+  line-height: 1.4;
+  font-family: system-ui, sans-serif;
+}
+
+.routine-footer-notes li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: #166534;
+  font-weight: bold;
+}
+
+.routine-footer-timing p {
+  font-size: 0.62rem;
+  color: #374151;
+  padding: 1px 0;
+  line-height: 1.4;
+  font-family: system-ui, sans-serif;
+}
+
+.routine-footer-center {
+  text-align: center;
+  padding: 10px 0;
+  border-top: 1px solid #bbf7d0;
+  border-bottom: 1px solid #bbf7d0;
+  margin-bottom: 12px;
+}
+
+.routine-generated {
+  font-size: 0.68rem;
+  color: #374151;
+  font-family: system-ui, sans-serif;
+}
+
+.routine-updated {
+  font-size: 0.6rem;
+  color: #6b7280;
+  margin-top: 2px;
+  font-family: system-ui, sans-serif;
+}
+
+.routine-footer-signature {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 40px;
+  margin-bottom: 16px;
+}
+
+.routine-sig-box {
+  text-align: center;
+  min-width: 140px;
+}
+
+.routine-sig-line {
+  width: 140px;
+  border-bottom: 1px solid #374151;
+  margin-bottom: 4px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.routine-sig-box p {
+  font-size: 0.62rem;
+  color: #374151;
+  font-weight: 600;
+  font-family: system-ui, sans-serif;
+}
+
+.routine-footer-strip {
+  background: #166534;
+  color: #ffffff;
+  text-align: center;
+  padding: 8px 16px;
+  margin: 0 -20px;
+}
+
+.routine-footer-strip p {
+  font-size: 0.62rem;
+  opacity: 0.9;
+  font-family: system-ui, sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PRINT STYLES — Official University Print Layout
+   ═══════════════════════════════════════════════════════════ */
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .no-print,
+  nav,
+  footer,
+  .mobile-bottom-nav,
+  .viewer-overlay,
+  .modal {
+    display: none !important;
+  }
+
+  .routine-export {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    max-width: none !important;
+    margin: 0 !important;
+    width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  .routine-header {
+    padding: 15mm 10mm 8mm !important;
+  }
+
+  .routine-table-wrapper {
+    padding: 0 5mm !important;
+  }
+
+  .routine-table {
+    page-break-inside: avoid;
+  }
+
+  .routine-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  .routine-td {
+    height: auto !important;
+    min-height: 60px;
+  }
+
+  .routine-footer {
+    padding: 5mm 10mm 0 !important;
+    page-break-inside: avoid;
+  }
+
+  .routine-footer-strip {
+    margin: 0 -10mm !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+}

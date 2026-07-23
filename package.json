@@ -11,6 +11,8 @@
     "@prisma/client": "^7.9.0",
     "firebase": "^12.16.0",
     "firebase-admin": "^14.2.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "next": "^14.2.0",
     "next-auth": "^4.24.0",
     "nodemailer": "^7.0.13",
