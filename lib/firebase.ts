@@ -1,5 +1,5 @@
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile as firebaseUpdateProfile, User } from 'firebase/auth';
+import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile as firebaseUpdateProfile, type Auth, type User } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,10 +11,24 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const auth = getAuth(app);
+let _app: FirebaseApp | null = null;
+let _auth: Auth | null = null;
 
-export { auth, GoogleAuthProvider, signInWithPopup };
+function getApp(): FirebaseApp {
+  if (!_app) {
+    _app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  }
+  return _app;
+}
+
+function getFirebaseAuth(): Auth {
+  if (!_auth) {
+    _auth = getAuth(getApp());
+  }
+  return _auth;
+}
+
+export { GoogleAuthProvider, signInWithPopup };
 
 async function saveTokensToCookies(user: User) {
   try {
@@ -36,21 +50,21 @@ async function saveTokensToCookies(user: User) {
 
 export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
-  const result = await signInWithPopup(auth, provider);
+  const result = await signInWithPopup(getFirebaseAuth(), provider);
   const idToken = await result.user.getIdToken();
   await saveTokensToCookies(result.user);
   return { idToken, user: result.user };
 }
 
 export async function signInWithEmail(email: string, password: string) {
-  const result = await signInWithEmailAndPassword(auth, email, password);
+  const result = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
   const idToken = await result.user.getIdToken();
   await saveTokensToCookies(result.user);
   return { idToken, user: result.user };
 }
 
 export async function signUpWithEmail(email: string, password: string) {
-  const result = await createUserWithEmailAndPassword(auth, email, password);
+  const result = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password);
   await sendEmailVerification(result.user);
   const idToken = await result.user.getIdToken();
   await saveTokensToCookies(result.user);
@@ -58,11 +72,11 @@ export async function signUpWithEmail(email: string, password: string) {
 }
 
 export async function resetPassword(email: string) {
-  await sendPasswordResetEmail(auth, email);
+  await sendPasswordResetEmail(getFirebaseAuth(), email);
 }
 
 export async function updateUserProfile(displayName?: string, photoURL?: string) {
-  const user = auth.currentUser;
+  const user = getFirebaseAuth().currentUser;
   if (!user) throw new Error('Not logged in');
   const updates: { displayName?: string; photoURL?: string } = {};
   if (displayName !== undefined) updates.displayName = displayName;
@@ -72,6 +86,6 @@ export async function updateUserProfile(displayName?: string, photoURL?: string)
 }
 
 export async function logoutFirebase() {
-  await auth.signOut();
+  await getFirebaseAuth().signOut();
   await fetch('/api/auth/firebase-session', { method: 'DELETE' });
 }
