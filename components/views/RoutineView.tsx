@@ -448,34 +448,6 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
         </div>
       </div>
 
-      {routine.courses.length > 0 && (
-        <div className="routine-legend">
-          <h4 className="routine-legend-title"><i className="fas fa-book-open"></i> Course Information</h4>
-          <div className="routine-legend-table-wrapper">
-            <table className="routine-legend-table">
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Course Title</th>
-                  <th>Instructor</th>
-                  <th>Room</th>
-                </tr>
-              </thead>
-              <tbody>
-                {routine.courses.map(c => (
-                  <tr key={c.code}>
-                    <td className="routine-legend-code-cell">{c.code}</td>
-                    <td>{c.title}</td>
-                    <td>{c.teacher}</td>
-                    <td>{c.room}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       <div className="routine-table-wrapper">
         <table className="routine-table">
           <thead>
@@ -542,6 +514,34 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
           </tbody>
         </table>
       </div>
+
+      {routine.courses.length > 0 && (
+        <div className="routine-legend">
+          <h4 className="routine-legend-title"><i className="fas fa-book-open"></i> Course Information</h4>
+          <div className="routine-legend-table-wrapper">
+            <table className="routine-legend-table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Course Title</th>
+                  <th>Instructor</th>
+                  <th>Room</th>
+                </tr>
+              </thead>
+              <tbody>
+                {routine.courses.map(c => (
+                  <tr key={c.code}>
+                    <td className="routine-legend-code-cell">{c.code}</td>
+                    <td>{c.title}</td>
+                    <td>{c.teacher}</td>
+                    <td>{c.room}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="routine-footer">
         <div className="routine-footer-grid">

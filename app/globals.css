@@ -722,7 +722,7 @@ button { font-family: inherit; }
 .routine-legend {
   padding: 14px 20px;
   background: #f0fdf4;
-  border-bottom: 1px solid #bbf7d0;
+  border-top: 1px solid #bbf7d0;
 }
 
 .routine-legend-title {
