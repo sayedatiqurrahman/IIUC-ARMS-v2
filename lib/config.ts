@@ -27,4 +27,12 @@ export const config = {
     syllabus: { label: 'Syllabus', icon: 'graduation-cap', color: '#8b5cf6' },
     other: { label: 'Other', icon: 'folder', color: '#94a3b8' },
   },
+  relatedKitabsCategories: {
+    'quran-tafsir': { label: 'Quran & Tafsir', icon: 'book-quran', color: '#10b981' },
+    'hadith': { label: 'Hadith', icon: 'book', color: '#f97316' },
+    'fiqh': { label: 'Fiqh', icon: 'balance-scale', color: '#6366f1' },
+    'aqeedah': { label: 'Aqeedah', icon: 'mosque', color: '#ec4899' },
+    'seerah': { label: 'Seerah', icon: 'user-graduate', color: '#14b8a6' },
+    'general': { label: 'General', icon: 'folder-open', color: '#94a3b8' },
+  },
 };

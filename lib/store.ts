@@ -47,6 +47,9 @@ function getMimeFromExt(ext: string) {
 
 function detectCategory(name: string) {
   const l = name.toLowerCase();
+  // Related Kitabs categories - return folder name as category key
+  if (config.relatedKitabsCategories[l]) return l;
+  // Semester categories
   if (l.includes('sheet')) return 'sheet';
   if (l.includes('previous question') || l.includes('question')) return 'question';
   if (l === 'notes' || l === 'note') return 'note';
@@ -544,6 +547,20 @@ export const useAppStore = create<AppState>((set, get) => ({
         catEntries.push({ cat, count, folders: [folderName] });
       }
     });
+
+    // For related-kitabs, merge entries with same category key and apply labels
+    if (isRelated) {
+      return catEntries.map(entry => {
+        const catCfg = config.relatedKitabsCategories[entry.cat];
+        return {
+          ...entry,
+          label: catCfg?.label || entry.cat,
+          icon: catCfg?.icon || 'folder',
+          color: catCfg?.color || '#94a3b8',
+        };
+      });
+    }
+
     return catEntries;
   },
 

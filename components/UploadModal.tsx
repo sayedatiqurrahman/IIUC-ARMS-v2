@@ -265,7 +265,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div>
                     <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester *</label>
-                    <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={semester} onChange={e => setSemester(e.target.value)}>
+                    <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={semester} onChange={e => { setSemester(e.target.value); setCategory(''); }}>
                       <option value="">Select...</option>
                       {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                       <option value={config.relatedKitabsFolder}>Related Kitabs</option>
@@ -275,11 +275,18 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                     <label className="text-[0.72rem] text-dark-text2 block mb-1">Category *</label>
                     <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={category} onChange={e => setCategory(e.target.value)}>
                       <option value="">Select...</option>
-                      <option value="sheet">Sheets</option>
-                      <option value="question">Previous Questions</option>
-                      <option value="note">Notes</option>
-                      <option value="syllabus">Syllabus</option>
-
+                      {semester === config.relatedKitabsFolder ? (
+                        Object.entries(config.relatedKitabsCategories).map(([key, cat]) => (
+                          <option key={key} value={key}>{cat.label}</option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="sheet">Sheets</option>
+                          <option value="question">Previous Questions</option>
+                          <option value="note">Notes</option>
+                          <option value="syllabus">Syllabus</option>
+                        </>
+                      )}
                     </select>
                   </div>
                 </div>

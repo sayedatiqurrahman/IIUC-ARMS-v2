@@ -528,7 +528,10 @@ export default function Home() {
             )}
             <div className="flex flex-col gap-2">
               {filteredCategories.map(ce => {
-                const catConfig = config.categories[ce.cat as keyof typeof config.categories] || config.categories.other;
+                const isRelated = currentSem === config.relatedKitabsFolder;
+                const catConfig = isRelated
+                  ? (config.relatedKitabsCategories[ce.cat as keyof typeof config.relatedKitabsCategories] || { label: ce.cat, icon: 'folder', color: '#94a3b8' })
+                  : (config.categories[ce.cat as keyof typeof config.categories] || config.categories.other);
                 return (
                   <div key={ce.cat} className="flex items-center gap-3.5 p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-accent hover:shadow-[0_0_16px_rgba(16,185,129,.2)] hover:translate-x-1 transition-all" onClick={() => navigateToCategory(currentSem, ce.cat)}>
                     <div className="text-[1.5rem]" style={{color: catConfig.color}}><i className={`fas ${catConfig.icon}`}></i></div>
@@ -546,7 +549,14 @@ export default function Home() {
           <section className="mb-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
-                <i className="fas fa-folder-open"></i> {config.categories[currentCat as keyof typeof config.categories]?.label || currentCat}
+                <i className="fas fa-folder-open"></i> {(() => {
+                  const isRelated = currentSem === config.relatedKitabsFolder;
+                  if (isRelated) {
+                    const catCfg = config.relatedKitabsCategories[currentCat as keyof typeof config.relatedKitabsCategories];
+                    return catCfg?.label || currentCat;
+                  }
+                  return config.categories[currentCat as keyof typeof config.categories]?.label || currentCat;
+                })()}
               </h3>
               <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={goBack}>
                 <i className="fas fa-arrow-left"></i> Back
