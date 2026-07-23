@@ -499,6 +499,162 @@ button { font-family: inherit; }
   font-size: 0.8rem;
 }
 
+/* ─── COURSE LEGEND ─── */
+.routine-legend {
+  padding: 12px 20px;
+  background: #f0fdf4;
+  border-bottom: 1px solid #bbf7d0;
+}
+
+.routine-legend-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #166534;
+  margin-bottom: 8px;
+  font-family: system-ui, sans-serif;
+}
+
+.routine-legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+}
+
+.routine-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #ffffff;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  font-family: system-ui, sans-serif;
+}
+
+.routine-legend-code {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #166534;
+  white-space: nowrap;
+}
+
+.routine-legend-title-text {
+  font-size: 0.62rem;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.routine-legend-teacher {
+  font-size: 0.58rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.routine-legend-room {
+  font-size: 0.55rem;
+  font-weight: 600;
+  color: #166534;
+  background: #dcfce7;
+  padding: 1px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ─── BREAK ROW ─── */
+.routine-break-row .routine-td {
+  background: #fef9c3 !important;
+  border-color: #fde68a !important;
+  height: 36px;
+}
+
+.routine-break-time {
+  background: #fef3c7 !important;
+  border-right: 2px solid #d97706 !important;
+}
+
+.routine-break-cell {
+  text-align: center;
+  vertical-align: middle !important;
+}
+
+.routine-break-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #92400e;
+  letter-spacing: 0.3px;
+}
+
+/* ─── PERIOD NAME ─── */
+.routine-period-name {
+  font-size: 0.58rem;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 2px;
+  line-height: 1.1;
+}
+
+/* ─── EDIT MODE ─── */
+.routine-td-edit {
+  padding: 4px 3px;
+}
+
+.routine-edit-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.routine-edit-select {
+  width: 100%;
+  padding: 3px 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  background: #ffffff;
+  color: #374151;
+  outline: none;
+}
+
+.routine-edit-select:focus {
+  border-color: #16a34a;
+}
+
+.routine-edit-remove {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #ef4444;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.routine-edit-remove:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.routine-edit-add {
+  background: #f0fdf4;
+  border: 1px dashed #bbf7d0;
+  color: #16a34a;
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.15s;
+}
+
+.routine-edit-add:hover {
+  background: #dcfce7;
+  border-color: #16a34a;
+}
+
 /* ─── FOOTER ─── */
 .routine-footer {
   border-top: 2px solid #166534;

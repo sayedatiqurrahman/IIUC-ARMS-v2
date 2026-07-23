@@ -1,14 +1,79 @@
 [
-  { "day": "Saturday", "time": "8:00 AM - 9:20 AM", "courseCode": "FSC-1201", "courseTitle": "Quran & Tafsir", "teacher": "Dr. Ahmad Hassan", "room": "Room 301" },
-  { "day": "Saturday", "time": "9:30 AM - 10:50 AM", "courseCode": "FSC-1202", "courseTitle": "Hadith Studies", "teacher": "Dr. Mohammad Ali", "room": "Room 302" },
-  { "day": "Saturday", "time": "11:00 AM - 12:20 PM", "courseCode": "FSC-1203", "courseTitle": "Islamic Fiqh", "teacher": "Dr. Omar Farooq", "room": "Room 303" },
-  { "day": "Sunday", "time": "8:00 AM - 9:20 AM", "courseCode": "FSC-1204", "courseTitle": "Arabic Language", "teacher": "Prof. Salahuddin", "room": "Room 301" },
-  { "day": "Sunday", "time": "9:30 AM - 10:50 AM", "courseCode": "FSC-1205", "courseTitle": "Aqeedah & Tasawwuf", "teacher": "Dr. Yunus Ahmed", "room": "Room 304" },
-  { "day": "Monday", "time": "8:00 AM - 9:20 AM", "courseCode": "FSC-1206", "courseTitle": "Seerah & Islamic History", "teacher": "Dr. Rashid Khan", "room": "Room 302" },
-  { "day": "Monday", "time": "11:00 AM - 12:20 PM", "courseCode": "FSC-1201", "courseTitle": "Quran & Tafsir", "teacher": "Dr. Ahmad Hassan", "room": "Room 301" },
-  { "day": "Tuesday", "time": "9:30 AM - 10:50 AM", "courseCode": "FSC-1203", "courseTitle": "Islamic Fiqh", "teacher": "Dr. Omar Farooq", "room": "Room 303" },
-  { "day": "Tuesday", "time": "2:00 PM - 3:20 PM", "courseCode": "FSC-1207", "courseTitle": "Research Methodology", "teacher": "Dr. Fatima Begum", "room": "Room 305" },
-  { "day": "Wednesday", "time": "8:00 AM - 9:20 AM", "courseCode": "FSC-1202", "courseTitle": "Hadith Studies", "teacher": "Dr. Mohammad Ali", "room": "Room 302" },
-  { "day": "Wednesday", "time": "11:00 AM - 12:20 PM", "courseCode": "FSC-1205", "courseTitle": "Aqeedah & Tasawwuf", "teacher": "Dr. Yunus Ahmed", "room": "Room 304" },
-  { "day": "Wednesday", "time": "3:30 PM - 4:50 PM", "courseCode": "FSC-1208", "courseTitle": "Islamic Banking & Finance", "teacher": "Mr. Karim Ullah", "room": "Room 306" }
+  {
+    "id": "spring-2025-1st",
+    "semester": "1st Semester",
+    "session": "2023-24",
+    "branch": null,
+    "academicYear": "2024-25",
+    "department": "Department of Qur'anic Sciences & Islamic Studies",
+    "university": "International Islamic University Chittagong",
+    "periods": [
+      { "name": "1st Period", "start": "10:40 AM", "end": "11:30 AM" },
+      { "name": "2nd Period", "start": "11:30 AM", "end": "12:20 PM" },
+      { "name": "3rd Period", "start": "12:20 PM", "end": "01:10 PM" },
+      { "name": "Lunch & Zuhr Prayer Break", "start": "01:10 PM", "end": "01:50 PM", "isBreak": true },
+      { "name": "4th Period", "start": "01:50 PM", "end": "02:40 PM" },
+      { "name": "5th Period", "start": "02:40 PM", "end": "03:30 PM" },
+      { "name": "6th Period", "start": "03:30 PM", "end": "04:20 PM" }
+    ],
+    "days": ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"],
+    "courses": [
+      { "code": "FSC-1201", "title": "Quran & Tafsir", "teacher": "Dr. Ahmad Hassan", "room": "Room 301" },
+      { "code": "FSC-1202", "title": "Hadith Studies", "teacher": "Dr. Mohammad Ali", "room": "Room 302" },
+      { "code": "FSC-1203", "title": "Islamic Fiqh", "teacher": "Dr. Omar Farooq", "room": "Room 303" },
+      { "code": "FSC-1204", "title": "Arabic Language", "teacher": "Prof. Salahuddin", "room": "Room 301" },
+      { "code": "FSC-1205", "title": "Aqeedah & Tasawwuf", "teacher": "Dr. Yunus Ahmed", "room": "Room 304" },
+      { "code": "FSC-1206", "title": "Seerah & Islamic History", "teacher": "Dr. Rashid Khan", "room": "Room 302" },
+      { "code": "FSC-1207", "title": "Research Methodology", "teacher": "Dr. Fatima Begum", "room": "Room 305" },
+      { "code": "FSC-1208", "title": "Islamic Banking & Finance", "teacher": "Mr. Karim Ullah", "room": "Room 306" }
+    ],
+    "slots": [
+      { "day": "Saturday", "period": 0, "course": "FSC-1201" },
+      { "day": "Saturday", "period": 1, "course": "FSC-1202" },
+      { "day": "Saturday", "period": 2, "course": "FSC-1203" },
+      { "day": "Sunday", "period": 0, "course": "FSC-1204" },
+      { "day": "Sunday", "period": 1, "course": "FSC-1205" },
+      { "day": "Monday", "period": 0, "course": "FSC-1206" },
+      { "day": "Monday", "period": 2, "course": "FSC-1201" },
+      { "day": "Tuesday", "period": 1, "course": "FSC-1203" },
+      { "day": "Tuesday", "period": 4, "course": "FSC-1207" },
+      { "day": "Wednesday", "period": 0, "course": "FSC-1202" },
+      { "day": "Wednesday", "period": 2, "course": "FSC-1205" },
+      { "day": "Wednesday", "period": 5, "course": "FSC-1208" }
+    ]
+  },
+  {
+    "id": "spring-2025-3rd",
+    "semester": "3rd Semester",
+    "session": "2022-23",
+    "branch": "A",
+    "academicYear": "2024-25",
+    "department": "Department of Qur'anic Sciences & Islamic Studies",
+    "university": "International Islamic University Chittagong",
+    "periods": [
+      { "name": "1st Period", "start": "10:40 AM", "end": "11:30 AM" },
+      { "name": "2nd Period", "start": "11:30 AM", "end": "12:20 PM" },
+      { "name": "3rd Period", "start": "12:20 PM", "end": "01:10 PM" },
+      { "name": "Lunch & Zuhr Prayer Break", "start": "01:10 PM", "end": "01:50 PM", "isBreak": true },
+      { "name": "4th Period", "start": "01:50 PM", "end": "02:40 PM" },
+      { "name": "5th Period", "start": "02:40 PM", "end": "03:30 PM" },
+      { "name": "6th Period", "start": "03:30 PM", "end": "04:20 PM" }
+    ],
+    "days": ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"],
+    "courses": [
+      { "code": "FSC-2301", "title": "Advanced Tafsir", "teacher": "Dr. Ahmad Hassan", "room": "Room 301" },
+      { "code": "FSC-2302", "title": "Hadith Sciences", "teacher": "Dr. Mohammad Ali", "room": "Room 302" },
+      { "code": "FSC-2303", "title": "Comparative Fiqh", "teacher": "Dr. Omar Farooq", "room": "Room 303" },
+      { "code": "FSC-2304", "title": "Arabic Literature", "teacher": "Prof. Salahuddin", "room": "Room 304" }
+    ],
+    "slots": [
+      { "day": "Saturday", "period": 0, "course": "FSC-2301" },
+      { "day": "Saturday", "period": 1, "course": "FSC-2302" },
+      { "day": "Sunday", "period": 0, "course": "FSC-2303" },
+      { "day": "Sunday", "period": 1, "course": "FSC-2304" },
+      { "day": "Monday", "period": 0, "course": "FSC-2301" },
+      { "day": "Tuesday", "period": 1, "course": "FSC-2302" },
+      { "day": "Wednesday", "period": 0, "course": "FSC-2303" }
+    ]
+  }
 ]
