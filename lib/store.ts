@@ -133,6 +133,8 @@ interface AppState {
   profile: Profile;
   updateProfile: (p: Partial<Profile>) => Promise<void>;
   loadProfile: () => Promise<void>;
+  githubToken: string;
+  setGithubToken: (token: string) => void;
 
   loadTree: (token?: string) => Promise<void>;
 
@@ -246,6 +248,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ profile: snapshot });
     }
   },
+
+  githubToken: '',
+  setGithubToken: (token: string) => set({ githubToken: token }),
 
   loadTree: async (token?: string) => {
     set({ loading: true, error: '' });

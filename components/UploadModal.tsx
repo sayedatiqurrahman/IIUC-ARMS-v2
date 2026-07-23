@@ -3,7 +3,10 @@
 import { useState, useRef } from 'react';
 import { config } from '@/lib/config';
 import type { Profile } from '@/lib/store';
+import { useAppStore } from '@/lib/store';
 import { connectGitHubPopup } from '@/lib/github-connect';
+import { uploadFilesToGitHub } from '@/lib/github-upload';
+import { showToast } from '@/lib/utils';
 
 interface CourseGroup {
   id: number;
@@ -21,6 +24,8 @@ interface UploadModalProps {
 }
 
 export default function UploadModal({ session, status, profile, onLogin, onClose }: UploadModalProps) {
+  const githubToken = useAppStore(s => s.githubToken);
+  const setGithubToken = useAppStore(s => s.setGithubToken);
   const [semester, setSemester] = useState(profile.semester || '');
   const [category, setCategory] = useState('');
   const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, code: '', title: '', files: [] }]);
@@ -28,7 +33,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean } | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
-  const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin;
+  const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!githubToken;
 
   const totalFiles = courses.reduce((sum, c) => sum + c.files.length, 0);
   const totalSizeMB = courses.reduce((sum, c) => sum + c.files.reduce((s, f) => s + f.size, 0), 0) / (1024 * 1024);
@@ -118,6 +123,12 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       return;
     }
 
+    const token = githubToken || (session as any)?.accessToken || '';
+    if (!token) {
+      setResult({ success: false, error: 'GitHub not connected. Please connect GitHub first.', tokenExpired: true });
+      return;
+    }
+
     setUploading(true);
     setResult(null);
 
@@ -144,23 +155,15 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       }
 
       const courseList = validCourses.map(c => c.title.trim() ? `${c.code} - ${c.title}` : c.code).join(', ');
+      const message = `Add ${courseList} (${category}) — ${semester}`;
 
-      const res = await fetch('/api/github/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          files: allFiles.map(f => ({ path: f.path, url: '', content: f.content })),
-          message: `Add ${courseList} (${category}) — ${semester}`,
-        }),
-      });
+      const data = await uploadFilesToGitHub(token, allFiles, message);
 
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setResult({ success: true, prUrl: data.pr?.url });
+      if (data.success) {
+        setResult({ success: true, prUrl: data.prUrl });
         setCourses([{ id: 1, code: '', title: '', files: [] }]);
       } else {
-        if (data.code === 'TOKEN_EXPIRED' || data.code === 'AUTH_REQUIRED') {
+        if (data.error?.includes('token') || data.error?.includes('401')) {
           setResult({ success: false, error: data.error, tokenExpired: true });
         } else {
           setResult({ success: false, error: data.error || 'Upload failed' });
@@ -243,8 +246,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             </div>
             <button className="w-full py-3 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity" onClick={async () => {
               const email = profile.email || session?.user?.email || '';
-              const connected = await connectGitHubPopup(email);
-              if (connected) window.location.reload();
+              const { connected, token } = await connectGitHubPopup(email);
+              if (connected) {
+                if (token) setGithubToken(token);
+                window.location.reload();
+              }
             }}>
               <i className="fab fa-github mr-2"></i> Connect GitHub Account
             </button>
@@ -426,8 +432,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                   {result.tokenExpired && (
                     <button className="mt-3 w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer" onClick={async () => {
                       const email = profile.email || session?.user?.email || '';
-                      const connected = await connectGitHubPopup(email);
-                      if (connected) window.location.reload();
+                      const { connected, token } = await connectGitHubPopup(email);
+                      if (connected) {
+                        if (token) setGithubToken(token);
+                        window.location.reload();
+                      }
                     }}>
                       <i className="fab fa-github mr-2"></i>Reconnect GitHub
                     </button>

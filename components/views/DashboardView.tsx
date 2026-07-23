@@ -24,6 +24,7 @@ export default function DashboardView() {
   const openRecentFile = useAppStore(s => s.openRecentFile);
   const setUploadOpen = useAppStore(s => s.setUploadOpen);
   const loadProfile = useAppStore(s => s.loadProfile);
+  const setGithubToken = useAppStore(s => s.setGithubToken);
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [editingSocials, setEditingSocials] = useState(false);
@@ -314,8 +315,9 @@ export default function DashboardView() {
             const email = profile.email || session?.user?.email || '';
             if (!email) { showToast('Please save your profile first', 'error'); return; }
             showToast('Opening GitHub...', 'info');
-            const connected = await connectGitHubPopup(email);
+            const { connected, token } = await connectGitHubPopup(email);
             if (connected) {
+              if (token) setGithubToken(token);
               await loadProfile();
               showToast('GitHub connected!', 'success');
             } else {

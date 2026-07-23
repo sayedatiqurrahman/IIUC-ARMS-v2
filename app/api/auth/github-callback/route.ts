@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   }
 
   let connected = false;
+  let accessToken = '';
 
   try {
     const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
       }),
     });
     const tokenData = await tokenRes.json();
+    accessToken = tokenData.access_token || '';
 
     if (tokenData.access_token) {
       const userRes = await fetch('https://api.github.com/user', {
@@ -64,7 +66,7 @@ export async function GET(req: NextRequest) {
   return new Response(
     `<script>
       if (window.opener) {
-        window.opener.postMessage({ type: 'github-connected', connected: ${connected} }, '*');
+        window.opener.postMessage({ type: 'github-connected', connected: ${connected}, token: ${JSON.stringify(accessToken)} }, '*');
         window.close();
       } else {
         window.location.href = '/dashboard';

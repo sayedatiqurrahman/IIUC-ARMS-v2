@@ -1,4 +1,4 @@
-export function connectGitHubPopup(userEmail: string): Promise<boolean> {
+export function connectGitHubPopup(userEmail: string): Promise<{ connected: boolean; token: string }> {
   return new Promise((resolve) => {
     const width = 600;
     const height = 700;
@@ -14,17 +14,16 @@ export function connectGitHubPopup(userEmail: string): Promise<boolean> {
     function handler(e: MessageEvent) {
       if (e.data?.type === 'github-connected') {
         window.removeEventListener('message', handler);
-        resolve(true);
+        resolve({ connected: e.data.connected, token: e.data.token || '' });
       }
     }
     window.addEventListener('message', handler);
 
-    // Fallback: if popup closes without message
     const checkClosed = setInterval(() => {
       if (popup?.closed) {
         clearInterval(checkClosed);
         window.removeEventListener('message', handler);
-        resolve(false);
+        resolve({ connected: false, token: '' });
       }
     }, 500);
   });

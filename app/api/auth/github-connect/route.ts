@@ -5,7 +5,7 @@ export async function GET(req: NextRequest) {
   const redirectUri = `${req.nextUrl.origin}/api/auth/github-callback`;
   const state = req.nextUrl.searchParams.get('email') || '';
 
-  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=read:user,user:email&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
 
   return Response.redirect(url);
 }
