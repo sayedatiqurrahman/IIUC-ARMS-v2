@@ -229,8 +229,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         set({ profile: { ...defaultProfile, ...data } });
+      } else {
+        console.warn('[Profile] Save failed:', res.status, await res.text());
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[Profile] Save error:', err);
+    }
   },
 
   loadTree: async (token?: string) => {

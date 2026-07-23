@@ -76,10 +76,10 @@ export default function RoutineView() {
   }, [routines, selectedId]);
 
   useEffect(() => {
-    if (!routineData && !routineLoading) {
+    if (routines.length === 0 && !routineLoading) {
       loadRoutine();
     }
-  }, [routineData, routineLoading, loadRoutine]);
+  }, [routines.length, routineLoading, loadRoutine]);
 
   useEffect(() => {
     if (current && editing) {
@@ -222,12 +222,10 @@ export default function RoutineView() {
                 <button disabled={exporting} className="inline-flex items-center gap-[5px] px-3 py-[5px] rounded-xl border border-qsis/30 bg-qsis/10 text-qsis cursor-pointer text-[0.75rem] font-semibold hover:bg-qsis/20 transition-all disabled:opacity-50" onClick={handlePrint}>
                   <i className="fas fa-print"></i> Print
                 </button>
+                <button className="inline-flex items-center gap-[5px] px-3 py-[5px] rounded-xl border border-accent/30 bg-accent/10 text-accent cursor-pointer text-[0.75rem] font-semibold hover:bg-accent/20 transition-all" onClick={startEdit}>
+                  <i className="fas fa-edit"></i> Edit
+                </button>
               </>
-            )}
-            {isOwner && !editing && (
-              <button className="inline-flex items-center gap-[5px] px-3 py-[5px] rounded-xl border border-accent/30 bg-accent/10 text-accent cursor-pointer text-[0.75rem] font-semibold hover:bg-accent/20 transition-all" onClick={startEdit}>
-                <i className="fas fa-edit"></i> Edit
-              </button>
             )}
             {editing && (
               <>
