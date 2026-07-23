@@ -491,11 +491,22 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
                       <div className="routine-time-text">{period.start}</div>
                       <div className="routine-time-sub">{period.end}</div>
                     </td>
-                    {routine.days.map((day, dIdx) => (
-                      <td key={day} className="routine-td routine-break-cell">
-                        {dIdx === Math.floor(routine.days.length / 2) ? <span className="routine-break-label">{period.name}</span> : null}
-                      </td>
-                    ))}
+                    {routine.days.map((day, dIdx) => {
+                      const offDay = isOffDay(day, routine.periods, routine.slots);
+                      if (offDay && pIdx > 0) return null;
+                      if (offDay) {
+                        return (
+                          <td key={day} className="routine-td routine-offday-cell" rowSpan={routine.periods.length}>
+                            <div className="routine-offday-vertical">Off Day</div>
+                          </td>
+                        );
+                      }
+                      return (
+                        <td key={day} className="routine-td routine-break-cell">
+                          {dIdx === Math.floor(routine.days.length / 2) ? <span className="routine-break-label">{period.name}</span> : null}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               }
@@ -515,16 +526,15 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
                     const slot = getSlot(day, classPeriodIdx, routine.slots);
                     const course = slot ? getCourse(slot.course, routine.courses) : null;
                     const offDay = isOffDay(day, routine.periods, routine.slots);
+                    if (offDay) return null;
                     return (
-                      <td key={day} className={`routine-td ${offDay && !slot ? 'routine-offday-cell' : ''}`}>
+                      <td key={day} className="routine-td">
                         {slot && course ? (
                           <div className="routine-course">
                             <span className="routine-course-code">{course.code}</span>
                             <span className="routine-course-title">{course.title}</span>
                             <span className="routine-course-teacher">{course.teacher}</span>
                           </div>
-                        ) : offDay && classPeriodIdx === 0 ? (
-                          <div className="routine-offday-vertical">Off Day</div>
                         ) : (
                           <span className="routine-empty">&mdash;</span>
                         )}
