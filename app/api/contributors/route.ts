@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { config } from '@/lib/config';
-import { prisma } from '@/lib/prisma';
 
 interface Contributor {
   id: string;
@@ -24,9 +23,18 @@ const OWNER_EMAILS = [
   's.atiqurrahman2003@gmail.com',
 ];
 
+async function getDbProfiles(): Promise<any[]> {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profiles = await prisma.profile.findMany();
+    return profiles || [];
+  } catch {
+    return [];
+  }
+}
+
 export async function GET() {
-  const githubContributors: any[] = [];
-  const dbProfiles: any[] = [];
+  const dbProfiles = await getDbProfiles();
 
   // Fetch contributors from BOTH repos in parallel
   const [v2Res, dataRes] = await Promise.all([
@@ -37,22 +45,13 @@ export async function GET() {
   const v2Contributors = v2Res?.ok ? await v2Res.json() : [];
   const dataContributors = dataRes?.ok ? await dataRes.json() : [];
 
-  // Fetch all DB profiles
-  try {
-    const profiles = await prisma.profile.findMany();
-    dbProfiles.push(...profiles);
-  } catch {}
-
   // Build merged contributor list
   const contributorMap = new Map<string, Contributor>();
 
-  // Track which repos each contributor contributed to
-  const contributorRepos = new Map<string, Set<'v2' | 'data'>>();
-
   // Add V2 (developer) contributors
   for (const gh of v2Contributors) {
+    if (gh.login === 'github-actions[bot]') continue;
     const login = gh.login;
-    contributorRepos.set(login, new Set(['v2']));
     contributorMap.set(login, {
       id: String(gh.id),
       login,
@@ -73,12 +72,9 @@ export async function GET() {
 
   // Add Data repo (resource provider) contributors
   for (const gh of dataContributors) {
+    if (gh.login === 'github-actions[bot]') continue;
     const login = gh.login;
     const existing = contributorMap.get(login);
-
-    const repos = contributorRepos.get(login) || new Set();
-    repos.add('data');
-    contributorRepos.set(login, repos);
 
     if (existing) {
       existing.contributions += gh.contributions || 0;
@@ -143,13 +139,10 @@ export async function GET() {
   }
 
   const contributors = Array.from(contributorMap.values()).sort((a, b) => {
-    // Founder & Lead always first
     if (a.role === 'Founder & Lead' && b.role !== 'Founder & Lead') return -1;
     if (a.role !== 'Founder & Lead' && b.role === 'Founder & Lead') return 1;
-    // Both repos before single repo
     if (a.roleType === 'both' && b.roleType !== 'both') return -1;
     if (a.roleType !== 'both' && b.roleType === 'both') return 1;
-    // Then by contributions
     return b.contributions - a.contributions;
   });
 

@@ -4,6 +4,8 @@ export const config = {
   branch: 'main',
   uploadPath: 'upload_academic_files',
   relatedKitabsFolder: 'related-kitabs',
+  founderName: 'Sayed Atiqur Rahman',
+  founderAgency: 'Programming Light',
   adobeClientId: process.env.NEXT_PUBLIC_ADOBE_CLIENT_ID || '',
   recaptchaSiteKey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '',
   emailRegex: /^q\d{5,8}@ugrad\.iiuc\.ac\.bd$/i,

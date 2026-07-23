@@ -307,7 +307,7 @@ export default function Home() {
           <h2 className="text-[1.7rem] font-extrabold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent mb-1.5">QSIS-ARMS</h2>
           <p className="text-gray-500 text-[0.95rem]">QSIS Academic Resource Management System</p>
           <div className="flex items-center justify-center gap-2 mt-2.5 flex-wrap">
-            <span className="text-[0.78rem] text-gray-400">Developed by <strong className="text-qsis">Sayed Atiqur Rahman</strong> &mdash; QSIS, IIUC</span>
+            <span className="text-[0.78rem] text-gray-400">Developed by <a href="https://atiq.is-a.dev" target="_blank"> <strong className="text-qsis">Sayed Atiqur Rahman</strong> </a> &mdash; QSIS, IIUC</span>
           </div>
         </section>
 
@@ -689,48 +689,65 @@ export default function Home() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {contributors.map((c: any) => (
-                  <div key={c.id} className="bg-dark-bg2 border border-dark-border rounded-2xl overflow-hidden hover:border-qsis hover:shadow-[0_4px_24px_rgba(34,197,94,0.15)] transition-all group">
-                    {/* Header with avatar + role badge */}
-                    <div className="relative bg-gradient-to-br from-qsis/10 to-accent/10 px-5 pt-6 pb-4 text-center">
-                      {c.profileComplete && (
-                        <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center" title="Profile Complete">
-                          <i className="fas fa-check text-white text-[0.6rem]"></i>
-                        </div>
-                      )}
-                      <Image
-                        src={c.avatar_url}
-                        alt={c.login}
-                        width={72}
-                        height={72}
-                        className="w-[72px] h-[72px] rounded-full border-[3px] border-qsis mx-auto mb-3 object-cover"
-                      />
-                      <h4 className="text-[1rem] font-bold text-dark-text">{c.name || c.login}</h4>
-                      <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors">@{c.login}</a>
-                      <div className="mt-2">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold ${
-                          c.role === 'Founder & Lead' ? 'bg-qsis/20 text-qsis ring-1 ring-qsis/30' :
-                          c.role === 'Developer & Resource Provider' ? 'bg-purple-500/15 text-purple-400' :
-                          c.role === 'Developer' ? 'bg-blue-500/15 text-blue-400' :
-                          c.role === 'Resource Provider' ? 'bg-orange-500/15 text-orange-400' :
-                          'bg-dark-bg3 text-dark-text2'
-                        }`}>
-                          <i className={`fas ${
-                            c.role === 'Founder & Lead' ? 'fa-crown' :
-                            c.role === 'Developer & Resource Provider' ? 'fa-code-branch' :
-                            c.role === 'Developer' ? 'fa-laptop-code' :
-                            c.role === 'Resource Provider' ? 'fa-book-open' :
-                            'fa-user'
-                          }`}></i>
-                          {c.role}
-                        </span>
-                        {c.roleType === 'both' && c.role !== 'Founder & Lead' && (
-                          <span className="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6rem] font-medium bg-green-500/10 text-green-400">
-                            <i className="fas fa-check-circle"></i> Both Repos
+                {contributors.map((c: any) => {
+                  const isFounder = c.role === 'Founder & Lead';
+                  return (
+                    <div key={c.id} className={`${isFounder ? 'bg-gradient-to-br from-qsis/5 to-accent/5 border-qsis/40 ring-1 ring-qsis/20' : 'bg-dark-bg2 border-dark-border'} border rounded-2xl overflow-hidden hover:border-qsis hover:shadow-[0_4px_24px_rgba(34,197,94,0.15)] transition-all group`}>
+                      {/* Header with avatar + role badge */}
+                      <div className={`relative ${isFounder ? 'bg-gradient-to-br from-qsis/20 to-accent/15' : 'bg-gradient-to-br from-qsis/10 to-accent/10'} px-5 pt-6 pb-4 text-center`}>
+                        {isFounder && (
+                          <div className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-qsis/20 text-qsis text-[0.6rem] font-bold flex items-center gap-1">
+                            <i className="fas fa-star"></i> Programming Light
+                          </div>
+                        )}
+                        {c.profileComplete && (
+                          <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center" title="Profile Complete">
+                            <i className="fas fa-check text-white text-[0.6rem]"></i>
+                          </div>
+                        )}
+                        <Image
+                          src={c.avatar_url}
+                          alt={c.login}
+                          width={72}
+                          height={72}
+                          className={`w-[72px] h-[72px] rounded-full mx-auto mb-3 object-cover ${isFounder ? 'border-[3px] border-qsis shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'border-[3px] border-qsis'}`}
+                        />
+                        <h4 className="text-[1rem] font-bold text-dark-text">{c.name || c.login}</h4>
+                        {isFounder && (
+                          <div className="text-[0.75rem] text-qsis font-medium mt-0.5">{config.founderName}</div>
+                        )}
+                        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors">@{c.login}</a>
+                        <div className="mt-2">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold ${
+                            isFounder ? 'bg-qsis/25 text-qsis ring-1 ring-qsis/40' :
+                            c.role === 'Developer & Resource Provider' ? 'bg-purple-500/15 text-purple-400' :
+                            c.role === 'Developer' ? 'bg-blue-500/15 text-blue-400' :
+                            c.role === 'Resource Provider' ? 'bg-orange-500/15 text-orange-400' :
+                            'bg-dark-bg3 text-dark-text2'
+                          }`}>
+                            <i className={`fas ${
+                              isFounder ? 'fa-crown' :
+                              c.role === 'Developer & Resource Provider' ? 'fa-code-branch' :
+                              c.role === 'Developer' ? 'fa-laptop-code' :
+                              c.role === 'Resource Provider' ? 'fa-book-open' :
+                              'fa-user'
+                            }`}></i>
+                            {c.role}
                           </span>
+                          {c.roleType === 'both' && !isFounder && (
+                            <span className="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6rem] font-medium bg-green-500/10 text-green-400">
+                              <i className="fas fa-check-circle"></i> Both Repos
+                            </span>
+                          )}
+                        </div>
+                        {isFounder && (
+                          <div className="mt-2 flex items-center justify-center gap-2 text-[0.65rem] text-dark-text2">
+                            <span><i className="fas fa-laptop-code text-blue-400 mr-1"></i>Web App</span>
+                            <span><i className="fas fa-book-open text-orange-400 mr-1"></i>Data Repo</span>
+                            <span><i className="fas fa-database text-green-400 mr-1"></i>Database</span>
+                          </div>
                         )}
                       </div>
-                    </div>
 
                     {/* Profile details */}
                     <div className="px-5 py-4">
@@ -806,7 +823,7 @@ export default function Home() {
                       </a>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </section>
