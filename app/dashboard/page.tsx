@@ -5,11 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import DashboardView from '@/components/views/DashboardView';
 
-export const metadata = {
-  title: 'Dashboard - QSIS-ARMS',
-  description: 'Your dashboard',
-};
-
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();

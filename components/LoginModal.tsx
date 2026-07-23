@@ -2,7 +2,7 @@
 
 import { signIn } from 'next-auth/react';
 import { useState, useEffect } from 'react';
-import { signInWithGoogle, signInWithEmail, signUpWithEmail } from '@/lib/firebase';
+import { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword } from '@/lib/firebase';
 import { useRecaptcha } from '@/lib/useRecaptcha';
 import { config } from '@/lib/config';
 
@@ -16,7 +16,11 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
   const [recaptchaReady, setRecaptchaReady] = useState(false);
   const recaptchaContainerId = 'login-recaptcha-container';
   const { renderCheckbox, getToken, reset } = useRecaptcha();
@@ -35,6 +39,10 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       setEmail('');
       setPassword('');
       setError('');
+      setSuccess('');
+      setShowForgotPassword(false);
+      setForgotPasswordEmail('');
+      setForgotPasswordSent(false);
       setRecaptchaReady(false);
     }
   }, [isOpen]);
@@ -48,6 +56,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (!isValidEmail(email)) {
       setError('Only IIUC departmental emails are allowed (e.g. q233099@ugrad.iiuc.ac.bd)');
@@ -57,14 +66,26 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setLoading(true);
 
     try {
-      let idToken: string;
+      let user: any;
       if (isSignUp) {
-        const { idToken: token } = await signUpWithEmail(email, password);
-        idToken = token;
+        const result = await signUpWithEmail(email, password);
+        user = result.user;
+        setSuccess('Account created! A verification email has been sent to your inbox. Please verify your email before signing in.');
+        setIsSignUp(false);
+        setLoading(false);
+        return;
       } else {
-        const { idToken: token } = await signInWithEmail(email, password);
-        idToken = token;
+        const result = await signInWithEmail(email, password);
+        user = result.user;
+
+        if (!user.emailVerified) {
+          setError('Your email is not verified. Please check your inbox for the verification link.');
+          setLoading(false);
+          return;
+        }
       }
+
+      const idToken = await user.getIdToken();
       const recaptchaToken = getToken(recaptchaContainerId);
 
       const result = await signIn('credentials', {
@@ -107,6 +128,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
   const handleGoogleLogin = async () => {
     setError('');
+    setSuccess('');
     setLoading(true);
     try {
       const { idToken } = await signInWithGoogle();
@@ -130,21 +152,112 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     }
   };
 
-  const handleGitHubLogin = async () => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!forgotPasswordEmail) {
+      setError('Please enter your email address');
+      return;
+    }
+
     setLoading(true);
     try {
-      await signIn('github', { callbackUrl: '/' });
-    } catch {
-      setError('GitHub sign-in failed');
+      await resetPassword(forgotPasswordEmail);
+      setForgotPasswordSent(true);
+      setSuccess('Password reset email sent! Check your inbox.');
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found') {
+        setError('No account found with this email');
+      } else {
+        setError('Failed to send reset email. Please try again.');
+      }
+    } finally {
       setLoading(false);
     }
   };
+
+  if (showForgotPassword) {
+    return (
+      <div className="modal active" onClick={onClose}>
+        <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
+            <h2 className="text-base font-semibold"><i className="fas fa-key"></i> Forgot Password</h2>
+            <button className="text-dark-text2 cursor-pointer bg-transparent border-none hover:text-dark-text" onClick={() => { setShowForgotPassword(false); setError(''); setSuccess(''); }}>
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+
+          <div className="p-5">
+            {error && (
+              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
+                <i className="fas fa-exclamation-circle mr-2"></i>{error}
+              </div>
+            )}
+            {success && (
+              <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-[0.8rem]">
+                <i className="fas fa-check-circle mr-2"></i>{success}
+              </div>
+            )}
+
+            {!forgotPasswordSent ? (
+              <form onSubmit={handleForgotPassword}>
+                <p className="text-[0.82rem] text-dark-text2 mb-4">Enter your email address and we&apos;ll send you a link to reset your password.</p>
+                <div className="mb-4">
+                  <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">University Email</label>
+                  <input
+                    type="email"
+                    className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors"
+                    placeholder="q233099@ugrad.iiuc.ac.bd"
+                    value={forgotPasswordEmail}
+                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-[0.85rem] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <><i className="fas fa-spinner fa-spin mr-2"></i>Sending...</>
+                  ) : (
+                    <><i className="fas fa-paper-plane mr-2"></i>Send Reset Link</>
+                  )}
+                </button>
+              </form>
+            ) : (
+              <div className="text-center py-4">
+                <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
+                  <i className="fas fa-check text-2xl text-green-500"></i>
+                </div>
+                <p className="text-[0.85rem] text-dark-text mb-2">Check your email!</p>
+                <p className="text-[0.78rem] text-dark-text2">We sent a password reset link to <strong>{forgotPasswordEmail}</strong></p>
+              </div>
+            )}
+
+            <div className="mt-4 text-center text-[0.78rem] text-dark-text2">
+              <button
+                type="button"
+                className="text-qsis bg-transparent border-none cursor-pointer font-semibold hover:underline text-[0.78rem]"
+                onClick={() => { setShowForgotPassword(false); setError(''); setSuccess(''); }}
+              >
+                Back to Sign In
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="modal active" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
-          <h2 className="text-base font-semibold"><i className="fas fa-sign-in-alt"></i> Sign In</h2>
+          <h2 className="text-base font-semibold"><i className="fas fa-sign-in-alt"></i> {isSignUp ? 'Sign Up' : 'Sign In'}</h2>
           <button className="text-dark-text2 cursor-pointer bg-transparent border-none hover:text-dark-text" onClick={onClose}>
             <i className="fas fa-times"></i>
           </button>
@@ -166,6 +279,13 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
               <i className="fas fa-exclamation-circle mr-2"></i>{error}
+            </div>
+          )}
+
+          {/* Success message */}
+          {success && (
+            <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-[0.8rem]">
+              <i className="fas fa-check-circle mr-2"></i>{success}
             </div>
           )}
 
@@ -195,12 +315,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
           {/* Email/Password Form */}
           <form onSubmit={handleEmailLogin}>
-            {error && (
-              <div className="mb-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
-                <i className="fas fa-exclamation-circle mr-2"></i>{error}
-              </div>
-            )}
-
             <div className="mb-3">
               <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">University Email</label>
               <input
@@ -243,12 +357,25 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
             </button>
           </form>
 
+          {/* Forgot Password */}
+          {!isSignUp && (
+            <div className="mt-3 text-center">
+              <button
+                type="button"
+                className="text-[0.78rem] text-dark-text2 hover:text-qsis bg-transparent border-none cursor-pointer hover:underline"
+                onClick={() => { setShowForgotPassword(true); setForgotPasswordEmail(email); setError(''); setSuccess(''); }}
+              >
+                Forgot your password?
+              </button>
+            </div>
+          )}
+
           <div className="mt-4 text-center text-[0.78rem] text-dark-text2">
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
             <button
               type="button"
               className="text-qsis bg-transparent border-none cursor-pointer font-semibold hover:underline text-[0.78rem]"
-              onClick={() => { setIsSignUp(!isSignUp); setError(''); }}
+              onClick={() => { setIsSignUp(!isSignUp); setError(''); setSuccess(''); }}
             >
               {isSignUp ? 'Sign In' : 'Sign Up'}
             </button>
