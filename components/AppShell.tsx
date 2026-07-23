@@ -34,8 +34,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadTree(session?.accessToken || '');
     loadRecentReads();
-    loadProfile();
   }, []);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      loadProfile();
+    }
+  }, [status]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
