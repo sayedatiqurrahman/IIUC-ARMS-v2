@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
             token = profile.githubToken;
             contributorLogin = profile.githubLogin || '';
           }
-          await prisma.$disconnect();
         }
       } catch {}
     }
@@ -213,6 +212,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     const msg = err.message || 'Upload failed';
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error('[Upload] Error:', msg, err.stack);
+    return NextResponse.json({ error: msg, details: err.message }, { status: 500 });
   }
 }

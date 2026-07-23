@@ -105,7 +105,6 @@ export const authOptions: NextAuthOptions = {
                 update: { githubLogin, githubToken: account.access_token },
                 create: { userId: user.email, email: user.email, githubLogin, githubToken: account.access_token },
               });
-              await prisma.$disconnect();
             } catch {}
           }
         } catch {}

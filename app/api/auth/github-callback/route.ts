@@ -48,7 +48,6 @@ export async function GET(req: NextRequest) {
               image: githubUser.avatar_url || null,
             },
           });
-          await prisma.$disconnect();
           connected = true;
           console.log('[GitHub Callback] Saved githubLogin:', githubUser.login, 'for', email);
         } catch (err) {
