@@ -202,7 +202,7 @@ export default function RoutineView() {
     setExporting(true);
     try {
       const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(printRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false });
+      const canvas = await html2canvas(printRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: printRef.current.scrollWidth, windowHeight: printRef.current.scrollHeight });
       if (format === 'pdf') {
         const { jsPDF } = await import('jspdf');
         const pdf = new jsPDF('p', 'mm', 'a4');
@@ -239,8 +239,6 @@ export default function RoutineView() {
     } catch (err) { console.error('Export failed:', err); }
     finally { setExporting(false); }
   }, [currentPreview]);
-
-  const handlePrint = useCallback(() => { window.print(); }, []);
 
   const handleSaveBuilder = useCallback((routine: RoutineItem) => {
     let updated: RoutineItem[];
@@ -358,7 +356,6 @@ export default function RoutineView() {
               {exporting && <span className="routine-exporting"><i className="fas fa-spinner fa-spin"></i> Exporting...</span>}
               <button disabled={exporting} className="routine-btn routine-btn-outline" onClick={() => handleExport('pdf')}><i className="fas fa-file-pdf"></i> PDF</button>
               <button disabled={exporting} className="routine-btn routine-btn-outline" onClick={() => handleExport('png')}><i className="fas fa-image"></i> PNG</button>
-              <button disabled={exporting} className="routine-btn routine-btn-accent" onClick={handlePrint}><i className="fas fa-print"></i> Print</button>
               <button className="routine-btn routine-btn-ghost" onClick={() => setViewMode('manager')}><i className="fas fa-arrow-left"></i> Back</button>
             </div>
           </div>
