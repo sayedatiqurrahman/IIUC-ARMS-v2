@@ -14,7 +14,8 @@ export async function GET() {
     const profile = await prisma.profile.findUnique({ where: { userId } });
 
     return NextResponse.json(profile || { userId, email: session.user.email });
-  } catch {
+  } catch (err) {
+    console.error('[Profile GET] Error:', err);
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
   }
 }
@@ -29,49 +30,54 @@ export async function POST(req: NextRequest) {
 
     const userId = session.user.email;
     const body = await req.json();
-    const {
-      universityId, name, whatsapp, semester, image,
-      facebook, twitter, linkedin, website,
-      hideWhatsapp, hideUniversityId, githubLogin,
-    } = body;
+
+    // Build update object — only include fields that are explicitly provided
+    const updateData: Record<string, any> = {};
+    const createData: Record<string, any> = { userId, email: session.user.email };
+
+    const fields = [
+      'name', 'universityId', 'whatsapp', 'semester', 'image',
+      'facebook', 'twitter', 'linkedin', 'website',
+      'hideWhatsapp', 'hideUniversityId', 'githubLogin',
+    ];
+
+    for (const field of fields) {
+      if (field in body) {
+        const val = body[field];
+        // For strings: only set if provided and non-empty, otherwise null
+        // For booleans: always set (they have defaults)
+        if (typeof val === 'boolean') {
+          updateData[field] = val;
+          createData[field] = val;
+        } else if (val !== undefined && val !== null && val !== '') {
+          updateData[field] = val;
+          createData[field] = val;
+        } else if (val === '' || val === null) {
+          // Only clear if explicitly set to empty/null AND the field is not githubLogin/image
+          // (those should never be cleared by profile save)
+          if (field !== 'githubLogin' && field !== 'image') {
+            updateData[field] = null;
+            createData[field] = null;
+          }
+        }
+      }
+    }
+
+    // Always set image from session if not provided
+    if (!updateData.image && (session as any).user?.image) {
+      updateData.image = (session as any).user.image;
+      if (!createData.image) createData.image = (session as any).user.image;
+    }
 
     const profile = await prisma.profile.upsert({
       where: { userId },
-      update: {
-        email: session.user.email,
-        name: name || null,
-        universityId: universityId || null,
-        whatsapp: whatsapp || null,
-        semester: semester || null,
-        image: image || (session as any).user?.image || null,
-        facebook: facebook || null,
-        twitter: twitter || null,
-        linkedin: linkedin || null,
-        website: website || null,
-        hideWhatsapp: !!hideWhatsapp,
-        hideUniversityId: !!hideUniversityId,
-        githubLogin: githubLogin || null,
-      },
-      create: {
-        userId,
-        email: session.user.email,
-        name: name || null,
-        universityId: universityId || null,
-        whatsapp: whatsapp || null,
-        semester: semester || null,
-        image: image || (session as any).user?.image || null,
-        facebook: facebook || null,
-        twitter: twitter || null,
-        linkedin: linkedin || null,
-        website: website || null,
-        hideWhatsapp: !!hideWhatsapp,
-        hideUniversityId: !!hideUniversityId,
-        githubLogin: githubLogin || null,
-      },
+      update: updateData,
+      create: createData as any,
     });
 
     return NextResponse.json(profile);
-  } catch {
+  } catch (err) {
+    console.error('[Profile POST] Error:', err);
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
   }
 }

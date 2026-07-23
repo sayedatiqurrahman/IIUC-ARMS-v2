@@ -8,8 +8,9 @@ export async function GET(req: NextRequest) {
     return new Response('<script>window.close()</script>', { headers: { 'Content-Type': 'text/html' } });
   }
 
+  let connected = false;
+
   try {
-    // Exchange code for token
     const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -22,13 +23,11 @@ export async function GET(req: NextRequest) {
     const tokenData = await tokenRes.json();
 
     if (tokenData.access_token) {
-      // Get GitHub user info
       const userRes = await fetch('https://api.github.com/user', {
         headers: { Authorization: `token ${tokenData.access_token}` },
       });
       const githubUser = await userRes.json();
 
-      // Save to profile DB
       const email = state;
       if (email && githubUser.login) {
         try {
@@ -48,16 +47,23 @@ export async function GET(req: NextRequest) {
             },
           });
           await prisma.$disconnect();
-        } catch {}
+          connected = true;
+          console.log('[GitHub Callback] Saved githubLogin:', githubUser.login, 'for', email);
+        } catch (err) {
+          console.error('[GitHub Callback] DB save failed:', err);
+        }
       }
+    } else {
+      console.error('[GitHub Callback] No access_token:', tokenData);
     }
-  } catch {}
+  } catch (err) {
+    console.error('[GitHub Callback] Error:', err);
+  }
 
-  // Close popup and notify parent
   return new Response(
     `<script>
       if (window.opener) {
-        window.opener.postMessage({ type: 'github-connected' }, '*');
+        window.opener.postMessage({ type: 'github-connected', connected: ${connected} }, '*');
         window.close();
       } else {
         window.location.href = '/dashboard';

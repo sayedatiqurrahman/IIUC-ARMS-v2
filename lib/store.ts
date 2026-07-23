@@ -209,8 +209,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         set({ profile: { ...defaultProfile, ...data } });
+      } else {
+        console.warn('[Profile] Load failed:', res.status, res.statusText);
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[Profile] Load error:', err);
+    }
   },
   updateProfile: async (p) => {
     const current = get().profile;
