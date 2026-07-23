@@ -16,7 +16,8 @@ interface UploadModalProps {
 export default function UploadModal({ session, status, profile, onLogin, onClose }: UploadModalProps) {
   const [semester, setSemester] = useState(profile.semester || '');
   const [category, setCategory] = useState('');
-  const [courseName, setCourseName] = useState('');
+  const [courseCode, setCourseCode] = useState('');
+  const [courseTitle, setCourseTitle] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean } | null>(null);
@@ -54,14 +55,18 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   }
 
   async function handleSubmit() {
-    if (!semester || !category || !courseName.trim()) {
-      alert('Please fill in semester, category, and course name.');
+    if (!semester || !category || !courseCode.trim()) {
+      alert('Please fill in semester, category, and course code.');
       return;
     }
     if (files.length === 0) {
       alert('Please select at least one file.');
       return;
     }
+
+    const folderName = courseTitle.trim()
+      ? `${courseCode.trim()}-${courseTitle.trim()}`
+      : courseCode.trim();
 
     setUploading(true);
     setResult(null);
@@ -76,7 +81,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           return btoa(binary);
         });
         uploadedFiles.push({
-          path: `${semester}/${category}/${courseName.trim()}/${file.name}`,
+          path: `${semester}/${category}/${folderName}/${file.name}`,
           content: base64,
         });
       }
@@ -86,7 +91,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           files: uploadedFiles.map(f => ({ path: f.path, url: '', content: f.content })),
-          message: `Add ${courseName} - ${category} (${semester})`,
+          message: `Add ${courseCode}${courseTitle ? ' - ' + courseTitle : ''} - ${category} (${semester})`,
         }),
       });
 
@@ -291,8 +296,12 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                   </div>
                 </div>
                 <div className="mb-3">
-                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Course Name *</label>
-                  <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. FSC-1208" value={courseName} onChange={e => setCourseName(e.target.value)} />
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Course Code *</label>
+                  <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. FSC-1208" value={courseCode} onChange={e => setCourseCode(e.target.value)} />
+                </div>
+                <div className="mb-3">
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Course Title</label>
+                  <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. Islamic Studies" value={courseTitle} onChange={e => setCourseTitle(e.target.value)} />
                 </div>
 
                 {/* File Input */}
@@ -350,7 +359,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
               <button
                 className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleSubmit}
-                disabled={uploading || files.length === 0 || !semester || !category || !courseName.trim()}
+                disabled={uploading || files.length === 0 || !semester || !category || !courseCode.trim()}
               >
                 {uploading ? (
                   <><i className="fas fa-spinner fa-spin mr-2"></i>Creating PR...</>
