@@ -25,7 +25,6 @@ export const config = {
     question: { label: 'Previous Questions', icon: 'question-circle', color: '#f59e0b' },
     note: { label: 'Notes', icon: 'sticky-note', color: '#22c55e' },
     syllabus: { label: 'Syllabus', icon: 'graduation-cap', color: '#8b5cf6' },
-    hadith: { label: 'Hadith', icon: 'book', color: '#f97316' },
     other: { label: 'Other', icon: 'folder', color: '#94a3b8' },
   },
 };

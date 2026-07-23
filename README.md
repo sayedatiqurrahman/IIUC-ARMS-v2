@@ -5,7 +5,7 @@
 ## Live: [qsis-arms.eu.cc](https://qsis-arms.eu.cc)
 
 ## Features
-- Browse 8 semesters of academic files (sheets, notes, previous questions, syllabus, hadith)
+- Browse 8 semesters of academic files (sheets, notes, previous questions, syllabus)
 - Related Kitabs — cross-semester & Shariah resources
 - PDF viewer (Adobe SDK), image viewer, Office document viewer
 - Upload files via GitHub Pull Request

@@ -279,7 +279,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                       <option value="question">Previous Questions</option>
                       <option value="note">Notes</option>
                       <option value="syllabus">Syllabus</option>
-                      <option value="hadith">Hadith</option>
+
                     </select>
                   </div>
                 </div>

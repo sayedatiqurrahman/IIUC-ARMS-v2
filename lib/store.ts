@@ -51,7 +51,6 @@ function detectCategory(name: string) {
   if (l.includes('previous question') || l.includes('question')) return 'question';
   if (l === 'notes' || l === 'note') return 'note';
   if (l.includes('syllabus')) return 'syllabus';
-  if (l.includes('hadith')) return 'hadith';
   return 'other';
 }
 
