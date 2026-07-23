@@ -770,6 +770,405 @@ button { font-family: inherit; }
   font-family: system-ui, sans-serif;
 }
 
+/* ─── OFF DAY ─── */
+.routine-offday-cell {
+  background: #f8f8f8 !important;
+}
+.routine-offday-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ROUTINE BUILDER — Full Flexible Editor
+   ═══════════════════════════════════════════════════════════ */
+
+.routine-builder {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.routine-builder-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.routine-builder-tab {
+  flex: 1;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+
+.routine-builder-tab:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.03);
+}
+
+.routine-builder-tab.active {
+  color: #22c55e;
+  border-bottom-color: #22c55e;
+}
+
+.routine-builder-section {
+  padding: 20px;
+}
+
+.routine-builder-section h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.routine-builder-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.routine-builder-hint {
+  font-size: 0.75rem;
+  color: var(--text2);
+  margin-bottom: 12px;
+}
+
+.routine-builder-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.routine-builder-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.routine-builder-grid label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text2);
+}
+
+.routine-builder-grid input,
+.routine-builder-grid select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 0.82rem;
+  outline: none;
+}
+
+.routine-builder-grid input:focus,
+.routine-builder-grid select:focus {
+  border-color: #22c55e;
+}
+
+.routine-builder-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.routine-builder-day-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.routine-builder-day-btn.active {
+  background: #22c55e;
+  color: #ffffff;
+  border-color: #22c55e;
+}
+
+/* Periods */
+.routine-builder-periods {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.routine-builder-period {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.routine-builder-period.break {
+  border-color: #eab308;
+  background: rgba(234,179,8,0.05);
+}
+
+.routine-builder-period-drag {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.routine-builder-period-drag button {
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-size: 0.6rem;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.routine-builder-period-drag button:hover { color: var(--text); }
+.routine-builder-period-drag button:disabled { opacity: 0.3; cursor: default; }
+
+.period-name-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.period-time-input {
+  width: 110px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.75rem;
+  outline: none;
+}
+
+.period-sep {
+  font-size: 0.7rem;
+  color: var(--text2);
+}
+
+.routine-builder-break-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: #eab308;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.routine-builder-break-toggle input { accent-color: #eab308; }
+
+/* Courses */
+.routine-builder-courses {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.routine-builder-course {
+  display: grid;
+  grid-template-columns: 120px 1fr 1fr 100px 36px;
+  gap: 8px;
+  align-items: center;
+}
+
+.routine-builder-course input {
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.routine-builder-course input:focus { border-color: #22c55e; }
+
+.routine-builder-add-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #22c55e;
+  background: rgba(34,197,94,0.1);
+  color: #22c55e;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.routine-builder-add-btn:hover { background: rgba(34,197,94,0.2); }
+
+.routine-builder-remove-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba(239,68,68,0.3);
+  background: rgba(239,68,68,0.1);
+  color: #ef4444;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.routine-builder-remove-btn:hover { background: #ef4444; color: #fff; }
+
+/* Grid Editor */
+.routine-builder-grid-wrapper {
+  overflow-x: auto;
+}
+
+.routine-builder-grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.routine-builder-grid th {
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 10px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+.routine-builder-grid th:last-child { border-right: none; }
+
+.routine-builder-grid td {
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  text-align: center;
+}
+
+.routine-builder-grid td:last-child { border-right: none; }
+.routine-builder-grid tr:last-child td { border-bottom: none; }
+
+.routine-builder-grid select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 0.72rem;
+  outline: none;
+}
+
+.routine-builder-grid select:focus { border-color: #22c55e; }
+
+.routine-builder-grid-time {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text2);
+  text-align: left !important;
+  padding-left: 12px !important;
+  white-space: nowrap;
+  background: var(--bg3);
+}
+
+.routine-builder-grid-time-sub {
+  font-size: 0.62rem;
+  color: var(--text2);
+  opacity: 0.7;
+}
+
+.routine-builder-grid-break td {
+  background: rgba(234,179,8,0.05);
+  color: #eab308;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.routine-builder-offday-info {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(148,163,184,0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: var(--text2);
+}
+
+/* Actions */
+.routine-builder-actions {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+}
+
+.routine-builder-save-btn {
+  padding: 10px 24px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.routine-builder-save-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+.routine-builder-cancel-btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.routine-builder-cancel-btn:hover { border-color: var(--text2); color: var(--text); }
+
 /* ═══════════════════════════════════════════════════════════
    PRINT STYLES — Official University Print Layout
    ═══════════════════════════════════════════════════════════ */
