@@ -70,7 +70,11 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       });
 
       if (result?.error) {
-        setError('Invalid email or password');
+        if (!isValidEmail(email)) {
+          setError('Only IIUC departmental emails are allowed (e.g. q233099@ugrad.iiuc.ac.bd).');
+        } else {
+          setError('Invalid email or password');
+        }
         reset();
       } else {
         onClose();
@@ -98,11 +102,16 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setLoading(true);
     try {
       const { idToken } = await signInWithGoogle();
-      await signIn('credentials', {
+      const result = await signIn('credentials', {
         idToken,
-        redirect: true,
-        callbackUrl: '/',
+        redirect: false,
       });
+      if (result?.error) {
+        setError('Only IIUC departmental emails are allowed. Please use your university email (e.g. q233099@ugrad.iiuc.ac.bd).');
+        setLoading(false);
+      } else if (result?.ok) {
+        onClose();
+      }
     } catch (err: any) {
       if (err.code === 'auth/popup-closed-by-user') {
         setError('Sign-in cancelled');
@@ -134,11 +143,23 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         </div>
 
         <div className="p-5">
-          {/* Info banner */}
-          <div className="mb-4 p-3 rounded-lg bg-qsis/10 border border-qsis/20 text-[0.78rem] text-dark-text2">
-            <i className="fas fa-info-circle text-qsis mr-1.5"></i>
-            Only IIUC departmental emails are allowed (e.g. <strong className="text-qsis">q233099@ugrad.iiuc.ac.bd</strong>).
+          {/* Warning banner */}
+          <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-[0.78rem]">
+            <div className="flex items-start gap-2">
+              <i className="fas fa-exclamation-triangle text-yellow-500 mt-0.5 flex-shrink-0"></i>
+              <div>
+                <span className="text-dark-text font-semibold">Only IIUC departmental emails allowed</span>
+                <p className="text-dark-text2 mt-1">When clicking &quot;Continue with Google&quot;, make sure to select your university email (e.g. <strong className="text-yellow-500">q233099@ugrad.iiuc.ac.bd</strong>). Personal Gmail accounts will be rejected.</p>
+              </div>
+            </div>
           </div>
+
+          {/* Error message */}
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
+              <i className="fas fa-exclamation-circle mr-2"></i>{error}
+            </div>
+          )}
 
           {/* Google Login */}
           <div className="mb-5">
