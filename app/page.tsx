@@ -1102,7 +1102,17 @@ export default function Home() {
           </div>
           <div className="border-t border-dark-border mt-6 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-[0.72rem] text-dark-text2">&copy; {new Date().getFullYear()} QSIS-ARMS. All rights reserved.</p>
-            <p className="text-[0.72rem] text-dark-text2">Developed with <i className="fas fa-heart text-red-500"></i> by <strong className="text-qsis">Sayed Atiqur Rahman</strong></p>
+            <div className="flex items-center gap-3">
+              <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+                <i className="fas fa-star text-yellow-500"></i> Star Files Repo
+              </a>
+              <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+                <i className="fas fa-code-fork text-qsis"></i> Fork to Contribute
+              </a>
+              <a href="https://github.com/sayedatiqurrahman/QSIS-ARMS-v2" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+                <i className="fab fa-github"></i> Source Code
+              </a>
+            </div>
           </div>
         </div>
       </footer>

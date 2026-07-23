@@ -137,20 +137,11 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
           {/* Info banner */}
           <div className="mb-4 p-3 rounded-lg bg-qsis/10 border border-qsis/20 text-[0.78rem] text-dark-text2">
             <i className="fas fa-info-circle text-qsis mr-1.5"></i>
-            Use your IIUC departmental email (e.g. <strong className="text-qsis">q233099@ugrad.iiuc.ac.bd</strong>) to sign in.
+            Only IIUC departmental emails are allowed (e.g. <strong className="text-qsis">q233099@ugrad.iiuc.ac.bd</strong>).
           </div>
 
-          {/* Social Login Buttons */}
-          <div className="flex flex-col gap-3 mb-5">
-            <button
-              className="flex items-center justify-center gap-3 w-full py-2.5 px-4 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text font-semibold text-[0.85rem] hover:bg-dark-bg hover:border-qsis transition-all cursor-pointer"
-              onClick={handleGitHubLogin}
-              disabled={loading}
-            >
-              <i className="fab fa-github text-[1.1rem]"></i>
-              Continue with GitHub
-            </button>
-
+          {/* Google Login */}
+          <div className="mb-5">
             <button
               className="flex items-center justify-center gap-3 w-full py-2.5 px-4 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text font-semibold text-[0.85rem] hover:bg-dark-bg hover:border-qsis transition-all cursor-pointer"
               onClick={handleGoogleLogin}

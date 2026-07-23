@@ -22,6 +22,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const hasGitHub = !!(session as any)?.accessToken;
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files || []);
     const valid = selected.filter(f => f.size <= config.maxUploadSizeMB * 1024 * 1024);
@@ -107,6 +109,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     }
   }
 
+  // Not logged in
   if (status !== 'authenticated') {
     return (
       <div className="modal active" onClick={onClose}>
@@ -121,7 +124,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                 <i className="fas fa-cloud-upload-alt text-2xl text-qsis"></i>
               </div>
               <h3 className="text-[1rem] font-bold mb-1">Share Academic Files</h3>
-              <p className="text-[0.82rem] text-dark-text2">Sign in to upload notes, sheets, and previous questions.</p>
+              <p className="text-[0.82rem] text-dark-text2">Sign in with your IIUC email to upload notes, sheets, and previous questions.</p>
             </div>
             <button className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer" onClick={onLogin}>
               <i className="fas fa-sign-in-alt mr-2"></i> Sign In to Upload
@@ -132,6 +135,85 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     );
   }
 
+  // Logged in but no GitHub connected
+  if (!hasGitHub) {
+    return (
+      <div className="modal active" onClick={onClose}>
+        <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
+            <h2 className="text-base font-semibold"><i className="fas fa-upload"></i> Connect GitHub</h2>
+            <button className="text-dark-text2 cursor-pointer bg-transparent border-none" onClick={onClose}><i className="fas fa-times"></i></button>
+          </div>
+          <div className="p-5">
+            <div className="text-center mb-5">
+              <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-dark-bg3 flex items-center justify-center">
+                <i className="fab fa-github text-2xl text-dark-text"></i>
+              </div>
+              <h3 className="text-[1rem] font-bold mb-1">Connect Your GitHub</h3>
+              <p className="text-[0.82rem] text-dark-text2">We need GitHub to create a Pull Request with your files.</p>
+            </div>
+
+            {/* Steps */}
+            <div className="mb-5">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-[0.72rem] font-bold text-qsis">1</span>
+                  </div>
+                  <div>
+                    <span className="text-[0.82rem] font-semibold block">Sign in with Google</span>
+                    <span className="text-[0.72rem] text-dark-text2">Use your IIUC email ({profile.email || session?.user?.email || 'your email'})</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-[0.72rem] font-bold text-qsis">2</span>
+                  </div>
+                  <div>
+                    <span className="text-[0.82rem] font-semibold block">Connect GitHub Account</span>
+                    <span className="text-[0.72rem] text-dark-text2">One click to link your GitHub for PR submissions</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-[0.72rem] font-bold text-qsis">3</span>
+                  </div>
+                  <div>
+                    <span className="text-[0.82rem] font-semibold block">Upload & Submit</span>
+                    <span className="text-[0.72rem] text-dark-text2">Files are submitted as a Pull Request for review</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* No GitHub account? */}
+            <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
+              <p className="text-[0.78rem] text-dark-text2 mb-2"><i className="fas fa-question-circle text-qsis mr-1.5"></i>Don&apos;t have a GitHub account?</p>
+              <a href="https://github.com/signup" target="_blank" rel="noopener noreferrer" className="text-[0.82rem] text-qsis font-semibold hover:underline">
+                Create one free at github.com/signup <i className="fas fa-external-link-alt text-[0.65rem] ml-1"></i>
+              </a>
+              <p className="text-[0.7rem] text-dark-text2 mt-2">It takes 2 minutes. Then come back and connect here.</p>
+            </div>
+
+            {/* Connect Button */}
+            <button className="w-full py-3 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity" onClick={() => signIn('github', { callbackUrl: '/' })}>
+              <i className="fab fa-github mr-2"></i> Connect GitHub Account
+            </button>
+
+            {/* Data repo info */}
+            <div className="mt-4 p-3 rounded-lg bg-qsis/5 border border-qsis/10">
+              <p className="text-[0.72rem] text-dark-text2 text-center">
+                <i className="fas fa-info-circle text-qsis mr-1"></i>
+                Files are stored in <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="text-qsis font-semibold hover:underline">QSIS-ACADEMIC-FILES-MANAFGER</a> &mdash; fork it to contribute directly.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Logged in with GitHub - show upload form
   return (
     <div className="modal active" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -186,6 +268,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                     <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={semester} onChange={e => setSemester(e.target.value)}>
                       <option value="">Select...</option>
                       {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                      <option value={config.relatedKitabsFolder}>Related Kitabs</option>
                     </select>
                   </div>
                   <div>
