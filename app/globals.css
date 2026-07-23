@@ -1598,12 +1598,12 @@ button { font-family: inherit; }
 
 .pdf-close-btn {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 0px;
+  right: 0px;
   z-index: 10000;
-  width: 34px;
-  height: 34px;
-  border-radius: 2px 2px 0px 0px;
+  width: 35.5px;
+  height: 35.5px;
+  border-radius: 0px 0px 0px 5px;
   background: rgba(239,68,68,0.9);
   color: #fff;
   border: none;

@@ -62,13 +62,29 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
           style.textContent = `
             [class*="watermark"], [class*="Watermark"] { display: none !important; }
             [data-element="watermark"] { display: none !important; }
+
             .HeaderContainer, .ToolsContainer { background: #1e293b !important; }
             .HeaderContainer *, .ToolsContainer * { color: #e2e8f0 !important; }
-            .PanelContainer, .LeftPanel { background: #0f172a !important; }
-            .PanelContainer *, .LeftPanel * { color: #e2e8f0 !important; }
-            .DocumentContainer { background: #1a1a2e !important; }
+
+            .PanelContainer, .LeftPanel, .RightPanel { background: #0f172a !important; }
+            .PanelContainer *, .LeftPanel *, .RightPanel * { color: #e2e8f0 !important; }
+
+            .DocumentContainer, .pageContainer, .canvas-container, .canvas { background: #1a1a2e !important; }
+
             .ScrollBar { background: #1e293b !important; }
             .Thumb { background: #475569 !important; }
+
+            .textLayer { color: transparent !important; }
+            .annotationLayer { color: #e2e8f0 !important; }
+
+            .PopupContainer, .annotationPopup, .ContextPopup, .modal { background: #1e293b !important; color: #e2e8f0 !important; border-color: #334155 !important; }
+            .PopupContainer *, .annotationPopup *, .ContextPopup *, .modal * { color: #e2e8f0 !important; }
+
+            input, select, textarea { background: #0f172a !important; color: #e2e8f0 !important; border-color: #334155 !important; }
+            button:not([class*="close"]):not([class*="Close"]) { background: #334155 !important; color: #e2e8f0 !important; border-color: #475569 !important; }
+
+            .MenuContainer, .tools-menu, .dropdown { background: #1e293b !important; }
+            .MenuContainer *, .tools-menu *, .dropdown * { color: #e2e8f0 !important; }
           `;
           iframe.contentDocument.head.appendChild(style);
         }
