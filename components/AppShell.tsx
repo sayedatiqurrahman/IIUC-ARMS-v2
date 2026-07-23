@@ -109,7 +109,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     </button>
                     <button
                       className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-red-400 hover:bg-red-500/10 cursor-pointer bg-transparent border-none text-left transition-colors"
-                      onClick={() => { setProfileDropdownOpen(false); signOut({ callbackUrl: '/' }); }}
+                      onClick={() => { setProfileDropdownOpen(false); fetch('/api/auth/firebase-session', { method: 'DELETE' }); signOut({ callbackUrl: '/' }); }}
                     >
                       <i className="fas fa-sign-out-alt w-4 text-center"></i> Logout
                     </button>

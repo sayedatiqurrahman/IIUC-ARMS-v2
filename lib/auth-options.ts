@@ -12,6 +12,16 @@ function isAllowedEmail(email: string): boolean {
   return IIUC_EMAIL_REGEX.test(email) || OWNER_EMAILS.includes(email);
 }
 
+async function verifyFirebaseToken(idToken: string) {
+  try {
+    const { adminAuth } = await import('@/lib/firebase-admin');
+    const decoded = await adminAuth.verifyIdToken(idToken);
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GitHubProvider({
@@ -30,14 +40,26 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.idToken) return null;
 
+        // Try Firebase Admin verification first
+        const decoded = await verifyFirebaseToken(credentials.idToken);
+        if (decoded) {
+          const email = decoded.email || credentials.email;
+          if (!email || !isAllowedEmail(email)) return null;
+          return {
+            id: decoded.sub || email,
+            email,
+            name: credentials.name || decoded.name || email.split('@')[0],
+            image: credentials.image || decoded.picture || null,
+          };
+        }
+
+        // Fallback: decode JWT manually (for dev/testing)
         try {
           const parts = credentials.idToken.split('.');
           if (parts.length !== 3) return null;
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
           const email = credentials.email || payload.email;
-
           if (!email || !isAllowedEmail(email)) return null;
-
           return {
             id: payload.sub || email,
             email,
@@ -52,14 +74,12 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      // For Google sign-in, validate email domain
       if (account?.provider === 'google' && profile?.email) {
         if (!isAllowedEmail(profile.email)) {
           return '/auth/error?error=invalid-email';
         }
       }
 
-      // For GitHub, save githubLogin to profile DB
       if (account?.provider === 'github') {
         try {
           const token = account.access_token;
@@ -76,12 +96,10 @@ export const authOptions: NextAuthOptions = {
             }
           }
 
-          // Save GitHub login to profile DB
           const githubLogin = (profile as any)?.login || user.name || '';
           if (githubLogin && user.email) {
             try {
-              const { PrismaClient } = await import('@prisma/client');
-              const prisma = new PrismaClient();
+              const { prisma } = await import('@/lib/prisma');
               await prisma.profile.upsert({
                 where: { userId: user.email },
                 update: { githubLogin },
@@ -90,9 +108,7 @@ export const authOptions: NextAuthOptions = {
               await prisma.$disconnect();
             } catch {}
           }
-        } catch {
-          // Allow sign-in if we can't verify (fallback)
-        }
+        } catch {}
       }
 
       return true;
