@@ -31,6 +31,22 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
+    // Fallback to stored GitHub token from popup connect
+    if (!token) {
+      try {
+        const session = await getServerSession(authOptions);
+        if (session?.user?.email) {
+          const { prisma } = await import('@/lib/prisma');
+          const profile = await prisma.profile.findUnique({ where: { userId: session.user.email } });
+          if (profile?.githubToken) {
+            token = profile.githubToken;
+            contributorLogin = profile.githubLogin || '';
+          }
+          await prisma.$disconnect();
+        }
+      } catch {}
+    }
+
     // Fallback to env token
     if (!token && process.env.GITHUB_TOKEN) {
       token = process.env.GITHUB_TOKEN;

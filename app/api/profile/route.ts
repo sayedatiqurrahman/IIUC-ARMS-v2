@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const fields = [
       'name', 'universityId', 'whatsapp', 'semester', 'image',
       'facebook', 'twitter', 'linkedin', 'website',
-      'hideWhatsapp', 'hideUniversityId', 'githubLogin',
+      'hideWhatsapp', 'hideUniversityId', 'githubLogin', 'githubToken',
     ];
 
     for (const field of fields) {
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
         } else if (val === '' || val === null) {
           // Only clear if explicitly set to empty/null AND the field is not githubLogin/image
           // (those should never be cleared by profile save)
-          if (field !== 'githubLogin' && field !== 'image') {
+          if (field !== 'githubLogin' && field !== 'githubToken' && field !== 'image') {
             updateData[field] = null;
             createData[field] = null;
           }

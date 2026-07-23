@@ -37,12 +37,14 @@ export async function GET(req: NextRequest) {
             where: { userId: email },
             update: {
               githubLogin: githubUser.login,
+              githubToken: tokenData.access_token,
               image: existing?.image ? existing.image : (githubUser.avatar_url || null),
             },
             create: {
               userId: email,
               email,
               githubLogin: githubUser.login,
+              githubToken: tokenData.access_token,
               image: githubUser.avatar_url || null,
             },
           });

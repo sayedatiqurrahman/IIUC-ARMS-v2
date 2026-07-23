@@ -102,8 +102,8 @@ export const authOptions: NextAuthOptions = {
               const { prisma } = await import('@/lib/prisma');
               await prisma.profile.upsert({
                 where: { userId: user.email },
-                update: { githubLogin },
-                create: { userId: user.email, email: user.email, githubLogin },
+                update: { githubLogin, githubToken: account.access_token },
+                create: { userId: user.email, email: user.email, githubLogin, githubToken: account.access_token },
               });
               await prisma.$disconnect();
             } catch {}

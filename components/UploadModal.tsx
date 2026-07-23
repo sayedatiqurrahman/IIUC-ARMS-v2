@@ -28,7 +28,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean } | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
-  const hasGitHub = !!(session as any)?.accessToken;
+  const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin;
 
   const totalFiles = courses.reduce((sum, c) => sum + c.files.length, 0);
   const totalSizeMB = courses.reduce((sum, c) => sum + c.files.reduce((s, f) => s + f.size, 0), 0) / (1024 * 1024);

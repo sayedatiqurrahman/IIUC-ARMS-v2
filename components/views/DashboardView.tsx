@@ -297,7 +297,7 @@ export default function DashboardView() {
             if (!email) { showToast('Please save your profile first', 'error'); return; }
             const connected = await connectGitHubPopup(email);
             if (connected) {
-              loadProfile();
+              await loadProfile();
               showToast('GitHub connected!', 'success');
             }
           }}>

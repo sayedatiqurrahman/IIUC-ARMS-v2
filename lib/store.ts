@@ -84,6 +84,7 @@ export interface Profile {
   semester: string;
   image: string;
   githubLogin: string;
+  githubToken: string;
   facebook: string;
   twitter: string;
   linkedin: string;
@@ -94,7 +95,7 @@ export interface Profile {
 
 const defaultProfile: Profile = {
   universityId: '', name: '', email: '', whatsapp: '', semester: '', image: '',
-  githubLogin: '', facebook: '', twitter: '', linkedin: '', website: '',
+  githubLogin: '', githubToken: '', facebook: '', twitter: '', linkedin: '', website: '',
   hideWhatsapp: false, hideUniversityId: false,
 };
 

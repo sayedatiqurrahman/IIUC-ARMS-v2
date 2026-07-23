@@ -16,6 +16,7 @@ model Profile {
   semester        String?
   image           String?
   githubLogin     String?
+  githubToken     String?
   facebook        String?
   twitter         String?
   linkedin        String?

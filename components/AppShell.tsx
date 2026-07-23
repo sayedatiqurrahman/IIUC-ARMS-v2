@@ -4,9 +4,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
-import { useAppStore, getSavedPdfPage, savePdfPage } from '@/lib/store';
+import { useAppStore, getSavedPdfPage } from '@/lib/store';
 import LoginModal from '@/components/LoginModal';
 import UploadModal from '@/components/UploadModal';
+import PdfViewer from '@/components/PdfViewer';
 import { useState, useEffect, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { config } from '@/lib/config';
@@ -239,7 +240,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
             <div className="flex-1 overflow-hidden">
-              {viewerItem.mimeType === 'pdf' && <PdfViewer item={viewerItem} onClose={closeViewer} />}
+              {viewerItem.mimeType === 'pdf' && <PdfViewer url={viewerItem.rawUrl} name={viewerItem.name} filePath={viewerItem.path} onClose={closeViewer} />}
               {viewerItem.mimeType === 'image' && <ImageViewer item={viewerItem} onClose={closeViewer} />}
               {(viewerItem.mimeType === 'doc' || viewerItem.mimeType === 'sheet' || viewerItem.mimeType === 'ppt') && (
                 <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(viewerItem.rawUrl)}`} className="w-full border-none" style={{minHeight:'calc(100vh - 50px)'}}></iframe>
@@ -262,84 +263,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <LoginModal isOpen={loginModalOpen} onClose={() => setLoginModalOpen(false)} />
     </div>
   );
-}
-
-/* ─── PDF Viewer (inline) ─── */
-
-function PdfViewer({ item, onClose }: { item: any; onClose: () => void }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const divId = 'adobe-pdf-' + Date.now();
-    const container = containerRef.current;
-    container.innerHTML = `<div id="${divId}" style="width:100%;height:100%;position:relative"></div>`;
-
-    const closeBtn = document.createElement('button');
-    closeBtn.title = 'Close PDF';
-    closeBtn.style.cssText = 'position:fixed;top:9px;left:19px;z-index:2147483647;width:27px;height:27px;border-radius:7px;background:#eb0e00;color:rgb(255,256,255);border:2px solid rgb(255,255,255);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.85rem;box-shadow:rgba(0,0,0,0.5) 0px 4px 16px;transition:0.15s;transform:scale(1)';
-    closeBtn.innerHTML = '<i class="fas fa-times" style="font-size:0.75rem"></i>';
-    closeBtn.onmouseover = function() { closeBtn.style.background = '#dc2626'; closeBtn.style.transform = 'scale(1.15)'; };
-    closeBtn.onmouseout = function() { closeBtn.style.background = '#ef4444'; closeBtn.style.transform = 'scale(1)'; };
-    closeBtn.onclick = onClose;
-    document.body.appendChild(closeBtn);
-
-    const savedPage = getSavedPdfPage(item.path);
-
-    function initAdobe() {
-      if (typeof (window as any).AdobeDC !== 'undefined') {
-        try {
-          const adobeDCView = new (window as any).AdobeDC.View({ clientId: config.adobeClientId, divId: divId });
-          adobeDCView.previewFile({
-            content: { location: { url: item.rawUrl } },
-            metaData: { fileName: item.name }
-          }, {}).then((adobeViewer: any) => {
-            adobeViewer.getAPIs().then((apis: any) => {
-              if (savedPage > 1) apis.gotoLocation(savedPage).catch(() => {});
-              let lastSaved = savedPage;
-              setInterval(() => {
-                apis.getCurrentPage().then((page: number) => {
-                  if (page && page !== lastSaved) { lastSaved = page; savePdfPage(item.path, page); }
-                }).catch(() => {});
-              }, 2000);
-            }).catch(() => {});
-          }).catch(() => {
-            fallbackPdf(container, item);
-          });
-        } catch {
-          fallbackPdf(container, item);
-        }
-      } else {
-        document.addEventListener('adobe_dc_view_sdk.ready', function handler() {
-          document.removeEventListener('adobe_dc_view_sdk.ready', handler);
-          initAdobe();
-        });
-        setTimeout(() => {
-          if (typeof (window as any).AdobeDC === 'undefined') fallbackPdf(container, item);
-        }, 8000);
-      }
-    }
-
-    initAdobe();
-
-    return () => {
-      closeBtn.remove();
-      container.innerHTML = '';
-    };
-  }, [item]);
-
-  return <div ref={containerRef} className="w-full h-full"></div>;
-}
-
-function fallbackPdf(container: HTMLElement, item: any) {
-  container.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;color:#94a3b8">
-      <i class="fas fa-file-pdf" style="font-size:3rem;color:#ef4444"></i>
-      <p>PDF viewer unavailable.</p>
-      <a href="${item.rawUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:12px;background:linear-gradient(135deg,#22c55e,#16a34a);color:white;text-decoration:none;font-weight:600;font-size:0.85rem">
-        <i class="fas fa-external-link-alt"></i> Open in new tab
-      </a>
-    </div>`;
 }
 
 /* ─── Image Viewer (inline) ─── */
