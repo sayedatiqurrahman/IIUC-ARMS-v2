@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
@@ -9,6 +9,11 @@ import { config } from '@/lib/config';
 import { getFileIconByType, showToast, timeAgo } from '@/lib/utils';
 import { updateUserProfile } from '@/lib/firebase';
 import { connectGitHubPopup } from '@/lib/github-connect';
+
+function extractUniversityId(email: string): string {
+  const match = email.match(/^(q\d+)/i);
+  return match ? match[1].toUpperCase() : '';
+}
 
 export default function DashboardView() {
   const router = useRouter();
@@ -31,6 +36,17 @@ export default function DashboardView() {
   });
 
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin;
+
+  // Auto-extract university ID from email if not set
+  useEffect(() => {
+    const email = profile.email || (session as any)?.user?.email || '';
+    if (email && !profile.universityId) {
+      const extracted = extractUniversityId(email);
+      if (extracted) {
+        updateProfile({ universityId: extracted });
+      }
+    }
+  }, [profile.email, profile.universityId]);
 
   // Primary info: profile DB > session (Firebase/Google)
   const displayName = profile.name || (session as any)?.user?.name || 'User';
@@ -106,8 +122,10 @@ export default function DashboardView() {
           </div>
           {!editingProfile && (
             <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={() => {
+              const email = profile.email || (session as any)?.user?.email || '';
+              const autoId = profile.universityId || extractUniversityId(email);
               setProfileForm({
-                universityId: profile.universityId,
+                universityId: autoId,
                 name: profile.name || '',
                 whatsapp: profile.whatsapp,
                 semester: profile.semester,
