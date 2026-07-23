@@ -40,6 +40,8 @@ interface RoutineItem {
   days: string[];
   courses: RoutineCourse[];
   slots: RoutineSlot[];
+  createdAt?: number;
+  published?: boolean;
 }
 
 const DEFAULT_PERIODS: RoutinePeriod[] = [
@@ -68,17 +70,49 @@ function isOffDay(day: string, periods: RoutinePeriod[], slots: RoutineSlot[]) {
   return classPeriods.every((_, idx) => !getSlot(day, idx, slots));
 }
 
-function loadMyRoutine(): RoutineItem | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem('qsis-my-routine');
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+function getTeacherAbbr(teacher: string): string {
+  if (!teacher) return '';
+  const parts = teacher.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
+  return parts.map(p => p[0]).join('').toUpperCase().slice(0, 4);
 }
 
-function saveMyRoutine(routine: RoutineItem) {
-  localStorage.setItem('qsis-my-routine', JSON.stringify(routine));
+/* ─── localStorage helpers ─── */
+const LS_MY_ROUTINES = 'qsis-routines';
+const LS_PUBLISHED = 'qsis-published-routines';
+
+function loadMyRoutines(): RoutineItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LS_MY_ROUTINES);
+    if (raw) return JSON.parse(raw);
+    const single = localStorage.getItem('qsis-my-routine');
+    if (single) {
+      const r = JSON.parse(single);
+      localStorage.setItem(LS_MY_ROUTINES, JSON.stringify([r]));
+      return [r];
+    }
+    return [];
+  } catch { return []; }
 }
+
+function saveMyRoutines(routines: RoutineItem[]) {
+  localStorage.setItem(LS_MY_ROUTINES, JSON.stringify(routines));
+}
+
+function loadPublishedRoutines(): RoutineItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LS_PUBLISHED);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function savePublishedRoutines(routines: RoutineItem[]) {
+  localStorage.setItem(LS_PUBLISHED, JSON.stringify(routines));
+}
+
+type ViewMode = 'manager' | 'preview' | 'builder';
 
 export default function RoutineView() {
   const router = useRouter();
@@ -88,28 +122,79 @@ export default function RoutineView() {
   const loadRoutine = useAppStore(s => s.loadRoutine);
   const printRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
-  const [selectedId, setSelectedId] = useState<string>('my-routine');
-  const [myRoutine, setMyRoutine] = useState<RoutineItem | null>(null);
 
-  const routines: RoutineItem[] = Array.isArray(routineData) ? routineData : [];
-  const allRoutines = [...(myRoutine ? [myRoutine] : []), ...routines];
-  const current = allRoutines.find(r => r.id === selectedId) || allRoutines[0] || null;
+  const [viewMode, setViewMode] = useState<ViewMode>('manager');
+  const [myRoutines, setMyRoutines] = useState<RoutineItem[]>([]);
+  const [publishedRoutines, setPublishedRoutines] = useState<RoutineItem[]>([]);
+  const [selectedId, setSelectedId] = useState<string>('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const isOwner = config.ownerEmails.includes(session?.user?.email || '');
+
+  const sharedRoutines: RoutineItem[] = Array.isArray(routineData) ? routineData : [];
+  const routines = sharedRoutines;
+  const allVisibleRoutines = [...publishedRoutines, ...sharedRoutines];
+  const currentPreview = myRoutines.find(r => r.id === selectedId) || allVisibleRoutines.find(r => r.id === selectedId) || null;
 
   useEffect(() => {
-    setMyRoutine(loadMyRoutine());
+    setMyRoutines(loadMyRoutines());
+    setPublishedRoutines(loadPublishedRoutines());
   }, []);
 
   useEffect(() => {
-    if (routines.length === 0 && !routineLoading) {
-      loadRoutine();
-    }
+    if (routines.length === 0 && !routineLoading) loadRoutine();
   }, [routines.length, routineLoading, loadRoutine]);
 
-  useEffect(() => {
-    if (!selectedId && allRoutines.length > 0) {
-      setSelectedId(myRoutine ? 'my-routine' : allRoutines[0].id);
-    }
-  }, [allRoutines.length, selectedId, myRoutine]);
+  const persistMyRoutines = useCallback((updated: RoutineItem[]) => {
+    setMyRoutines(updated);
+    saveMyRoutines(updated);
+  }, []);
+
+  const handleView = useCallback((id: string) => {
+    setSelectedId(id);
+    setViewMode('preview');
+  }, []);
+
+  const handleEdit = useCallback((id: string) => {
+    setEditingId(id);
+    setViewMode('builder');
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    if (!confirm('Delete this routine?')) return;
+    const updated = myRoutines.filter(r => r.id !== id);
+    persistMyRoutines(updated);
+    showToast('Routine deleted', 'success');
+  }, [myRoutines, persistMyRoutines]);
+
+  const handleDuplicate = useCallback((routine: RoutineItem) => {
+    const dup: RoutineItem = {
+      ...routine,
+      id: `my-${Date.now()}`,
+      semester: routine.semester + ' (Copy)',
+      createdAt: Date.now(),
+      published: false,
+    };
+    persistMyRoutines([...myRoutines, dup]);
+    showToast('Routine duplicated', 'success');
+  }, [myRoutines, persistMyRoutines]);
+
+  const handlePublish = useCallback((routine: RoutineItem) => {
+    if (!confirm(`Publish "${routine.semester}" for all users?`)) return;
+    const published = { ...routine, published: true, id: `pub-${Date.now()}` };
+    const updated = publishedRoutines.filter(r => !(r.semester === routine.semester && r.branch === routine.branch));
+    updated.push(published);
+    setPublishedRoutines(updated);
+    savePublishedRoutines(updated);
+    showToast('Routine published! All users can now see it.', 'success');
+  }, [publishedRoutines]);
+
+  const handleUnpublish = useCallback((id: string) => {
+    const updated = publishedRoutines.filter(r => r.id !== id);
+    setPublishedRoutines(updated);
+    savePublishedRoutines(updated);
+    showToast('Routine unpublished', 'success');
+  }, [publishedRoutines]);
 
   const handleExport = useCallback(async (format: 'pdf' | 'png' | 'jpeg') => {
     if (!printRef.current) return;
@@ -122,7 +207,7 @@ export default function RoutineView() {
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfW = pdf.internal.pageSize.getWidth();
         const pdfH = pdf.internal.pageSize.getHeight();
-        const margin = 20;
+        const margin = 15;
         const imgData = canvas.toDataURL('image/png');
         const imgW = pdfW - margin * 2;
         const imgH = (canvas.height * imgW) / canvas.width;
@@ -143,25 +228,42 @@ export default function RoutineView() {
             yPos += sourceH;
           }
         }
-        pdf.save(`QSIS-ARMS-${current?.semester || 'Routine'}.pdf`);
+        pdf.save(`QSIS-Routine-${currentPreview?.semester || 'Routine'}.pdf`);
       } else {
         const link = document.createElement('a');
-        link.download = `QSIS-ARMS-${current?.semester || 'Routine'}.${format}`;
+        link.download = `QSIS-Routine-${currentPreview?.semester || 'Routine'}.${format}`;
         link.href = canvas.toDataURL(format === 'png' ? 'image/png' : 'image/jpeg', 0.95);
         link.click();
       }
     } catch (err) { console.error('Export failed:', err); }
     finally { setExporting(false); }
-  }, [current]);
+  }, [currentPreview]);
 
   const handlePrint = useCallback(() => { window.print(); }, []);
 
-  if (routineLoading && !myRoutine) {
+  const handleSaveBuilder = useCallback((routine: RoutineItem) => {
+    let updated: RoutineItem[];
+    if (editingId) {
+      updated = myRoutines.map(r => r.id === editingId ? routine : r);
+    } else {
+      updated = [...myRoutines, routine];
+    }
+    persistMyRoutines(updated);
+    setEditingId(null);
+    setViewMode('manager');
+    showToast(editingId ? 'Routine updated!' : 'Routine created!', 'success');
+  }, [myRoutines, editingId, persistMyRoutines]);
+
+  const handleCancelBuilder = useCallback(() => {
+    setEditingId(null);
+    setViewMode('manager');
+  }, []);
+
+  if (routineLoading && myRoutines.length === 0) {
     return (
       <section className="mb-5">
-        <div className="no-print flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold flex items-center gap-2"><i className="fas fa-calendar-alt"></i> Class Routine</h3>
-          <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={() => router.push('/')}><i className="fas fa-arrow-left"></i> Back</button>
+        <div className="routine-page-header no-print">
+          <div><h3 className="routine-page-title"><i className="fas fa-calendar-alt"></i> Class Routine</h3><p className="routine-page-sub">Manage and view your class schedules</p></div>
         </div>
         <div className="loading-container">
           <div className="book-loader"><div className="book-base"></div><div className="book-spine-loader"></div><div className="book-cover"></div><div className="book-page-stack"><div className="book-page"></div><div className="book-page"></div><div className="book-page"></div></div><div className="page-shadow"></div><div className="page-shadow"></div><div className="page-shadow"></div></div>
@@ -173,65 +275,147 @@ export default function RoutineView() {
 
   return (
     <section className="mb-5">
-      <div className="no-print">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h3 className="text-base font-semibold flex items-center gap-2"><i className="fas fa-calendar-alt"></i> Class Routine</h3>
-          <div className="flex items-center gap-2">
-            {current && selectedId !== 'builder' && (
-              <>
-                <button disabled={exporting} className="inline-flex items-center gap-[5px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold hover:border-qsis transition-all disabled:opacity-50" onClick={() => handleExport('pdf')}><i className="fas fa-file-pdf text-red-400"></i> PDF</button>
-                <button disabled={exporting} className="inline-flex items-center gap-[5px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold hover:border-qsis transition-all disabled:opacity-50" onClick={() => handleExport('png')}><i className="fas fa-image text-blue-400"></i> PNG</button>
-                <button disabled={exporting} className="inline-flex items-center gap-[5px] px-3 py-[5px] rounded-xl border border-qsis/30 bg-qsis/10 text-qsis cursor-pointer text-[0.75rem] font-semibold hover:bg-qsis/20 transition-all disabled:opacity-50" onClick={handlePrint}><i className="fas fa-print"></i> Print</button>
-              </>
-            )}
-            <button className={`inline-flex items-center gap-[5px] px-3 py-[5px] rounded-xl border cursor-pointer text-[0.75rem] font-semibold transition-all ${selectedId === 'builder' ? 'border-accent bg-accent/20 text-accent' : 'border-accent/30 bg-accent/10 text-accent hover:bg-accent/20'}`} onClick={() => setSelectedId(selectedId === 'builder' ? (myRoutine ? 'my-routine' : routines[0]?.id || '') : 'builder')}>
-              <i className="fas fa-plus"></i> {selectedId === 'builder' ? 'Back' : 'Create My Routine'}
-            </button>
-            <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={() => router.push('/')}><i className="fas fa-arrow-left"></i> Back</button>
-          </div>
-        </div>
-
-        {allRoutines.length > 1 && selectedId !== 'builder' && (
-          <div className="mb-4 flex items-center gap-2 flex-wrap">
-            {myRoutine && (
-              <button className={`px-3 py-1.5 rounded-lg text-[0.75rem] font-semibold cursor-pointer transition-all ${selectedId === 'my-routine' ? 'bg-qsis text-white' : 'bg-dark-bg3 border border-dark-border text-dark-text2 hover:border-qsis'}`} onClick={() => setSelectedId('my-routine')}>
-                <i className="fas fa-user-edit mr-1"></i>My Routine
+      {/* ─── MANAGER VIEW ─── */}
+      {viewMode === 'manager' && (
+        <>
+          <div className="routine-page-header no-print">
+            <div>
+              <h3 className="routine-page-title"><i className="fas fa-calendar-alt"></i> Class Routine</h3>
+              <p className="routine-page-sub">Manage and view your class schedules</p>
+            </div>
+            <div className="routine-page-actions">
+              <button className="routine-btn routine-btn-primary" onClick={() => { setEditingId(null); setViewMode('builder'); }}>
+                <i className="fas fa-plus"></i> Create New
               </button>
-            )}
-            {routines.map(r => (
-              <button key={r.id} className={`px-3 py-1.5 rounded-lg text-[0.75rem] font-semibold cursor-pointer transition-all ${r.id === selectedId ? 'bg-qsis text-white' : 'bg-dark-bg3 border border-dark-border text-dark-text2 hover:border-qsis'}`} onClick={() => setSelectedId(r.id)}>
-                {r.semester}{r.branch ? ` - ${r.branch}` : ''}
-              </button>
-            ))}
+              <button className="routine-btn routine-btn-ghost" onClick={() => router.push('/')}><i className="fas fa-arrow-left"></i> Back</button>
+            </div>
           </div>
-        )}
 
-        {exporting && (
-          <div className="mb-4 p-3 rounded-xl bg-qsis/10 border border-qsis/20 text-qsis text-[0.82rem] flex items-center gap-2"><i className="fas fa-spinner fa-spin"></i> Generating export...</div>
-        )}
-      </div>
+          {myRoutines.length === 0 && allVisibleRoutines.length === 0 ? (
+            <div className="routine-empty-state">
+              <div className="routine-empty-icon"><i className="fas fa-calendar-plus"></i></div>
+              <h4>No Routines Yet</h4>
+              <p>Create your first class routine to get started.</p>
+              <button className="routine-btn routine-btn-primary" onClick={() => { setEditingId(null); setViewMode('builder'); }}>
+                <i className="fas fa-plus"></i> Create Your First Routine
+              </button>
+            </div>
+          ) : (
+            <>
+              {myRoutines.length > 0 && (
+                <div className="routine-manager-section">
+                  <h4 className="routine-manager-section-title"><i className="fas fa-user-edit"></i> My Routines</h4>
+                  <div className="routine-manager-grid">
+                    {myRoutines.map(r => (
+                      <RoutineCard key={r.id} routine={r} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} onDuplicate={handleDuplicate} onPublish={isOwner ? handlePublish : undefined} />
+                    ))}
+                  </div>
+                </div>
+              )}
 
-      {selectedId === 'builder' ? (
-        <RoutineBuilder
-          existing={myRoutine}
-          onSave={(r) => { saveMyRoutine(r); setMyRoutine(r); setSelectedId('my-routine'); showToast('Routine saved!', 'success'); }}
-          onCancel={() => setSelectedId(myRoutine ? 'my-routine' : routines[0]?.id || '')}
-        />
-      ) : !current ? (
-        <div className="no-print text-center py-12 text-dark-bg2 rounded-2xl border border-dark-border">
-          <i className="fas fa-calendar-times text-4xl text-dark-text2 mb-3 block opacity-30"></i>
-          <p className="text-[0.9rem] text-dark-text2">No routine available yet.</p>
-          <p className="text-[0.78rem] text-dark-text2 mt-1 opacity-60">Click &quot;Create My Routine&quot; to build your own schedule.</p>
-        </div>
-      ) : (
-        <RoutinePrintView ref={printRef} routine={current} />
+              {allVisibleRoutines.length > 0 && (
+                <div className="routine-manager-section">
+                  <h4 className="routine-manager-section-title"><i className="fas fa-globe"></i> Published Routines</h4>
+                  <div className="routine-manager-grid">
+                    {allVisibleRoutines.map(r => (
+                      <RoutineCard key={r.id} routine={r} isPublished onView={handleView} onUnpublish={isOwner ? handleUnpublish : undefined} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {/* ─── BUILDER VIEW ─── */}
+      {viewMode === 'builder' && (
+        <>
+          <div className="routine-page-header no-print">
+            <div>
+              <h3 className="routine-page-title"><i className={`fas fa-${editingId ? 'edit' : 'plus-circle'}`}></i> {editingId ? 'Edit Routine' : 'Create New Routine'}</h3>
+              <p className="routine-page-sub">Build your custom class schedule step by step</p>
+            </div>
+          </div>
+          <RoutineBuilder
+            existing={editingId ? myRoutines.find(r => r.id === editingId) || null : null}
+            onSave={handleSaveBuilder}
+            onCancel={handleCancelBuilder}
+          />
+        </>
+      )}
+
+      {/* ─── PREVIEW VIEW ─── */}
+      {viewMode === 'preview' && currentPreview && (
+        <>
+          <div className="routine-page-header no-print">
+            <div>
+              <h3 className="routine-page-title"><i className="fas fa-eye"></i> {currentPreview.semester}{currentPreview.branch ? ` - Branch ${currentPreview.branch}` : ''}</h3>
+              <p className="routine-page-sub">Session: {currentPreview.session}</p>
+            </div>
+            <div className="routine-page-actions">
+              {exporting && <span className="routine-exporting"><i className="fas fa-spinner fa-spin"></i> Exporting...</span>}
+              <button disabled={exporting} className="routine-btn routine-btn-outline" onClick={() => handleExport('pdf')}><i className="fas fa-file-pdf"></i> PDF</button>
+              <button disabled={exporting} className="routine-btn routine-btn-outline" onClick={() => handleExport('png')}><i className="fas fa-image"></i> PNG</button>
+              <button disabled={exporting} className="routine-btn routine-btn-accent" onClick={handlePrint}><i className="fas fa-print"></i> Print</button>
+              <button className="routine-btn routine-btn-ghost" onClick={() => setViewMode('manager')}><i className="fas fa-arrow-left"></i> Back</button>
+            </div>
+          </div>
+          <RoutinePrintView ref={printRef} routine={currentPreview} />
+        </>
       )}
     </section>
   );
 }
 
 /* ═══════════════════════════════════════════════════════
-   ROUTINE PRINT VIEW
+   ROUTINE CARD — Manager Grid Card
+   ═══════════════════════════════════════════════════════ */
+function RoutineCard({ routine, isPublished, onView, onEdit, onDelete, onDuplicate, onPublish, onUnpublish }: {
+  routine: RoutineItem;
+  isPublished?: boolean;
+  onView: (id: string) => void;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onDuplicate?: (r: RoutineItem) => void;
+  onPublish?: (r: RoutineItem) => void;
+  onUnpublish?: (id: string) => void;
+}) {
+  const slotCount = routine.slots.length;
+  const daysCount = routine.days.length;
+  const courseCount = routine.courses.length;
+  const dateStr = routine.createdAt ? new Date(routine.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+  return (
+    <div className={`routine-card ${isPublished ? 'routine-card-published' : ''}`}>
+      <div className="routine-card-header">
+        <div className="routine-card-semester">{routine.semester}</div>
+        {routine.branch && <span className="routine-card-badge">Branch {routine.branch}</span>}
+        {isPublished && <span className="routine-card-published-badge"><i className="fas fa-globe"></i> Published</span>}
+      </div>
+      <div className="routine-card-meta">
+        <span><i className="fas fa-book"></i> {courseCount} courses</span>
+        <span><i className="fas fa-calendar-day"></i> {daysCount} days</span>
+        <span><i className="fas fa-clock"></i> {slotCount} classes</span>
+      </div>
+      <div className="routine-card-info">
+        <span>Session: {routine.session}</span>
+        {dateStr && <span>Created: {dateStr}</span>}
+      </div>
+      <div className="routine-card-actions">
+        <button className="routine-card-btn routine-card-btn-view" onClick={() => onView(routine.id)}><i className="fas fa-eye"></i> View</button>
+        {onEdit && <button className="routine-card-btn routine-card-btn-edit" onClick={() => onEdit(routine.id)}><i className="fas fa-edit"></i> Edit</button>}
+        {onDuplicate && <button className="routine-card-btn routine-card-btn-dup" onClick={() => onDuplicate(routine)}><i className="fas fa-copy"></i> Duplicate</button>}
+        {onPublish && !isPublished && <button className="routine-card-btn routine-card-btn-publish" onClick={() => onPublish(routine)}><i className="fas fa-share-alt"></i> Publish</button>}
+        {onUnpublish && isPublished && <button className="routine-card-btn routine-card-btn-unpublish" onClick={() => onUnpublish(routine.id)}><i className="fas fa-eye-slash"></i> Unpublish</button>}
+        {onDelete && <button className="routine-card-btn routine-card-btn-delete" onClick={() => onDelete(routine.id)}><i className="fas fa-trash"></i></button>}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   ROUTINE PRINT VIEW — Beautiful University Layout
    ═══════════════════════════════════════════════════════ */
 import { forwardRef } from 'react';
 
@@ -241,31 +425,53 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
     <div ref={ref} className="routine-export">
       <div className="routine-header">
         <div className="routine-header-inner">
-          <div className="routine-logo-wrapper"><Image src="/iiuc-logo.png" alt="IIUC" width={72} height={72} className="routine-logo" priority /></div>
-          <h1 className="routine-university-name">{routine.university}</h1>
-          <p className="routine-arabic-name">&#x262F;&#x2015;&#x627;&#x644;&#x62C;&#x627;&#x645;&#x639;&#x629; &#x627;&#x644;&#x625;&#x633;&#x644;&#x627;&#x645;&#x64A;&#x629; &#x627;&#x644;&#x62F;&#x648;&#x644;&#x64A;&#x629; &#x634;&#x64A;&#x62A;&#x627;&#x63A;&#x648;&#x646;&#x63A;</p>
-          <p className="routine-dept-name">{routine.department}</p>
-          <div className="routine-title-bar"><h2 className="routine-title">Class Routine</h2></div>
+          <div className="routine-header-top">
+            <div className="routine-logo-wrapper">
+              <Image src="/iiuc-logo.png" alt="IIUC" width={80} height={80} className="routine-logo" priority />
+            </div>
+            <div className="routine-header-text">
+              <h1 className="routine-university-name">{routine.university}</h1>
+              <p className="routine-arabic-name">&#x262F;&#x2015;&#x627;&#x644;&#x62C;&#x627;&#x645;&#x639;&#x629; &#x627;&#x644;&#x625;&#x633;&#x644;&#x627;&#x645;&#x64A;&#x629; &#x627;&#x644;&#x62F;&#x648;&#x644;&#x64A;&#x629; &#x634;&#x64A;&#x62A;&#x627;&#x63A;&#x648;&#x646;&#x63A;</p>
+              <p className="routine-dept-name">{routine.department}</p>
+            </div>
+          </div>
+          <div className="routine-title-bar">
+            <div className="routine-title-accent"></div>
+            <h2 className="routine-title">CLASS ROUTINE</h2>
+            <div className="routine-title-accent"></div>
+          </div>
           <div className="routine-badges">
-            <span className="routine-badge-semester">{routine.semester}</span>
-            {routine.branch && <span className="routine-badge-session">Branch: {routine.branch}</span>}
-            <span className="routine-badge-session">Session: {routine.session}</span>
+            <span className="routine-badge routine-badge-semester"><i className="fas fa-graduation-cap"></i> {routine.semester}</span>
+            {routine.branch && <span className="routine-badge routine-badge-branch"><i className="fas fa-code-branch"></i> Branch {routine.branch}</span>}
+            <span className="routine-badge routine-badge-session"><i className="fas fa-calendar"></i> Session {routine.session}</span>
           </div>
         </div>
       </div>
 
       {routine.courses.length > 0 && (
         <div className="routine-legend">
-          <h4 className="routine-legend-title"><i className="fas fa-book-open mr-1"></i> Course Information</h4>
-          <div className="routine-legend-grid">
-            {routine.courses.map(c => (
-              <div key={c.code} className="routine-legend-item">
-                <span className="routine-legend-code">{c.code}</span>
-                <span className="routine-legend-title-text">{c.title}</span>
-                <span className="routine-legend-teacher">{c.teacher}</span>
-                <span className="routine-legend-room">{c.room}</span>
-              </div>
-            ))}
+          <h4 className="routine-legend-title"><i className="fas fa-book-open"></i> Course Information</h4>
+          <div className="routine-legend-table-wrapper">
+            <table className="routine-legend-table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Course Title</th>
+                  <th>Instructor</th>
+                  <th>Room</th>
+                </tr>
+              </thead>
+              <tbody>
+                {routine.courses.map(c => (
+                  <tr key={c.code}>
+                    <td className="routine-legend-code-cell">{c.code}</td>
+                    <td>{c.title}</td>
+                    <td>{c.teacher}</td>
+                    <td>{c.room}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -283,7 +489,6 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
           <tbody>
             {routine.periods.map((period, pIdx) => {
               if (period.isBreak) {
-                const classIdx = pIdx;
                 return (
                   <tr key={pIdx} className="routine-break-row">
                     <td className="routine-td routine-td-time routine-break-time">
@@ -319,6 +524,9 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
                         {slot && course ? (
                           <div className="routine-course">
                             <span className="routine-course-code">{course.code}</span>
+                            <span className="routine-course-title">{course.title}</span>
+                            <span className="routine-course-teacher">{course.teacher}</span>
+                            <span className="routine-course-room"><i className="fas fa-door-open"></i> {course.room}</span>
                           </div>
                         ) : offDay && classPeriodIdx === 0 ? (
                           <span className="routine-offday-label">Off Day</span>
@@ -364,12 +572,12 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
 RoutinePrintView.displayName = 'RoutinePrintView';
 
 /* ═══════════════════════════════════════════════════════
-   ROUTINE BUILDER — Full Flexible Editor
+   ROUTINE BUILDER — Simplified Step-by-Step Editor
    ═══════════════════════════════════════════════════════ */
-type BuilderTab = 'info' | 'periods' | 'courses' | 'grid';
+type BuilderStep = 'info' | 'courses' | 'periods' | 'assign';
 
 function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem | null; onSave: (r: RoutineItem) => void; onCancel: () => void }) {
-  const [tab, setTab] = useState<BuilderTab>('info');
+  const [step, setStep] = useState<BuilderStep>('info');
   const [semester, setSemester] = useState(existing?.semester || SEMESTERS[0]);
   const [branch, setBranch] = useState(existing?.branch || '');
   const [session, setSession] = useState(existing?.session || '2023-24');
@@ -385,34 +593,37 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
     return count - 1;
   };
 
-  const addPeriod = () => {
-    setPeriods([...periods, { name: `Period ${periods.filter(p => !p.isBreak).length + 1}`, start: '10:40 AM', end: '11:30 AM' }]);
-  };
+  const steps: { key: BuilderStep; label: string; icon: string; num: number }[] = [
+    { key: 'info', label: 'Basic Info', icon: 'info-circle', num: 1 },
+    { key: 'courses', label: 'Add Courses', icon: 'book', num: 2 },
+    { key: 'periods', label: 'Time Periods', icon: 'clock', num: 3 },
+    { key: 'assign', label: 'Assign Grid', icon: 'table', num: 4 },
+  ];
+  const currentStepIdx = steps.findIndex(s => s.key === step);
+
+  const addPeriod = () => setPeriods([...periods, { name: `Period ${classPeriods.length + 1}`, start: '10:40 AM', end: '11:30 AM' }]);
   const updatePeriod = (idx: number, field: keyof RoutinePeriod, value: string | boolean) => {
     const p = [...periods]; p[idx] = { ...p[idx], [field]: value }; setPeriods(p);
   };
-  const removePeriod = (idx: number) => { setPeriods(periods.filter((_, i) => i !== idx)); };
+  const removePeriod = (idx: number) => setPeriods(periods.filter((_, i) => i !== idx));
   const movePeriod = (idx: number, dir: -1 | 1) => {
     const p = [...periods]; const ni = idx + dir;
     if (ni < 0 || ni >= p.length) return;
     [p[idx], p[ni]] = [p[ni], p[idx]]; setPeriods(p);
   };
 
-  const addCourse = () => { setCourses([...courses, { code: '', title: '', teacher: '', room: '' }]); };
+  const addCourse = () => setCourses([...courses, { code: '', title: '', teacher: '', room: '' }]);
   const updateCourse = (idx: number, field: keyof RoutineCourse, value: string) => {
     const c = [...courses]; c[idx] = { ...c[idx], [field]: value }; setCourses(c);
   };
   const removeCourse = (idx: number) => { setCourses(courses.filter((_, i) => i !== idx)); setSlots(slots.filter(s => s.course !== courses[idx].code)); };
 
-  const toggleDay = (day: string) => { setDays(days.includes(day) ? days.filter(d => d !== day) : [...days, day].sort()); };
-  const addDay = (day: string) => { if (!days.includes(day)) setDays([...days, day].sort()); };
-  const removeDay = (day: string) => { setDays(days.filter(d => d !== day)); setSlots(slots.filter(s => s.day !== day)); };
+  const toggleDay = (day: string) => setDays(days.includes(day) ? days.filter(d => d !== day) : [...days, day].sort());
 
   const setSlot = (day: string, period: number, courseCode: string) => {
-    const existing = slots.find(s => s.day === day && s.period === period);
     if (courseCode === '') {
       setSlots(slots.filter(s => !(s.day === day && s.period === period)));
-    } else if (existing) {
+    } else if (slots.find(s => s.day === day && s.period === period)) {
       setSlots(slots.map(s => s.day === day && s.period === period ? { ...s, course: courseCode } : s));
     } else {
       setSlots([...slots, { day, period, course: courseCode }]);
@@ -428,38 +639,47 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
       department: existing?.department || 'Department of Qur\'anic Sciences & Islamic Studies',
       university: existing?.university || 'International Islamic University Chittagong',
       periods, days, courses, slots,
+      createdAt: existing?.createdAt || Date.now(),
     };
     onSave(routine);
   };
 
-  const tabs: { key: BuilderTab; label: string; icon: string }[] = [
-    { key: 'info', label: 'Info', icon: 'info-circle' },
-    { key: 'periods', label: 'Time Slots', icon: 'clock' },
-    { key: 'courses', label: 'Courses', icon: 'book' },
-    { key: 'grid', label: 'Assign', icon: 'table' },
-  ];
-
   return (
     <div className="routine-builder">
-      <div className="routine-builder-tabs">
-        {tabs.map(t => (
-          <button key={t.key} className={`routine-builder-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-            <i className={`fas fa-${t.icon}`}></i> {t.label}
-          </button>
+      <div className="routine-builder-steps">
+        {steps.map((s, idx) => (
+          <div key={s.key} className={`routine-step ${step === s.key ? 'active' : ''} ${idx < currentStepIdx ? 'completed' : ''}`}>
+            <div className="routine-step-num">{idx < currentStepIdx ? <i className="fas fa-check"></i> : s.num}</div>
+            <span className="routine-step-label">{s.label}</span>
+            {idx < steps.length - 1 && <div className="routine-step-line"></div>}
+          </div>
         ))}
       </div>
 
-      {tab === 'info' && (
+      {step === 'info' && (
         <div className="routine-builder-section">
-          <h4>Routine Information</h4>
-          <div className="routine-builder-grid">
-            <div><label>Semester</label><select value={semester} onChange={e => setSemester(e.target.value)}>{SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-            <div><label>Branch (optional)</label><input placeholder="e.g. A, B, or leave empty" value={branch} onChange={e => setBranch(e.target.value)} /></div>
-            <div><label>Session</label><input placeholder="e.g. 2023-24" value={session} onChange={e => setSession(e.target.value)} /></div>
-            <div><label>Days</label>
-              <div className="routine-builder-days">
+          <h4><i className="fas fa-info-circle"></i> Basic Information</h4>
+          <div className="routine-form-grid">
+            <div className="routine-form-group">
+              <label>Semester</label>
+              <select value={semester} onChange={e => setSemester(e.target.value)}>{SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+            </div>
+            <div className="routine-form-group">
+              <label>Branch <span className="routine-label-optional">(optional)</span></label>
+              <input placeholder="e.g. A, B" value={branch} onChange={e => setBranch(e.target.value)} />
+            </div>
+            <div className="routine-form-group">
+              <label>Session</label>
+              <input placeholder="e.g. 2023-24" value={session} onChange={e => setSession(e.target.value)} />
+            </div>
+            <div className="routine-form-group routine-form-full">
+              <label>Class Days</label>
+              <div className="routine-day-selector">
                 {['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(d => (
-                  <button key={d} className={`routine-builder-day-btn ${days.includes(d) ? 'active' : ''}`} onClick={() => toggleDay(d)}>{d.slice(0, 3)}</button>
+                  <button key={d} type="button" className={`routine-day-btn ${days.includes(d) ? 'active' : ''}`} onClick={() => toggleDay(d)}>
+                    <span className="routine-day-short">{d.slice(0, 3)}</span>
+                    <span className="routine-day-full">{d}</span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -467,107 +687,145 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
         </div>
       )}
 
-      {tab === 'periods' && (
+      {step === 'courses' && (
         <div className="routine-builder-section">
           <div className="routine-builder-section-header">
-            <h4>Time Periods</h4>
-            <button className="routine-builder-add-btn" onClick={addPeriod}><i className="fas fa-plus"></i> Add Period</button>
+            <h4><i className="fas fa-book"></i> Course List</h4>
+            <button className="routine-add-btn" onClick={addCourse}><i className="fas fa-plus"></i> Add Course</button>
           </div>
-          <p className="routine-builder-hint">Drag to reorder. Toggle break for lunch/prayer. Default IIUC times are pre-filled.</p>
-          <div className="routine-builder-periods">
+          {courses.length > 0 && (
+            <div className="routine-course-list">
+              {courses.map((c, idx) => (
+                <div key={idx} className="routine-course-item">
+                  <div className="routine-course-num">{idx + 1}</div>
+                  <div className="routine-course-fields">
+                    <input className="routine-input-sm" placeholder="Code (e.g. QSM-3601)" value={c.code} onChange={e => updateCourse(idx, 'code', e.target.value)} />
+                    <input placeholder="Course Title (e.g. Tafsir Bir Rayi)" value={c.title} onChange={e => updateCourse(idx, 'title', e.target.value)} />
+                    <div className="routine-course-row-2">
+                      <input placeholder="Instructor (e.g. Dr. Ahmad Hassan)" value={c.teacher} onChange={e => updateCourse(idx, 'teacher', e.target.value)} />
+                      <input className="routine-input-sm" placeholder="Room" value={c.room} onChange={e => updateCourse(idx, 'room', e.target.value)} />
+                    </div>
+                  </div>
+                  <button className="routine-remove-btn" onClick={() => removeCourse(idx)}><i className="fas fa-trash-alt"></i></button>
+                </div>
+              ))}
+            </div>
+          )}
+          {courses.length === 0 && (
+            <div className="routine-empty-courses">
+              <i className="fas fa-book-open"></i>
+              <p>No courses added yet. Click &quot;Add Course&quot; to start building your schedule.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 'periods' && (
+        <div className="routine-builder-section">
+          <div className="routine-builder-section-header">
+            <h4><i className="fas fa-clock"></i> Time Periods</h4>
+            <button className="routine-add-btn" onClick={addPeriod}><i className="fas fa-plus"></i> Add Period</button>
+          </div>
+          <div className="routine-period-list">
             {periods.map((p, idx) => (
-              <div key={idx} className={`routine-builder-period ${p.isBreak ? 'break' : ''}`}>
-                <div className="routine-builder-period-drag">
+              <div key={idx} className={`routine-period-item ${p.isBreak ? 'break' : ''}`}>
+                <div className="routine-period-drag">
                   <button disabled={idx === 0} onClick={() => movePeriod(idx, -1)}><i className="fas fa-chevron-up"></i></button>
                   <button disabled={idx === periods.length - 1} onClick={() => movePeriod(idx, 1)}><i className="fas fa-chevron-down"></i></button>
                 </div>
-                <input className="period-name-input" placeholder="Period name" value={p.name} onChange={e => updatePeriod(idx, 'name', e.target.value)} />
-                <input type="time" className="period-time-input" value={to24h(p.start)} onChange={e => updatePeriod(idx, 'start', to12h(e.target.value))} />
-                <span className="period-sep">to</span>
-                <input type="time" className="period-time-input" value={to24h(p.end)} onChange={e => updatePeriod(idx, 'end', to12h(e.target.value))} />
-                <label className="routine-builder-break-toggle">
-                  <input type="checkbox" checked={!!p.isBreak} onChange={e => updatePeriod(idx, 'isBreak', e.target.checked)} /> Break
+                <div className="routine-period-fields">
+                  <input className="routine-period-name" placeholder="Period name" value={p.name} onChange={e => updatePeriod(idx, 'name', e.target.value)} />
+                  <div className="routine-period-times">
+                    <input type="time" value={to24h(p.start)} onChange={e => updatePeriod(idx, 'start', to12h(e.target.value))} />
+                    <span className="routine-period-sep">to</span>
+                    <input type="time" value={to24h(p.end)} onChange={e => updatePeriod(idx, 'end', to12h(e.target.value))} />
+                  </div>
+                </div>
+                <label className="routine-break-toggle">
+                  <input type="checkbox" checked={!!p.isBreak} onChange={e => updatePeriod(idx, 'isBreak', e.target.checked)} />
+                  <span>Break</span>
                 </label>
-                <button className="routine-builder-remove-btn" onClick={() => removePeriod(idx)}><i className="fas fa-trash"></i></button>
+                <button className="routine-remove-btn-sm" onClick={() => removePeriod(idx)}><i className="fas fa-times"></i></button>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {tab === 'courses' && (
+      {step === 'assign' && (
         <div className="routine-builder-section">
-          <div className="routine-builder-section-header">
-            <h4>Courses</h4>
-            <button className="routine-builder-add-btn" onClick={addCourse}><i className="fas fa-plus"></i> Add Course</button>
-          </div>
-          <div className="routine-builder-courses">
-            {courses.map((c, idx) => (
-              <div key={idx} className="routine-builder-course">
-                <input placeholder="Code (e.g. FSC-1201)" value={c.code} onChange={e => updateCourse(idx, 'code', e.target.value)} />
-                <input placeholder="Title (e.g. Quran & Tafsir)" value={c.title} onChange={e => updateCourse(idx, 'title', e.target.value)} />
-                <input placeholder="Teacher (e.g. Dr. Ahmad)" value={c.teacher} onChange={e => updateCourse(idx, 'teacher', e.target.value)} />
-                <input placeholder="Room (e.g. Room 301)" value={c.room} onChange={e => updateCourse(idx, 'room', e.target.value)} />
-                <button className="routine-builder-remove-btn" onClick={() => removeCourse(idx)}><i className="fas fa-trash"></i></button>
-              </div>
-            ))}
-            {courses.length === 0 && <p className="routine-builder-hint">No courses added yet. Click &quot;Add Course&quot; to start.</p>}
-          </div>
-        </div>
-      )}
-
-      {tab === 'grid' && (
-        <div className="routine-builder-section">
-          <h4>Assign Courses to Schedule</h4>
-          <p className="routine-builder-hint">Select a course for each day/period. Empty cells = Off Day.</p>
-          <div className="routine-builder-grid-wrapper">
-            <table className="routine-builder-grid">
-              <thead>
-                <tr>
-                  <th>Period</th>
-                  {days.map(d => <th key={d}>{d}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {periods.map((p, pIdx) => {
-                  if (p.isBreak) {
+          <h4><i className="fas fa-table"></i> Assign Courses to Schedule</h4>
+          <p className="routine-builder-hint">Select a course for each day/period. Leave empty for Off Day.</p>
+          {courses.length === 0 ? (
+            <div className="routine-empty-courses">
+              <i className="fas fa-exclamation-triangle"></i>
+              <p>Please add courses first (Step 2) before assigning them to the schedule.</p>
+            </div>
+          ) : (
+            <div className="routine-grid-wrapper">
+              <table className="routine-grid-table">
+                <thead>
+                  <tr>
+                    <th>Period</th>
+                    {days.map(d => <th key={d}>{d.slice(0, 3)}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {periods.map((p, pIdx) => {
+                    if (p.isBreak) {
+                      return (
+                        <tr key={pIdx} className="routine-grid-break">
+                          <td className="routine-grid-time">{p.start} - {p.end}</td>
+                          {days.map(d => <td key={d}>Break</td>)}
+                        </tr>
+                      );
+                    }
+                    const cpIdx = nonBreakIdx(pIdx);
                     return (
-                      <tr key={pIdx} className="routine-builder-grid-break">
-                        <td className="routine-builder-grid-time">{p.start} - {p.end}</td>
-                        {days.map(d => <td key={d}>Break</td>)}
+                      <tr key={pIdx}>
+                        <td className="routine-grid-time">
+                          <div>{p.name}</div>
+                          <small>{p.start} - {p.end}</small>
+                        </td>
+                        {days.map(d => {
+                          const currentSlot = getSlot(d, cpIdx, slots);
+                          return (
+                            <td key={d}>
+                              <select value={currentSlot?.course || ''} onChange={e => setSlot(d, cpIdx, e.target.value)}>
+                                <option value="">-- Off Day --</option>
+                                {courses.map(c => <option key={c.code} value={c.code}>{c.code} - {c.title}</option>)}
+                              </select>
+                            </td>
+                          );
+                        })}
                       </tr>
                     );
-                  }
-                  const cpIdx = nonBreakIdx(pIdx);
-                  return (
-                    <tr key={pIdx}>
-                      <td className="routine-builder-grid-time"><div>{p.name}</div><div className="routine-builder-grid-time-sub">{p.start} - {p.end}</div></td>
-                      {days.map(d => {
-                        const currentSlot = getSlot(d, cpIdx, slots);
-                        return (
-                          <td key={d}>
-                            <select value={currentSlot?.course || ''} onChange={e => setSlot(d, cpIdx, e.target.value)}>
-                              <option value="">-- Off Day --</option>
-                              {courses.map(c => <option key={c.code} value={c.code}>{c.code} - {c.title}</option>)}
-                            </select>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="routine-builder-offday-info">
-            <i className="fas fa-info-circle"></i> Days with no courses assigned will show as &quot;Off Day&quot; in the routine.
-          </div>
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      <div className="routine-builder-actions">
-        <button className="routine-builder-save-btn" onClick={handleSave}><i className="fas fa-save"></i> Save Routine</button>
-        <button className="routine-builder-cancel-btn" onClick={onCancel}><i className="fas fa-times"></i> Cancel</button>
+      <div className="routine-builder-nav">
+        <button className="routine-btn routine-btn-ghost" onClick={onCancel}><i className="fas fa-times"></i> Cancel</button>
+        <div className="routine-builder-nav-right">
+          {currentStepIdx > 0 && (
+            <button className="routine-btn routine-btn-outline" onClick={() => setStep(steps[currentStepIdx - 1].key)}>
+              <i className="fas fa-arrow-left"></i> Previous
+            </button>
+          )}
+          {currentStepIdx < steps.length - 1 ? (
+            <button className="routine-btn routine-btn-primary" onClick={() => setStep(steps[currentStepIdx + 1].key)}>
+              Next <i className="fas fa-arrow-right"></i>
+            </button>
+          ) : (
+            <button className="routine-btn routine-btn-save" onClick={handleSave}>
+              <i className="fas fa-save"></i> Save Routine
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
