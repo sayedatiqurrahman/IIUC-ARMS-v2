@@ -7,6 +7,7 @@
     "academicYear": "2024-25",
     "department": "Department of Qur'anic Sciences & Islamic Studies",
     "university": "International Islamic University Chittagong",
+    "room": "Room 301",
     "periods": [
       { "name": "1st Period", "start": "10:40 AM", "end": "11:30 AM" },
       { "name": "2nd Period", "start": "11:30 AM", "end": "12:20 PM" },
@@ -50,6 +51,7 @@
     "academicYear": "2024-25",
     "department": "Department of Qur'anic Sciences & Islamic Studies",
     "university": "International Islamic University Chittagong",
+    "room": "Room 302",
     "periods": [
       { "name": "1st Period", "start": "10:40 AM", "end": "11:30 AM" },
       { "name": "2nd Period", "start": "11:30 AM", "end": "12:20 PM" },

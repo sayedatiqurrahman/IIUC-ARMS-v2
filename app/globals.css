@@ -625,6 +625,7 @@ button { font-family: inherit; }
   background: #ffffff;
   display: block;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  padding: 6px;
 }
 
 .routine-header-text {
@@ -716,6 +717,12 @@ button { font-family: inherit; }
   background: rgba(255,255,255,0.15);
   color: rgba(255,255,255,0.9);
   border: 1px solid rgba(255,255,255,0.2);
+}
+
+.routine-badge-room {
+  background: rgba(250,204,21,0.2);
+  color: #facc15;
+  border: 1px solid rgba(250,204,21,0.4);
 }
 
 /* Course Legend Table */
@@ -860,7 +867,7 @@ button { font-family: inherit; }
 }
 
 .routine-course-code {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: #166534;
   line-height: 1.2;
@@ -880,20 +887,6 @@ button { font-family: inherit; }
   color: #6b7280;
   line-height: 1.2;
 }
-
-.routine-course-room {
-  display: inline-block;
-  background: #dcfce7;
-  color: #166534;
-  font-size: 0.55rem;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 8px;
-  border: 1px solid #bbf7d0;
-  margin-top: 1px;
-}
-
-.routine-course-room i { font-size: 0.5rem; }
 
 .routine-empty {
   color: #d1d5db;
@@ -926,14 +919,23 @@ button { font-family: inherit; }
 
 /* Off Day */
 .routine-offday-cell {
-  background: #f8f8f8 !important;
+  background: #fff5f5 !important;
+  position: relative;
 }
 
-.routine-offday-label {
-  font-size: 0.6rem;
-  font-weight: 600;
-  color: #9ca3af;
-  font-style: italic;
+.routine-offday-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #dc2626;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
 }
 
 /* Footer */

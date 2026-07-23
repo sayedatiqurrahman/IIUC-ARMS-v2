@@ -36,6 +36,7 @@ interface RoutineItem {
   academicYear: string;
   department: string;
   university: string;
+  room: string;
   periods: RoutinePeriod[];
   days: string[];
   courses: RoutineCourse[];
@@ -444,6 +445,7 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
             <span className="routine-badge routine-badge-semester"><i className="fas fa-graduation-cap"></i> {routine.semester}</span>
             {routine.branch && <span className="routine-badge routine-badge-branch"><i className="fas fa-code-branch"></i> Branch {routine.branch}</span>}
             <span className="routine-badge routine-badge-session"><i className="fas fa-calendar"></i> Session {routine.session}</span>
+            {routine.room && <span className="routine-badge routine-badge-room"><i className="fas fa-door-open"></i> {routine.room}</span>}
           </div>
         </div>
       </div>
@@ -498,10 +500,9 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
                             <span className="routine-course-code">{course.code}</span>
                             <span className="routine-course-title">{course.title}</span>
                             <span className="routine-course-teacher">{course.teacher}</span>
-                            <span className="routine-course-room"><i className="fas fa-door-open"></i> {course.room}</span>
                           </div>
                         ) : offDay && classPeriodIdx === 0 ? (
-                          <span className="routine-offday-label">Off Day</span>
+                          <div className="routine-offday-vertical">Off Day</div>
                         ) : (
                           <span className="routine-empty">&mdash;</span>
                         )}
@@ -525,7 +526,6 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
                   <th>Code</th>
                   <th>Course Title</th>
                   <th>Instructor</th>
-                  <th>Room</th>
                 </tr>
               </thead>
               <tbody>
@@ -534,7 +534,6 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
                     <td className="routine-legend-code-cell">{c.code}</td>
                     <td>{c.title}</td>
                     <td>{c.teacher}</td>
-                    <td>{c.room}</td>
                   </tr>
                 ))}
               </tbody>
@@ -581,6 +580,7 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
   const [semester, setSemester] = useState(existing?.semester || SEMESTERS[0]);
   const [branch, setBranch] = useState(existing?.branch || '');
   const [session, setSession] = useState(existing?.session || '2023-24');
+  const [room, setRoom] = useState(existing?.room || '');
   const [periods, setPeriods] = useState<RoutinePeriod[]>(existing?.periods || [...DEFAULT_PERIODS]);
   const [days, setDays] = useState<string[]>(existing?.days || [...DEFAULT_DAYS]);
   const [courses, setCourses] = useState<RoutineCourse[]>(existing?.courses || []);
@@ -634,7 +634,7 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
     if (!semester) { showToast('Please select semester', 'error'); return; }
     const routine: RoutineItem = {
       id: existing?.id || `my-${Date.now()}`,
-      semester, branch: branch || null, session,
+      semester, branch: branch || null, session, room: room || '',
       academicYear: existing?.academicYear || new Date().getFullYear().toString(),
       department: existing?.department || 'Department of Qur\'anic Sciences & Islamic Studies',
       university: existing?.university || 'International Islamic University Chittagong',
@@ -671,6 +671,10 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
             <div className="routine-form-group">
               <label>Session</label>
               <input placeholder="e.g. 2023-24" value={session} onChange={e => setSession(e.target.value)} />
+            </div>
+            <div className="routine-form-group">
+              <label>Room / Venue</label>
+              <input placeholder="e.g. Room 301, Building B" value={room} onChange={e => setRoom(e.target.value)} />
             </div>
             <div className="routine-form-group routine-form-full">
               <label>Class Days</label>
