@@ -2,12 +2,6 @@
 
 import { useEffect, useRef } from 'react';
 
-declare global {
-  interface Window {
-    WebViewer?: any;
-  }
-}
-
 interface PdfViewerProps {
   url: string;
   name: string;
@@ -34,8 +28,6 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
           initialDoc: url,
           licenseKey: 'demo',
           disableLogs: true,
-          fullScreen: true,
-          header: false,
         },
         viewerRef.current,
       );
@@ -44,41 +36,42 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
       instanceRef.current = instance;
 
       const { documentViewer, annotationManager } = instance.Core;
-
       annotationManager.setIsAdminUser(true);
 
-      instance.UI.setToolbarPosition({ top: 0, left: 0, right: 0 });
-      instance.UI.setHeaderPosition({ top: 0 });
-
       documentViewer.addEventListener('documentLoaded', () => {
-        instance.UI.setActiveToolGroup('markup');
-      });
-
-      documentViewer.addEventListener('finishedRendering', () => {
-        const currentDoc = documentViewer.getDocument();
-        if (currentDoc) {
-          const pdfDocRef = { getPages: () => currentDoc.getPageCount ? [] : [] };
-          try {
-            if (typeof window !== 'undefined') {
-              const savedPage = localStorage.getItem(`pdf-page-${filePath}`);
-              if (savedPage) {
-                const pageNum = parseInt(savedPage);
-                if (pageNum > 0) {
-                  documentViewer.setCurrentPage(pageNum, false);
-                }
-              }
-            }
-          } catch {}
-        }
+        try {
+          const saved = localStorage.getItem(`pdf-page-${filePath}`);
+          if (saved) {
+            const pageNum = parseInt(saved);
+            if (pageNum > 0) documentViewer.setCurrentPage(pageNum, false);
+          }
+        } catch {}
       });
 
       documentViewer.addEventListener('pageChanged', (e: any) => {
         try {
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(`pdf-page-${filePath}`, String(e.pageNumber));
-          }
+          localStorage.setItem(`pdf-page-${filePath}`, String(e.pageNumber));
         } catch {}
       });
+
+      try {
+        const iframe = viewerRef.current.querySelector('iframe');
+        if (iframe?.contentDocument) {
+          const style = iframe.contentDocument.createElement('style');
+          style.textContent = `
+            [class*="watermark"], [class*="Watermark"] { display: none !important; }
+            [data-element="watermark"] { display: none !important; }
+            .HeaderContainer, .ToolsContainer { background: #1e293b !important; }
+            .HeaderContainer *, .ToolsContainer * { color: #e2e8f0 !important; }
+            .PanelContainer, .LeftPanel { background: #0f172a !important; }
+            .PanelContainer *, .LeftPanel * { color: #e2e8f0 !important; }
+            .DocumentContainer { background: #1a1a2e !important; }
+            .ScrollBar { background: #1e293b !important; }
+            .Thumb { background: #475569 !important; }
+          `;
+          iframe.contentDocument.head.appendChild(style);
+        }
+      } catch {}
     }
 
     init();
@@ -86,9 +79,7 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
     return () => {
       cancelled = true;
       if (instanceRef.current) {
-        try {
-          instanceRef.current.Core?.documentViewer?.closeAllDocuments();
-        } catch {}
+        try { instanceRef.current.Core?.documentViewer?.closeAllDocuments(); } catch {}
         instanceRef.current = null;
       }
     };
