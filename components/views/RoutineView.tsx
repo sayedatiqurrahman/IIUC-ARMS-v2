@@ -1,10 +1,9 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAppStore } from '@/lib/store';
-import { config } from '@/lib/config';
 
 const DAYS = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday'];
 const TIMES = [
@@ -24,8 +23,15 @@ export default function RoutineView() {
   const router = useRouter();
   const routineData = useAppStore(s => s.routineData);
   const routineLoading = useAppStore(s => s.routineLoading);
+  const loadRoutine = useAppStore(s => s.loadRoutine);
   const printRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    if (routineData.length === 0 && !routineLoading) {
+      loadRoutine();
+    }
+  }, [routineData.length, routineLoading, loadRoutine]);
 
   const handleExport = useCallback(async (format: 'pdf' | 'png' | 'jpeg') => {
     if (!printRef.current) return;
@@ -33,7 +39,7 @@ export default function RoutineView() {
     try {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(printRef.current, {
-        scale: format === 'pdf' ? 2 : 3,
+        scale: 3,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
@@ -43,14 +49,15 @@ export default function RoutineView() {
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfW = pdf.internal.pageSize.getWidth();
         const pdfH = pdf.internal.pageSize.getHeight();
+        const margin = 20;
         const imgData = canvas.toDataURL('image/png');
-        const imgW = pdfW - 40;
+        const imgW = pdfW - margin * 2;
         const imgH = (canvas.height * imgW) / canvas.width;
-        if (imgH <= pdfH - 40) {
-          pdf.addImage(imgData, 'PNG', 20, 20, imgW, imgH);
+        if (imgH <= pdfH - margin * 2) {
+          pdf.addImage(imgData, 'PNG', margin, margin, imgW, imgH);
         } else {
           let yPos = 0;
-          const pageContentH = pdfH - 40;
+          const pageContentH = pdfH - margin * 2;
           const sourceH = (pageContentH / imgH) * canvas.height;
           while (yPos < canvas.height) {
             if (yPos > 0) pdf.addPage();
@@ -61,7 +68,7 @@ export default function RoutineView() {
             ctx.drawImage(canvas, 0, yPos, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
             const sliceData = sliceCanvas.toDataURL('image/png');
             const sliceH = (sliceCanvas.height * imgW) / canvas.width;
-            pdf.addImage(sliceData, 'PNG', 20, 20, imgW, sliceH);
+            pdf.addImage(sliceData, 'PNG', margin, margin, imgW, sliceH);
             yPos += sourceH;
           }
         }
@@ -87,7 +94,7 @@ export default function RoutineView() {
   if (routineLoading) {
     return (
       <section className="mb-5">
-        <div className="flex items-center justify-between mb-4">
+        <div className="no-print flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold flex items-center gap-2"><i className="fas fa-calendar-alt"></i> Class Routine</h3>
           <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={() => router.push('/')}>
             <i className="fas fa-arrow-left"></i> Back
@@ -155,16 +162,20 @@ export default function RoutineView() {
         <div ref={printRef} className="routine-export">
           {/* ─── HEADER ─── */}
           <div className="routine-header">
-            <Image src="/iiuc-logo.png" alt="IIUC" width={64} height={64} className="routine-logo" />
-            <h1 className="routine-university-name">International Islamic University Chittagong</h1>
-            <p className="routine-arabic-name">الجامعة الإسلامية الدولية شيتاغونغ</p>
-            <p className="routine-dept-name">Department of Qur&apos;anic Sciences &amp; Islamic Studies</p>
-            <div className="routine-title-bar">
-              <h2 className="routine-title">Class Routine</h2>
-            </div>
-            <div className="routine-badges">
-              <span className="routine-badge-semester">Spring 2025</span>
-              <span className="routine-badge-session">Session: 2023-24</span>
+            <div className="routine-header-inner">
+              <div className="routine-logo-wrapper">
+                <Image src="/iiuc-logo.png" alt="IIUC" width={72} height={72} className="routine-logo" priority />
+              </div>
+              <h1 className="routine-university-name">International Islamic University Chittagong</h1>
+              <p className="routine-arabic-name">&#x262F;&#x2015;&#x627;&#x644;&#x62C;&#x627;&#x645;&#x639;&#x629; &#x627;&#x644;&#x625;&#x633;&#x644;&#x627;&#x645;&#x64A;&#x629; &#x627;&#x644;&#x62F;&#x648;&#x644;&#x64A;&#x629; &#x634;&#x64A;&#x62A;&#x627;&#x63A;&#x648;&#x646;&#x63A;</p>
+              <p className="routine-dept-name">Department of Qur&apos;anic Sciences &amp; Islamic Studies</p>
+              <div className="routine-title-bar">
+                <h2 className="routine-title">Class Routine</h2>
+              </div>
+              <div className="routine-badges">
+                <span className="routine-badge-semester">Spring 2025</span>
+                <span className="routine-badge-session">Session: 2023-24</span>
+              </div>
             </div>
           </div>
 
@@ -198,7 +209,7 @@ export default function RoutineView() {
                               {slot.room && <span className="routine-room">{slot.room}</span>}
                             </div>
                           ) : (
-                            <span className="routine-empty">—</span>
+                            <span className="routine-empty">&mdash;</span>
                           )}
                         </td>
                       );

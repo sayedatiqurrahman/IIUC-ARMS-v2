@@ -283,7 +283,6 @@ button { font-family: inherit; }
   border-radius: 12px;
   overflow: hidden;
   border: 2px solid #166534;
-  font-family: 'Georgia', 'Times New Roman', serif;
   max-width: 900px;
   margin: 0 auto;
 }
@@ -296,10 +295,19 @@ button { font-family: inherit; }
   color: #ffffff;
 }
 
+.routine-header-inner {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.routine-logo-wrapper {
+  margin-bottom: 10px;
+}
+
 .routine-logo {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 10px;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto;
   border-radius: 50%;
   border: 3px solid #facc15;
   object-fit: contain;
@@ -312,6 +320,7 @@ button { font-family: inherit; }
   font-weight: 700;
   letter-spacing: 0.5px;
   margin-bottom: 2px;
+  font-family: 'Georgia', 'Times New Roman', serif;
 }
 
 .routine-arabic-name {
@@ -326,6 +335,7 @@ button { font-family: inherit; }
   font-size: 0.78rem;
   opacity: 0.85;
   margin-bottom: 12px;
+  font-family: 'Georgia', 'Times New Roman', serif;
 }
 
 .routine-title-bar {
@@ -342,6 +352,7 @@ button { font-family: inherit; }
   padding: 6px 24px;
   border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.25);
+  font-family: 'Georgia', 'Times New Roman', serif;
 }
 
 .routine-badges {
@@ -375,7 +386,7 @@ button { font-family: inherit; }
 
 /* ─── TABLE ─── */
 .routine-table-wrapper {
-  padding: 16px;
+  padding: 16px 20px;
   overflow-x: auto;
 }
 
@@ -392,7 +403,7 @@ button { font-family: inherit; }
 .routine-th {
   background: #166534;
   color: #ffffff;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 700;
   padding: 10px 6px;
   text-align: center;
@@ -402,18 +413,20 @@ button { font-family: inherit; }
 }
 
 .routine-th-time {
-  width: 110px;
+  width: 120px;
   background: #14532d;
 }
 
 .routine-td {
   border: 1px solid #bbf7d0;
-  padding: 6px 5px;
+  padding: 8px 5px;
   vertical-align: top;
+  min-height: 80px;
   height: 80px;
   text-align: center;
   background: #ffffff;
   font-family: system-ui, sans-serif;
+  overflow: hidden;
 }
 
 .routine-td:nth-child(even) {
@@ -428,7 +441,7 @@ button { font-family: inherit; }
 }
 
 .routine-time-text {
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 700;
   color: #166534;
   line-height: 1.2;
@@ -457,9 +470,10 @@ button { font-family: inherit; }
 .routine-course-title {
   font-size: 0.65rem;
   color: #374151;
-  line-height: 1.2;
+  line-height: 1.25;
   max-width: 100%;
   word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .routine-teacher {
@@ -477,7 +491,7 @@ button { font-family: inherit; }
   padding: 1px 6px;
   border-radius: 8px;
   border: 1px solid #bbf7d0;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
 .routine-empty {
@@ -523,7 +537,7 @@ button { font-family: inherit; }
 }
 
 .routine-footer-notes li::before {
-  content: '•';
+  content: '\2022';
   position: absolute;
   left: 0;
   color: #166534;
@@ -635,10 +649,13 @@ button { font-family: inherit; }
     margin: 0 !important;
     width: 100% !important;
     page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   .routine-header {
     padding: 15mm 10mm 8mm !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   .routine-table-wrapper {
@@ -647,21 +664,32 @@ button { font-family: inherit; }
 
   .routine-table {
     page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .routine-table thead {
+    display: table-header-group;
+  }
+
+  .routine-table tbody {
+    display: table-row-group;
   }
 
   .routine-table tr {
     page-break-inside: avoid;
+    break-inside: avoid;
     page-break-after: auto;
   }
 
   .routine-td {
     height: auto !important;
-    min-height: 60px;
+    min-height: 50px;
   }
 
   .routine-footer {
     padding: 5mm 10mm 0 !important;
     page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   .routine-footer-strip {
@@ -674,6 +702,6 @@ button { font-family: inherit; }
 
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 20mm;
   }
 }
