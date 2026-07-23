@@ -709,19 +709,26 @@ export default function Home() {
                       <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors">@{c.login}</a>
                       <div className="mt-2">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold ${
-                          c.role === 'Founder & Lead' ? 'bg-qsis/20 text-qsis' :
-                          c.role === 'Active Contributor' ? 'bg-green-500/15 text-green-400' :
-                          c.role === 'File Provider' ? 'bg-blue-500/15 text-blue-400' :
+                          c.role === 'Founder & Lead' ? 'bg-qsis/20 text-qsis ring-1 ring-qsis/30' :
+                          c.role === 'Developer & Resource Provider' ? 'bg-purple-500/15 text-purple-400' :
+                          c.role === 'Developer' ? 'bg-blue-500/15 text-blue-400' :
+                          c.role === 'Resource Provider' ? 'bg-orange-500/15 text-orange-400' :
                           'bg-dark-bg3 text-dark-text2'
                         }`}>
                           <i className={`fas ${
                             c.role === 'Founder & Lead' ? 'fa-crown' :
-                            c.role === 'Active Contributor' ? 'fa-star' :
-                            c.role === 'File Provider' ? 'fa-file-upload' :
+                            c.role === 'Developer & Resource Provider' ? 'fa-code-branch' :
+                            c.role === 'Developer' ? 'fa-laptop-code' :
+                            c.role === 'Resource Provider' ? 'fa-book-open' :
                             'fa-user'
                           }`}></i>
                           {c.role}
                         </span>
+                        {c.roleType === 'both' && c.role !== 'Founder & Lead' && (
+                          <span className="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6rem] font-medium bg-green-500/10 text-green-400">
+                            <i className="fas fa-check-circle"></i> Both Repos
+                          </span>
+                        )}
                       </div>
                     </div>
 

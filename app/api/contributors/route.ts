@@ -11,6 +11,7 @@ interface Contributor {
   html_url: string;
   contributions: number;
   role: string;
+  roleType: 'developer' | 'resource_provider' | 'both';
   universityId: string;
   whatsapp: string;
   semester: string;
@@ -18,30 +19,25 @@ interface Contributor {
   source: 'github' | 'db' | 'both';
 }
 
-function getRole(p: any, ghContrib: any): string {
-  if (ghContrib && ghContrib.login === config.owner) return 'Founder & Lead';
-  if (p.universityId && p.whatsapp) return 'Active Contributor';
-  if (p.universityId) return 'File Provider';
-  return 'Contributor';
-}
+const OWNER_EMAILS = [
+  'quranicsciencesclub@gmail.com',
+  's.atiqurrahman2003@gmail.com',
+];
 
 export async function GET() {
   const githubContributors: any[] = [];
   const dbProfiles: any[] = [];
 
-  // Fetch GitHub contributors (direct commits)
-  try {
-    const res = await fetch(
-      `https://api.github.com/repos/${config.owner}/${config.repo}/contributors?per_page=100`,
-      { next: { revalidate: 300 } }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      githubContributors.push(...data);
-    }
-  } catch {}
+  // Fetch contributors from BOTH repos in parallel
+  const [v2Res, dataRes] = await Promise.all([
+    fetch(`https://api.github.com/repos/${config.owner}/QSIS-ARMS-v2/contributors?per_page=100`, { next: { revalidate: 300 } }).catch(() => null),
+    fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contributors?per_page=100`, { next: { revalidate: 300 } }).catch(() => null),
+  ]);
 
-  // Fetch all DB profiles (PR-based contributors)
+  const v2Contributors = v2Res?.ok ? await v2Res.json() : [];
+  const dataContributors = dataRes?.ok ? await dataRes.json() : [];
+
+  // Fetch all DB profiles
   try {
     const profiles = await prisma.profile.findMany();
     dbProfiles.push(...profiles);
@@ -50,17 +46,23 @@ export async function GET() {
   // Build merged contributor list
   const contributorMap = new Map<string, Contributor>();
 
-  // Add GitHub contributors first
-  for (const gh of githubContributors) {
-    contributorMap.set(gh.login, {
+  // Track which repos each contributor contributed to
+  const contributorRepos = new Map<string, Set<'v2' | 'data'>>();
+
+  // Add V2 (developer) contributors
+  for (const gh of v2Contributors) {
+    const login = gh.login;
+    contributorRepos.set(login, new Set(['v2']));
+    contributorMap.set(login, {
       id: String(gh.id),
-      login: gh.login,
-      name: gh.login,
+      login,
+      name: login,
       email: '',
       avatar_url: gh.avatar_url,
       html_url: gh.html_url,
       contributions: gh.contributions || 0,
-      role: gh.login === config.owner ? 'Founder & Lead' : 'Source Contributor',
+      role: gh.login === config.owner ? 'Founder & Lead' : 'Developer',
+      roleType: 'developer',
       universityId: '',
       whatsapp: '',
       semester: '',
@@ -69,7 +71,42 @@ export async function GET() {
     });
   }
 
-  // Merge DB profiles — enrich existing or add new
+  // Add Data repo (resource provider) contributors
+  for (const gh of dataContributors) {
+    const login = gh.login;
+    const existing = contributorMap.get(login);
+
+    const repos = contributorRepos.get(login) || new Set();
+    repos.add('data');
+    contributorRepos.set(login, repos);
+
+    if (existing) {
+      existing.contributions += gh.contributions || 0;
+      existing.roleType = 'both';
+      if (existing.role !== 'Founder & Lead') {
+        existing.role = 'Developer & Resource Provider';
+      }
+    } else {
+      contributorMap.set(login, {
+        id: String(gh.id),
+        login,
+        name: login,
+        email: '',
+        avatar_url: gh.avatar_url,
+        html_url: gh.html_url,
+        contributions: gh.contributions || 0,
+        role: 'Resource Provider',
+        roleType: 'resource_provider',
+        universityId: '',
+        whatsapp: '',
+        semester: '',
+        profileComplete: false,
+        source: 'github',
+      });
+    }
+  }
+
+  // Merge DB profiles
   for (const p of dbProfiles) {
     const login = p.name?.toLowerCase().replace(/\s+/g, '') || '';
     const existing = contributorMap.get(login);
@@ -83,10 +120,8 @@ export async function GET() {
       existing.whatsapp = p.whatsapp || existing.whatsapp;
       existing.semester = p.semester || existing.semester;
       existing.profileComplete = profileComplete;
-      existing.role = getRole(p, { login: existing.login });
       existing.source = 'both';
     } else {
-      // DB-only contributor (PR from fork, no direct GitHub commit)
       const newLogin = p.email?.split('@')[0] || p.userId?.split('@')[0] || 'unknown';
       contributorMap.set(p.userId, {
         id: p.userId,
@@ -96,7 +131,8 @@ export async function GET() {
         avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || newLogin)}&background=22c55e&color=fff&bold=true&size=200`,
         html_url: `https://github.com/${newLogin}`,
         contributions: 0,
-        role: getRole(p, null),
+        role: OWNER_EMAILS.includes(p.email) ? 'Founder & Lead' : 'Resource Provider',
+        roleType: OWNER_EMAILS.includes(p.email) ? 'developer' : 'resource_provider',
         universityId: p.universityId || '',
         whatsapp: p.whatsapp || '',
         semester: p.semester || '',
@@ -107,8 +143,13 @@ export async function GET() {
   }
 
   const contributors = Array.from(contributorMap.values()).sort((a, b) => {
-    if (a.source === 'both' && b.source !== 'both') return -1;
-    if (a.source !== 'both' && b.source === 'both') return 1;
+    // Founder & Lead always first
+    if (a.role === 'Founder & Lead' && b.role !== 'Founder & Lead') return -1;
+    if (a.role !== 'Founder & Lead' && b.role === 'Founder & Lead') return 1;
+    // Both repos before single repo
+    if (a.roleType === 'both' && b.roleType !== 'both') return -1;
+    if (a.roleType !== 'both' && b.roleType === 'both') return 1;
+    // Then by contributions
     return b.contributions - a.contributions;
   });
 

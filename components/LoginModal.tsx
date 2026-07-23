@@ -97,7 +97,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       } else if (err.code === 'auth/too-many-requests') {
         setError('Too many attempts. Please try again later.');
       } else {
-        setError('An error occurred. Please try again.');
+        setError('Something went wrong. If you don\'t have an account, please sign up first.');
       }
       reset();
     } finally {
