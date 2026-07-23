@@ -19,6 +19,7 @@ export interface UploadResult {
   success: boolean;
   prUrl?: string;
   error?: string;
+  tokenExpired?: boolean;
 }
 
 export async function uploadFilesToGitHub(
@@ -29,10 +30,16 @@ export async function uploadFilesToGitHub(
   if (!token) return { success: false, error: 'GitHub not connected' };
   if (!files.length) return { success: false, error: 'No files provided' };
 
-  // Verify token
+  // Verify token and check scopes
   const userRes = await fetch(`${GITHUB_API}/user`, { headers: ghHeaders(token) });
   if (userRes.status === 401) return { success: false, error: 'GitHub token expired. Please reconnect.' };
   if (!userRes.ok) return { success: false, error: 'Failed to verify GitHub identity' };
+
+  const tokenScopes = userRes.headers.get('x-oauth-scopes') || '';
+  if (!tokenScopes.includes('repo')) {
+    return { success: false, error: 'GitHub token missing "repo" scope. Please disconnect and reconnect GitHub from your Dashboard with full repo access.', tokenExpired: true };
+  }
+
   const githubUser = await userRes.json();
   const isOwner = githubUser.login === config.owner;
 

@@ -35,10 +35,11 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
       if (cancelled) return;
       instanceRef.current = instance;
 
-      const { documentViewer, annotationManager } = instance.Core;
+      const { documentViewer, annotationManager, Tools } = instance.Core;
       annotationManager.setIsAdminUser(true);
 
       documentViewer.addEventListener('documentLoaded', () => {
+        documentViewer.setToolMode(Tools.ToolNames.PAN);
         try {
           const saved = localStorage.getItem(`pdf-page-${filePath}`);
           if (saved) {

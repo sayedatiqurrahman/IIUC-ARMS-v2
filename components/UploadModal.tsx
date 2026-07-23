@@ -163,7 +163,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         setResult({ success: true, prUrl: data.prUrl });
         setCourses([{ id: 1, code: '', title: '', files: [] }]);
       } else {
-        if (data.error?.includes('token') || data.error?.includes('401')) {
+        if (data.tokenExpired || data.error?.includes('token') || data.error?.includes('401') || data.error?.includes('scope')) {
           setResult({ success: false, error: data.error, tokenExpired: true });
         } else {
           setResult({ success: false, error: data.error || 'Upload failed' });
