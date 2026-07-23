@@ -199,30 +199,29 @@ export default function RoutineView() {
   const handleExport = useCallback(async (format: 'pdf' | 'png' | 'jpeg') => {
     if (!printRef.current) return;
     setExporting(true);
+    const fixes: { el: HTMLElement; orig: string }[] = [];
     try {
       const el = printRef.current;
 
-      const flexFixes: { el: HTMLElement; orig: string }[] = [];
-      el.querySelectorAll<HTMLElement>('.routine-header-top, .routine-title-bar, .routine-badges').forEach(flexEl => {
-        const orig = flexEl.style.cssText;
-        flexEl.style.cssText += ';display:table;width:100%;gap:0';
-        flexFixes.push({ el: flexEl, orig });
+      el.querySelectorAll<HTMLElement>('.routine-header-inner').forEach(e => {
+        const orig = e.style.cssText;
+        e.style.cssText += ';margin-top:-10px';
+        fixes.push({ el: e, orig });
       });
-      el.querySelectorAll<HTMLElement>('.routine-logo-wrapper, .routine-header-text, .routine-title-accent, .routine-title').forEach(cell => {
-        const orig = cell.style.cssText;
-        cell.style.cssText += ';display:table-cell;vertical-align:middle';
-        flexFixes.push({ el: cell, orig });
+      el.querySelectorAll<HTMLElement>('.routine-title-bar').forEach(e => {
+        const orig = e.style.cssText;
+        e.style.cssText += ';margin-top:-6px';
+        fixes.push({ el: e, orig });
       });
-      el.querySelectorAll<HTMLElement>('.routine-badge').forEach(badge => {
-        const orig = badge.style.cssText;
-        badge.style.cssText += ';display:inline-block;vertical-align:middle';
-        flexFixes.push({ el: badge, orig });
+      el.querySelectorAll<HTMLElement>('.routine-badges').forEach(e => {
+        const orig = e.style.cssText;
+        e.style.cssText += ';margin-top:-4px';
+        fixes.push({ el: e, orig });
       });
 
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(el, { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: el.scrollWidth, windowHeight: el.scrollHeight });
 
-      flexFixes.forEach(f => { f.el.style.cssText = f.orig; });
       if (format === 'pdf') {
         const { jsPDF } = await import('jspdf');
         const pdf = new jsPDF('p', 'mm', 'a4');
@@ -258,9 +257,7 @@ export default function RoutineView() {
       }
     } catch (err) { console.error('Export failed:', err); }
     finally {
-      if (printRef.current) {
-        printRef.current.querySelectorAll<HTMLElement>('.routine-header-top, .routine-title-bar, .routine-badges, .routine-logo-wrapper, .routine-header-text, .routine-title-accent, .routine-title, .routine-badge').forEach(e => { e.style.cssText = ''; });
-      }
+      fixes.forEach(f => { f.el.style.cssText = f.orig; });
       setExporting(false);
     }
   }, [currentPreview]);
