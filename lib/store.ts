@@ -39,9 +39,9 @@ function getMimeFromExt(ext: string) {
   const e = ext.toLowerCase();
   if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(e)) return 'image';
   if (e === 'pdf') return 'pdf';
-  if (['doc', 'docx'].includes(e)) return 'word';
-  if (['xls', 'xlsx', 'csv'].includes(e)) return 'excel';
-  if (['ppt', 'pptx'].includes(e)) return 'powerpoint';
+  if (['doc', 'docx'].includes(e)) return 'doc';
+  if (['xls', 'xlsx', 'csv'].includes(e)) return 'sheet';
+  if (['ppt', 'pptx'].includes(e)) return 'ppt';
   return 'other';
 }
 
@@ -186,7 +186,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   breadcrumbs: [],
 
   searchQuery: '',
-  fileTypeFilter: 'all',
+  fileTypeFilter: '',
   searchSemester: '',
   searchYear: '',
 
@@ -383,7 +383,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentCat: '',
       breadcrumbs: [],
       searchQuery: '',
-      fileTypeFilter: 'all',
+      fileTypeFilter: '',
       searchSemester: '',
       searchYear: '',
     });
@@ -394,7 +394,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFileTypeFilter: (f) => set({ fileTypeFilter: f }),
   setSearchSemester: (s) => set({ searchSemester: s }),
   setSearchYear: (y) => set({ searchYear: y }),
-  resetFilters: () => set({ searchQuery: '', fileTypeFilter: 'all', searchSemester: '', searchYear: '' }),
+  resetFilters: () => set({ searchQuery: '', fileTypeFilter: '', searchSemester: '', searchYear: '' }),
 
   openFile: (item) => {
     const ext = item.path.split('/').pop()?.split('.').pop()?.toLowerCase() || '';

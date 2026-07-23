@@ -19,12 +19,14 @@ export default function BrowsePage() {
   const breadcrumbs = useAppStore(s => s.breadcrumbs);
   const searchQuery = useAppStore(s => s.searchQuery);
   const fileTypeFilter = useAppStore(s => s.fileTypeFilter);
+  const searchSemester = useAppStore(s => s.searchSemester);
   const searchYear = useAppStore(s => s.searchYear);
   const recentReads = useAppStore(s => s.recentReads);
 
   const loadTree = useAppStore(s => s.loadTree);
   const setSearchQuery = useAppStore(s => s.setSearchQuery);
   const setFileTypeFilter = useAppStore(s => s.setFileTypeFilter);
+  const setSearchSemester = useAppStore(s => s.setSearchSemester);
   const setSearchYear = useAppStore(s => s.setSearchYear);
   const resetFilters = useAppStore(s => s.resetFilters);
   const goHome = useAppStore(s => s.goHome);
@@ -58,7 +60,7 @@ export default function BrowsePage() {
       return fileName.toLowerCase().includes(searchQuery.toLowerCase());
     });
     if (!matchSearch) return false;
-    if (fileTypeFilter !== 'all') {
+    if (fileTypeFilter) {
       const semFiles = uploadTree.filter((item: any) => {
         if (item.type !== 'blob') return false;
         const parts = item.path.split('/');
@@ -93,7 +95,7 @@ export default function BrowsePage() {
       return fileName.toLowerCase().includes(searchQuery.toLowerCase());
     });
     if (!matchSearch) return false;
-    if (fileTypeFilter !== 'all') {
+    if (fileTypeFilter) {
       const matchingFiles = uploadTree.filter((item: any) => {
         if (item.type !== 'blob') return false;
         const parts = item.path.split('/');
@@ -123,7 +125,7 @@ export default function BrowsePage() {
       const fileName = f.path.split('/').pop() || '';
       return fileName.toLowerCase().includes(searchQuery.toLowerCase());
     });
-    const matchType = fileTypeFilter === 'all' || files.some((f: any) => {
+    const matchType = !fileTypeFilter || files.some((f: any) => {
       const ext = f.path.split('.').pop()?.toLowerCase() || '';
       return getMimeFromExt(ext) === fileTypeFilter;
     });
@@ -142,7 +144,7 @@ export default function BrowsePage() {
       const fileName = f.path.split('/').pop() || '';
       const ext = fileName.split('.').pop()?.toLowerCase() || '';
       const matchSearch = !searchQuery || fileName.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchType = fileTypeFilter === 'all' || getMimeFromExt(ext) === fileTypeFilter;
+      const matchType = !fileTypeFilter || getMimeFromExt(ext) === fileTypeFilter;
       const matchYear = !searchYear || extractYear(fileName) === searchYear;
       return matchSearch && matchType && matchYear;
     });
@@ -221,46 +223,53 @@ export default function BrowsePage() {
       )}
 
       {/* Search & Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 mb-5 p-3 bg-dark-bg2 border border-dark-border rounded-xl">
-        <div className="relative flex-1">
-          <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-dark-text2 text-[0.78rem]"></i>
+      <div className="bg-dark-bg2 border border-dark-border rounded-xl p-1 mb-5">
+        <div className="flex items-center gap-2.5 bg-dark-bg border border-dark-border rounded-lg px-3.5">
+          <i className="fas fa-search text-dark-text2"></i>
           <input
             type="text"
-            placeholder="Search courses, files, semesters..."
+            placeholder="Search files, courses, semesters..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-lg bg-dark-bg3 border border-dark-border text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors placeholder:text-dark-text2"
+            className="flex-1 bg-transparent border-none text-dark-text py-2.5 text-[0.9rem] outline-none placeholder:text-dark-text2"
           />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-dark-text2 hover:text-dark-text bg-transparent border-none cursor-pointer text-[0.75rem]">
-              <i className="fas fa-times-circle"></i>
-            </button>
-          )}
         </div>
-        <select
-          value={fileTypeFilter}
-          onChange={e => setFileTypeFilter(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-dark-bg3 border border-dark-border text-dark-text text-[0.82rem] outline-none focus:border-qsis cursor-pointer"
-        >
-          <option value="all">All Types</option>
-          <option value="pdf">PDF</option>
-          <option value="word">Word</option>
-          <option value="excel">Excel</option>
-          <option value="powerpoint">PowerPoint</option>
-          <option value="image">Images</option>
-        </select>
-        <input
-          type="text"
-          placeholder="Year"
-          value={searchYear}
-          onChange={e => setSearchYear(e.target.value)}
-          className="w-24 px-3 py-2 rounded-lg bg-dark-bg3 border border-dark-border text-dark-text text-[0.82rem] outline-none focus:border-qsis placeholder:text-dark-text2"
-        />
-        {(searchQuery || fileTypeFilter !== 'all' || searchYear) && (
-          <button onClick={() => { resetFilters(); }} className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-[0.78rem] font-medium cursor-pointer hover:bg-red-500/20 transition-colors whitespace-nowrap">
-            <i className="fas fa-times mr-1"></i>Clear
-          </button>
-        )}
+        <div className="flex gap-2 p-2 flex-wrap">
+          <select
+            value={searchSemester}
+            onChange={e => setSearchSemester(e.target.value)}
+            className="bg-dark-bg border border-dark-border text-dark-text py-1.5 px-2.5 rounded-md text-[0.78rem] outline-none cursor-pointer focus:border-qsis"
+          >
+            <option value="">All Semesters</option>
+            {config.semesters.map(s => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+            <option value="related-kitabs">Related Kitabs</option>
+          </select>
+          <select
+            value={fileTypeFilter}
+            onChange={e => setFileTypeFilter(e.target.value)}
+            className="bg-dark-bg border border-dark-border text-dark-text py-1.5 px-2.5 rounded-md text-[0.78rem] outline-none cursor-pointer focus:border-qsis"
+          >
+            <option value="">All Types</option>
+            <option value="pdf">PDF</option>
+            <option value="image">Image</option>
+            <option value="doc">Document</option>
+            <option value="sheet">Sheet (XLS)</option>
+            <option value="ppt">Presentation</option>
+          </select>
+          <select
+            value={searchYear}
+            onChange={e => setSearchYear(e.target.value)}
+            className="bg-dark-bg border border-dark-border text-dark-text py-1.5 px-2.5 rounded-md text-[0.78rem] outline-none cursor-pointer focus:border-qsis"
+          >
+            <option value="">All Years</option>
+            <option value="2026">2026</option>
+            <option value="2025">2025</option>
+            <option value="2024">2024</option>
+            <option value="2023">2023</option>
+          </select>
+        </div>
       </div>
 
       {/* Loading */}
