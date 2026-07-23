@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -25,6 +25,12 @@ export async function signInWithGoogle() {
 
 export async function signInWithEmail(email: string, password: string) {
   const result = await signInWithEmailAndPassword(auth, email, password);
+  const idToken = await result.user.getIdToken();
+  return { idToken, user: result.user };
+}
+
+export async function signUpWithEmail(email: string, password: string) {
+  const result = await createUserWithEmailAndPassword(auth, email, password);
   const idToken = await result.user.getIdToken();
   return { idToken, user: result.user };
 }

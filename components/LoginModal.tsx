@@ -2,7 +2,7 @@
 
 import { signIn } from 'next-auth/react';
 import { useState, useEffect } from 'react';
-import { signInWithGoogle, signInWithEmail } from '@/lib/firebase';
+import { signInWithGoogle, signInWithEmail, signUpWithEmail } from '@/lib/firebase';
 import { useRecaptcha } from '@/lib/useRecaptcha';
 import { config } from '@/lib/config';
 
@@ -16,6 +16,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
   const [recaptchaReady, setRecaptchaReady] = useState(false);
   const recaptchaContainerId = 'login-recaptcha-container';
   const { renderCheckbox, getToken, reset } = useRecaptcha();
@@ -56,7 +57,14 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setLoading(true);
 
     try {
-      const { idToken } = await signInWithEmail(email, password);
+      let idToken: string;
+      if (isSignUp) {
+        const { idToken: token } = await signUpWithEmail(email, password);
+        idToken = token;
+      } else {
+        const { idToken: token } = await signInWithEmail(email, password);
+        idToken = token;
+      }
       const recaptchaToken = getToken(recaptchaContainerId);
 
       const result = await signIn('credentials', {
@@ -70,22 +78,22 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       });
 
       if (result?.error) {
-        if (!isValidEmail(email)) {
-          setError('Only IIUC departmental emails are allowed (e.g. q233099@ugrad.iiuc.ac.bd).');
-        } else {
-          setError('Invalid email or password');
-        }
+        setError('Invalid email or password');
         reset();
       } else {
         onClose();
       }
     } catch (err: any) {
-      if (err.code === 'auth/user-not-found') {
-        setError('No account found with this email');
+      if (isSignUp && err.code === 'auth/email-already-in-use') {
+        setError('An account with this email already exists. Please sign in instead.');
+      } else if (err.code === 'auth/user-not-found') {
+        setError('No account found with this email. Try signing up instead.');
       } else if (err.code === 'auth/wrong-password') {
         setError('Incorrect password');
       } else if (err.code === 'auth/invalid-email') {
         setError('Invalid email address');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Password must be at least 6 characters');
       } else if (err.code === 'auth/too-many-requests') {
         setError('Too many attempts. Please try again later.');
       } else {
@@ -228,12 +236,23 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
               className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-[0.85rem] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
-                <><i className="fas fa-spinner fa-spin mr-2"></i>Signing in...</>
+                <><i className="fas fa-spinner fa-spin mr-2"></i>{isSignUp ? 'Creating account...' : 'Signing in...'}</>
               ) : (
-                <><i className="fas fa-envelope mr-2"></i>Sign in with Email</>
+                <><i className="fas fa-envelope mr-2"></i>{isSignUp ? 'Sign Up with Email' : 'Sign In with Email'}</>
               )}
             </button>
           </form>
+
+          <div className="mt-4 text-center text-[0.78rem] text-dark-text2">
+            {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+            <button
+              type="button"
+              className="text-qsis bg-transparent border-none cursor-pointer font-semibold hover:underline text-[0.78rem]"
+              onClick={() => { setIsSignUp(!isSignUp); setError(''); }}
+            >
+              {isSignUp ? 'Sign In' : 'Sign Up'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
