@@ -199,28 +199,31 @@ export default function RoutineView() {
   const handleExport = useCallback(async (format: 'pdf' | 'png' | 'jpeg') => {
     if (!printRef.current) return;
     setExporting(true);
-    const fixes: { el: HTMLElement; orig: string }[] = [];
     try {
       const el = printRef.current;
 
-      el.querySelectorAll<HTMLElement>('.routine-header-inner').forEach(e => {
-        const orig = e.style.cssText;
-        e.style.cssText += ';margin-top:-10px';
-        fixes.push({ el: e, orig });
-      });
-      el.querySelectorAll<HTMLElement>('.routine-title-bar').forEach(e => {
-        const orig = e.style.cssText;
-        e.style.cssText += ';margin-top:-6px';
-        fixes.push({ el: e, orig });
-      });
-      el.querySelectorAll<HTMLElement>('.routine-badges').forEach(e => {
-        const orig = e.style.cssText;
-        e.style.cssText += ';margin-top:-4px';
-        fixes.push({ el: e, orig });
-      });
-
       const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(el, { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: el.scrollWidth, windowHeight: el.scrollHeight });
+      const canvas = await html2canvas(el, {
+        scale: 3,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: el.scrollWidth,
+        windowHeight: el.scrollHeight,
+        onclone: (doc: Document) => {
+          const root = doc.querySelector('.routine-export');
+          if (!root) return;
+          root.querySelectorAll<HTMLElement>('.routine-header-inner').forEach(e => {
+            e.style.marginTop = '-10px';
+          });
+          root.querySelectorAll<HTMLElement>('.routine-title-bar').forEach(e => {
+            e.style.marginTop = '-6px';
+          });
+          root.querySelectorAll<HTMLElement>('.routine-badges').forEach(e => {
+            e.style.marginTop = '-4px';
+          });
+        },
+      });
 
       if (format === 'pdf') {
         const { jsPDF } = await import('jspdf');
@@ -256,10 +259,7 @@ export default function RoutineView() {
         link.click();
       }
     } catch (err) { console.error('Export failed:', err); }
-    finally {
-      fixes.forEach(f => { f.el.style.cssText = f.orig; });
-      setExporting(false);
-    }
+    finally { setExporting(false); }
   }, [currentPreview]);
 
   const handleSaveBuilder = useCallback((routine: RoutineItem) => {
@@ -457,7 +457,7 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
           </div>
           <div className="routine-title-bar">
             <div className="routine-title-accent"></div>
-            <h2 className="routine-title">CLASS ROUTINE</h2>
+            <h2 className="routine-title"> CLASS ROUTINE</h2>
             <div className="routine-title-accent"></div>
           </div>
           <div className="routine-badges">
