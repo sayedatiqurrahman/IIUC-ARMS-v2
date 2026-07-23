@@ -3,6 +3,14 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import type { NextAuthOptions } from 'next-auth';
 
 const IIUC_EMAIL_REGEX = /^q\d{5,8}@ugrad\.iiuc\.ac\.bd$/i;
+const OWNER_EMAILS = [
+  'quranicsciencesclub@gmail.com',
+  's.atiqurrahman2003@gmail.com',
+];
+
+function isAllowedEmail(email: string): boolean {
+  return IIUC_EMAIL_REGEX.test(email) || OWNER_EMAILS.includes(email);
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -28,7 +36,7 @@ export const authOptions: NextAuthOptions = {
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
           const email = credentials.email || payload.email;
 
-          if (!email || !IIUC_EMAIL_REGEX.test(email)) return null;
+          if (!email || !isAllowedEmail(email)) return null;
 
           return {
             id: payload.sub || email,
@@ -46,7 +54,7 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account, profile }) {
       // For Google sign-in, validate email domain
       if (account?.provider === 'google' && profile?.email) {
-        if (!IIUC_EMAIL_REGEX.test(profile.email)) {
+        if (!isAllowedEmail(profile.email)) {
           return '/auth/error?error=invalid-email';
         }
       }
@@ -60,9 +68,9 @@ export const authOptions: NextAuthOptions = {
           });
           if (emailRes.ok) {
             const emails = await emailRes.json();
-            const iiucEmail = emails.find((e: any) => e.primary && IIUC_EMAIL_REGEX.test(e.email));
-            if (iiucEmail) {
-              user.email = iiucEmail.email;
+            const allowedEmail = emails.find((e: any) => e.primary && isAllowedEmail(e.email));
+            if (allowedEmail) {
+              user.email = allowedEmail.email;
             } else {
               return '/auth/error?error=invalid-email';
             }

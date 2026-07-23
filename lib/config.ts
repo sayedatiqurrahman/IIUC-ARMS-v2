@@ -7,9 +7,13 @@ export const config = {
   adobeClientId: process.env.NEXT_PUBLIC_ADOBE_CLIENT_ID || '',
   recaptchaSiteKey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '',
   emailRegex: /^q\d{5,8}@ugrad\.iiuc\.ac\.bd$/i,
+  ownerEmails: [
+    'quranicsciencesclub@gmail.com',
+    's.atiqurrahman2003@gmail.com',
+  ],
   maxFilesPerUpload: 10,
   maxUploadSizeMB: 50,
-  academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','gif','webp','csv','txt','zip','rar'],
+  academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','webp','csv'],
   semesters: [
     { id: '1st-semister', label: '1st Semester' },
     { id: '2nd-semister', label: '2nd Semester' },

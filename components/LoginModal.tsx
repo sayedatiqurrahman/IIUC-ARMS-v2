@@ -42,7 +42,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   if (!isOpen) return null;
 
   function isValidEmail(email: string): boolean {
-    return config.emailRegex.test(email);
+    return config.emailRegex.test(email) || config.ownerEmails.includes(email);
   }
 
   const handleEmailLogin = async (e: React.FormEvent) => {

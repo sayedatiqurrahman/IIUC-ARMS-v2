@@ -296,7 +296,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                 </div>
 
                 {/* File Input */}
-                <input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.csv,.txt,.zip,.rar" onChange={handleFileChange} />
+                <input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv" onChange={handleFileChange} />
                 <div className="border-2 border-dashed border-dark-border rounded-lg p-6 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => fileInputRef.current?.click()}>
                   <i className="fas fa-cloud-upload-alt text-2xl text-dark-text2 mb-2 block"></i>
                   <p className="text-[0.82rem] text-dark-text2">Drop files here or click to browse</p>
