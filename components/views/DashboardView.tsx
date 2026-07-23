@@ -30,7 +30,7 @@ export default function DashboardView() {
     hideWhatsapp: false, hideUniversityId: false,
   });
 
-  const hasGitHub = !!(session as any)?.accessToken;
+  const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin;
 
   // Primary info: profile DB > session (Firebase/Google)
   const displayName = profile.name || (session as any)?.user?.name || 'User';
