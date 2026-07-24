@@ -1,3 +1,5 @@
+export type UserRole = 'admin' | 'manager' | 'teacher' | 'student' | 'user';
+
 export const config = {
   owner: 'sayedatiqurrahman',
   repo: 'QSIS-ACADEMIC-FILES-MANAFGER',
@@ -9,10 +11,50 @@ export const config = {
   adobeClientId: process.env.NEXT_PUBLIC_ADOBE_CLIENT_ID || '',
   recaptchaSiteKey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '',
   emailRegex: /^q\d{5,8}@ugrad\.iiuc\.ac\.bd$/i,
+  adminEmails: [
+    's.atiqurrahman2003@gmail.com',
+    'quranicsciencesclub@gmail.com',
+    'iiucqsisclub@gmail.com',
+    'q233099@ugrad.iiuc.ac.bd',
+  ],
   ownerEmails: [
     'quranicsciencesclub@gmail.com',
     's.atiqurrahman2003@gmail.com',
   ],
+  detectRole: (email: string): UserRole => {
+    const lower = email.toLowerCase();
+    if (config.adminEmails.includes(lower)) return 'admin';
+    if (/@iiuc\.ac\.bd$/i.test(lower) && !/@ugrad\.iiuc\.ac\.bd$/i.test(lower)) return 'teacher';
+    if (/@ugrad\.iiuc\.ac\.bd$/i.test(lower)) return 'student';
+    return 'user';
+  },
+  getEffectiveRole: (email: string, profileRole?: string): UserRole => {
+    const base = config.detectRole(email);
+    if (base === 'admin') return 'admin';
+    if (profileRole === 'admin') return 'admin';
+    if (profileRole === 'manager') return 'manager';
+    return base;
+  },
+  isManager: (email: string, profileRole?: string): boolean => {
+    return config.getEffectiveRole(email, profileRole) === 'manager';
+  },
+  isAdminOrAbove: (email: string, profileRole?: string): boolean => {
+    const r = config.getEffectiveRole(email, profileRole);
+    return r === 'admin';
+  },
+  canManageAdmins: (email: string): boolean => {
+    return config.ownerEmails.includes(email.toLowerCase());
+  },
+  canPromoteManager: (email: string, profileRole?: string): boolean => {
+    const r = config.getEffectiveRole(email, profileRole);
+    return r === 'admin';
+  },
+  canPublishRoutine: (email: string, profile?: { role?: string; isCR?: boolean }): boolean => {
+    const role = config.getEffectiveRole(email, profile?.role);
+    if (role === 'admin' || role === 'manager' || role === 'teacher') return true;
+    if (profile?.isCR) return true;
+    return false;
+  },
   maxFilesPerUpload: 10,
   maxUploadSizeMB: 50,
   academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','webp','csv'],
@@ -27,11 +69,11 @@ export const config = {
     { id: '8th-semister', label: '8th Semester' },
   ],
   categories: {
-    sheet: { label: 'Sheets', icon: 'scroll', color: '#3b82f6' },
-    question: { label: 'Previous Questions', icon: 'question-circle', color: '#f59e0b' },
-    note: { label: 'Notes', icon: 'sticky-note', color: '#22c55e' },
-    syllabus: { label: 'Syllabus', icon: 'graduation-cap', color: '#8b5cf6' },
-    other: { label: 'Other', icon: 'folder', color: '#94a3b8' },
+    sheet: { label: 'Sheets', icon: 'scroll', color: '#3b82f6', folder: 'sheet' },
+    notes: { label: 'Notes', icon: 'sticky-note', color: '#22c55e', folder: 'NOTES' },
+    questions: { label: 'Previous Questions', icon: 'question-circle', color: '#f59e0b', folder: 'Previous Questions' },
+    syllabus: { label: 'Syllabus', icon: 'graduation-cap', color: '#8b5cf6', folder: 'Syllabus' },
+    other: { label: 'Other', icon: 'folder', color: '#94a3b8', folder: 'Other' },
   },
   relatedKitabsCategories: {
     'quran-tafsir': { label: 'Quran & Tafsir', icon: 'book-quran', color: '#10b981' },

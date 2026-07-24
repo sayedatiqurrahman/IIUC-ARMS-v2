@@ -5,6 +5,7 @@ interface Contributor {
   id: string;
   login: string;
   name: string;
+  title: string;
   email: string;
   avatar_url: string;
   html_url: string;
@@ -21,8 +22,13 @@ interface Contributor {
   twitter: string;
   linkedin: string;
   website: string;
+  company: string;
+  companyUrl: string;
+  publicEmail: string;
   hideWhatsapp: boolean;
   hideUniversityId: boolean;
+  hideSemester: boolean;
+  hideEmail: boolean;
   profileComplete: boolean;
   source: 'github' | 'db' | 'both';
 }
@@ -62,12 +68,13 @@ export async function GET() {
   function ensure(login: string, avatar: string, htmlUrl: string, id: string): Contributor {
     if (map.has(login)) return map.get(login)!;
     const c: Contributor = {
-      id, login, name: login, email: '', avatar_url: avatar, html_url: htmlUrl,
+      id, login, name: login, title: '', email: '', avatar_url: avatar, html_url: htmlUrl,
       contributions: 0, v2Contributions: 0, dataContributions: 0, prCount: 0,
       role: 'Contributor', roleType: 'developer',
       universityId: '', whatsapp: '', semester: '',
       facebook: '', twitter: '', linkedin: '', website: '',
-      hideWhatsapp: false, hideUniversityId: false,
+      company: '', companyUrl: '', publicEmail: '',
+      hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false,
       profileComplete: false, source: 'github',
     };
     map.set(login, c);
@@ -130,8 +137,10 @@ export async function GET() {
     const profileComplete = !!(p.universityId && p.whatsapp && p.semester);
 
     if (matchedContributor) {
-      matchedContributor.email = p.email || matchedContributor.email;
+      // Email: only show if publicEmail is explicitly set by the user
+      matchedContributor.email = p.publicEmail || '';
       matchedContributor.name = p.name || matchedContributor.name;
+      matchedContributor.title = p.title || matchedContributor.title;
       matchedContributor.universityId = p.universityId || matchedContributor.universityId;
       matchedContributor.whatsapp = p.whatsapp || matchedContributor.whatsapp;
       matchedContributor.semester = p.semester || matchedContributor.semester;
@@ -139,28 +148,17 @@ export async function GET() {
       matchedContributor.twitter = p.twitter || '';
       matchedContributor.linkedin = p.linkedin || '';
       matchedContributor.website = p.website || '';
+      matchedContributor.company = p.company || '';
+      matchedContributor.companyUrl = p.companyUrl || '';
+      matchedContributor.publicEmail = p.publicEmail || '';
       matchedContributor.hideWhatsapp = !!p.hideWhatsapp;
       matchedContributor.hideUniversityId = !!p.hideUniversityId;
+      matchedContributor.hideSemester = !!p.hideSemester;
+      matchedContributor.hideEmail = !!p.hideEmail;
       matchedContributor.profileComplete = profileComplete;
       matchedContributor.source = 'both';
-    } else {
-      // DB-only user (no GitHub activity)
-      const login = p.githubLogin || p.email?.split('@')[0] || p.userId?.split('@')[0] || '';
-      if (!login) continue;
-      if (map.has(login)) continue;
-      map.set(login, {
-        id: p.userId, login, name: p.name || login, email: p.email || '',
-        avatar_url: p.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || login)}&background=22c55e&color=fff&bold=true&size=200`,
-        html_url: `https://github.com/${login}`,
-        contributions: 0, v2Contributions: 0, dataContributions: 0, prCount: 0,
-        role: OWNER_EMAILS.includes(p.email) ? 'Founder & Lead' : 'Resource Provider',
-        roleType: OWNER_EMAILS.includes(p.email) ? 'developer' : 'resource_provider',
-        universityId: p.universityId || '', whatsapp: p.whatsapp || '', semester: p.semester || '',
-        facebook: p.facebook || '', twitter: p.twitter || '', linkedin: p.linkedin || '', website: p.website || '',
-        hideWhatsapp: !!p.hideWhatsapp, hideUniversityId: !!p.hideUniversityId,
-        profileComplete, source: 'db',
-      });
     }
+    // DB-only users (no GitHub activity) are NOT shown in contributors list
   }
 
   const contributors = Array.from(map.values()).sort((a, b) => {

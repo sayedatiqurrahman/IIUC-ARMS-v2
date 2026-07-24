@@ -81,6 +81,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/contributors" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/contributors') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
               <i className="fas fa-users"></i> Contributors
             </Link>
+            <Link href="/faculty" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/faculty') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
+              <i className="fas fa-chalkboard-teacher"></i> Faculty
+            </Link>
           </div>
           <div className="flex items-center gap-2">
             <button className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-qsis/30 bg-qsis/10 text-qsis cursor-pointer hover:bg-qsis/20 transition-all" onClick={() => setUploadOpen(true)}>
@@ -108,6 +111,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     >
                       <i className="fas fa-th-large w-4 text-center text-dark-text2"></i> Dashboard
                     </button>
+                    {config.adminEmails.includes((session as any)?.user?.email || '') && (
+                      <button
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-dark-text hover:bg-dark-bg3 cursor-pointer bg-transparent border-none text-left transition-colors"
+                        onClick={() => { setProfileDropdownOpen(false); router.push('/admin'); }}
+                      >
+                        <i className="fas fa-shield-alt w-4 text-center text-qsis"></i> Admin Panel
+                      </button>
+                    )}
                     <button
                       className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-red-400 hover:bg-red-500/10 cursor-pointer bg-transparent border-none text-left transition-colors"
                       onClick={() => { setProfileDropdownOpen(false); fetch('/api/auth/firebase-session', { method: 'DELETE' }); signOut({ callbackUrl: '/' }); }}
@@ -150,6 +161,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <i className="fas fa-users text-[1rem]"></i>
             <span className="text-[0.62rem] font-medium">Team</span>
           </Link>
+          <Link href="/faculty" className={`flex flex-col items-center gap-[2px] px-3 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/faculty') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+            <i className="fas fa-chalkboard-teacher text-[1rem]"></i>
+            <span className="text-[0.62rem] font-medium">Faculty</span>
+          </Link>
         </div>
       </div>
 
@@ -175,6 +190,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link href="/history" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-history mr-2"></i>History</Link>
                 <Link href="/routine" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-calendar-alt mr-2"></i>Routine</Link>
                 <Link href="/contributors" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2"></i>Contributors</Link>
+                <Link href="/faculty" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-chalkboard-teacher mr-2"></i>Faculty</Link>
                 <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" className="text-[0.8rem] text-dark-text2 hover:text-qsis transition-colors"><i className="fab fa-github mr-2"></i>GitHub Repo</a>
               </div>
             </div>
@@ -198,16 +214,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </div>
-          <div className="border-t border-dark-border mt-6 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="border-t border-dark-border mt-6 pt-5 pb-8  flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-[0.72rem] text-dark-text2">&copy; {new Date().getFullYear()} QSIS-ARMS. All rights reserved.</p>
-            <div className="flex items-center gap-3">
-              <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+              <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
                 <i className="fas fa-star text-yellow-500"></i> Star Files Repo
               </a>
-              <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+              <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
                 <i className="fas fa-code-fork text-qsis"></i> Fork to Contribute
               </a>
-              <a href="https://github.com/sayedatiqurrahman/QSIS-ARMS-v2" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+              <a href="https://github.com/sayedatiqurrahman/QSIS-ARMS-v2" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
                 <i className="fab fa-github"></i> Source Code
               </a>
             </div>

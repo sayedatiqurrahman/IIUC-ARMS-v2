@@ -26,6 +26,7 @@ export default function ContributorsView() {
           <i className="fas fa-arrow-left"></i> Back
         </button>
       </div>
+
       {contributorsLoading ? (
         <div className="loading-container">
           <div className="book-loader">
@@ -55,9 +56,13 @@ export default function ContributorsView() {
             return (
               <div key={c.id} className={`${isFounder ? 'bg-gradient-to-br from-qsis/5 to-accent/5 border-qsis/40 ring-1 ring-qsis/20' : 'bg-dark-bg2 border-dark-border'} border rounded-2xl overflow-hidden hover:border-qsis hover:shadow-[0_4px_24px_rgba(34,197,94,0.15)] transition-all group`}>
                 <div className={`relative ${isFounder ? 'bg-gradient-to-br from-qsis/20 to-accent/15' : 'bg-gradient-to-br from-qsis/10 to-accent/10'} px-5 pt-6 pb-4 text-center`}>
-                  {isFounder && (
+                  {c.company && (
                     <div className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-qsis/20 text-qsis text-[0.6rem] font-bold flex items-center gap-1">
-                      <i className="fas fa-star"></i> Programming Light
+                      {c.companyUrl ? (
+                        <a href={c.companyUrl} target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline no-underline"><i className="fas fa-star mr-0.5"></i>{c.company}</a>
+                      ) : (
+                        <><i className="fas fa-star"></i> {c.company}</>
+                      )}
                     </div>
                   )}
                   {c.profileComplete && (
@@ -76,7 +81,11 @@ export default function ContributorsView() {
                   {isFounder && (
                     <div className="text-[0.75rem] text-qsis font-medium mt-0.5">{config.founderName}</div>
                   )}
-                  <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors">@{c.login}</a>
+                  {c.title ? (
+                    <p className="text-[0.75rem] text-qsis font-medium mt-0.5 italic">{c.title}</p>
+                  ) : (
+                    <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors">@{c.login}</a>
+                  )}
                   <div className="mt-2">
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold ${
                       isFounder ? 'bg-qsis/25 text-qsis ring-1 ring-qsis/40' :
@@ -111,40 +120,50 @@ export default function ContributorsView() {
 
                 {/* Profile details */}
                 <div className="px-5 py-4">
-                  {c.universityId && (
-                    <div className="flex items-center gap-2.5 mb-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-qsis/10 flex items-center justify-center flex-shrink-0">
-                        <i className="fas fa-id-card text-qsis text-[0.7rem]"></i>
-                      </div>
-                      <div>
-                        <div className="text-[0.65rem] text-dark-text2 leading-tight">University ID</div>
-                        <div className="text-[0.82rem] font-semibold text-qsis font-mono">{c.universityId}</div>
-                      </div>
+                  {(c.universityId && !c.hideUniversityId) || (c.semester && !c.hideSemester) ? (
+                    <div className="grid grid-cols-2 gap-2.5 mb-2.5">
+                      {c.universityId && !c.hideUniversityId && (
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-qsis/10 flex items-center justify-center flex-shrink-0">
+                            <i className="fas fa-id-card text-qsis text-[0.7rem]"></i>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-[0.65rem] text-dark-text2 leading-tight">University ID</div>
+                            <div className="text-[0.82rem] font-semibold text-qsis font-mono truncate">{c.universityId}</div>
+                          </div>
+                        </div>
+                      )}
+                      {c.semester && !c.hideSemester && (
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+                            <i className="fas fa-graduation-cap text-accent text-[0.7rem]"></i>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-[0.65rem] text-dark-text2 leading-tight">Semester</div>
+                            <div className="text-[0.82rem] font-semibold truncate">{config.semesters.find(s => s.id === c.semester)?.label || c.semester}</div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {c.whatsapp && (
-                    <div className="flex items-center gap-2.5 mb-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0">
-                        <i className="fab fa-whatsapp text-green-500 text-[0.7rem]"></i>
-                      </div>
-                      <div>
-                        <div className="text-[0.65rem] text-dark-text2 leading-tight">WhatsApp</div>
-                        <div className="text-[0.82rem] font-semibold">{c.whatsapp}</div>
-                      </div>
-                    </div>
-                  )}
-                  {c.semester && (
-                    <div className="flex items-center gap-2.5 mb-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
-                        <i className="fas fa-graduation-cap text-accent text-[0.7rem]"></i>
-                      </div>
-                      <div>
-                        <div className="text-[0.65rem] text-dark-text2 leading-tight">Semester</div>
-                        <div className="text-[0.82rem] font-semibold">{config.semesters.find(s => s.id === c.semester)?.label || c.semester}</div>
-                      </div>
-                    </div>
-                  )}
-                  {c.email && (
+                  ) : null}
+                  {c.whatsapp && !c.hideWhatsapp && (() => {
+                    const cleaned = c.whatsapp.replace(/[^0-9]/g, '');
+                    const waNumber = cleaned.startsWith('0') ? '880' + cleaned.slice(1) : cleaned.startsWith('880') ? cleaned : cleaned;
+                    const waMessage = encodeURIComponent(`Hi! I came across your profile on QSIS ARMS and would like to connect with you.`);
+                    const waUrl = `https://wa.me/${waNumber}?text=${waMessage}`;
+                    return (
+                      <a href={waUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 mb-2.5 group cursor-pointer no-underline">
+                        <div className="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500/20 transition-colors">
+                          <i className="fab fa-whatsapp text-green-500 text-[0.7rem]"></i>
+                        </div>
+                        <div>
+                          <div className="text-[0.65rem] text-dark-text2 leading-tight">WhatsApp</div>
+                          <div className="text-[0.82rem] font-semibold text-dark-text group-hover:text-green-400 transition-colors">{c.whatsapp} <i className="fas fa-external-link-alt text-[0.55rem] ml-1 text-dark-text2"></i></div>
+                        </div>
+                      </a>
+                    );
+                  })()}
+                  {c.email && !c.hideEmail && (
                     <div className="flex items-center gap-2.5 mb-2.5">
                       <div className="w-7 h-7 rounded-lg bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
                         <i className="fas fa-envelope text-yellow-500 text-[0.7rem]"></i>
@@ -153,6 +172,15 @@ export default function ContributorsView() {
                         <div className="text-[0.65rem] text-dark-text2 leading-tight">Email</div>
                         <div className="text-[0.82rem] font-semibold truncate">{c.email}</div>
                       </div>
+                    </div>
+                  )}
+                  {/* Social icons row */}
+                  {(c.website || c.facebook || c.twitter || c.linkedin) && (
+                    <div className="flex items-center justify-center gap-1.5 mb-2.5">
+                      {c.website && <a href={c.website} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-dark-bg border border-dark-border flex items-center justify-center text-dark-text2 hover:text-white hover:bg-sky-500/20 hover:border-sky-400/50 transition-all" title={c.website.replace(/https?:\/\//, '')}><i className="fas fa-globe text-[0.72rem]"></i></a>}
+                      {c.facebook && <a href={c.facebook} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-dark-bg border border-dark-border flex items-center justify-center text-dark-text2 hover:text-white hover:bg-blue-600/20 hover:border-blue-500/50 transition-all" title="Facebook"><i className="fab fa-facebook-f text-[0.72rem]"></i></a>}
+                      {c.twitter && <a href={c.twitter} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-dark-bg border border-dark-border flex items-center justify-center text-dark-text2 hover:text-white hover:bg-sky-400/20 hover:border-sky-300/50 transition-all" title="Twitter / X"><i className="fab fa-x-twitter text-[0.72rem]"></i></a>}
+                      {c.linkedin && <a href={c.linkedin} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-dark-bg border border-dark-border flex items-center justify-center text-dark-text2 hover:text-white hover:bg-blue-700/20 hover:border-blue-600/50 transition-all" title="LinkedIn"><i className="fab fa-linkedin-in text-[0.72rem]"></i></a>}
                     </div>
                   )}
                   {!c.universityId && !c.whatsapp && !c.semester && !c.email && (
@@ -201,6 +229,78 @@ export default function ContributorsView() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* How to Become a Contributor */}
+      {!contributorsLoading && contributors.length > 0 && (
+        <div className="mt-8 bg-gradient-to-br from-qsis/10 to-accent/5 border border-qsis/25 rounded-2xl p-5">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-qsis/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <i className="fas fa-trophy text-qsis text-[1.1rem]"></i>
+            </div>
+            <div>
+              <h4 className="text-[0.95rem] font-bold text-dark-text mb-1">Want Your Name Here?</h4>
+              <p className="text-[0.8rem] text-dark-text2 leading-relaxed">
+                Upload academic documents — notes, sheets, previous questions, or syllabus — for your department. Every valid contribution earns you a spot on this page with your profile, stats, and GitHub link.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-dark-bg border border-dark-border">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+                <i className="fas fa-upload text-blue-400 text-[0.75rem]"></i>
+              </div>
+              <div>
+                <div className="text-[0.75rem] font-semibold">1. Upload Files</div>
+                <div className="text-[0.62rem] text-dark-text2">Notes, sheets, questions</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-dark-bg border border-dark-border">
+              <div className="w-8 h-8 rounded-lg bg-accent/15 flex items-center justify-center flex-shrink-0">
+                <i className="fas fa-check-circle text-accent text-[0.75rem]"></i>
+              </div>
+              <div>
+                <div className="text-[0.75rem] font-semibold">2. Get Reviewed</div>
+                <div className="text-[0.62rem] text-dark-text2">Team verifies quality</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-dark-bg border border-dark-border">
+              <div className="w-8 h-8 rounded-lg bg-green-500/15 flex items-center justify-center flex-shrink-0">
+                <i className="fas fa-user-check text-green-400 text-[0.75rem]"></i>
+              </div>
+              <div>
+                <div className="text-[0.75rem] font-semibold">3. Get Listed</div>
+                <div className="text-[0.62rem] text-dark-text2">Your name &amp; profile here</div>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-qsis to-accent text-white font-semibold text-[0.8rem] cursor-pointer hover:shadow-[0_4px_16px_rgba(34,197,94,0.3)] hover:scale-[1.02] transition-all border-none" onClick={() => router.push('/')}>
+              <i className="fas fa-upload"></i> Start Uploading
+            </button>
+            <span className="text-[0.7rem] text-dark-text2">or visit <strong className="text-qsis">Dashboard</strong> to get started</span>
+          </div>
+        </div>
+      )}
+
+      {/* Policy Warning */}
+      {!contributorsLoading && contributors.length > 0 && (
+        <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 mt-4">
+          <div className="flex items-start gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-red-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <i className="fas fa-exclamation-triangle text-red-400 text-[0.7rem]"></i>
+            </div>
+            <div>
+              <h5 className="text-[0.82rem] font-semibold text-red-400 mb-1">Contribution Policy</h5>
+              <ul className="text-[0.72rem] text-dark-text2 space-y-1 list-none">
+                <li><i className="fas fa-check text-green-400 mr-1.5"></i>Upload only original academic documents relevant to IIUC</li>
+                <li><i className="fas fa-check text-green-400 mr-1.5"></i>One account per person — no duplicate accounts</li>
+                <li><i className="fas fa-times text-red-400 mr-1.5"></i>No spam, irrelevant content, or copied work claimed as own</li>
+                <li><i className="fas fa-times text-red-400 mr-1.5"></i>Duplicate submissions or malicious activity will result in a <strong>permanent ban</strong></li>
+              </ul>
+            </div>
+          </div>
         </div>
       )}
 

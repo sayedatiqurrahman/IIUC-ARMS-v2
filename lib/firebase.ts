@@ -1,5 +1,5 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile as firebaseUpdateProfile, type Auth, type User } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, updateProfile as firebaseUpdateProfile, type Auth, type User } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -65,7 +65,11 @@ export async function signInWithEmail(email: string, password: string) {
 
 export async function signUpWithEmail(email: string, password: string) {
   const result = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password);
-  await sendEmailVerification(result.user);
+  const actionCodeSettings = {
+    url: `${window.location.origin}/callback`,
+    handleCodeInApp: false,
+  };
+  await sendEmailVerification(result.user, actionCodeSettings);
   const idToken = await result.user.getIdToken();
   await saveTokensToCookies(result.user);
   return { idToken, user: result.user };
@@ -73,6 +77,29 @@ export async function signUpWithEmail(email: string, password: string) {
 
 export async function resetPassword(email: string) {
   await sendPasswordResetEmail(getFirebaseAuth(), email);
+}
+
+export async function sendMagicLink(email: string) {
+  const actionCodeSettings = {
+    url: `${window.location.origin}/auth/magic-link`,
+    handleCodeInApp: true,
+  };
+  await sendSignInLinkToEmail(getFirebaseAuth(), email, actionCodeSettings);
+  window.localStorage.setItem('emailForSignIn', email);
+}
+
+export function isMagicLink(): boolean {
+  return isSignInWithEmailLink(getFirebaseAuth(), window.location.href);
+}
+
+export async function completeMagicLinkSignIn() {
+  const email = window.localStorage.getItem('emailForSignIn');
+  if (!email) throw new Error('No email found. Please enter your email again.');
+  const result = await signInWithEmailLink(getFirebaseAuth(), email, window.location.href);
+  window.localStorage.removeItem('emailForSignIn');
+  const idToken = await result.user.getIdToken();
+  await saveTokensToCookies(result.user);
+  return { idToken, user: result.user };
 }
 
 export async function updateUserProfile(displayName?: string, photoURL?: string) {

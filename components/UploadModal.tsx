@@ -4,9 +4,8 @@ import { useState, useRef } from 'react';
 import { config } from '@/lib/config';
 import type { Profile } from '@/lib/store';
 import { useAppStore } from '@/lib/store';
-import { connectGitHubPopup } from '@/lib/github-connect';
-import { uploadFilesToGitHub } from '@/lib/github-upload';
 import { showToast } from '@/lib/utils';
+import { installGitHubApp } from '@/lib/github-install';
 
 interface CourseGroup {
   id: number;
@@ -30,8 +29,9 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [category, setCategory] = useState('');
   const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, code: '', title: '', files: [] }]);
   const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [activeTab, setActiveTab] = useState<'repo' | 'direct'>('direct');
 
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!githubToken || !!profile.githubToken;
 
@@ -157,14 +157,25 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       const courseList = validCourses.map(c => c.title.trim() ? `${c.code} - ${c.title}` : c.code).join(', ');
       const message = `Add ${courseList} (${category}) — ${semester}`;
 
-      const data = await uploadFilesToGitHub(token, allFiles, message);
+      // Use server-side API route (uses GITHUB_TOKEN env for write access)
+      const res = await fetch('/api/github/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: allFiles, message, githubToken: token }),
+      });
+      const data = await res.json();
 
       if (data.success) {
-        setResult({ success: true, prUrl: data.prUrl });
+        setResult({ success: true, prUrl: data.pr?.url });
         setCourses([{ id: 1, code: '', title: '', files: [] }]);
+        // Refresh tree cache so newly uploaded files appear immediately
+        try { localStorage.removeItem('qs_tree_cache'); } catch {}
+        useAppStore.getState().loadTree(session?.accessToken || '');
       } else {
-        if (data.tokenExpired || data.error?.includes('token') || data.error?.includes('401') || data.error?.includes('scope')) {
+        if (data.code === 'TOKEN_EXPIRED' || data.code === 'AUTH_REQUIRED') {
           setResult({ success: false, error: data.error, tokenExpired: true });
+        } else if (data.code === 'NEEDS_PAT' || data.code === 'TOKEN_NO_ACCESS') {
+          setResult({ success: false, error: data.error, needsPAT: true });
         } else {
           setResult({ success: false, error: data.error || 'Upload failed' });
         }
@@ -245,11 +256,23 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
               </a>
             </div>
             <button className="w-full py-3 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity" onClick={async () => {
-              const email = profile.email || session?.user?.email || '';
-              const { connected, token } = await connectGitHubPopup(email);
-              if (connected) {
-                if (token) setGithubToken(token);
+              showToast('Opening GitHub...', 'info');
+              const result = await installGitHubApp();
+              if (result.token && result.login) {
+                setGithubToken(result.token);
+                fetch('/api/profile', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    githubLogin: result.login,
+                    githubToken: result.token,
+                    githubInstallationId: result.installationId,
+                    githubAvatar: result.avatarUrl,
+                  }),
+                }).catch(() => {});
                 window.location.reload();
+              } else {
+                showToast(result.error || 'Connection cancelled', 'error');
               }
             }}>
               <i className="fab fa-github mr-2"></i> Connect GitHub Account
@@ -266,7 +289,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     );
   }
 
-  // Upload form
+  // Upload form with tabs
   return (
     <div className="modal active" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -274,187 +297,437 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           <h2 className="text-base font-semibold"><i className="fas fa-upload"></i> Contribute Files</h2>
           <button className="text-dark-text2 cursor-pointer bg-transparent border-none" onClick={onClose}><i className="fas fa-times"></i></button>
         </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-dark-border">
+          <button className={`flex-1 py-2.5 text-[0.82rem] font-semibold border-none cursor-pointer transition-all ${activeTab === 'direct' ? 'bg-transparent text-qsis border-b-2 border-b-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text'}`} onClick={() => setActiveTab('direct')}>
+            <i className="fas fa-cloud-upload-alt mr-1.5"></i>Direct Upload
+          </button>
+          <button className={`flex-1 py-2.5 text-[0.82rem] font-semibold border-none cursor-pointer transition-all ${activeTab === 'repo' ? 'bg-transparent text-qsis border-b-2 border-b-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text'}`} onClick={() => setActiveTab('repo')}>
+            <i className="fab fa-github mr-1.5"></i>Upload from Repository
+          </button>
+        </div>
+
         <div className="p-5 max-h-[80vh] overflow-y-auto">
-          {result?.success ? (
-            <div className="text-center py-6">
-              <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-green-500/10 flex items-center justify-center">
-                <i className="fas fa-check-circle text-2xl text-green-500"></i>
+
+          {/* ═══════════ TAB 1: Upload from Repository ═══════════ */}
+          {activeTab === 'repo' && (
+            <div>
+              <div className="text-center mb-4">
+                <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-qsis/10 flex items-center justify-center">
+                  <i className="fab fa-github text-2xl text-qsis"></i>
+                </div>
+                <h3 className="text-[1rem] font-bold mb-1">Upload Directly on GitHub</h3>
+                <p className="text-[0.8rem] text-dark-text2">Upload files manually through GitHub&apos;s web interface. Perfect for small uploads or if you prefer full control.</p>
               </div>
-              <h3 className="text-[1rem] font-bold mb-2">PR Created Successfully!</h3>
-              <p className="text-[0.82rem] text-dark-text2 mb-4">Your files are pending review.</p>
-              <a href={result.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-qsis text-white font-semibold text-[0.85rem] hover:opacity-90 transition-opacity">
-                <i className="fab fa-github"></i> View Pull Request
-              </a>
-              <button className="block mx-auto mt-3 px-4 py-2 text-qsis text-[0.82rem] font-semibold bg-transparent border-none cursor-pointer hover:underline" onClick={onClose}>Close</button>
-            </div>
-          ) : (
-            <>
-              {/* Semester & Category — shared */}
-              <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester *</label>
-                    <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={semester} onChange={e => { setSemester(e.target.value); setCategory(''); }}>
-                      <option value="">Select...</option>
-                      {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                      <option value={config.relatedKitabsFolder}>Related Kitabs</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[0.72rem] text-dark-text2 block mb-1">Category *</label>
-                    <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={category} onChange={e => setCategory(e.target.value)}>
-                      <option value="">Select...</option>
-                      {semester === config.relatedKitabsFolder ? (
-                        Object.entries(config.relatedKitabsCategories).map(([key, cat]) => (
-                          <option key={key} value={key}>{cat.label}</option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="sheet">Sheets</option>
-                          <option value="question">Previous Questions</option>
-                          <option value="note">Notes</option>
-                          <option value="syllabus">Syllabus</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
+
+              {/* Quick Links */}
+              <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-4">
+                <p className="text-[0.72rem] text-dark-text2 mb-2 font-semibold"><i className="fas fa-bolt text-qsis mr-1"></i> Quick Links</p>
+                <div className="flex flex-wrap gap-2">
+                  <a href="https://github.com/signup" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-[0.7rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all no-underline">
+                    <i className="fab fa-github"></i> Create GitHub Account
+                  </a>
+                  <a href="https://github.com/login" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-[0.7rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all no-underline">
+                    <i className="fas fa-sign-in-alt"></i> Sign In to GitHub
+                  </a>
+                  <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-[0.7rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all no-underline">
+                    <i className="fas fa-code-branch"></i> Fork Repository
+                  </a>
                 </div>
               </div>
 
-              {/* Course Groups */}
-              {courses.map((course, idx) => {
-                const folderPreview = course.code.trim()
-                  ? (course.title.trim() ? `${course.code.trim()}-${course.title.trim()}` : course.code.trim())
-                  : '';
-                return (
-                <div key={course.id} className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-3">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[0.78rem] font-semibold text-qsis">
-                      <i className="fas fa-book mr-1.5"></i>Course {courses.length > 1 ? idx + 1 : ''}
-                    </span>
-                    {courses.length > 1 && (
-                      <button className="w-6 h-6 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.7rem] hover:bg-red-500/20" onClick={() => removeCourse(course.id)} title="Remove course">
-                        <i className="fas fa-times"></i>
-                      </button>
-                    )}
+              {/* Step by step guide */}
+              <div className="space-y-4">
+                {/* Step 1: Fork */}
+                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[0.72rem] font-bold text-qsis">1</span>
+                    </div>
+                    <h4 className="text-[0.85rem] font-semibold">Fork the Repository</h4>
+                  </div>
+                  <div className="ml-9 space-y-2">
+                    <p className="text-[0.78rem] text-dark-text2">
+                      You need your own copy of the repo to upload files. Click <strong>Fork</strong> to create a copy under your GitHub account.
+                    </p>
+                    <div className="bg-dark-bg border border-dark-border rounded-lg p-2.5 text-[0.72rem] text-dark-text2">
+                      <i className="fas fa-info-circle text-qsis mr-1.5"></i>
+                      <strong>Why fork?</strong> You can&apos;t upload directly to the main repo. Forking creates your personal copy, then you submit a Pull Request to share your files.
+                    </div>
+                    <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-qsis/10 border border-qsis/20 text-qsis text-[0.75rem] font-semibold hover:bg-qsis/20 transition-all no-underline">
+                      <i className="fas fa-code-branch"></i> Fork Now
+                    </a>
+                  </div>
+                </div>
+
+                {/* Step 2: Open Your Fork */}
+                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[0.72rem] font-bold text-qsis">2</span>
+                    </div>
+                    <h4 className="text-[0.85rem] font-semibold">Open Your Fork</h4>
+                  </div>
+                  <div className="ml-9 space-y-2">
+                    <p className="text-[0.78rem] text-dark-text2">
+                      After forking, you&apos;ll be on your own copy (<code className="bg-dark-bg px-1 rounded text-qsis">github.com/YOUR-USERNAME/QSIS-ACADEMIC-FILES-MANAFGER</code>).
+                    </p>
+                    <p className="text-[0.78rem] text-dark-text2">
+                      Click <strong>Add file</strong> &rarr; <strong>Upload files</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 3: Folder Structure */}
+                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[0.72rem] font-bold text-qsis">3</span>
+                    </div>
+                    <h4 className="text-[0.85rem] font-semibold">Navigate to the Correct Folder</h4>
+                  </div>
+                  <p className="text-[0.78rem] text-dark-text2 ml-9 mb-2">
+                    Your files must go inside the correct path. Follow this structure:
+                  </p>
+                  <div className="ml-9 bg-dark-bg border border-dark-border rounded-lg p-3 font-mono text-[0.72rem]">
+                    <div className="text-qsis mb-1">upload_academic_files/</div>
+                    <div className="pl-3 text-dark-text2 mb-1">└── <span className="text-accent">[your-semester]/</span></div>
+                    <div className="pl-6 text-dark-text2 mb-1">└── <span className="text-yellow-400">[category]/</span></div>
+                    <div className="pl-9 text-dark-text2 mb-1">└── <span className="text-green-400">[CourseCode-CourseTitle]/</span></div>
+                    <div className="pl-12 text-dark-text2">└── <span className="text-blue-400">your-file.pdf</span></div>
+                  </div>
+                </div>
+
+                {/* Step 4: Choose Path + Create Folders */}
+                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[0.72rem] font-bold text-qsis">4</span>
+                    </div>
+                    <h4 className="text-[0.85rem] font-semibold">Choose the Correct Path &amp; Create Folders</h4>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <div>
-                      <label className="text-[0.72rem] text-dark-text2 block mb-1">Course Code *</label>
-                      <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. FSC-1208" value={course.code} onChange={e => updateCourse(course.id, { code: e.target.value })} />
+                  {/* How to create folders */}
+                  <div className="ml-9 mb-4">
+                    <div className="p-2.5 rounded-lg bg-yellow-500/5 border border-yellow-500/20 mb-3">
+                      <p className="text-[0.75rem] text-dark-text2">
+                        <i className="fas fa-lightbulb text-yellow-500 mr-1.5"></i>
+                        <strong>GitHub has no &quot;Create Folder&quot; button.</strong> Folders are created automatically when you type a path in the filename field.
+                      </p>
                     </div>
-                    <div>
-                      <label className="text-[0.72rem] text-dark-text2 block mb-1">Course Title</label>
-                      <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. Islamic Studies" value={course.title} onChange={e => updateCourse(course.id, { title: e.target.value })} />
+                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-folder-plus text-qsis mr-1.5"></i>How to Create Folders:</p>
+                    <div className="space-y-2">
+                      <div className="p-2.5 rounded-lg bg-dark-bg border border-dark-border">
+                        <p className="text-[0.72rem] font-semibold text-dark-text mb-1"><i className="fas fa-check-circle text-green-400 mr-1"></i> Method 1 — Upload with path (Recommended)</p>
+                        <ol className="list-decimal ml-4 space-y-1 text-[0.72rem] text-dark-text2">
+                          <li>Select your file(s) to upload</li>
+                          <li>In the commit box, type the full path as the filename:</li>
+                        </ol>
+                        <div className="mt-1.5 bg-dark-bg3 border border-dark-border rounded-lg p-2 font-mono text-[0.68rem]">
+                          <span className="text-qsis">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208</span><span className="text-dark-text2">/</span><span className="text-blue-400">file.pdf</span>
+                        </div>
+                        <p className="text-[0.65rem] text-green-400 mt-1"><i className="fas fa-check mr-1"></i>GitHub creates all folders automatically!</p>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-dark-bg border border-dark-border">
+                        <p className="text-[0.72rem] font-semibold text-dark-text mb-1"><i className="fas fa-check-circle text-green-400 mr-1"></i> Method 2 — Create empty folder first</p>
+                        <ol className="list-decimal ml-4 space-y-1 text-[0.72rem] text-dark-text2">
+                          <li>Click <strong>Add file</strong> &rarr; <strong>Create new file</strong></li>
+                          <li>Type path + <code className="bg-dark-bg3 px-1 rounded">.gitkeep</code> as filename</li>
+                        </ol>
+                        <div className="mt-1.5 bg-dark-bg3 border border-dark-border rounded-lg p-2 font-mono text-[0.68rem]">
+                          <span className="text-qsis">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208</span><span className="text-dark-text2">/</span><span className="text-blue-400">.gitkeep</span>
+                        </div>
+                        <p className="text-[0.65rem] text-dark-text3 mt-1"><i className="fas fa-info-circle text-qsis mr-1"></i><code className="bg-dark-bg3 px-1 rounded">.gitkeep</code> is a placeholder that keeps the folder in Git.</p>
+                      </div>
                     </div>
                   </div>
 
-                  {folderPreview && semester && category && (
-                    <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-qsis/5 border border-qsis/10">
-                      <span className="text-[0.62rem] text-qsis font-mono">
-                        <i className="fas fa-folder mr-1"></i>{semester}/{category}/{folderPreview}/<span className="text-dark-text2">*.{/* files go here */}</span>
-                      </span>
+                  {/* Semester */}
+                  <div className="ml-9 mb-3">
+                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-calendar text-accent mr-1.5"></i>Semester — pick yours:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {config.semesters.map(s => (
+                        <span key={s.id} className="px-2 py-1 rounded bg-dark-bg border border-dark-border text-[0.65rem] text-dark-text2 font-mono">{s.id}/</span>
+                      ))}
                     </div>
-                  )}
-
-                  {/* File picker for this course */}
-                  <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv" onChange={e => handleFilesForCourse(course.id, e)} />
-                  <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => fileInputRefs.current[course.id]?.click()}>
-                    <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
-                    <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
-                    <p className="text-[0.65rem] text-dark-text2">Max 5 files, {config.maxUploadSizeMB}MB each</p>
                   </div>
 
-                  {course.files.length > 0 && (
-                    <div className="mt-2 flex flex-col gap-1.5">
-                      {course.files.map((file, fi) => {
-                        const folderName = course.title.trim()
-                          ? `${course.code.trim()}-${course.title.trim()}`
-                          : course.code.trim() || 'untitled';
-                        const fullPath = `${semester || '...'}/${category || '...'}/${folderName}/${file.name}`;
-                        return (
-                          <div key={fi} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border">
-                            <div className="text-[0.95rem] flex-shrink-0">{getFileIcon(file.name)}</div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[0.75rem] font-semibold truncate">{file.name}</div>
-                              <div className="text-[0.62rem] text-qsis font-mono truncate mt-0.5">
-                                <i className="fas fa-folder-open mr-1 text-[0.55rem]"></i>{fullPath}
-                              </div>
-                            </div>
-                            <div className="text-[0.62rem] text-dark-text2 flex-shrink-0">{formatSize(file.size)}</div>
-                          <button className="w-5 h-5 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.65rem] hover:bg-red-500/20" onClick={() => removeFileFromCourse(course.id, fi)}>
+                  {/* Category */}
+                  <div className="ml-9 mb-3">
+                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-folder text-yellow-400 mr-1.5"></i>Category — choose what you&apos;re uploading:</p>
+                    <div className="flex flex-col gap-1.5">
+                      {Object.entries(config.categories).map(([key, cat]) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <span className="px-2 py-1 rounded bg-dark-bg border border-dark-border text-[0.65rem] text-dark-text2 font-mono w-[120px]">{key}/</span>
+                          <span className="text-[0.72rem] text-dark-text2">{cat.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Course folder */}
+                  <div className="ml-9 mb-3">
+                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-book text-green-400 mr-1.5"></i>Course Folder — naming format:</p>
+                    <div className="bg-dark-bg border border-dark-border rounded-lg p-2.5 font-mono text-[0.72rem]">
+                      <span className="text-green-400">CourseCode-CourseTitle</span><span className="text-dark-text2">/</span>
+                    </div>
+                    <div className="mt-1.5 flex flex-col gap-1">
+                      <p className="text-[0.7rem] text-dark-text2"><i className="fas fa-check text-green-400 mr-1.5"></i><code className="bg-dark-bg px-1 rounded text-qsis">FSC-1208-IslamicStudies/</code></p>
+                      <p className="text-[0.7rem] text-dark-text2"><i className="fas fa-check text-green-400 mr-1.5"></i><code className="bg-dark-bg px-1 rounded text-qsis">MAT-1101/</code> <span className="text-dark-text3">(title optional)</span></p>
+                      <p className="text-[0.7rem] text-dark-text2"><i className="fas fa-check text-green-400 mr-1.5"></i><code className="bg-dark-bg px-1 rounded text-qsis">ENG-2201-EnglishI/</code></p>
+                    </div>
+                  </div>
+
+                  {/* Full example */}
+                  <div className="ml-9">
+                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-lightbulb text-yellow-400 mr-1.5"></i>Full Example — 3rd Semester sheets for FSC-1208:</p>
+                    <div className="bg-dark-bg border border-dark-border rounded-lg p-3 font-mono text-[0.72rem] leading-relaxed">
+                      <span className="text-qsis">upload_academic_files</span><span className="text-dark-text2">/</span><span className="text-accent">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208-IslamicStudies</span><span className="text-dark-text2">/</span><span className="text-blue-400">Midterm-Sheet.pdf</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 5: Upload & Commit */}
+                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[0.72rem] font-bold text-qsis">5</span>
+                    </div>
+                    <h4 className="text-[0.85rem] font-semibold">Upload &amp; Commit</h4>
+                  </div>
+                  <div className="ml-9 space-y-2">
+                    <p className="text-[0.78rem] text-dark-text2">
+                      Drag &amp; drop your files or click <strong>choose your files</strong>. Then fill in the commit message:
+                    </p>
+                    <div className="bg-dark-bg border border-dark-border rounded-lg p-2.5 font-mono text-[0.72rem]">
+                      <span className="text-dark-text2">Commit message:</span>{' '}
+                      <span className="text-qsis">Add FSC-1208 (Sheets) — 3rd-semister</span>
+                    </div>
+                    <p className="text-[0.78rem] text-dark-text2">
+                      Select <strong>&quot;Commit directly to the main branch&quot;</strong> and click <strong>Commit changes</strong>.
+                    </p>
+                    <div className="flex items-center gap-2 mt-2 p-2 rounded-lg bg-green-500/5 border border-green-500/20">
+                      <i className="fas fa-check-circle text-green-400 text-[0.8rem]"></i>
+                      <span className="text-[0.75rem] text-green-400">That&apos;s it! Your files will appear in the app within 5 minutes.</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Supported files */}
+                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
+                  <p className="text-[0.78rem] font-semibold mb-2"><i className="fas fa-info-circle text-qsis mr-1.5"></i>Supported File Types</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['PDF', 'DOC/DOCX', 'XLS/XLSX', 'PPT/PPTX', 'JPG/PNG', 'CSV'].map(t => (
+                      <span key={t} className="px-2 py-0.5 rounded bg-dark-bg border border-dark-border text-[0.65rem] text-dark-text2">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════ TAB 2: Direct Upload ═══════════ */}
+          {activeTab === 'direct' && (
+            <>
+              {result?.success ? (
+                <div className="text-center py-6">
+                  <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <i className="fas fa-check-circle text-2xl text-green-500"></i>
+                  </div>
+                  <h3 className="text-[1rem] font-bold mb-2">PR Created Successfully!</h3>
+                  <p className="text-[0.82rem] text-dark-text2 mb-4">Your files are pending review.</p>
+                  <a href={result.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-qsis text-white font-semibold text-[0.85rem] hover:opacity-90 transition-opacity">
+                    <i className="fab fa-github"></i> View Pull Request
+                  </a>
+                  <button className="block mx-auto mt-3 px-4 py-2 text-qsis text-[0.82rem] font-semibold bg-transparent border-none cursor-pointer hover:underline" onClick={onClose}>Close</button>
+                </div>
+              ) : (
+                <>
+                  {/* Semester & Category */}
+                  <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester *</label>
+                        <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={semester} onChange={e => { setSemester(e.target.value); setCategory(''); }}>
+                          <option value="">Select...</option>
+                          {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                          <option value={config.relatedKitabsFolder}>Related Kitabs</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[0.72rem] text-dark-text2 block mb-1">Category *</label>
+                        <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={category} onChange={e => setCategory(e.target.value)}>
+                          <option value="">Select...</option>
+                          {semester === config.relatedKitabsFolder ? (
+                            Object.entries(config.relatedKitabsCategories).map(([key, cat]) => (
+                              <option key={key} value={key}>{cat.label}</option>
+                            ))
+                          ) : (
+                            <>
+                              {Object.entries(config.categories).filter(([k]) => k !== 'other').map(([key, cat]) => (
+                                <option key={key} value={cat.folder}>{cat.label}</option>
+                              ))}
+                            </>
+                          )}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Course Groups */}
+                  {courses.map((course, idx) => {
+                    const folderPreview = course.code.trim()
+                      ? (course.title.trim() ? `${course.code.trim()}-${course.title.trim()}` : course.code.trim())
+                      : '';
+                    return (
+                    <div key={course.id} className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-3">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[0.78rem] font-semibold text-qsis">
+                          <i className="fas fa-book mr-1.5"></i>Course {courses.length > 1 ? idx + 1 : ''}
+                        </span>
+                        {courses.length > 1 && (
+                          <button className="w-6 h-6 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.7rem] hover:bg-red-500/20" onClick={() => removeCourse(course.id)} title="Remove course">
                             <i className="fas fa-times"></i>
                           </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <div>
+                          <label className="text-[0.72rem] text-dark-text2 block mb-1">Course Code *</label>
+                          <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. FSC-1208" value={course.code} onChange={e => updateCourse(course.id, { code: e.target.value })} />
                         </div>
-                      )})}
+                        <div>
+                          <label className="text-[0.72rem] text-dark-text2 block mb-1">Course Title</label>
+                          <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. Islamic Studies" value={course.title} onChange={e => updateCourse(course.id, { title: e.target.value })} />
+                        </div>
+                      </div>
+
+                      {folderPreview && semester && category && (
+                        <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-qsis/5 border border-qsis/10">
+                          <span className="text-[0.62rem] text-qsis font-mono">
+                            <i className="fas fa-folder mr-1"></i>{semester}/{category}/{folderPreview}/<span className="text-dark-text2">*.{/* files go here */}</span>
+                          </span>
+                        </div>
+                      )}
+
+                      <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv" onChange={e => handleFilesForCourse(course.id, e)} />
+                      <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => fileInputRefs.current[course.id]?.click()}>
+                        <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
+                        <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
+                        <p className="text-[0.65rem] text-dark-text2">Max 5 files, {config.maxUploadSizeMB}MB each</p>
+                      </div>
+
+                      {course.files.length > 0 && (
+                        <div className="mt-2 flex flex-col gap-1.5">
+                          {course.files.map((file, fi) => {
+                            const folderName = course.title.trim()
+                              ? `${course.code.trim()}-${course.title.trim()}`
+                              : course.code.trim() || 'untitled';
+                            const fullPath = `${semester || '...'}/${category || '...'}/${folderName}/${file.name}`;
+                            return (
+                              <div key={fi} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border">
+                                <div className="text-[0.95rem] flex-shrink-0">{getFileIcon(file.name)}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[0.75rem] font-semibold truncate">{file.name}</div>
+                                  <div className="text-[0.62rem] text-qsis font-mono truncate mt-0.5">
+                                    <i className="fas fa-folder-open mr-1 text-[0.55rem]"></i>{fullPath}
+                                  </div>
+                                </div>
+                                <div className="text-[0.62rem] text-dark-text2 flex-shrink-0">{formatSize(file.size)}</div>
+                              <button className="w-5 h-5 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.65rem] hover:bg-red-500/20" onClick={() => removeFileFromCourse(course.id, fi)}>
+                                <i className="fas fa-times"></i>
+                              </button>
+                            </div>
+                          )})}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-              })}
+                  );
+                  })}
 
-              {/* Add another course */}
-              {courses.length < 5 && (
-                <button className="w-full py-2.5 rounded-xl border-2 border-dashed border-dark-border text-dark-text2 text-[0.8rem] font-semibold bg-transparent cursor-pointer hover:border-qsis hover:text-qsis transition-all mb-4" onClick={addCourse}>
-                  <i className="fas fa-plus mr-1.5"></i> Add Another Course
-                </button>
-              )}
-
-              {/* Summary */}
-              <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-4">
-                <div className="flex items-center justify-between text-[0.78rem]">
-                  <span className="text-dark-text2">
-                    <i className="fas fa-file mr-1"></i>{totalFiles} file{totalFiles !== 1 ? 's' : ''} across {courses.filter(c => c.files.length > 0).length} course{courses.filter(c => c.files.length > 0).length !== 1 ? 's' : ''}
-                  </span>
-                  <span className={`font-semibold ${totalSizeMB > 40 ? 'text-red-400' : 'text-qsis'}`}>
-                    {totalSizeMB.toFixed(1)} / 50 MB
-                  </span>
-                </div>
-                <div className="w-full h-1.5 bg-dark-bg3 rounded-full overflow-hidden mt-2">
-                  <div className="h-full bg-gradient-to-r from-qsis to-accent rounded-full transition-all" style={{ width: `${Math.min((totalSizeMB / 50) * 100, 100)}%` }}></div>
-                </div>
-              </div>
-
-              {/* Auto-filled info */}
-              <div className="bg-dark-bg3 border border-dark-border rounded-xl p-3 mb-4">
-                <p className="text-[0.72rem] text-dark-text2 mb-2">Your info will be auto-included in the PR:</p>
-                <div className="flex flex-wrap gap-2">
-                  {profile.universityId && <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{profile.universityId}</span>}
-                  <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{session?.user?.email || ''}</span>
-                  <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{profile.name || (session as any)?.user?.name || ''}</span>
-                </div>
-              </div>
-
-              {result?.error && (
-                <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
-                  <i className="fas fa-exclamation-circle mr-2"></i>{result.error}
-                  {result.tokenExpired && (
-                    <button className="mt-3 w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer" onClick={async () => {
-                      const email = profile.email || session?.user?.email || '';
-                      const { connected, token } = await connectGitHubPopup(email);
-                      if (connected) {
-                        if (token) setGithubToken(token);
-                        window.location.reload();
-                      }
-                    }}>
-                      <i className="fab fa-github mr-2"></i>Reconnect GitHub
+                  {/* Add another course */}
+                  {courses.length < 5 && (
+                    <button className="w-full py-3 rounded-xl border-2 border-dashed border-qsis/40 bg-qsis/5 text-qsis text-[0.85rem] font-bold cursor-pointer hover:border-qsis hover:bg-qsis/10 transition-all mb-4" onClick={addCourse}>
+                      <i className="fas fa-plus-circle mr-2 text-lg"></i> Add Another Course
                     </button>
                   )}
-                </div>
-              )}
 
-              <button
-                className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleSubmit}
-                disabled={uploading || !canSubmit()}
-              >
-                {uploading ? (
-                  <><i className="fas fa-spinner fa-spin mr-2"></i>Creating PR...</>
-                ) : (
-                  <><i className="fas fa-paper-plane mr-2"></i>Submit {totalFiles} File{totalFiles !== 1 ? 's' : ''} for Review</>
-                )}
-              </button>
+                  {/* Summary */}
+                  <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-4">
+                    <div className="flex items-center justify-between text-[0.78rem]">
+                      <span className="text-dark-text2">
+                        <i className="fas fa-file mr-1"></i>{totalFiles} file{totalFiles !== 1 ? 's' : ''} across {courses.filter(c => c.files.length > 0).length} course{courses.filter(c => c.files.length > 0).length !== 1 ? 's' : ''}
+                      </span>
+                      <span className={`font-semibold ${totalSizeMB > 40 ? 'text-red-400' : 'text-qsis'}`}>
+                        {totalSizeMB.toFixed(1)} / 50 MB
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-dark-bg3 rounded-full overflow-hidden mt-2">
+                      <div className="h-full bg-gradient-to-r from-qsis to-accent rounded-full transition-all" style={{ width: `${Math.min((totalSizeMB / 50) * 100, 100)}%` }}></div>
+                    </div>
+                  </div>
+
+                  {/* Auto-filled info */}
+                  <div className="bg-dark-bg3 border border-dark-border rounded-xl p-3 mb-4">
+                    <p className="text-[0.72rem] text-dark-text2 mb-2">Your info will be auto-included in the PR:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {profile.universityId && <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{profile.universityId}</span>}
+                      <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{session?.user?.email || ''}</span>
+                      <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{profile.name || (session as any)?.user?.name || ''}</span>
+                    </div>
+                  </div>
+
+                  {result?.error && (
+                    <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
+                      <i className="fas fa-exclamation-circle mr-2"></i>{result.error}
+                      {result.tokenExpired && (
+                        <button className="mt-3 w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer" onClick={async () => {
+                          showToast('Opening GitHub...', 'info');
+                          const installResult = await installGitHubApp();
+                          if (installResult.error || !installResult.token) {
+                            showToast(installResult.error || 'Connection cancelled', 'error');
+                            return;
+                          }
+                          setGithubToken(installResult.token);
+                          fetch('/api/profile', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              githubLogin: installResult.login,
+                              githubToken: installResult.token,
+                              githubInstallationId: installResult.installationId,
+                              githubAvatar: installResult.avatarUrl,
+                            }),
+                          }).catch(() => {});
+                          showToast(`Connected as @${installResult.login}!`, 'success');
+                          window.location.reload();
+                        }}>
+                          <i className="fab fa-github mr-2"></i>Connect with GitHub
+                        </button>
+                      )}
+                      {result?.needsPAT && (
+                        <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer" className="mt-3 block text-center py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white no-underline font-semibold text-[0.82rem]">
+                          <i className="fas fa-key mr-2"></i>Create Personal Access Token
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleSubmit}
+                    disabled={uploading || !canSubmit()}
+                  >
+                    {uploading ? (
+                      <><i className="fas fa-spinner fa-spin mr-2"></i>Creating PR...</>
+                    ) : (
+                      <><i className="fas fa-paper-plane mr-2"></i>Submit {totalFiles} File{totalFiles !== 1 ? 's' : ''} for Review</>
+                    )}
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>

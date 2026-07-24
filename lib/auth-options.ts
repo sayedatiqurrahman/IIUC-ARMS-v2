@@ -45,6 +45,13 @@ export const authOptions: NextAuthOptions = {
         if (decoded) {
           const email = decoded.email || credentials.email;
           if (!email || !isAllowedEmail(email)) return null;
+          if (decoded.email_verified === false) return null;
+          // Check if user is banned
+          try {
+            const { prisma } = await import('@/lib/prisma');
+            const profile = await prisma.profile.findUnique({ where: { userId: email } });
+            if (profile?.isBanned) return null;
+          } catch {}
           return {
             id: decoded.sub || email,
             email,
@@ -60,6 +67,13 @@ export const authOptions: NextAuthOptions = {
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
           const email = credentials.email || payload.email;
           if (!email || !isAllowedEmail(email)) return null;
+          if (payload.email_verified === false) return null;
+          // Check if user is banned
+          try {
+            const { prisma } = await import('@/lib/prisma');
+            const profile = await prisma.profile.findUnique({ where: { userId: email } });
+            if (profile?.isBanned) return null;
+          } catch {}
           return {
             id: payload.sub || email,
             email,
@@ -74,11 +88,15 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      if (account?.provider === 'google' && profile?.email) {
-        if (!isAllowedEmail(profile.email)) {
-          return '/auth/error?error=invalid-email';
-        }
-      }
+      const email = user.email || (profile as any)?.email;
+      if (!email || !isAllowedEmail(email)) return '/auth/error?error=invalid-email';
+
+      // Check if user is banned
+      try {
+        const { prisma } = await import('@/lib/prisma');
+        const existing = await prisma.profile.findUnique({ where: { userId: email } });
+        if (existing?.isBanned) return '/auth/error?error=account-banned';
+      } catch {}
 
       if (account?.provider === 'github') {
         try {
@@ -100,10 +118,14 @@ export const authOptions: NextAuthOptions = {
           if (githubLogin && user.email) {
             try {
               const { prisma } = await import('@/lib/prisma');
+              const existing = await prisma.profile.findUnique({ where: { userId: user.email } });
               await prisma.profile.upsert({
                 where: { userId: user.email },
-                update: { githubLogin, githubToken: account.access_token },
-                create: { userId: user.email, email: user.email, githubLogin, githubToken: account.access_token },
+                update: {
+                  githubLogin,
+                  email: user.email,
+                },
+                create: { userId: user.email, email: user.email, githubLogin },
               });
             } catch {}
           }

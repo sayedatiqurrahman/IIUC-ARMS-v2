@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
+import { encrypt, decrypt, isEncrypted } from '@/lib/crypto';
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,6 +14,14 @@ export async function GET(req: NextRequest) {
     const userId = email;
     const profile = await prisma.profile.findUnique({ where: { userId } });
     console.log('[Profile GET] email:', email, 'found:', !!profile);
+
+    if (profile?.githubToken && isEncrypted(profile.githubToken)) {
+      try {
+        profile.githubToken = decrypt(profile.githubToken);
+      } catch {
+        console.error('[Profile GET] Failed to decrypt githubToken');
+      }
+    }
 
     return NextResponse.json(profile || { userId, email });
   } catch (err: any) {
@@ -38,10 +47,14 @@ export async function POST(req: NextRequest) {
     const createData: Record<string, any> = { userId, email };
 
     const fields = [
-      'name', 'universityId', 'whatsapp', 'semester', 'image',
-      'facebook', 'twitter', 'linkedin', 'website',
-      'hideWhatsapp', 'hideUniversityId', 'githubLogin', 'githubToken',
+      'name', 'title', 'shortForm', 'department', 'isCR', 'universityId', 'whatsapp', 'semester', 'image',
+      'facebook', 'twitter', 'linkedin', 'website', 'company', 'companyUrl', 'publicEmail',
+      'hideWhatsapp', 'hideUniversityId', 'hideSemester', 'hideEmail',
+      'githubLogin', 'githubToken', 'githubInstallationId', 'githubAvatar',
     ];
+
+    // Fields that can be cleared by sending empty string (disconnect flow)
+    const clearableFields = new Set(['githubLogin', 'githubToken', 'githubInstallationId', 'githubAvatar']);
 
     for (const field of fields) {
       if (field in body) {
@@ -50,14 +63,20 @@ export async function POST(req: NextRequest) {
           updateData[field] = val;
           createData[field] = val;
         } else if (val !== undefined && val !== null && val !== '') {
-          updateData[field] = val;
-          createData[field] = val;
-        } else if (val === '' || val === null) {
-          if (field !== 'githubLogin' && field !== 'githubToken' && field !== 'image') {
-            updateData[field] = null;
-            createData[field] = null;
+          // Encrypt githubToken before storing
+          if (field === 'githubToken' && typeof val === 'string') {
+            updateData[field] = isEncrypted(val) ? val : encrypt(val);
+            createData[field] = updateData[field];
+          } else {
+            updateData[field] = val;
+            createData[field] = val;
           }
+        } else if ((val === '' || val === null) && clearableFields.has(field)) {
+          // Only clear github fields on explicit empty (disconnect)
+          updateData[field] = null;
+          createData[field] = null;
         }
+        // For non-clearable fields with empty/null values, simply skip — don't overwrite existing data
       }
     }
 

@@ -1,0 +1,691 @@
+'use client';
+
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { config } from '@/lib/config';
+import { showToast } from '@/lib/utils';
+import { useAppStore } from '@/lib/store';
+import { FACULTIES, TEACHER_TITLES } from '@/lib/departments';
+
+interface UserRecord {
+  email: string;
+  name: string;
+  role: string | null;
+  title?: string;
+  isBanned?: boolean;
+  isCR?: boolean;
+  isACR?: boolean;
+  githubLogin?: string;
+  githubAvatar?: string;
+  image?: string;
+  universityId?: string;
+  semester?: string;
+  lastSignIn?: string;
+  department?: string;
+  providers?: string[];
+  hasProfile?: boolean;
+}
+
+interface ActivityLog {
+  id: string;
+  action: string;
+  details: string;
+  email: string;
+  name: string;
+  createdAt: string;
+}
+
+interface AdminStats {
+  total: number;
+  admins: number;
+  teachers: number;
+  students: number;
+  users: number;
+  banned: number;
+}
+
+type Tab = 'overview' | 'admins' | 'managers' | 'teachers' | 'students' | 'users' | 'activity' | 'faculty';
+
+export default function AdminPanelView() {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const profile = useAppStore(s => s.profile);
+
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [activities, setActivities] = useState<ActivityLog[]>([]);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [userFilter, setUserFilter] = useState<'all' | 'admin' | 'manager' | 'teacher' | 'student' | 'user'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [actionLoading, setActionLoading] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [showAddAdmin, setShowAddAdmin] = useState(false);
+  const [facultyList, setFacultyList] = useState<any[]>([]);
+  const [facultyForm, setFacultyForm] = useState({ department: '', name: '', title: '', email: '', phone: '', shortForm: '' });
+  const [facultySaving, setFacultySaving] = useState(false);
+
+  const email = session?.user?.email || profile.email || '';
+  const effectiveRole = config.getEffectiveRole(email, profile.role);
+  const isAdmin = effectiveRole === 'admin';
+  const isManager = effectiveRole === 'manager';
+  const hasAdminAccess = isAdmin || isManager;
+
+  useEffect(() => {
+    if (!hasAdminAccess) return;
+    fetch('/api/activity?limit=50')
+      .then(r => r.json())
+      .then(data => {
+        setActivities(data.activities || []);
+        setStats(data.stats || null);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError('Failed to load admin data');
+        setLoading(false);
+      });
+  }, [hasAdminAccess]);
+
+  const loadUsers = useCallback((role?: string, search?: string) => {
+    const params = new URLSearchParams();
+    if (role && role !== 'all') params.set('role', role);
+    if (search) params.set('search', search);
+    fetch(`/api/admin/users?${params}`)
+      .then(r => r.json())
+      .then(data => setUsers(data.users || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!hasAdminAccess) return;
+    const tabRole = activeTab === 'admins' ? 'admin'
+      : activeTab === 'managers' ? 'manager'
+      : activeTab === 'teachers' ? 'teacher'
+      : activeTab === 'students' ? 'student'
+      : activeTab === 'faculty' ? undefined
+      : userFilter;
+    if (activeTab !== 'faculty') loadUsers(tabRole, searchQuery);
+  }, [hasAdminAccess, activeTab, userFilter, searchQuery, loadUsers]);
+
+  const handleBan = async (targetEmail: string, isBanned: boolean) => {
+    const action = isBanned ? 'unban' : 'ban';
+    const label = isBanned ? 'Unban' : 'Ban';
+    if (!confirm(`${label} user ${targetEmail}?`)) return;
+    setActionLoading(targetEmail + action);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetEmail, action }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        loadUsers(activeTab === 'admins' ? 'admin' : activeTab === 'managers' ? 'manager' : activeTab === 'teachers' ? 'teacher' : activeTab === 'students' ? 'student' : userFilter, searchQuery);
+      } else {
+        showToast(data.error || 'Failed', 'error');
+      }
+    } catch {
+      showToast('Action failed', 'error');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const handleSetRole = async (targetEmail: string, newRole: string) => {
+    if (!confirm(`Change ${targetEmail}'s role to ${newRole}?`)) return;
+    setActionLoading(targetEmail + 'role');
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetEmail, action: 'setRole', newRole }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        loadUsers(activeTab === 'admins' ? 'admin' : activeTab === 'managers' ? 'manager' : activeTab === 'teachers' ? 'teacher' : activeTab === 'students' ? 'student' : userFilter, searchQuery);
+      } else {
+        showToast(data.error || 'Failed', 'error');
+      }
+    } catch {
+      showToast('Action failed', 'error');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const handleAddAdmin = async () => {
+    if (!newAdminEmail.trim()) return;
+    await handleSetRole(newAdminEmail.trim(), 'admin');
+    setNewAdminEmail('');
+    setShowAddAdmin(false);
+  };
+
+  const handleToggleCR = async (targetEmail: string, currentCR: boolean) => {
+    setActionLoading(targetEmail + 'cr');
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetEmail, action: 'toggleCR', isCR: !currentCR }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        loadUsers(activeTab === 'admins' ? 'admin' : activeTab === 'managers' ? 'manager' : activeTab === 'teachers' ? 'teacher' : activeTab === 'students' ? 'student' : userFilter, searchQuery);
+      } else {
+        showToast(data.error || 'Failed', 'error');
+      }
+    } catch {
+      showToast('Action failed', 'error');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const handleToggleACR = async (targetEmail: string, currentACR: boolean) => {
+    setActionLoading(targetEmail + 'acr');
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetEmail, action: 'toggleACR', isACR: !currentACR }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        loadUsers(activeTab === 'admins' ? 'admin' : activeTab === 'managers' ? 'manager' : activeTab === 'teachers' ? 'teacher' : activeTab === 'students' ? 'student' : userFilter, searchQuery);
+      } else {
+        showToast(data.error || 'Failed', 'error');
+      }
+    } catch {
+      showToast('Action failed', 'error');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const handleToggleManager = async (targetEmail: string, currentRole: string) => {
+    if (currentRole === 'manager') {
+      await handleSetRole(targetEmail, 'student');
+      return;
+    }
+    if (!confirm(`Promote ${targetEmail} to Manager? You will remain admin.`)) return;
+    setActionLoading(targetEmail + 'manager');
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetEmail, action: 'setRole', newRole: 'manager' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        loadUsers(activeTab === 'managers' ? 'manager' : userFilter, searchQuery);
+      } else {
+        showToast(data.error || 'Failed', 'error');
+      }
+    } catch {
+      showToast('Action failed', 'error');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const loadFaculty = (dept?: string) => {
+    const params = new URLSearchParams();
+    if (dept) params.set('department', dept);
+    fetch(`/api/faculty?${params}`)
+      .then(r => r.json())
+      .then(data => setFacultyList(data.members || []))
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    if (activeTab === 'faculty') loadFaculty();
+  }, [activeTab]);
+
+  const handleAddFaculty = async () => {
+    if (!facultyForm.department || !facultyForm.name) {
+      showToast('Department and name are required', 'error');
+      return;
+    }
+    setFacultySaving(true);
+    try {
+      const res = await fetch('/api/faculty', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(facultyForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`${facultyForm.name} added to faculty`, 'success');
+        setFacultyForm({ department: '', name: '', title: '', email: '', phone: '', shortForm: '' });
+        loadFaculty(facultyForm.department);
+      } else {
+        showToast(data.error || 'Failed to add', 'error');
+      }
+    } catch {
+      showToast('Failed to add faculty', 'error');
+    } finally {
+      setFacultySaving(false);
+    }
+  };
+
+  const handleDeleteFaculty = async (id: string, name: string) => {
+    if (!confirm(`Remove ${name} from faculty?`)) return;
+    try {
+      const res = await fetch(`/api/faculty?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`${name} removed`, 'success');
+        loadFaculty();
+      } else {
+        showToast(data.error || 'Failed', 'error');
+      }
+    } catch {
+      showToast('Failed', 'error');
+    }
+  };
+
+  if (!hasAdminAccess) {
+    return (
+      <section className="mb-5">
+        <div className="text-center py-20">
+          <i className="fas fa-shield-alt text-4xl text-red-400 mb-4 block opacity-30"></i>
+          <p className="text-[1rem] text-dark-text2 mb-2">Access Denied</p>
+          <p className="text-[0.82rem] text-dark-text2 opacity-60">You need admin or manager privileges to view this page.</p>
+          <button onClick={() => router.push('/')} className="mt-4 px-4 py-2 bg-qsis text-white rounded-lg text-sm">Go Home</button>
+        </div>
+      </section>
+    );
+  }
+
+  const formatAction = (action: string) => {
+    switch (action) {
+      case 'file_upload': return { label: 'File Upload', icon: 'fa-upload', color: 'text-blue-400' };
+      case 'routine_publish': return { label: 'Routine Published', icon: 'fa-calendar-check', color: 'text-green-400' };
+      default: return { label: action, icon: 'fa-circle', color: 'text-gray-400' };
+    }
+  };
+
+  const formatDate = (d: string) => new Date(d).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  const getRoleBadge = (role: string | null, u?: UserRecord) => {
+    switch (role) {
+      case 'admin': return <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 text-[0.65rem] font-semibold">Admin</span>;
+      case 'manager': return <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 text-[0.65rem] font-semibold">Manager</span>;
+      case 'teacher': return <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[0.65rem] font-semibold">Teacher</span>;
+      case 'student': return <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[0.65rem] font-semibold">Student</span>;
+      default: return <span className="px-2 py-0.5 rounded-full bg-gray-500/15 text-gray-400 text-[0.65rem] font-semibold">User</span>;
+    }
+  };
+
+  const isSuperAdmin = config.ownerEmails.includes(email);
+
+  const UserRow = ({ u }: { u: UserRecord }) => {
+    const isSelf = u.email === email;
+    const uRole = u.role || 'user';
+    const canEditRole = !isSelf && (isAdmin || (isManager && uRole !== 'admin' && uRole !== 'manager'));
+    const canBan = !isSelf && uRole !== 'admin' && (isAdmin || isManager);
+    const canToggleCR = !isSelf && (isAdmin || isManager);
+    const canToggleACR = !isSelf && (isAdmin || isManager);
+    const canPromoteManager = isAdmin && !isSelf;
+
+    return (
+      <div className={`px-4 py-3 flex items-center gap-3 transition-colors ${u.isBanned ? 'bg-red-500/5 opacity-60' : 'hover:bg-dark-bg/50'}`}>
+        <img src={u.githubAvatar || u.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email)}&background=6366f1&color=fff&bold=true&size=40`} alt="" className="w-9 h-9 rounded-full border border-dark-border object-cover" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[0.82rem] font-medium text-dark-text truncate">{u.name || u.email.split('@')[0]}</span>
+            {getRoleBadge(u.role, u)}
+            {u.isCR && <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 text-[0.6rem] font-bold">CR</span>}
+            {u.isACR && <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 text-[0.6rem] font-bold">ACR</span>}
+            {u.isBanned && <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 text-[0.6rem] font-bold">BANNED</span>}
+            {u.title && <span className="text-[0.65rem] text-qsis italic">{u.title}</span>}
+            {u.githubLogin && <i className="fab fa-github text-[0.65rem] text-dark-text3"></i>}
+          </div>
+          <p className="text-[0.7rem] text-dark-text3 truncate">{u.email}{u.universityId ? ` (${u.universityId})` : ''}{u.semester ? ` — ${u.semester}` : ''}</p>
+          {u.lastSignIn && <p className="text-[0.6rem] text-dark-text3 mt-0.5">Last seen: {formatDate(u.lastSignIn)}</p>}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end">
+          {/* CR/ACR toggles */}
+          {canToggleCR && (
+            <>
+              <button
+                onClick={() => handleToggleCR(u.email, !!u.isCR)}
+                disabled={actionLoading === u.email + 'cr'}
+                className={`px-1.5 py-1 rounded text-[0.65rem] font-semibold cursor-pointer border-none disabled:opacity-50 ${
+                  u.isCR ? 'bg-purple-500/20 text-purple-300' : 'bg-dark-bg3 text-dark-text2 hover:text-purple-400'
+                }`}
+                title={u.isCR ? 'Remove CR' : 'Make CR'}
+              >
+                {actionLoading === u.email + 'cr' ? <i className="fas fa-spinner fa-spin"></i> : 'CR'}
+              </button>
+              <button
+                onClick={() => handleToggleACR(u.email, !!u.isACR)}
+                disabled={actionLoading === u.email + 'acr'}
+                className={`px-1.5 py-1 rounded text-[0.65rem] font-semibold cursor-pointer border-none disabled:opacity-50 ${
+                  u.isACR ? 'bg-indigo-500/20 text-indigo-300' : 'bg-dark-bg3 text-dark-text2 hover:text-indigo-400'
+                }`}
+                title={u.isACR ? 'Remove ACR' : 'Make ACR'}
+              >
+                {actionLoading === u.email + 'acr' ? <i className="fas fa-spinner fa-spin"></i> : 'ACR'}
+              </button>
+            </>
+          )}
+          {/* Role select */}
+          {canEditRole && (
+            <select
+              value={uRole}
+              onChange={e => handleSetRole(u.email, e.target.value)}
+              disabled={actionLoading === u.email + 'role'}
+              className="px-1.5 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.68rem] cursor-pointer disabled:opacity-50"
+            >
+              <option value="user">User</option>
+              <option value="student">Student</option>
+              <option value="teacher">Teacher</option>
+              {isAdmin && <option value="manager">Manager</option>}
+              {isSuperAdmin && <option value="admin">Admin</option>}
+            </select>
+          )}
+          {/* Manager quick toggle (admin only) */}
+          {canPromoteManager && (
+            <button
+              onClick={() => handleToggleManager(u.email, uRole)}
+              disabled={actionLoading === u.email + 'manager'}
+              className={`px-1.5 py-1 rounded text-[0.65rem] font-semibold cursor-pointer border-none disabled:opacity-50 ${
+                uRole === 'manager' ? 'bg-orange-500/20 text-orange-300' : 'bg-dark-bg3 text-dark-text2 hover:text-orange-400'
+              }`}
+              title={uRole === 'manager' ? 'Remove Manager' : 'Make Manager'}
+            >
+              {actionLoading === u.email + 'manager' ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-user-shield"></i>}
+            </button>
+          )}
+          {/* Ban/Unban */}
+          {canBan && (
+            u.isBanned ? (
+              <button
+                onClick={() => handleBan(u.email, true)}
+                disabled={actionLoading === u.email + 'unban'}
+                className="px-2 py-1 rounded bg-green-500/15 text-green-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-green-500/25 border-none disabled:opacity-50"
+              >
+                {actionLoading === u.email + 'unban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Unban</>}
+              </button>
+            ) : (
+              <button
+                onClick={() => handleBan(u.email, false)}
+                disabled={actionLoading === u.email + 'ban'}
+                className="px-2 py-1 rounded bg-red-500/15 text-red-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/25 border-none disabled:opacity-50"
+              >
+                {actionLoading === u.email + 'ban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-ban mr-0.5"></i>Ban</>}
+              </button>
+            )
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const TABS: { key: Tab; label: string; icon: string; color: string; show: boolean }[] = [
+    { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', color: 'text-qsis', show: true },
+    { key: 'admins', label: 'Admins', icon: 'fa-crown', color: 'text-red-400', show: isSuperAdmin },
+    { key: 'managers', label: 'Managers', icon: 'fa-user-shield', color: 'text-orange-400', show: isAdmin },
+    { key: 'teachers', label: 'Teachers', icon: 'fa-chalkboard-teacher', color: 'text-green-400', show: true },
+    { key: 'students', label: 'Students', icon: 'fa-user-graduate', color: 'text-blue-400', show: true },
+    { key: 'users', label: 'All Users', icon: 'fa-users', color: 'text-dark-text2', show: true },
+    { key: 'faculty', label: 'Faculty', icon: 'fa-building', color: 'text-teal-400', show: isAdmin },
+    { key: 'activity', label: 'Activity Log', icon: 'fa-history', color: 'text-yellow-400', show: true },
+  ];
+
+  return (
+    <section className="mb-5">
+      <div className="mb-5">
+        <h2 className="text-xl font-bold text-dark-text flex items-center gap-2">
+          <i className="fas fa-shield-alt text-qsis"></i>Admin Panel
+        </h2>
+        <p className="text-[0.82rem] text-dark-text2 mt-1">
+          {isAdmin ? 'Full admin access' : 'Manager access — you can manage users but cannot change admin roles'}
+        </p>
+      </div>
+
+      {loading && (
+        <div className="text-center py-10">
+          <i className="fas fa-spinner fa-spin text-2xl text-qsis"></i>
+          <p className="text-dark-text2 mt-2 text-sm">Loading admin data...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
+          <i className="fas fa-exclamation-triangle text-red-400 mr-2"></i>
+          <span className="text-red-400 text-sm">{error}</span>
+        </div>
+      )}
+
+      {/* Tab Navigation */}
+      <div className="flex gap-1 mb-5 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto">
+        {TABS.filter(t => t.show).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none whitespace-nowrap ${
+              activeTab === tab.key ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+            }`}
+          >
+            <i className={`fas ${tab.icon} ${activeTab === tab.key ? 'text-white' : tab.color}`}></i>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Overview Tab */}
+      {activeTab === 'overview' && stats && (
+        <div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-5">
+            {[
+              { label: 'Total Users', value: stats.total, icon: 'fa-users', color: 'text-qsis' },
+              { label: 'Admins', value: stats.admins, icon: 'fa-crown', color: 'text-red-400' },
+              { label: 'Teachers', value: stats.teachers, icon: 'fa-chalkboard-teacher', color: 'text-green-400' },
+              { label: 'Students', value: stats.students, icon: 'fa-user-graduate', color: 'text-blue-400' },
+              { label: 'Managers', value: (stats as any).managers || 0, icon: 'fa-user-shield', color: 'text-orange-400' },
+              { label: 'Banned', value: stats.banned, icon: 'fa-ban', color: 'text-red-400' },
+            ].map(s => (
+              <div key={s.label} className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
+                <i className={`fas ${s.icon} text-lg ${s.color} mb-1`}></i>
+                <p className="text-lg font-bold text-dark-text">{s.value}</p>
+                <p className="text-[0.65rem] text-dark-text3">{s.label}</p>
+              </div>
+            ))}
+          </div>
+          {activities.length > 0 && (
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-dark-text mb-3"><i className="fas fa-clock text-qsis mr-2"></i>Recent Activity</h3>
+              {activities.slice(0, 5).map(a => {
+                const fa = formatAction(a.action);
+                return (
+                  <div key={a.id} className="flex items-center gap-3 py-2 border-b border-dark-border last:border-0">
+                    <i className={`fas ${fa.icon} ${fa.color} text-sm`}></i>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[0.78rem] text-dark-text truncate">{a.details}</p>
+                      <p className="text-[0.65rem] text-dark-text3">{a.name || a.email} &middot; {formatDate(a.createdAt)}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Admins Tab */}
+      {activeTab === 'admins' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-crown text-red-400 mr-2"></i>Admins ({users.length})</h3>
+            {isSuperAdmin && (
+              <button onClick={() => setShowAddAdmin(!showAddAdmin)} className="px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 text-[0.75rem] font-semibold cursor-pointer hover:bg-red-500/25 border-none">
+                <i className="fas fa-plus mr-1"></i>Add Admin
+              </button>
+            )}
+          </div>
+          {showAddAdmin && (
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4 mb-4 flex gap-2">
+              <input value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} placeholder="Email to make admin" className="flex-1 px-3 py-2 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-sm" />
+              <button onClick={handleAddAdmin} disabled={!newAdminEmail.trim()} className="px-4 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">Add</button>
+            </div>
+          )}
+          {users.map(u => <UserRow key={u.email} u={u} />)}
+        </div>
+      )}
+
+      {/* Managers Tab */}
+      {activeTab === 'managers' && (
+        <div>
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-user-shield text-orange-400 mr-2"></i>Managers ({users.length})</h3>
+            <p className="text-[0.75rem] text-dark-text3 mt-1">Managers can manage users, upload files, and publish routines. They cannot change admin roles or promote other managers.</p>
+          </div>
+          {users.map(u => <UserRow key={u.email} u={u} />)}
+          {users.length === 0 && <p className="text-dark-text3 text-sm text-center py-8">No managers assigned yet</p>}
+        </div>
+      )}
+
+      {/* Teachers / Students / Users Tabs */}
+      {(activeTab === 'teachers' || activeTab === 'students' || activeTab === 'users') && (
+        <div>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h3 className="text-sm font-semibold text-dark-text">
+              {activeTab === 'teachers' && <><i className="fas fa-chalkboard-teacher text-green-400 mr-1"></i>Teachers ({users.length})</>}
+              {activeTab === 'students' && <><i className="fas fa-user-graduate text-blue-400 mr-1"></i>Students ({users.length})</>}
+              {activeTab === 'users' && <><i className="fas fa-users text-dark-text2 mr-1"></i>All Users ({users.length})</>}
+            </h3>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by name or email..."
+              className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-[0.78rem] w-60"
+            />
+          </div>
+          {users.map(u => <UserRow key={u.email} u={u} />)}
+        </div>
+      )}
+
+      {/* Faculty Tab */}
+      {activeTab === 'faculty' && (
+        <div>
+          <h3 className="text-sm font-semibold text-dark-text mb-1"><i className="fas fa-building text-teal-400 mr-2"></i>Faculty Management</h3>
+          <p className="text-[0.75rem] text-dark-text3 mb-4">Add and manage faculty members. Also available at <a href="/faculty" target="_blank" className="text-qsis underline">/faculty</a> with inline editing.</p>
+
+          {/* Add Faculty Form */}
+          <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4 mb-5">
+            <h4 className="text-[0.82rem] font-semibold text-dark-text mb-3"><i className="fas fa-plus-circle text-qsis mr-1"></i>Add New Faculty</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[0.7rem] text-dark-text2 block mb-1">Department *</label>
+                <select
+                  value={facultyForm.department}
+                  onChange={e => setFacultyForm(f => ({ ...f, department: e.target.value }))}
+                  className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
+                >
+                  <option value="">Select department...</option>
+                  {FACULTIES.map(f => (
+                    <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
+                      {f.departments.map(d => (
+                        <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[0.7rem] text-dark-text2 block mb-1">Full Name *</label>
+                <input type="text" value={facultyForm.name} onChange={e => setFacultyForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Prof. Dr. Gias Uddin Hafiz" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+              </div>
+              <div>
+                <label className="text-[0.7rem] text-dark-text2 block mb-1">Designation</label>
+                <select value={facultyForm.title} onChange={e => setFacultyForm(f => ({ ...f, title: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
+                  <option value="">Select designation...</option>
+                  {TEACHER_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[0.7rem] text-dark-text2 block mb-1">Short Form</label>
+                <input type="text" value={facultyForm.shortForm} onChange={e => setFacultyForm(f => ({ ...f, shortForm: e.target.value.toUpperCase() }))} placeholder="e.g. GH" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+              </div>
+              <div>
+                <label className="text-[0.7rem] text-dark-text2 block mb-1">Email</label>
+                <input type="email" value={facultyForm.email} onChange={e => setFacultyForm(f => ({ ...f, email: e.target.value }))} placeholder="email@example.com" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+              </div>
+              <div>
+                <label className="text-[0.7rem] text-dark-text2 block mb-1">Phone</label>
+                <input type="tel" value={facultyForm.phone} onChange={e => setFacultyForm(f => ({ ...f, phone: e.target.value }))} placeholder="+8801XXXXXXXXX" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+              </div>
+            </div>
+            <button onClick={handleAddFaculty} disabled={facultySaving || !facultyForm.department || !facultyForm.name} className="mt-3 px-4 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">
+              {facultySaving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Adding...</> : <><i className="fas fa-plus mr-1"></i>Add Faculty Member</>}
+            </button>
+          </div>
+
+          {/* Faculty List */}
+          <div className="bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-dark-border flex items-center justify-between">
+              <h4 className="text-[0.82rem] font-semibold text-dark-text"><i className="fas fa-list text-dark-text3 mr-1"></i>All Faculty ({facultyList.length})</h4>
+              <button onClick={() => loadFaculty()} className="text-[0.72rem] text-dark-text2 hover:text-qsis bg-transparent border-none cursor-pointer"><i className="fas fa-sync mr-1"></i>Refresh</button>
+            </div>
+            {facultyList.length === 0 ? (
+              <p className="text-dark-text3 text-sm text-center py-8">No faculty members found</p>
+            ) : (
+              <div className="divide-y divide-dark-border">
+                {facultyList.map(m => (
+                  <div key={m.id} className="px-4 py-2.5 flex items-center gap-3 hover:bg-dark-bg/50 transition-colors group">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-qsis/20 to-accent/20 border border-dark-border flex items-center justify-center flex-shrink-0">
+                      <span className="text-[0.68rem] font-bold text-qsis">{m.shortForm || m.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[0.82rem] font-medium text-dark-text truncate">{m.name}</span>
+                        {m.title && <span className="text-[0.65rem] text-qsis">{m.title}</span>}
+                      </div>
+                      <p className="text-[0.7rem] text-dark-text3">{m.department}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</p>
+                    </div>
+                    <button onClick={() => handleDeleteFaculty(m.id, m.name)} className="px-2 py-1 rounded bg-red-500/10 text-red-400 text-[0.65rem] cursor-pointer hover:bg-red-500/20 border-none opacity-0 group-hover:opacity-100 transition-opacity" title="Remove">
+                      <i className="fas fa-trash"></i>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Activity Log Tab */}
+      {activeTab === 'activity' && (
+        <div>
+          <h3 className="text-sm font-semibold text-dark-text mb-3"><i className="fas fa-history text-yellow-400 mr-2"></i>Activity Log</h3>
+          {activities.length === 0 && <p className="text-dark-text3 text-sm text-center py-8">No activity recorded yet</p>}
+          {activities.map(a => {
+            const fa = formatAction(a.action);
+            return (
+              <div key={a.id} className="flex items-center gap-3 px-4 py-3 hover:bg-dark-bg/50 transition-colors border-b border-dark-border">
+                <i className={`fas ${fa.icon} ${fa.color} text-sm`}></i>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[0.78rem] text-dark-text">{a.details}</p>
+                  <p className="text-[0.65rem] text-dark-text3">{a.name || a.email} &middot; {formatDate(a.createdAt)}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}

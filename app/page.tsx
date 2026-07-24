@@ -1,7 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { config } from '@/lib/config';
@@ -10,6 +10,13 @@ import { getMimeFromExt, getFileIconByType, esc, timeAgo, extractYear } from '@/
 
 export default function BrowsePage() {
   const { data: session } = useSession();
+  const profile = useAppStore(s => s.profile);
+  const [showWelcome, setShowWelcome] = useState(true);
+
+  const email = session?.user?.email || profile.email || '';
+  const userRole = email ? config.detectRole(email) : null;
+  const userName = session?.user?.name || profile.name || '';
+  const isPrivileged = userRole === 'admin' || userRole === 'teacher';
 
   const loading = useAppStore(s => s.loading);
   const error = useAppStore(s => s.error);
@@ -40,6 +47,7 @@ export default function BrowsePage() {
   const getCategories = useAppStore(s => s.getCategories);
   const getCourses = useAppStore(s => s.getCourses);
   const getUploadTree = useAppStore(s => s.getUploadTree);
+  const getSearchResults = useAppStore(s => s.getSearchResults);
 
   useEffect(() => {
     loadTree(session?.accessToken || '');
@@ -49,6 +57,9 @@ export default function BrowsePage() {
   const categories = currentSem ? getCategories(currentSem) : [];
   const courses = currentSem && currentCat ? getCourses(currentSem, currentCat) : [];
   const uploadTree = getUploadTree();
+
+  const isSearching = !!(searchQuery || fileTypeFilter || searchYear || searchSemester);
+  const searchResults = isSearching ? getSearchResults(searchQuery, fileTypeFilter, searchYear, searchSemester) : { files: [], folders: [] };
 
   const filteredSemesters = semesters.filter(sem => {
     const matchLabel = !searchQuery || sem.label.toLowerCase().includes(searchQuery.toLowerCase());
@@ -156,7 +167,7 @@ export default function BrowsePage() {
       {view === 'semesters' && !searchQuery && (
         <section className="text-center py-8 mb-5">
           <div className="mb-4">
-            <Image src="/arms-logo.png" alt="QSIS-ARMS" width={80} height={80} className="w-20 h-20 p-2 rounded-full border-2 border-qsis mx-auto object-contain bg-white mb-4" />
+            <Image src="/arms-logo.png" alt="QSIS-ARMS" width={150} height={150} className="w-32 h-32 p-2 rounded-lg border-2 border-qsis mx-auto object-contain bg-white mb-4" />
           </div>
           <h2 className="text-[1.7rem] font-extrabold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent mb-1.5">QSIS-ARMS</h2>
           <p className="text-gray-500 text-[0.95rem]">QSIS Academic Resource Management System</p>
@@ -166,8 +177,34 @@ export default function BrowsePage() {
         </section>
       )}
 
+      {/* Welcome Banner for Teachers & Admins */}
+      {view === 'semesters' && !searchQuery && isPrivileged && showWelcome && (
+        <section className="max-w-[700px] mx-auto mb-5 p-4 rounded-xl border border-qsis/20 bg-gradient-to-r from-qsis/5 to-accent/5">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[1rem] font-semibold text-dark-text mb-1">
+                Assalamu Alaikum{userName ? `, ${userRole === 'teacher' ? 'Sir' : userRole === 'admin' ? 'Sir' : ''}` : ''} {userName || ''} 
+              </p>
+              <p className="text-[0.82rem] text-dark-text2 leading-relaxed">
+                Welcome to <strong className="text-qsis">QSIS-ARMS</strong>. In sha Allah, we hope you will enjoy exploring the site.
+              </p>
+              <p className="text-[0.78rem] text-dark-text3 mt-1">
+                {userRole === 'admin' ? (
+                  <>You have <strong className="text-green-400">full admin access</strong> &mdash; routine management, publishing, file uploads, and activity monitoring.</>
+                ) : (
+                  <>You have <strong className="text-green-400">routine management access</strong> and <strong className="text-green-400">publishable access</strong> for all branches.</>
+                )}
+              </p>
+            </div>
+            <button onClick={() => setShowWelcome(false)} className="text-dark-text3 hover:text-dark-text text-sm ml-3 mt-1 flex-shrink-0" title="Dismiss">
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* Stats */}
-      {view === 'semesters' && (
+      {!isSearching && view === 'semesters' && (
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-[700px] mx-auto mb-6">
           <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3.5 text-center">
             <div className="text-[1.3rem] font-bold text-qsis">{semesters.filter(s => !s.isRelated).length}</div>
@@ -233,6 +270,11 @@ export default function BrowsePage() {
             onChange={e => setSearchQuery(e.target.value)}
             className="flex-1 bg-transparent border-none text-dark-text py-2.5 text-[0.9rem] outline-none placeholder:text-dark-text2"
           />
+          {searchQuery && (
+            <button className="text-dark-text2 hover:text-dark-text cursor-pointer bg-transparent border-none text-[0.85rem] transition-colors" onClick={() => setSearchQuery('')} title="Clear search">
+              <i className="fas fa-times-circle"></i>
+            </button>
+          )}
         </div>
         <div className="flex gap-2 p-2 flex-wrap">
           <select
@@ -304,7 +346,7 @@ export default function BrowsePage() {
       )}
 
       {/* Semester View */}
-      {!loading && !error && view === 'semesters' && (
+      {!loading && !error && !isSearching && view === 'semesters' && (
         <section className="mb-5">
           <h3 className="text-base font-semibold flex items-center gap-2 mb-3"><i className="fas fa-book"></i> Select Semester</h3>
           {filteredSemesters.length === 0 && (
@@ -337,7 +379,7 @@ export default function BrowsePage() {
       )}
 
       {/* Category View */}
-      {!loading && !error && view === 'categories' && (
+      {!loading && !error && !isSearching && view === 'categories' && (
         <section className="mb-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
@@ -373,7 +415,7 @@ export default function BrowsePage() {
       )}
 
       {/* Course View */}
-      {!loading && !error && view === 'courses' && (
+      {!loading && !error && !isSearching && view === 'courses' && (
         <section className="mb-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
@@ -426,7 +468,7 @@ export default function BrowsePage() {
       )}
 
       {/* Files in course */}
-      {!loading && !error && view === 'files' && currentSem && currentCat && (
+      {!loading && !error && !isSearching && view === 'files' && currentSem && currentCat && (
         <section className="mb-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[1.05rem] font-semibold flex items-center gap-2"><i className="fas fa-folder-open"></i> Files</h3>
@@ -441,6 +483,77 @@ export default function BrowsePage() {
             </div>
           )}
           <FileCards items={filteredFiles} onOpen={openFile} />
+        </section>
+      )}
+
+      {/* Search Results View */}
+      {!loading && !error && isSearching && (
+        <section className="mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
+              <i className="fas fa-search"></i> Search Results
+              <span className="text-[0.75rem] text-dark-text2 font-normal">({searchResults.files.length} files, {searchResults.folders.length} folders)</span>
+            </h3>
+            <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={() => { resetFilters(); goHome(); }}>
+              <i className="fas fa-times"></i> Clear
+            </button>
+          </div>
+
+          {/* Matched Folders */}
+          {searchResults.folders.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-[0.82rem] font-semibold text-dark-text2 mb-2"><i className="fas fa-folder mr-1.5"></i> Matching Folders</h4>
+              <div className="flex flex-col gap-2">
+                {searchResults.folders.map((folder: any) => (
+                  <div
+                    key={folder.path}
+                    className="flex items-center gap-3 p-[12px_16px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-qsis hover:shadow-[0_0_12px_rgba(34,197,94,0.2)] hover:translate-x-1 transition-all"
+                    onClick={() => {
+                      if (folder.type === 'semester') {
+                        navigateToSemester(folder.id);
+                      } else if (folder.type === 'category') {
+                        const parts = folder.path.split('/');
+                        navigateToCategory(parts[0], folder.id);
+                      } else if (folder.type === 'course') {
+                        const parts = folder.path.split('/');
+                        // Navigate: semester -> category -> course
+                        navigateToSemester(parts[0]);
+                        setTimeout(() => {
+                          navigateToCategory(parts[0], parts[1]);
+                          setTimeout(() => navigateToCourse(folder.id), 0);
+                        }, 0);
+                      }
+                    }}
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-qsis/10 flex items-center justify-center flex-shrink-0">
+                      <i className={`fas ${folder.type === 'semester' ? 'fa-book' : folder.type === 'category' ? 'fa-folder' : 'fa-book-open'} text-qsis text-[0.85rem]`}></i>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[0.85rem] font-semibold">{folder.label}</div>
+                      <div className="text-[0.65rem] text-dark-text2 font-mono truncate">{folder.path}</div>
+                    </div>
+                    <span className="text-[0.7rem] text-dark-text2 flex-shrink-0">{folder.count} file{folder.count !== 1 ? 's' : ''}</span>
+                    <i className="fas fa-chevron-right text-dark-text2 text-[0.65rem] flex-shrink-0"></i>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Matched Files */}
+          {searchResults.files.length > 0 && (
+            <div>
+              <h4 className="text-[0.82rem] font-semibold text-dark-text2 mb-2"><i className="fas fa-file mr-1.5"></i> Matching Files</h4>
+              <FileCards items={searchResults.files} onOpen={openFile} />
+            </div>
+          )}
+
+          {searchResults.files.length === 0 && searchResults.folders.length === 0 && (
+            <div className="text-center py-8 text-dark-text2">
+              <i className="fas fa-search text-3xl mb-3 block opacity-40"></i>
+              <p>No results match your search.</p>
+            </div>
+          )}
         </section>
       )}
     </>

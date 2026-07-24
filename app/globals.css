@@ -17,6 +17,10 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, -apple
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; }
 
+/* Hide scrollbar but keep scroll functionality */
+*::-webkit-scrollbar { width: 0; height: 0; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+
 .viewer-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1500; }
 .viewer-overlay.active { display:flex; }
 .viewer-container { background:#111827; width:100%; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
@@ -490,6 +494,19 @@ button { font-family: inherit; }
   gap: 4px;
 }
 
+.routine-card-draft-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.2);
+  padding: 2px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .routine-card-meta {
   display: flex;
   gap: 12px;
@@ -638,7 +655,7 @@ button { font-family: inherit; }
 }
 
 .routine-university-name {
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   margin: 0;
@@ -649,22 +666,22 @@ button { font-family: inherit; }
 }
 
 .routine-arabic-name {
-  font-size: 0.82rem;
-  opacity: 0.9;
+  font-size: 1.05rem;
+  opacity: 0.95;
   direction: rtl;
   font-family: 'Traditional Arabic', 'Scheherazade', serif;
-  margin: 2px 0 0 0;
+  margin: 4px 0 0 0;
   padding: 0;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .routine-dept-name {
-  font-size: 0.75rem;
-  opacity: 0.85;
+  font-size: 0.85rem;
+  opacity: 0.9;
   font-family: 'Georgia', 'Times New Roman', serif;
-  margin: 2px 0 0 0;
+  margin: 4px 0 0 0;
   padding: 0;
-  line-height: 1.2;
+  line-height: 1.3;
 }
 
 .routine-title-bar {
@@ -698,7 +715,7 @@ button { font-family: inherit; }
   display: flex;
   justify-content: center;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .routine-badge {
@@ -709,9 +726,10 @@ button { font-family: inherit; }
   font-weight: 600;
   padding: 4px 14px;
   border-radius: 20px;
+  white-space: nowrap;
 }
 
-.routine-badge i { font-size: 0.65rem; }
+.routine-badge i { font-size: 0.9rem; }
 
 .routine-badge-semester {
   background: linear-gradient(135deg, #facc15, #eab308);
@@ -934,15 +952,22 @@ button { font-family: inherit; }
   background: #fff5f5 !important;
   text-align: center;
   vertical-align: middle;
+  position: relative;
 }
 
 .routine-offday-vertical {
-  font-size: 0.82rem;
-  font-weight: 700;
+  writing-mode: vertical-lr;
+  text-orientation: mixed;
+  font-size: 1.5rem;
+  font-weight: 900;
   color: #dc2626;
-  letter-spacing: 2px;
+  letter-spacing: 4px;
   text-transform: uppercase;
   white-space: nowrap;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(180deg);
 }
 
 /* Footer */

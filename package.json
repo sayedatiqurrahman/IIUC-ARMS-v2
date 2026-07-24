@@ -2,6 +2,7 @@
   "name": "qsis-arms-v2",
   "version": "2.0.0",
   "private": true,
+  "author": "s.atiqurrahman2003@gmail.com",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -13,6 +14,8 @@
     "@prisma/adapter-pg": "^7.9.0",
     "@prisma/client": "^7.9.0",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
+    "dom-to-image-more": "^3.10.2",
     "firebase": "^12.16.0",
     "firebase-admin": "^14.2.0",
     "html2canvas": "^1.4.1",
@@ -20,9 +23,11 @@
     "next": "^14.2.0",
     "next-auth": "^4.24.0",
     "nodemailer": "^7.0.13",
+    "otpauth": "^9.5.1",
     "pdfjs-dist": "^6.1.200",
     "pg": "^8.22.0",
     "prisma": "^7.9.0",
+    "qrcode": "^1.5.4",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "zustand": "^5.0.14"

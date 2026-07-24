@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
+import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 
 interface RoutinePeriod {
   name: string;
@@ -42,6 +43,9 @@ interface RoutineItem {
   slots: RoutineSlot[];
   createdAt?: number;
   published?: boolean;
+  isDraft?: boolean;
+  publishedBy?: { name: string; title?: string };
+  publishedAt?: number;
 }
 
 const DEFAULT_PERIODS: RoutinePeriod[] = [
@@ -56,6 +60,24 @@ const DEFAULT_PERIODS: RoutinePeriod[] = [
 
 const DEFAULT_DAYS = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday'];
 const SEMESTERS = ['1st Semester', '2nd Semester', '3rd Semester', '4th Semester', '5th Semester', '6th Semester', '7th Semester', '8th Semester'];
+const SESSIONS = (() => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const list: string[] = [];
+  for (let y = currentYear - 3; y <= currentYear + 10; y++) {
+    list.push(`Spring - ${y}`);
+    list.push(`Autumn - ${y}`);
+  }
+  return list;
+})();
+
+function getDefaultSession(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  return month < 6 ? `Spring - ${year}` : `Autumn - ${year}`;
+}
 
 function getCourse(code: string, courses: RoutineCourse[]) {
   return courses.find(c => c.code === code);
@@ -80,6 +102,7 @@ function getTeacherAbbr(teacher: string): string {
 /* ─── localStorage helpers ─── */
 const LS_MY_ROUTINES = 'qsis-routines';
 const LS_PUBLISHED = 'qsis-published-routines';
+const LS_DRAFT = 'qsis-routine-draft';
 
 function loadMyRoutines(): RoutineItem[] {
   if (typeof window === 'undefined') return [];
@@ -112,6 +135,34 @@ function savePublishedRoutines(routines: RoutineItem[]) {
   localStorage.setItem(LS_PUBLISHED, JSON.stringify(routines));
 }
 
+interface DraftData {
+  semester?: string;
+  branch?: string | null;
+  session?: string;
+  room?: string;
+  periods?: RoutinePeriod[];
+  days?: string[];
+  courses?: RoutineCourse[];
+  slots?: RoutineSlot[];
+  step?: string;
+}
+
+function loadDraft(): DraftData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(LS_DRAFT);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveDraft(data: DraftData) {
+  localStorage.setItem(LS_DRAFT, JSON.stringify(data));
+}
+
+function clearDraft() {
+  localStorage.removeItem(LS_DRAFT);
+}
+
 type ViewMode = 'manager' | 'preview' | 'builder';
 
 export default function RoutineView() {
@@ -120,6 +171,7 @@ export default function RoutineView() {
   const routineData = useAppStore(s => s.routineData);
   const routineLoading = useAppStore(s => s.routineLoading);
   const loadRoutine = useAppStore(s => s.loadRoutine);
+  const profile = useAppStore(s => s.profile);
   const printRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -129,7 +181,9 @@ export default function RoutineView() {
   const [selectedId, setSelectedId] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const isOwner = config.ownerEmails.includes(session?.user?.email || '');
+  const email = session?.user?.email || profile.email || '';
+  const isOwner = config.ownerEmails.includes(email);
+  const canPublish = config.canPublishRoutine(email, profile) || isOwner;
 
   const sharedRoutines: RoutineItem[] = Array.isArray(routineData) ? routineData : [];
   const routines = sharedRoutines;
@@ -181,13 +235,33 @@ export default function RoutineView() {
 
   const handlePublish = useCallback((routine: RoutineItem) => {
     if (!confirm(`Publish "${routine.semester}" for all users?`)) return;
-    const published = { ...routine, published: true, id: `pub-${Date.now()}` };
+    const publisherName = session?.user?.name || profile.name || 'Unknown';
+    const published = {
+      ...routine,
+      published: true,
+      isDraft: false,
+      id: `pub-${Date.now()}`,
+      publishedBy: { name: publisherName },
+      publishedAt: Date.now(),
+    };
     const updated = publishedRoutines.filter(r => !(r.semester === routine.semester && r.branch === routine.branch));
     updated.push(published);
     setPublishedRoutines(updated);
     savePublishedRoutines(updated);
+    const myUpdated = myRoutines.map(r => r.id === routine.id ? { ...r, isDraft: false } : r);
+    persistMyRoutines(myUpdated);
+
+    fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'routine_publish',
+        details: JSON.stringify({ semester: routine.semester, branch: routine.branch, publisher: publisherName }),
+      }),
+    }).catch(() => {});
+
     showToast('Routine published! All users can now see it.', 'success');
-  }, [publishedRoutines]);
+  }, [publishedRoutines, myRoutines, persistMyRoutines, session, profile]);
 
   const handleUnpublish = useCallback((id: string) => {
     const updated = publishedRoutines.filter(r => r.id !== id);
@@ -201,53 +275,66 @@ export default function RoutineView() {
     setExporting(true);
     try {
       const el = printRef.current;
+      const domtoimage = (await import('dom-to-image-more')).default;
 
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(el, {
-        scale: 3,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        windowWidth: el.scrollWidth,
-        windowHeight: el.scrollHeight,
-        onclone: (doc: Document) => {
-          const root = doc.querySelector('.routine-export');
-          if (!root) return;
-          root.querySelectorAll<HTMLElement>('.routine-header-inner').forEach(e => {
-            e.style.marginTop = '-10px';
+      const dataUrl = await domtoimage.toPng(el, {
+        quality: 0.95,
+        pixelRatio: 3,
+        bgcolor: '#ffffff',
+        cacheBust: true,
+        filter: (node: HTMLElement) => {
+          return !node.classList?.contains('no-print');
+        },
+        onclone: (clone: Node) => {
+          const doc = clone.ownerDocument;
+          if (!doc) return;
+
+          const root = doc.querySelector('.routine-export') as HTMLElement | null;
+          if (root) {
+            root.style.width = '920px';
+            root.style.minWidth = '920px';
+            root.style.maxWidth = '920px';
+          }
+
+          doc.querySelectorAll<HTMLElement>('.routine-course-code').forEach(el => {
+            el.style.whiteSpace = 'nowrap';
           });
-          root.querySelectorAll<HTMLElement>('.routine-title-bar').forEach(e => {
-            e.style.marginTop = '-6px';
-          });
-          root.querySelectorAll<HTMLElement>('.routine-badges').forEach(e => {
-            e.style.marginTop = '-4px';
-          });
+
+          const badges = doc.querySelector('.routine-badges') as HTMLElement | null;
+          if (badges) {
+            badges.style.flexWrap = 'nowrap';
+            badges.style.justifyContent = 'center';
+          }
         },
       });
 
       if (format === 'pdf') {
         const { jsPDF } = await import('jspdf');
+        const img = new Image();
+        img.src = dataUrl;
+        await new Promise<void>((resolve) => { img.onload = () => resolve(); });
+
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfW = pdf.internal.pageSize.getWidth();
         const pdfH = pdf.internal.pageSize.getHeight();
         const margin = 15;
-        const imgData = canvas.toDataURL('image/png');
         const imgW = pdfW - margin * 2;
-        const imgH = (canvas.height * imgW) / canvas.width;
+        const imgH = (img.height * imgW) / img.width;
+
         if (imgH <= pdfH - margin * 2) {
-          pdf.addImage(imgData, 'PNG', margin, margin, imgW, imgH);
+          pdf.addImage(dataUrl, 'PNG', margin, margin, imgW, imgH);
         } else {
-          let yPos = 0;
           const pageContentH = pdfH - margin * 2;
-          const sourceH = (pageContentH / imgH) * canvas.height;
-          while (yPos < canvas.height) {
+          const sourceH = (pageContentH / imgH) * img.height;
+          let yPos = 0;
+          while (yPos < img.height) {
             if (yPos > 0) pdf.addPage();
             const sliceCanvas = document.createElement('canvas');
-            sliceCanvas.width = canvas.width;
-            sliceCanvas.height = Math.min(sourceH, canvas.height - yPos);
+            sliceCanvas.width = img.width;
+            sliceCanvas.height = Math.min(sourceH, img.height - yPos);
             const ctx = sliceCanvas.getContext('2d')!;
-            ctx.drawImage(canvas, 0, yPos, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
-            pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgW, (sliceCanvas.height * imgW) / canvas.width);
+            ctx.drawImage(img, 0, yPos, img.width, sliceCanvas.height, 0, 0, img.width, sliceCanvas.height);
+            pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgW, (sliceCanvas.height * imgW) / img.width);
             yPos += sourceH;
           }
         }
@@ -255,7 +342,7 @@ export default function RoutineView() {
       } else {
         const link = document.createElement('a');
         link.download = `QSIS-Routine-${currentPreview?.semester || 'Routine'}.${format}`;
-        link.href = canvas.toDataURL(format === 'png' ? 'image/png' : 'image/jpeg', 0.95);
+        link.href = format === 'png' ? dataUrl : dataUrl.replace('image/png', 'image/jpeg');
         link.click();
       }
     } catch (err) { console.error('Export failed:', err); }
@@ -328,7 +415,7 @@ export default function RoutineView() {
                   <h4 className="routine-manager-section-title"><i className="fas fa-user-edit"></i> My Routines</h4>
                   <div className="routine-manager-grid">
                     {myRoutines.map(r => (
-                      <RoutineCard key={r.id} routine={r} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} onDuplicate={handleDuplicate} onPublish={isOwner ? handlePublish : undefined} />
+                      <RoutineCard key={r.id} routine={r} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} onDuplicate={handleDuplicate} onPublish={canPublish ? handlePublish : undefined} />
                     ))}
                   </div>
                 </div>
@@ -339,7 +426,7 @@ export default function RoutineView() {
                   <h4 className="routine-manager-section-title"><i className="fas fa-globe"></i> Published Routines</h4>
                   <div className="routine-manager-grid">
                     {allVisibleRoutines.map(r => (
-                      <RoutineCard key={r.id} routine={r} isPublished onView={handleView} onUnpublish={isOwner ? handleUnpublish : undefined} />
+                      <RoutineCard key={r.id} routine={r} isPublished onView={handleView} onUnpublish={canPublish ? handleUnpublish : undefined} />
                     ))}
                   </div>
                 </div>
@@ -412,6 +499,7 @@ function RoutineCard({ routine, isPublished, onView, onEdit, onDelete, onDuplica
         <div className="routine-card-semester">{routine.semester}</div>
         {routine.branch && <span className="routine-card-badge">Branch {routine.branch}</span>}
         {isPublished && <span className="routine-card-published-badge"><i className="fas fa-globe"></i> Published</span>}
+        {!isPublished && routine.isDraft && <span className="routine-card-draft-badge"><i className="fas fa-pen"></i> Draft</span>}
       </div>
       <div className="routine-card-meta">
         <span><i className="fas fa-book"></i> {courseCount} courses</span>
@@ -421,6 +509,9 @@ function RoutineCard({ routine, isPublished, onView, onEdit, onDelete, onDuplica
       <div className="routine-card-info">
         <span>Session: {routine.session}</span>
         {dateStr && <span>Created: {dateStr}</span>}
+        {isPublished && routine.publishedBy && (
+          <span><i className="fas fa-user-check"></i> Published by {routine.publishedBy.name}</span>
+        )}
       </div>
       <div className="routine-card-actions">
         <button className="routine-card-btn routine-card-btn-view" onClick={() => onView(routine.id)}><i className="fas fa-eye"></i> View</button>
@@ -449,7 +540,7 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
             <div className="routine-logo-wrapper">
               <img src="/iiuc-logo.png" alt="IIUC" width={80} height={80} className="routine-logo" style={{ display: 'block' }} />
             </div>
-            <div className="routine-header-text -mt-5">
+            <div className="routine-header-text">
               <h1 className="routine-university-name">{routine.university}</h1>
               <p className="routine-arabic-name">&#x262F;&#x2015;&#x627;&#x644;&#x62C;&#x627;&#x645;&#x639;&#x629; &#x627;&#x644;&#x625;&#x633;&#x644;&#x627;&#x645;&#x64A;&#x629; &#x627;&#x644;&#x639;&#x644;&#x627;&#x645;&#x64A;&#x629; &#x634;&#x64A;&#x62A;&#x627;&#x63A;&#x648;&#x646;&#x63A;</p>
               <p className="routine-dept-name">{routine.department}</p>
@@ -461,10 +552,22 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
             <div className="routine-title-accent"></div>
           </div>
           <div className="routine-badges">
-            <span className="routine-badge routine-badge-semester"><i className="fas fa-graduation-cap"></i> {routine.semester}</span>
-            {routine.branch && <span className="routine-badge routine-badge-branch"><i className="fas fa-code-branch"></i> Branch {routine.branch}</span>}
-            <span className="routine-badge routine-badge-session"><i className="fas fa-calendar"></i> Session {routine.session}</span>
-            {routine.room && <span className="routine-badge routine-badge-room"><i className="fas fa-door-open"></i> {routine.room}</span>}
+            <span className="routine-badge routine-badge-semester">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'6px'}}><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
+              {routine.semester}
+            </span>
+            {routine.branch && <span className="routine-badge routine-badge-branch">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'6px'}}><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>
+              Branch {routine.branch}
+            </span>}
+            <span className="routine-badge routine-badge-session">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'6px'}}><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M17 14h-6"/><path d="M13 18H7"/><path d="M7 14h.01"/><path d="M17 18h.01"/></svg>
+              Session {routine.session}
+            </span>
+            {routine.room && <span className="routine-badge routine-badge-room">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'6px'}}><path d="M11 20H2"/><path d="M11 4.562v16.157a1 1 0 0 0 1.242.97L19 20V5.562a2 2 0 0 0-1.515-1.94l-4-1A2 2 0 0 0 11 4.561z"/><path d="M11 4H8a2 2 0 0 0-2 2v14"/><path d="M14 12h.01"/><path d="M22 20h-3"/></svg>
+              {/^\d+$/.test(routine.room) ? `Room ${routine.room}` : routine.room}
+            </span>}
           </div>
         </div>
       </div>
@@ -482,6 +585,8 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
           <tbody>
             {routine.periods.map((period, pIdx) => {
               if (period.isBreak) {
+                const nonOffDays = routine.days.filter(day => !isOffDay(day, routine.periods, routine.slots));
+                const midIdx = Math.floor(nonOffDays.length / 2);
                 return (
                   <tr key={pIdx} className="routine-break-row">
                     <td className="routine-td routine-td-time routine-break-time">
@@ -490,17 +595,11 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
                     </td>
                     {routine.days.map((day, dIdx) => {
                       const offDay = isOffDay(day, routine.periods, routine.slots);
-                      if (offDay && pIdx > 0) return null;
-                      if (offDay) {
-                        return (
-                          <td key={day} className="routine-td routine-offday-cell" rowSpan={routine.periods.length}>
-                            <div className="routine-offday-vertical">Off Day</div>
-                          </td>
-                        );
-                      }
+                      if (offDay) return null;
+                      const showLabel = nonOffDays.indexOf(day) === midIdx;
                       return (
                         <td key={day} className="routine-td routine-break-cell">
-                          {dIdx === Math.floor(routine.days.length / 2) ? <span className="routine-break-label">{period.name}</span> : null}
+                          {showLabel ? <span className="routine-break-label">{period.name}</span> : null}
                         </td>
                       );
                     })}
@@ -520,10 +619,19 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
                     <div className="routine-time-sub">{period.end}</div>
                   </td>
                   {routine.days.map(day => {
+                    const offDay = isOffDay(day, routine.periods, routine.slots);
+                    if (offDay) {
+                      if (pIdx === 0) {
+                        return (
+                          <td key={day} className="routine-td routine-offday-cell" rowSpan={routine.periods.length}>
+                            <div className="routine-offday-vertical">OFF DAY</div>
+                          </td>
+                        );
+                      }
+                      return null;
+                    }
                     const slot = getSlot(day, classPeriodIdx, routine.slots);
                     const course = slot ? getCourse(slot.course, routine.courses) : null;
-                    const offDay = isOffDay(day, routine.periods, routine.slots);
-                    if (offDay) return null;
                     return (
                       <td key={day} className="routine-td">
                         {slot && course ? (
@@ -587,7 +695,7 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
           </div>
         </div>
         <div className="routine-footer-center">
-          <p className="routine-generated">Generated by <strong>QSIS Academic Resource Management System</strong></p>
+          <p className="routine-generated">Presented by <strong><a href="https://programming-light.eu.cc" target="_blank" rel="noopener noreferrer" style={{color:'inherit',textDecoration:'underline'}}>Programming Light</a></strong> &amp; Developed by <strong><a href="https://atiq.is-a.dev" target="_blank" rel="noopener noreferrer" style={{color:'inherit',textDecoration:'underline'}}>Sayed Atiqur Rahman</a></strong></p>
           <p className="routine-updated">Last Updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
         <div className="routine-footer-strip">
@@ -608,12 +716,40 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
   const [step, setStep] = useState<BuilderStep>('info');
   const [semester, setSemester] = useState(existing?.semester || SEMESTERS[0]);
   const [branch, setBranch] = useState(existing?.branch || '');
-  const [session, setSession] = useState(existing?.session || '2023-24');
+  const [session, setSession] = useState(existing?.session || getDefaultSession());
   const [room, setRoom] = useState(existing?.room || '');
   const [periods, setPeriods] = useState<RoutinePeriod[]>(existing?.periods || [...DEFAULT_PERIODS]);
   const [days, setDays] = useState<string[]>(existing?.days || [...DEFAULT_DAYS]);
   const [courses, setCourses] = useState<RoutineCourse[]>(existing?.courses || []);
   const [slots, setSlots] = useState<RoutineSlot[]>(existing?.slots || []);
+  const [draftSaved, setDraftSaved] = useState(false);
+
+  useEffect(() => {
+    if (existing) return;
+    const draft = loadDraft();
+    if (draft) {
+      if (draft.semester) setSemester(draft.semester);
+      if (draft.branch !== undefined) setBranch(draft.branch || '');
+      if (draft.session) setSession(draft.session);
+      if (draft.room !== undefined) setRoom(draft.room || '');
+      if (draft.periods) setPeriods(draft.periods);
+      if (draft.days) setDays(draft.days);
+      if (draft.courses) setCourses(draft.courses);
+      if (draft.slots) setSlots(draft.slots);
+      if (draft.step) setStep(draft.step as BuilderStep);
+      showToast('Draft restored from previous session', 'success');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (existing) return;
+    const timer = setTimeout(() => {
+      saveDraft({ semester, branch, session, room, periods, days, courses, slots, step });
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2000);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [semester, branch, session, room, periods, days, courses, slots, step, existing]);
 
   const classPeriods = periods.filter(p => !p.isBreak);
   const nonBreakIdx = (pIdx: number) => {
@@ -642,8 +778,26 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
   };
 
   const addCourse = () => setCourses([...courses, { code: '', title: '', teacher: '', room: '' }]);
-  const updateCourse = (idx: number, field: keyof RoutineCourse, value: string) => {
-    const c = [...courses]; c[idx] = { ...c[idx], [field]: value }; setCourses(c);
+  const toInitials = (name: string): string => {
+    if (!name) return '';
+    const skip = new Set(['dr.', 'prof.', 'mr.', 'mrs.', 'ms.', 'md.', 'sheikh', 'ustaz', 'moulana', 'alhaj']);
+    const parts = name.trim().split(/\s+/).filter(p => !skip.has(p.toLowerCase().replace(/[.:]$/, '')));
+    if (parts.length === 0) return '';
+    if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
+    return parts.map(p => p[0]).join('').toUpperCase().slice(0, 4);
+  };
+
+  const updateCourse = (idx: number, field: keyof RoutineCourse, value: string, shortForm?: string) => {
+    const c = [...courses];
+    const old = c[idx];
+    c[idx] = { ...old, [field]: value };
+    if (field === 'teacher') {
+      const oldInitials = toInitials(old.teacher);
+      if (!old.room || old.room === oldInitials) {
+        c[idx].room = shortForm || toInitials(value);
+      }
+    }
+    setCourses(c);
   };
   const removeCourse = (idx: number) => { setCourses(courses.filter((_, i) => i !== idx)); setSlots(slots.filter(s => s.course !== courses[idx].code)); };
 
@@ -669,12 +823,19 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
       university: existing?.university || 'International Islamic University Chittagong',
       periods, days, courses, slots,
       createdAt: existing?.createdAt || Date.now(),
+      isDraft: true,
     };
+    clearDraft();
     onSave(routine);
   };
 
   return (
     <div className="routine-builder">
+      {draftSaved && (
+        <div style={{textAlign:'center',padding:'6px',background:'#dcfce7',borderRadius:'8px',marginBottom:'12px',fontSize:'0.8rem',color:'#166534'}}>
+          <i className="fas fa-check-circle"></i> Draft auto-saved
+        </div>
+      )}
       <div className="routine-builder-steps">
         {steps.map((s, idx) => (
           <div key={s.key} className={`routine-step ${step === s.key ? 'active' : ''} ${idx < currentStepIdx ? 'completed' : ''}`}>
@@ -699,7 +860,7 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
             </div>
             <div className="routine-form-group">
               <label>Session</label>
-              <input placeholder="e.g. 2023-24" value={session} onChange={e => setSession(e.target.value)} />
+              <input placeholder="e.g. Spring - 2026" value={session} onChange={e => setSession(e.target.value)} />
             </div>
             <div className="routine-form-group">
               <label>Room / Venue</label>
@@ -735,8 +896,8 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
                     <input className="routine-input-sm" placeholder="Code (e.g. QSM-3601)" value={c.code} onChange={e => updateCourse(idx, 'code', e.target.value)} />
                     <input placeholder="Course Title (e.g. Tafsir Bir Rayi)" value={c.title} onChange={e => updateCourse(idx, 'title', e.target.value)} />
                     <div className="routine-course-row-2">
-                      <input placeholder="Instructor (e.g. Dr. Ahmad Hassan)" value={c.teacher} onChange={e => updateCourse(idx, 'teacher', e.target.value)} />
-                      <input className="routine-input-sm" placeholder="Room" value={c.room} onChange={e => updateCourse(idx, 'room', e.target.value)} />
+                      <TeacherAutocomplete value={c.teacher} onChange={(val, sf) => updateCourse(idx, 'teacher', val, sf)} placeholder="Type name or short form (e.g. MER)" />
+                      <input className="routine-input-sm" placeholder={c.teacher ? `Room (auto: ${toInitials(c.teacher)})` : 'Room (auto from name)'} value={c.room} onChange={e => updateCourse(idx, 'room', e.target.value)} />
                     </div>
                   </div>
                   <button className="routine-remove-btn" onClick={() => removeCourse(idx)}><i className="fas fa-trash-alt"></i></button>

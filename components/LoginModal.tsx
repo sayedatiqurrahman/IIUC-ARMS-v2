@@ -2,7 +2,7 @@
 
 import { signIn } from 'next-auth/react';
 import { useState, useEffect } from 'react';
-import { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword } from '@/lib/firebase';
+import { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, sendMagicLink } from '@/lib/firebase';
 import { useRecaptcha } from '@/lib/useRecaptcha';
 import { config } from '@/lib/config';
 
@@ -22,6 +22,11 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
   const [recaptchaReady, setRecaptchaReady] = useState(false);
+  const [loginMode, setLoginMode] = useState<'password' | 'magiclink'>('password');
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [totpStep, setTotpStep] = useState(false);
+  const [totpCode, setTotpCode] = useState('');
+  const [pendingCredentials, setPendingCredentials] = useState<{ idToken: string; email: string } | null>(null);
   const recaptchaContainerId = 'login-recaptcha-container';
   const { renderCheckbox, getToken, reset } = useRecaptcha();
 
@@ -44,6 +49,11 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       setForgotPasswordEmail('');
       setForgotPasswordSent(false);
       setRecaptchaReady(false);
+      setLoginMode('password');
+      setMagicLinkSent(false);
+      setTotpStep(false);
+      setTotpCode('');
+      setPendingCredentials(null);
     }
   }, [isOpen]);
 
@@ -66,6 +76,21 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setLoading(true);
 
     try {
+      // Pre-check if user is banned
+      if (!isSignUp) {
+        const banCheck = await fetch('/api/auth/check-ban', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const banData = await banCheck.json();
+        if (banData.banned) {
+          setError('YOUR_ACCOUNT_IS_BANNED');
+          setLoading(false);
+          return;
+        }
+      }
+
       let user: any;
       if (isSignUp) {
         const result = await signUpWithEmail(email, password);
@@ -79,7 +104,20 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         user = result.user;
 
         if (!user.emailVerified) {
-          setError('Your email is not verified. Please check your inbox for the verification link.');
+          setError('YOUR_EMAIL_IS_NOT_VERIFIED');
+          setLoading(false);
+          return;
+        }
+
+        const idToken = await user.getIdToken();
+        const totpRes = await fetch('/api/auth/totp/check', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        const totpData = await totpRes.json();
+
+        if (totpData.totpEnabled) {
+          setPendingCredentials({ idToken, email });
+          setTotpStep(true);
           setLoading(false);
           return;
         }
@@ -173,6 +211,75 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       } else {
         setError('Failed to send reset email. Please try again.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!isValidEmail(email)) {
+      setError('Only IIUC departmental emails are allowed');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await sendMagicLink(email);
+      setMagicLinkSent(true);
+      setSuccess('Magic link sent! Check your email inbox.');
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found') {
+        setError('No account found. Please sign up first.');
+      } else {
+        setError('Failed to send magic link. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTotpVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/totp/verify', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${pendingCredentials?.idToken}` },
+        body: JSON.stringify({ code: totpCode }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Invalid code');
+        setLoading(false);
+        return;
+      }
+
+      const recaptchaToken = getToken(recaptchaContainerId);
+      const result = await signIn('credentials', {
+        idToken: pendingCredentials!.idToken,
+        email: pendingCredentials!.email,
+        name: pendingCredentials!.email.split('@')[0],
+        image: '',
+        login: pendingCredentials!.email.split('@')[0],
+        recaptchaToken,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError('Login failed');
+        reset();
+      } else {
+        onClose();
+      }
+    } catch {
+      setError('Verification failed');
     } finally {
       setLoading(false);
     }
@@ -276,9 +383,58 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
           </div>
 
           {/* Error message */}
-          {error && (
+          {error && error !== 'YOUR_EMAIL_IS_NOT_VERIFIED' && error !== 'YOUR_ACCOUNT_IS_BANNED' && (
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
               <i className="fas fa-exclamation-circle mr-2"></i>{error}
+            </div>
+          )}
+
+          {/* Email not verified special message */}
+          {error === 'YOUR_EMAIL_IS_NOT_VERIFIED' && (
+            <div className="mb-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-[0.8rem]">
+              <div className="flex items-start gap-3">
+                <i className="fas fa-envelope-open-text text-yellow-400 text-lg mt-0.5"></i>
+                <div>
+                  <p className="text-yellow-400 font-semibold mb-1">Email Not Verified</p>
+                  <p className="text-dark-text2 mb-3">Please check your inbox and click the verification link before signing in. Check your spam/junk folder too.</p>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    className="px-4 py-2 rounded-lg bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 font-semibold text-[0.78rem] cursor-pointer hover:bg-yellow-500/30 transition-colors disabled:opacity-50"
+                    onClick={async () => {
+                      setLoading(true);
+                      try {
+                        const { signInWithEmail } = await import('@/lib/firebase');
+                        const result = await signInWithEmail(email, password);
+                        const actionCodeSettings = { url: `${window.location.origin}/callback`, handleCodeInApp: false };
+                        const { sendEmailVerification } = await import('firebase/auth');
+                        await sendEmailVerification(result.user, actionCodeSettings);
+                        setSuccess('Verification email resent! Check your inbox.');
+                        setError('');
+                      } catch {
+                        setError('Failed to resend. Try again.');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                  >
+                    <i className="fas fa-redo mr-1"></i>{loading ? 'Sending...' : 'Resend Verification Email'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Account banned message */}
+          {error === 'YOUR_ACCOUNT_IS_BANNED' && (
+            <div className="mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-[0.8rem]">
+              <div className="flex items-start gap-3">
+                <i className="fas fa-ban text-red-400 text-lg mt-0.5"></i>
+                <div>
+                  <p className="text-red-400 font-semibold mb-1">Account Suspended</p>
+                  <p className="text-dark-text2">Your account has been suspended by an administrator. You cannot access the system. Contact admin for more information.</p>
+                </div>
+              </div>
             </div>
           )}
 
@@ -313,52 +469,168 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
             <div className="flex-1 h-px bg-dark-border"></div>
           </div>
 
-          {/* Email/Password Form */}
-          <form onSubmit={handleEmailLogin}>
-            <div className="mb-3">
-              <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">University Email</label>
-              <input
-                type="email"
-                className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors"
-                placeholder="q233099@ugrad.iiuc.ac.bd"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+          {/* Login Mode Toggle */}
+          {!isSignUp && !magicLinkSent && (
+            <div className="flex gap-2 mb-4 p-1 rounded-lg bg-dark-bg3 border border-dark-border">
+              <button
+                type="button"
+                className={`flex-1 py-2 rounded-md text-[0.78rem] font-semibold border-none cursor-pointer transition-all ${
+                  loginMode === 'password'
+                    ? 'bg-qsis text-white'
+                    : 'bg-transparent text-dark-text2 hover:text-dark-text'
+                }`}
+                onClick={() => setLoginMode('password')}
+              >
+                <i className="fas fa-lock mr-1.5"></i>Password
+              </button>
+              <button
+                type="button"
+                className={`flex-1 py-2 rounded-md text-[0.78rem] font-semibold border-none cursor-pointer transition-all ${
+                  loginMode === 'magiclink'
+                    ? 'bg-qsis text-white'
+                    : 'bg-transparent text-dark-text2 hover:text-dark-text'
+                }`}
+                onClick={() => setLoginMode('magiclink')}
+              >
+                <i className="fas fa-link mr-1.5"></i>Magic Link
+              </button>
             </div>
+          )}
 
-            <div className="mb-4">
-              <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">Password</label>
-              <input
-                type="password"
-                className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+          {/* Magic Link Sent */}
+          {magicLinkSent && (
+            <div className="text-center py-4 mb-4">
+              <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
+                <i className="fas fa-envelope-open-text text-2xl text-green-500"></i>
+              </div>
+              <p className="text-[0.85rem] text-dark-text font-semibold mb-1">Check your email!</p>
+              <p className="text-[0.78rem] text-dark-text2 mb-4">We sent a magic link to <strong className="text-qsis">{email}</strong></p>
+              <button
+                type="button"
+                className="text-[0.78rem] text-qsis bg-transparent border-none cursor-pointer font-semibold hover:underline"
+                onClick={() => { setMagicLinkSent(false); setSuccess(''); }}
+              >
+                Try another method
+              </button>
             </div>
+          )}
 
-            {/* reCAPTCHA Checkbox */}
-            <div className="mb-4 flex justify-center">
-              <div id={recaptchaContainerId}></div>
-            </div>
+          {/* TOTP Verification Step */}
+          {totpStep && (
+            <div>
+              <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-[0.8rem]">
+                <i className="fas fa-shield-alt mr-2"></i>Two-factor authentication required. Enter the 6-digit code from your authenticator app.
+              </div>
 
-            <button
-              type="submit"
-              disabled={loading || !recaptchaReady}
-              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-[0.85rem] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <><i className="fas fa-spinner fa-spin mr-2"></i>{isSignUp ? 'Creating account...' : 'Signing in...'}</>
-              ) : (
-                <><i className="fas fa-envelope mr-2"></i>{isSignUp ? 'Sign Up with Email' : 'Sign In with Email'}</>
+              {error && (
+                <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
+                  <i className="fas fa-exclamation-circle mr-2"></i>{error}
+                </div>
               )}
-            </button>
-          </form>
+
+              <form onSubmit={handleTotpVerify}>
+                <div className="mb-4">
+                  <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">Authenticator Code</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[1.2rem] tracking-[0.3em] text-center outline-none focus:border-qsis transition-colors font-mono"
+                    placeholder="000000"
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    autoFocus
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || totpCode.length !== 6}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-[0.85rem] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <><i className="fas fa-spinner fa-spin mr-2"></i>Verifying...</>
+                  ) : (
+                    <><i className="fas fa-check-circle mr-2"></i>Verify & Sign In</>
+                  )}
+                </button>
+              </form>
+
+              <div className="mt-3 text-center">
+                <button
+                  type="button"
+                  className="text-[0.78rem] text-dark-text2 hover:text-qsis bg-transparent border-none cursor-pointer hover:underline"
+                  onClick={() => { setTotpStep(false); setTotpCode(''); setPendingCredentials(null); setError(''); }}
+                >
+                  <i className="fas fa-arrow-left mr-1"></i>Back to login
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Email/Password Form or Magic Link Form */}
+          {!magicLinkSent && !totpStep && (
+            <form onSubmit={loginMode === 'magiclink' ? handleMagicLink : handleEmailLogin}>
+              <div className="mb-3">
+                <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">University Email</label>
+                <input
+                  type="email"
+                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors"
+                  placeholder="q233099@ugrad.iiuc.ac.bd"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              {loginMode === 'password' && (
+                <>
+                  <div className="mb-4">
+                    <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">Password</label>
+                    <input
+                      type="password"
+                      className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  {/* reCAPTCHA Checkbox */}
+                  <div className="mb-4 flex justify-center">
+                    <div id={recaptchaContainerId}></div>
+                  </div>
+                </>
+              )}
+
+              {loginMode === 'magiclink' && (
+                <p className="text-[0.72rem] text-dark-text2 mb-4">
+                  <i className="fas fa-info-circle mr-1"></i>
+                  We&apos;ll email you a sign-in link. No password needed.
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || (loginMode === 'password' && !recaptchaReady)}
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-[0.85rem] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <><i className="fas fa-spinner fa-spin mr-2"></i>{isSignUp ? 'Creating account...' : 'Sending...'}</>
+                ) : loginMode === 'magiclink' ? (
+                  <><i className="fas fa-paper-plane mr-2"></i>Send Magic Link</>
+                ) : (
+                  <><i className="fas fa-envelope mr-2"></i>{isSignUp ? 'Sign Up with Email' : 'Sign In with Email'}</>
+                )}
+              </button>
+            </form>
+          )}
 
           {/* Forgot Password */}
-          {!isSignUp && (
+          {!isSignUp && loginMode === 'password' && !magicLinkSent && (
             <div className="mt-3 text-center">
               <button
                 type="button"

@@ -8,7 +8,8 @@ import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { getFileIconByType, showToast, timeAgo } from '@/lib/utils';
 import { updateUserProfile } from '@/lib/firebase';
-import { connectGitHubPopup } from '@/lib/github-connect';
+import { installGitHubApp } from '@/lib/github-install';
+import { FACULTIES, TEACHER_TITLES } from '@/lib/departments';
 
 function extractUniversityId(email: string): string {
   const match = email.match(/^(q\d+)/i);
@@ -31,12 +32,27 @@ export default function DashboardView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
-    universityId: '', name: '', whatsapp: '', semester: '',
+    universityId: '', name: '', title: '', shortForm: '', department: '', whatsapp: '', semester: '',
     facebook: '', twitter: '', linkedin: '', website: '',
-    hideWhatsapp: false, hideUniversityId: false,
+    company: '', companyUrl: '', publicEmail: '',
+    hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false,
   });
 
-  const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin;
+  const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!profile.githubToken;
+  const email = (session as any)?.user?.email || profile.email || '';
+  const effectiveRole = config.getEffectiveRole(email, profile.role);
+  const isStudent = effectiveRole === 'student';
+  const isTeacherOrAbove = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
+  const [ghUser, setGhUser] = useState<any>(null);
+  const [ghStats, setGhStats] = useState<any>(null);
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [patInput, setPatInput] = useState('');
+  const [patLoading, setPatLoading] = useState(false);
+
+  // Load profile from DB on mount — ensures GitHub connection persists across reloads
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
   // Auto-extract university ID from email if not set
   useEffect(() => {
@@ -51,8 +67,158 @@ export default function DashboardView() {
 
   // Primary info: profile DB > session (Firebase/Google)
   const displayName = profile.name || (session as any)?.user?.name || 'User';
-  const displayEmail = profile.email || session?.user?.email || '';
+  const displayEmail = profile.publicEmail || profile.email || session?.user?.email || '';
   const displayImage = profile.image || (session as any)?.user?.image || '';
+
+  // Pick up GitHub token from URL after install redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ghToken = params.get('gh_token');
+    const ghLogin = params.get('gh_login');
+    const ghInstall = params.get('gh_install');
+    const ghError = params.get('error');
+    if (ghToken && ghLogin) {
+      // Save to store
+      useAppStore.setState(s => ({
+        profile: { ...s.profile, githubLogin: ghLogin, githubToken: ghToken, githubInstallationId: ghInstall || '' },
+        githubToken: ghToken,
+      }));
+      // Save to DB
+      fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubLogin: ghLogin, githubToken: ghToken, githubInstallationId: ghInstall || '' }),
+      }).catch(() => {});
+      showToast(`Connected as @${ghLogin}!`, 'success');
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (ghError) {
+      showToast(`GitHub Error: ${ghError}`, 'error');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!profile.githubToken || !hasGitHub) return;
+
+    // Build ghUser from saved profile data as primary source (no API call needed)
+    if (profile.githubLogin) {
+      setGhUser({
+        login: profile.githubLogin,
+        name: profile.githubLogin,
+        avatar_url: profile.githubAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.githubLogin)}&background=333&color=fff&bold=true&size=80`,
+      });
+    }
+
+    // Also try to fetch live stats from GitHub API (best-effort)
+    const ghHeaders = { Authorization: `token ${profile.githubToken}`, Accept: 'application/vnd.github.v3+json' };
+    fetch('https://api.github.com/user', { headers: ghHeaders })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          // Update ghUser with live data if available
+          setGhUser((prev: any) => ({ ...prev, name: data.name || prev?.name || profile.githubLogin, avatar_url: data.avatar_url || prev?.avatar_url }));
+          return fetch(`https://api.github.com/users/${data.login}`, { headers: ghHeaders });
+        }
+      })
+      .then(r => r?.json())
+      .then(data => { if (data) setGhStats(data); })
+      .catch(() => {});
+  }, [profile.githubToken, profile.githubLogin, profile.githubAvatar, hasGitHub]);
+
+  async function handleDisconnect() {
+    if (!confirm('Disconnect this GitHub account? You can reconnect later.')) return;
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubLogin: '', githubToken: '', githubInstallationId: '', githubAvatar: '' }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      useAppStore.setState(s => ({
+        profile: { ...s.profile, githubLogin: '', githubToken: '', githubInstallationId: '', githubAvatar: '' },
+        githubToken: '',
+      }));
+      setGhUser(null);
+      setGhStats(null);
+      showToast('GitHub disconnected', 'success');
+    } catch {
+      showToast('Disconnect failed. Please try again.', 'error');
+    }
+  }
+
+  async function handleInstallGitHub() {
+    showToast('Opening GitHub...', 'info');
+    const result = await installGitHubApp();
+    if (result.error || !result.token) {
+      showToast(result.error || 'GitHub connection cancelled', 'error');
+      return;
+    }
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          githubLogin: result.login,
+          githubToken: result.token,
+          githubInstallationId: result.installationId,
+          githubAvatar: result.avatarUrl,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      useAppStore.setState(s => ({
+        profile: {
+          ...s.profile,
+          githubLogin: result.login,
+          githubToken: result.token,
+          githubInstallationId: result.installationId,
+          githubAvatar: result.avatarUrl,
+        },
+        githubToken: result.token,
+      }));
+      setGhUser({ login: result.login, name: result.login, avatar_url: result.avatarUrl });
+      showToast(`Connected as @${result.login}!`, 'success');
+    } catch {
+      showToast('Failed to save. Please try again.', 'error');
+    }
+  }
+
+  async function handlePastePAT() {
+    const token = patInput.trim();
+    if (!token) return;
+    setPatLoading(true);
+    try {
+      const res = await fetch('https://api.github.com/user', {
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
+      });
+      if (!res.ok) {
+        showToast('Invalid token. Please check and try again.', 'error');
+        setPatLoading(false);
+        return;
+      }
+      const ghUser = await res.json();
+      await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          githubLogin: ghUser.login,
+          githubToken: token,
+          githubAvatar: ghUser.avatar_url,
+        }),
+      });
+      useAppStore.setState(s => ({
+        profile: { ...s.profile, githubLogin: ghUser.login, githubToken: token, githubAvatar: ghUser.avatar_url },
+        githubToken: token,
+      }));
+      setGhUser({ login: ghUser.login, name: ghUser.name || ghUser.login, avatar_url: ghUser.avatar_url });
+      setShowTokenModal(false);
+      setPatInput('');
+      showToast(`Connected as @${ghUser.login}!`, 'success');
+    } catch {
+      showToast('Failed to connect. Please try again.', 'error');
+    } finally {
+      setPatLoading(false);
+    }
+  }
 
   async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -71,14 +237,8 @@ export default function DashboardView() {
         return 'data:image/jpeg;base64,' + btoa(binary);
       });
 
-      // Save to our DB
       await updateProfile({ image: base64 });
-
-      // Also update Firebase Auth profile
-      try {
-        await updateUserProfile(undefined, base64);
-      } catch {}
-
+      try { await updateUserProfile(undefined, base64); } catch {}
       showToast('Profile picture updated!', 'success');
     } catch {
       showToast('Failed to update picture', 'error');
@@ -87,6 +247,14 @@ export default function DashboardView() {
       if (avatarInputRef.current) avatarInputRef.current.value = '';
     }
   }
+
+  // Build social links array (website first, then others)
+  const socialLinks = [
+    profile.website && { icon: 'fas fa-globe', label: 'Website', url: profile.website },
+    profile.facebook && { icon: 'fab fa-facebook', label: 'Facebook', url: profile.facebook },
+    profile.twitter && { icon: 'fab fa-twitter', label: 'Twitter', url: profile.twitter },
+    profile.linkedin && { icon: 'fab fa-linkedin', label: 'LinkedIn', url: profile.linkedin },
+  ].filter(Boolean) as { icon: string; label: string; url: string }[];
 
   return (
     <section className="mb-5">
@@ -97,27 +265,46 @@ export default function DashboardView() {
         </button>
       </div>
 
-      {/* Profile Card */}
+      {/* ═══════════════ UNIFIED PROFILE CARD ═══════════════ */}
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
+
+        {/* Top row: Avatar + Name + Role + GitHub badge + Edit */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
-            {/* Avatar with upload */}
             <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
               <Image src={displayImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=22c55e&color=fff&bold=true&size=200`} alt="" width={64} height={64} className="w-16 h-16 rounded-full border-2 border-qsis object-cover" />
               <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                {uploadingAvatar ? (
-                  <i className="fas fa-spinner fa-spin text-white text-sm"></i>
-                ) : (
-                  <i className="fas fa-camera text-white text-sm"></i>
-                )}
+                {uploadingAvatar ? <i className="fas fa-spinner fa-spin text-white text-sm"></i> : <i className="fas fa-camera text-white text-sm"></i>}
               </div>
               <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
             </div>
             <div>
-              <h4 className="text-[1.1rem] font-bold">{displayName}</h4>
+              <div className="flex items-center gap-2">
+                <h4 className="text-[1.1rem] font-bold">{displayName}</h4>
+                {hasGitHub && ghUser && (
+                  <a href={`https://github.com/${ghUser.login}`} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors flex items-center gap-1">
+                    <i className="fab fa-github"></i> {profile.title || `@${ghUser.login}`}
+                  </a>
+                )}
+              </div>
               <p className="text-[0.82rem] text-dark-text2">{displayEmail}</p>
-              {profile.githubLogin && (
-                <p className="text-[0.72rem] text-dark-text2"><i className="fab fa-github mr-1"></i>@{profile.githubLogin}</p>
+              {profile.company && (
+                <p className="text-[0.72rem] text-dark-text2 mt-0.5">
+                  <i className="fas fa-building mr-1"></i>
+                  {profile.companyUrl ? (
+                    <a href={profile.companyUrl} target="_blank" rel="noopener noreferrer" className="hover:text-qsis transition-colors">{profile.company}</a>
+                  ) : profile.company}
+                </p>
+              )}
+              {/* Social icons row */}
+              {socialLinks.length > 0 && (
+                <div className="flex items-center gap-2 mt-1.5">
+                  {socialLinks.map((s, i) => (
+                    <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" title={s.label} className="w-7 h-7 rounded-full bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+                      <i className={`${s.icon} text-[0.7rem]`}></i>
+                    </a>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -128,14 +315,22 @@ export default function DashboardView() {
               setProfileForm({
                 universityId: autoId,
                 name: profile.name || '',
+                title: profile.title || '',
+                shortForm: profile.shortForm || '',
+                department: profile.department || '',
                 whatsapp: profile.whatsapp,
                 semester: profile.semester,
                 facebook: profile.facebook,
                 twitter: profile.twitter,
                 linkedin: profile.linkedin,
                 website: profile.website,
+                company: profile.company,
+                companyUrl: profile.companyUrl,
+                publicEmail: profile.publicEmail,
                 hideWhatsapp: profile.hideWhatsapp,
                 hideUniversityId: profile.hideUniversityId,
+                hideSemester: profile.hideSemester,
+                hideEmail: profile.hideEmail,
               });
               setEditingProfile(true);
             }}>
@@ -146,8 +341,11 @@ export default function DashboardView() {
 
         {/* Profile Completion */}
         {(() => {
-          const filled = [profile.universityId, profile.name, profile.whatsapp, profile.semester].filter(Boolean).length;
-          const pct = Math.round((filled / 4) * 100);
+          const studentFields = [profile.universityId, profile.name, profile.whatsapp, profile.semester];
+          const teacherFields = [profile.name, profile.shortForm, profile.department, profile.title];
+          const fields = isStudent ? studentFields : teacherFields;
+          const filled = fields.filter(Boolean).length;
+          const pct = Math.round((filled / fields.length) * 100);
           return (
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
@@ -170,32 +368,109 @@ export default function DashboardView() {
                 <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Sayed Atiqur Rahman" value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} />
               </div>
               <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">University ID</label>
-                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Q233099" value={profileForm.universityId} onChange={e => setProfileForm(p => ({ ...p, universityId: e.target.value }))} />
+                <label className="text-[0.72rem] text-dark-text2 block mb-1">Short Form / Initials</label>
+                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. SAR" value={profileForm.shortForm} onChange={e => setProfileForm(p => ({ ...p, shortForm: e.target.value.toUpperCase() }))} />
               </div>
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1">Faculty</label>
+                <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
+                  value={(() => { const found = FACULTIES.find(f => f.departments.some(d => d.id === profileForm.department)); return found?.id || ''; })()}
+                  onChange={e => setProfileForm(p => ({ ...p, department: '' }))}
+                >
+                  <option value="">Select faculty...</option>
+                  {FACULTIES.map(f => <option key={f.id} value={f.id}>{f.shortName} — {f.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1">Department</label>
+                <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
+                  value={profileForm.department}
+                  onChange={e => setProfileForm(p => ({ ...p, department: e.target.value }))}
+                >
+                  <option value="">Select department...</option>
+                  {FACULTIES.flatMap(f => f.departments.map(d => (
+                    <option key={d.id} value={d.id}>{f.shortName} / {d.shortName} — {d.name}</option>
+                  )))}
+                </select>
+              </div>
+              {/* Designation — teachers, admin, manager only */}
+              {isTeacherOrAbove && (
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Designation / Title</label>
+                  <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" value={profileForm.title} onChange={e => setProfileForm(p => ({ ...p, title: e.target.value }))}>
+                    <option value="">Select designation...</option>
+                    {TEACHER_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+                    <option value="__custom">Other (type below)</option>
+                  </select>
+                  {profileForm.title === '__custom' && (
+                    <input type="text" className="w-full mt-1 px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="Type your designation" value="" onChange={e => setProfileForm(p => ({ ...p, title: e.target.value }))} autoFocus />
+                  )}
+                </div>
+              )}
+              {/* University ID — students only */}
+              {isStudent && (
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">University ID</label>
+                  <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Q233099" value={profileForm.universityId} onChange={e => setProfileForm(p => ({ ...p, universityId: e.target.value }))} />
+                </div>
+              )}
               <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">WhatsApp</label>
                 <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
               </div>
+              {/* Semester — students only */}
+              {isStudent && (
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Current Semester</label>
+                  <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" value={profileForm.semester} onChange={e => setProfileForm(p => ({ ...p, semester: e.target.value }))}>
+                    <option value="">Select semester...</option>
+                    {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Company / Organization */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Current Semester</label>
-                <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" value={profileForm.semester} onChange={e => setProfileForm(p => ({ ...p, semester: e.target.value }))}>
-                  <option value="">Select semester...</option>
-                  {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-building mr-1"></i>Company / Organization</label>
+                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Programming Light" value={profileForm.company} onChange={e => setProfileForm(p => ({ ...p, company: e.target.value }))} />
               </div>
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-link mr-1"></i>Company URL</label>
+                <input type="url" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="https://..." value={profileForm.companyUrl} onChange={e => setProfileForm(p => ({ ...p, companyUrl: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* Public Email */}
+            <div className="mb-3">
+              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-envelope mr-1"></i>Public Email <span className="text-dark-text3">(shown on your public profile)</span></label>
+              <input type="email" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. yourmail@gmail.com" value={profileForm.publicEmail} onChange={e => setProfileForm(p => ({ ...p, publicEmail: e.target.value }))} />
+              <p className="text-[0.65rem] text-dark-text3 mt-1">Leave empty to use your login email. Set a custom email to control what the public sees.</p>
             </div>
 
             {/* Privacy Toggles */}
             <div className="mb-3 p-3 rounded-lg bg-dark-bg border border-dark-border">
               <p className="text-[0.72rem] text-dark-text2 mb-2"><i className="fas fa-eye-slash mr-1"></i>Privacy Settings</p>
+              {isStudent && (
+                <label className="flex items-center gap-2 cursor-pointer mb-2">
+                  <input type="checkbox" checked={profileForm.hideUniversityId} onChange={e => setProfileForm(p => ({ ...p, hideUniversityId: e.target.checked }))} className="accent-qsis" />
+                  <span className="text-[0.78rem] text-dark-text">Hide University ID from public profile</span>
+                </label>
+              )}
               <label className="flex items-center gap-2 cursor-pointer mb-2">
-                <input type="checkbox" checked={profileForm.hideUniversityId} onChange={e => setProfileForm(p => ({ ...p, hideUniversityId: e.target.checked }))} className="accent-qsis" />
-                <span className="text-[0.78rem] text-dark-text">Hide University ID from public profile</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={profileForm.hideWhatsapp} onChange={e => setProfileForm(p => ({ ...p, hideWhatsapp: e.target.checked }))} className="accent-qsis" />
                 <span className="text-[0.78rem] text-dark-text">Hide WhatsApp from public profile</span>
+              </label>
+              {isStudent && (
+                <label className="flex items-center gap-2 cursor-pointer mb-2">
+                  <input type="checkbox" checked={profileForm.hideSemester} onChange={e => setProfileForm(p => ({ ...p, hideSemester: e.target.checked }))} className="accent-qsis" />
+                  <span className="text-[0.78rem] text-dark-text">Hide Semester from public profile</span>
+                </label>
+              )}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={profileForm.hideEmail} onChange={e => setProfileForm(p => ({ ...p, hideEmail: e.target.checked }))} className="accent-qsis" />
+                <span className="text-[0.78rem] text-dark-text">Hide Email from public profile</span>
               </label>
             </div>
 
@@ -214,48 +489,60 @@ export default function DashboardView() {
           </div>
         ) : (
           <>
+            {/* Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-              <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-                <span className="text-[0.7rem] text-dark-text2 block mb-1">University ID</span>
-                <span className={`text-[0.85rem] font-semibold ${profile.universityId ? 'text-qsis' : 'text-dark-text2'}`}>
-                  {profile.universityId ? (profile.hideUniversityId ? '***' : profile.universityId) : 'Not set'}
-                </span>
-              </div>
-              <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-                <span className="text-[0.7rem] text-dark-text2 block mb-1">Department</span>
-                <span className="text-[0.85rem] font-semibold">Qur&apos;anic Sciences &amp; Islamic Studies</span>
-              </div>
+              {isStudent && (
+                <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                  <span className="text-[0.7rem] text-dark-text2 block mb-1">University ID</span>
+                  <span className={`text-[0.85rem] font-semibold ${profile.universityId ? 'text-qsis' : 'text-dark-text2'}`}>
+                    {profile.universityId || 'Not set'}
+                  </span>
+                </div>
+              )}
+              {profile.department && (
+                <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                  <span className="text-[0.7rem] text-dark-text2 block mb-1">Department</span>
+                  <span className="text-[0.85rem] font-semibold">{(() => {
+                    const found = FACULTIES.flatMap(f => f.departments.map(d => ({ ...d, faculty: f.shortName }))).find(d => d.id === profile.department);
+                    return found ? `${found.shortName} — ${found.faculty}` : profile.department;
+                  })()}</span>
+                </div>
+              )}
+              {profile.shortForm && (
+                <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                  <span className="text-[0.7rem] text-dark-text2 block mb-1">Short Form</span>
+                  <span className="text-[0.85rem] font-semibold text-qsis">{profile.shortForm}</span>
+                </div>
+              )}
+              {isTeacherOrAbove && profile.title && (
+                <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                  <span className="text-[0.7rem] text-dark-text2 block mb-1">Designation</span>
+                  <span className="text-[0.85rem] font-semibold text-qsis">{profile.title}</span>
+                </div>
+              )}
               <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                 <span className="text-[0.7rem] text-dark-text2 block mb-1">WhatsApp</span>
                 <span className={`text-[0.85rem] font-semibold ${profile.whatsapp ? '' : 'text-dark-text2'}`}>
-                  {profile.whatsapp ? (profile.hideWhatsapp ? '***' : profile.whatsapp) : 'Not set'}
+                  {profile.whatsapp || 'Not set'}
                 </span>
               </div>
-              <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-                <span className="text-[0.7rem] text-dark-text2 block mb-1">Semester</span>
-                <span className={`text-[0.85rem] font-semibold ${profile.semester ? '' : 'text-dark-text2'}`}>{profile.semester ? config.semesters.find(s => s.id === profile.semester)?.label || profile.semester : 'Not set'}</span>
-              </div>
+              {isStudent && (
+                <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                  <span className="text-[0.7rem] text-dark-text2 block mb-1">Semester</span>
+                  <span className={`text-[0.85rem] font-semibold ${profile.semester ? '' : 'text-dark-text2'}`}>{profile.semester ? config.semesters.find(s => s.id === profile.semester)?.label || profile.semester : 'Not set'}</span>
+                </div>
+              )}
             </div>
 
-            {/* Social Links */}
-            {(profile.facebook || profile.twitter || profile.linkedin || profile.website) && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {profile.facebook && <a href={profile.facebook} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all"><i className="fab fa-facebook"></i> Facebook</a>}
-                {profile.twitter && <a href={profile.twitter} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all"><i className="fab fa-twitter"></i> Twitter</a>}
-                {profile.linkedin && <a href={profile.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all"><i className="fab fa-linkedin"></i> LinkedIn</a>}
-                {profile.website && <a href={profile.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-dark-bg3 border border-dark-border text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all"><i className="fas fa-globe"></i> Website</a>}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Edit Social Links */}
-        {!editingProfile && (
-          <div className="mt-3">
+            {/* Edit Social Links */}
             {editingSocials ? (
               <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
                 <h5 className="text-[0.85rem] font-semibold mb-3"><i className="fas fa-share-alt text-qsis mr-2"></i>Social Links</h5>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-globe mr-1"></i>Website URL</label>
+                    <input type="url" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="https://..." value={profileForm.website} onChange={e => setProfileForm(p => ({ ...p, website: e.target.value }))} />
+                  </div>
                   <div>
                     <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-facebook mr-1"></i>Facebook URL</label>
                     <input type="url" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="https://facebook.com/..." value={profileForm.facebook} onChange={e => setProfileForm(p => ({ ...p, facebook: e.target.value }))} />
@@ -267,10 +554,6 @@ export default function DashboardView() {
                   <div>
                     <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-linkedin mr-1"></i>LinkedIn URL</label>
                     <input type="url" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="https://linkedin.com/in/..." value={profileForm.linkedin} onChange={e => setProfileForm(p => ({ ...p, linkedin: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-globe mr-1"></i>Website URL</label>
-                    <input type="url" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="https://..." value={profileForm.website} onChange={e => setProfileForm(p => ({ ...p, website: e.target.value }))} />
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -294,42 +577,159 @@ export default function DashboardView() {
                 <i className="fas fa-share-alt mr-1"></i> Edit Social Links
               </button>
             )}
-          </div>
+          </>
         )}
       </div>
 
-      {/* GitHub Connection */}
+      {/* ═══════════════ TEACHER INFO ═══════════════ */}
+      {isTeacherOrAbove && (
+        <TeacherInfoSection email={email} profile={profile} />
+      )}
+
+      {/* ═══════════════ GITHUB CONNECTION ═══════════════ */}
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
         <h4 className="text-[0.95rem] font-semibold mb-3 flex items-center gap-2">
           <i className="fab fa-github"></i> GitHub Connection
         </h4>
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasGitHub ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
-            <i className={`fas ${hasGitHub ? 'fa-check-circle text-green-500' : 'fa-times-circle text-red-500'}`}></i>
+
+        {hasGitHub && ghUser ? (
+          <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <img src={ghUser.avatar_url} alt="" className="w-12 h-12 rounded-full border-2 border-dark-border" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[0.9rem] font-bold">{ghUser.name || ghUser.login}</span>
+                  {profile.title ? (
+                    <span className="text-[0.72rem] text-qsis font-medium">{profile.title}</span>
+                  ) : (
+                    <span className="text-[0.72rem] text-dark-text2">@{ghUser.login}</span>
+                  )}
+                </div>
+                {ghUser.bio && <p className="text-[0.72rem] text-dark-text2 truncate mt-0.5">{ghUser.bio}</p>}
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  <span className="text-[0.68rem] text-green-400">
+                    {profile.githubToken?.startsWith('ghp_') || profile.githubToken?.startsWith('github_pat_')
+                      ? 'Connected via Personal Access Token'
+                      : 'Connected via GitHub App'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {ghStats && (
+              <div className="flex gap-2 flex-wrap mb-3">
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border">
+                  <i className="fas fa-book text-qsis text-[0.6rem]"></i>
+                  <span className="text-[0.72rem] font-semibold">{ghStats.public_repos}</span>
+                  <span className="text-[0.6rem] text-dark-text2">repos</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border">
+                  <i className="fas fa-users text-accent text-[0.6rem]"></i>
+                  <span className="text-[0.72rem] font-semibold">{ghStats.followers}</span>
+                  <span className="text-[0.6rem] text-dark-text2">followers</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border">
+                  <i className="fas fa-user-friends text-green-400 text-[0.6rem]"></i>
+                  <span className="text-[0.72rem] font-semibold">{ghStats.following}</span>
+                  <span className="text-[0.6rem] text-dark-text2">following</span>
+                </div>
+                {ghStats.created_at && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border">
+                    <i className="fas fa-calendar text-yellow-500 text-[0.6rem]"></i>
+                    <span className="text-[0.6rem] text-dark-text2">Joined {new Date(ghStats.created_at).getFullYear()}</span>
+                  </div>
+                )}
+                {ghStats.location && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border">
+                    <i className="fas fa-map-marker-alt text-red-400 text-[0.6rem]"></i>
+                    <span className="text-[0.6rem] text-dark-text2">{ghStats.location}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PAT Section — for contributor visibility */}
+            {!profile.githubToken?.startsWith('ghp_') && !profile.githubToken?.startsWith('github_pat_') ? (
+              <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-3">
+                <p className="text-[0.78rem] text-qsis font-semibold mb-1"><i className="fas fa-star mr-1"></i>Appear in Contributors List</p>
+                <p className="text-[0.72rem] text-dark-text2 mb-2">Add a Personal Access Token to show your name in our Contributors page.</p>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis transition-colors"
+                    placeholder="ghp_xxxxxxxxxxxx"
+                    value={patInput}
+                    onChange={e => setPatInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handlePastePAT()}
+                  />
+                  <button
+                    className="px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 whitespace-nowrap"
+                    onClick={handlePastePAT}
+                    disabled={!patInput.trim() || patLoading}
+                  >
+                    {patLoading ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-1"></i>Save</>}
+                  </button>
+                </div>
+                <a href="https://github.com/settings/tokens/new?scopes=repo&description=QSIS-ARMS" target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text2 hover:text-qsis mt-2 inline-block no-underline">
+                  <i className="fas fa-external-link-alt mr-1"></i>Create new token (No expiry, repo scope)
+                </a>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 text-[0.72rem] text-qsis mb-3 bg-qsis/5 border border-qsis/20 rounded-xl p-3">
+                <div className="flex items-center gap-1.5">
+                  <i className="fas fa-check-circle"></i>
+                  <span className="font-semibold">PAT saved — visible in Contributors list</span>
+                </div>
+                <button
+                  className="text-[0.68rem] text-dark-text2 hover:text-qsis bg-transparent border-none cursor-pointer underline"
+                  onClick={() => { setPatInput(''); document.getElementById('pat-replace-input')?.focus(); }}
+                >
+                  Replace
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-2 flex-wrap">
+              <a href={`https://github.com/${ghUser.login}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] font-semibold cursor-pointer hover:border-qsis hover:text-qsis transition-all no-underline">
+                <i className="fab fa-github"></i> View Profile
+              </a>
+              <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={handleInstallGitHub}>
+                <i className="fab fa-github mr-1"></i> Reinstall
+              </button>
+              <button className="px-3 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-[0.72rem] font-semibold cursor-pointer hover:bg-red-500/20 transition-all" onClick={handleDisconnect}>
+                <i className="fas fa-unlink mr-1"></i> Disconnect
+              </button>
+            </div>
           </div>
-          <div className="flex-1">
-            <span className="text-[0.85rem] font-semibold block">{hasGitHub ? 'Connected' : 'Not Connected'}</span>
-            <span className="text-[0.72rem] text-dark-text2">{hasGitHub ? 'You can upload and create PRs' : 'Connect GitHub to upload files'}</span>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                <i className="fas fa-unlink text-red-500"></i>
+              </div>
+              <div className="flex-1">
+                <span className="text-[0.85rem] font-semibold block">Not Connected</span>
+                <span className="text-[0.72rem] text-dark-text2">Connect GitHub to upload files and appear in Contributors</span>
+              </div>
+            </div>
+            <button className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.85rem] font-bold cursor-pointer hover:opacity-90 transition-all shadow-lg shadow-qsis/20" onClick={handleInstallGitHub}>
+              <i className="fab fa-github"></i> Connect with GitHub App
+              <span className="text-[0.65rem] bg-white/20 px-2 py-0.5 rounded-full ml-1">Recommended</span>
+            </button>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg3">
+              <button className="flex items-center gap-2 bg-transparent border-none text-dark-text2 text-[0.78rem] font-semibold cursor-pointer hover:text-qsis transition-colors" onClick={() => setShowTokenModal(true)}>
+                <i className="fas fa-key"></i> Or paste a Personal Access Token
+              </button>
+            </div>
+            <p className="text-[0.68rem] text-dark-text2 text-center">
+              GitHub App is easiest. PAT is needed only for contributor badge.
+            </p>
           </div>
-          <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={async () => {
-            const email = profile.email || session?.user?.email || '';
-            if (!email) { showToast('Please save your profile first', 'error'); return; }
-            showToast('Opening GitHub...', 'info');
-            const { connected, token } = await connectGitHubPopup(email);
-            if (connected) {
-              if (token) setGithubToken(token);
-              await loadProfile();
-              showToast('GitHub connected!', 'success');
-            } else {
-              showToast('GitHub connection cancelled or failed', 'error');
-            }
-          }}>
-            {hasGitHub ? 'Reconnect' : 'Connect'}
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* Quick Actions */}
+      {/* ═══════════════ QUICK ACTIONS ═══════════════ */}
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
         <h4 className="text-[0.95rem] font-semibold mb-3"><i className="fas fa-bolt"></i> Quick Actions</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -352,7 +752,7 @@ export default function DashboardView() {
         </div>
       </div>
 
-      {/* Activity */}
+      {/* ═══════════════ ACTIVITY ═══════════════ */}
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
         <h4 className="text-[0.95rem] font-semibold mb-3"><i className="fas fa-chart-line"></i> Recent Activity</h4>
         {recentReads.length === 0 ? (
@@ -374,6 +774,333 @@ export default function DashboardView() {
           </div>
         )}
       </div>
+
+      {/* PAT Modal */}
+      {showTokenModal && (
+        <div className="modal active" onClick={() => setShowTokenModal(false)}>
+          <div className="modal-content max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
+              <h2 className="text-base font-semibold"><i className="fas fa-key mr-2"></i>Connect with PAT</h2>
+              <button className="text-dark-text2 cursor-pointer bg-transparent border-none" onClick={() => setShowTokenModal(false)}><i className="fas fa-times"></i></button>
+            </div>
+            <div className="p-5">
+              <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-4">
+                <p className="text-[0.78rem] text-qsis font-semibold"><i className="fas fa-star mr-1.5"></i>Why connect?</p>
+                <p className="text-[0.72rem] text-dark-text2 mt-1">Once connected, your name and profile will appear in our <strong>Contributors</strong> list. You can also upload files directly from this app.</p>
+              </div>
+              <div className="bg-dark-bg3 border border-dark-border rounded-xl p-3 mb-4">
+                <p className="text-[0.78rem] font-semibold mb-2"><i className="fas fa-list-ol text-qsis mr-2"></i>Steps:</p>
+                <ol className="text-[0.72rem] text-dark-text2 space-y-1.5 ml-4 list-decimal">
+                  <li>Click the button below to open GitHub</li>
+                  <li><strong>Expiration:</strong> click dropdown → select <span className="text-qsis font-bold">&quot;No expiration&quot;</span></li>
+                  <li>Click <strong>Generate token</strong></li>
+                  <li>Copy the token → paste below</li>
+                </ol>
+              </div>
+              <a href="https://github.com/settings/tokens/new?scopes=repo&description=QSIS-ARMS" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-lg border border-qsis/30 bg-qsis/5 text-qsis text-[0.82rem] font-semibold hover:bg-qsis/10 transition-all mb-4 no-underline">
+                <i className="fas fa-external-link-alt"></i> Open GitHub Token Page
+              </a>
+              <label className="text-[0.78rem] text-dark-text2 block mb-1.5">Paste your token here:</label>
+              <input
+                type="password"
+                className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors mb-4"
+                placeholder="ghp_xxxxxxxxxxxx"
+                value={patInput}
+                onChange={e => setPatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handlePastePAT()}
+              />
+              <button
+                className="w-full py-2.5 rounded-lg bg-qsis text-white text-[0.82rem] font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+                onClick={handlePastePAT}
+                disabled={!patInput.trim() || patLoading}
+              >
+                {patLoading ? <><i className="fas fa-spinner fa-spin mr-2"></i>Validating...</> : <><i className="fas fa-check mr-2"></i>Connect</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+/* ─── Teacher Management Section (for admin/teacher/manager) ─── */
+function TeacherInfoSection({ email, profile }: { email: string; profile: any }) {
+  const effectiveRole = config.getEffectiveRole(email, profile.role);
+  const isAdmin = effectiveRole === 'admin';
+  const myDept = profile.department || '';
+
+  const [myEntry, setMyEntry] = useState<any>(null);
+  const [myEntryChecked, setMyEntryChecked] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [form, setForm] = useState({ department: myDept, name: profile.name || '', title: profile.title || '', shortForm: profile.shortForm || '', email: email, phone: '' });
+  const [saving, setSaving] = useState(false);
+
+  // Search state
+  const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ department: '', name: '', title: '', shortForm: '', email: '', phone: '' });
+
+  // Check if teacher has entry
+  useEffect(() => {
+    fetch('/api/faculty')
+      .then(r => r.json())
+      .then(data => {
+        const entries = data.members || [];
+        const mine = entries.find((m: any) => m.email?.toLowerCase() === email.toLowerCase());
+        setMyEntry(mine || null);
+        setMyEntryChecked(true);
+        if (!mine) {
+          setForm({ department: myDept, name: profile.name || '', title: profile.title || '', shortForm: profile.shortForm || '', email: email, phone: '' });
+          setShowAddForm(true);
+        }
+      })
+      .catch(() => setMyEntryChecked(true));
+  }, [email]);
+
+  const handleAdd = async () => {
+    if (!form.department || !form.name) { showToast('Department and name required', 'error'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/faculty', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      const data = await res.json();
+      if (data.success) { showToast('Your info added to directory!', 'success'); setMyEntry(data.member); setShowAddForm(false); }
+      else showToast(data.error || 'Failed', 'error');
+    } catch { showToast('Failed', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleSearch = async () => {
+    if (!search.trim()) { setSearchResults(null); return; }
+    setSearching(true);
+    try {
+      const params = new URLSearchParams({ search: search.trim() });
+      const res = await fetch(`/api/faculty?${params}`);
+      const data = await res.json();
+      setSearchResults(data.members || []);
+    } catch { setSearchResults([]); }
+    finally { setSearching(false); }
+  };
+
+  const handleEditSave = async (id: string) => {
+    if (!editForm.department || !editForm.name) { showToast('Department and name required', 'error'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/faculty', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...editForm }) });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Updated', 'success');
+        setEditingId(null);
+        // Refresh myEntry if it was the one edited
+        if (myEntry?.id === id) setMyEntry(data.member);
+        // Refresh search results
+        if (searchResults) handleSearch();
+      } else showToast(data.error || 'Failed', 'error');
+    } catch { showToast('Failed', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Remove ${name} from faculty directory?`)) return;
+    try {
+      const res = await fetch(`/api/faculty?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`${name} removed`, 'success');
+        if (myEntry?.id === id) setMyEntry(null);
+        if (searchResults) handleSearch();
+      } else showToast(data.error || 'Failed', 'error');
+    } catch { showToast('Failed', 'error'); }
+  };
+
+  const getDeptLabel = (deptId: string) => {
+    const found = FACULTIES.flatMap(f => f.departments.map(d => ({ ...d, faculty: f.shortName }))).find(d => d.id === deptId);
+    return found ? `${found.shortName} — ${found.faculty}` : deptId;
+  };
+
+  const canManage = (m: any) => {
+    if (isAdmin) return true;
+    if (myDept && m.department === myDept) return true;
+    return false;
+  };
+
+  if (!myEntryChecked) {
+    return (
+      <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
+        <div className="text-center py-4"><i className="fas fa-spinner fa-spin text-xl text-qsis"></i></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
+      <h4 className="text-[0.95rem] font-semibold flex items-center gap-2 mb-4">
+        <i className="fas fa-chalkboard-teacher text-qsis"></i> Teacher Directory
+      </h4>
+
+      {/* ─── PROMPT: No entry → Add Your Info ─── */}
+      {!myEntry && showAddForm && (
+        <div className="bg-gradient-to-br from-qsis/5 to-accent/5 border border-qsis/20 rounded-xl p-4 mb-4">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-10 h-10 rounded-full bg-qsis/15 flex items-center justify-center flex-shrink-0">
+              <i className="fas fa-user-plus text-qsis text-sm"></i>
+            </div>
+            <div>
+              <h5 className="text-[0.85rem] font-semibold text-dark-text">Complete Your Teacher Profile</h5>
+              <p className="text-[0.75rem] text-dark-text2 mt-0.5">You are not in the faculty directory yet. Add your info so students and colleagues can find you.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Department *</label>
+              <select value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
+                <option value="">Select department...</option>
+                {FACULTIES.map(f => (
+                  <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
+                    {f.departments.map(d => <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Full Name *</label>
+              <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+            </div>
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Designation</label>
+              <select value={TEACHER_TITLES.includes(form.title) ? form.title : form.title ? '__custom' : ''} onChange={e => setForm(f => ({ ...f, title: e.target.value === '__custom' ? '' : e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
+                <option value="">Select designation...</option>
+                {TEACHER_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+                <option value="__custom">Other (type below)</option>
+              </select>
+              {!TEACHER_TITLES.includes(form.title) && form.title !== '' && (
+                <input type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Type designation" className="w-full mt-1 px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+              )}
+            </div>
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Short Form</label>
+              <input type="text" value={form.shortForm} onChange={e => setForm(f => ({ ...f, shortForm: e.target.value.toUpperCase() }))} placeholder="e.g. GH" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+            </div>
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Email</label>
+              <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+            </div>
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Phone</label>
+              <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+8801XXXXXXXXX" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleAdd} disabled={saving || !form.department || !form.name} className="px-4 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">
+              {saving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : <><i className="fas fa-plus mr-1"></i>Add My Info</>}
+            </button>
+            <button onClick={() => setShowAddForm(false)} className="px-4 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] cursor-pointer hover:border-qsis">Skip</button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MY CARD: Entry found → Show card ─── */}
+      {myEntry && (
+        <div className="bg-gradient-to-br from-qsis/5 to-accent/5 border border-qsis/20 rounded-xl p-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-qsis/20 to-accent/20 border border-dark-border flex items-center justify-center flex-shrink-0">
+              <span className="text-[0.78rem] font-bold text-qsis">{myEntry.shortForm || myEntry.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[0.9rem] font-bold text-dark-text">{myEntry.name}</span>
+                <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[0.6rem] font-semibold">In Directory</span>
+              </div>
+              {myEntry.title && <p className="text-[0.75rem] text-qsis font-medium">{myEntry.title}</p>}
+              <p className="text-[0.72rem] text-dark-text3">{getDeptLabel(myEntry.department)}{myEntry.email ? ` · ${myEntry.email}` : ''}{myEntry.phone ? ` · ${myEntry.phone}` : ''}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SEARCH: Find any teacher ─── */}
+      <div className="mb-4">
+        <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-search mr-1"></i>Search Teachers</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={e => { setSearch(e.target.value); if (!e.target.value) setSearchResults(null); }}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="Search by name, email, or short form..."
+            className="flex-1 px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
+          />
+          <button onClick={handleSearch} disabled={searching || !search.trim()} className="px-4 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">
+            {searching ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-search"></i>}
+          </button>
+        </div>
+      </div>
+
+      {/* ─── SEARCH RESULTS ─── */}
+      {searchResults !== null && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[0.78rem] text-dark-text2">{searchResults.length} result{searchResults.length !== 1 ? 's' : ''}</span>
+            <button onClick={() => { setSearchResults(null); setSearch(''); }} className="text-[0.72rem] text-dark-text3 hover:text-qsis bg-transparent border-none cursor-pointer"><i className="fas fa-times mr-1"></i>Clear</button>
+          </div>
+          {searchResults.length === 0 ? (
+            <p className="text-[0.78rem] text-dark-text3 text-center py-4">No teachers found</p>
+          ) : (
+            <div className="space-y-2">
+              {searchResults.map(m => (
+                <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg bg-dark-bg3 border border-dark-border hover:border-qsis/30 transition-all group">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-qsis/20 to-accent/20 border border-dark-border flex items-center justify-center flex-shrink-0">
+                    <span className="text-[0.68rem] font-bold text-qsis">{m.shortForm || m.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}</span>
+                  </div>
+                  {editingId === m.id ? (
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <input type="text" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className="px-2 py-1 rounded border border-qsis/50 bg-dark-bg text-dark-text text-[0.75rem] outline-none" placeholder="Name" />
+                      <input type="text" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} className="px-2 py-1 rounded border border-qsis/50 bg-dark-bg text-dark-text text-[0.75rem] outline-none" placeholder="Designation" />
+                      <input type="text" value={editForm.shortForm} onChange={e => setEditForm(f => ({ ...f, shortForm: e.target.value.toUpperCase() }))} className="px-2 py-1 rounded border border-qsis/50 bg-dark-bg text-dark-text text-[0.75rem] outline-none" placeholder="Short Form" />
+                      <input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} className="px-2 py-1 rounded border border-qsis/50 bg-dark-bg text-dark-text text-[0.75rem] outline-none" placeholder="Email" />
+                      <input type="tel" value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} className="px-2 py-1 rounded border border-qsis/50 bg-dark-bg text-dark-text text-[0.75rem] outline-none" placeholder="Phone" />
+                      <div className="flex gap-1">
+                        <button onClick={() => handleEditSave(m.id)} disabled={saving} className="px-2 py-1 rounded bg-qsis text-white text-[0.68rem] cursor-pointer border-none disabled:opacity-50"><i className="fas fa-check"></i></button>
+                        <button onClick={() => setEditingId(null)} className="px-2 py-1 rounded border border-dark-border text-dark-text2 text-[0.68rem] cursor-pointer bg-dark-bg">X</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[0.82rem] font-medium text-dark-text truncate">{m.name}</span>
+                          {m.title && <span className="text-[0.65rem] text-qsis italic">{m.title}</span>}
+                          {m.email?.toLowerCase() === email.toLowerCase() && <span className="text-[0.55rem] text-green-400 font-semibold">(You)</span>}
+                        </div>
+                        <p className="text-[0.7rem] text-dark-text3">{getDeptLabel(m.department)}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</p>
+                      </div>
+                      {canManage(m) && (
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                          <button onClick={() => { setEditingId(m.id); setEditForm({ department: m.department, name: m.name, title: m.title || '', shortForm: m.shortForm || '', email: m.email || '', phone: m.phone || '' }); }} className="px-2 py-1 rounded bg-dark-bg border border-dark-border text-dark-text2 hover:text-qsis text-[0.65rem] cursor-pointer transition-all" title="Edit">
+                            <i className="fas fa-pen"></i>
+                          </button>
+                          <button onClick={() => handleDelete(m.id, m.name)} className="px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 text-[0.65rem] cursor-pointer transition-all border-none" title="Delete">
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Hint ─── */}
+      {!myEntry && !showAddForm && (
+        <button onClick={() => setShowAddForm(true)} className="w-full py-3 rounded-lg border border-dashed border-dark-border text-dark-text2 hover:text-qsis hover:border-qsis/50 text-[0.82rem] cursor-pointer bg-transparent transition-all">
+          <i className="fas fa-plus-circle mr-2"></i>Add Your Teacher Info
+        </button>
+      )}
+    </div>
   );
 }

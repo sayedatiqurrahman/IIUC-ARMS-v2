@@ -1,0 +1,21 @@
+{
+  "name": "QSIS-ARMS",
+  "short_name": "QSIS-ARMS",
+  "description": "Academic Resource Management System for QSIS, IIUC",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/arms-logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/arms-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

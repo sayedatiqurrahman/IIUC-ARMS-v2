@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import { config } from './config';
+import { config, UserRole } from './config';
+import { extractYear } from './utils';
 
 /* ─── types ─── */
-export type View = 'semesters' | 'categories' | 'courses' | 'files' | 'history' | 'contributors' | 'routine' | 'dashboard';
+export type View = 'semesters' | 'categories' | 'courses' | 'files' | 'history' | 'contributors' | 'routine' | 'dashboard' | 'search';
 
 export interface Breadcrumb {
   label: string;
@@ -49,11 +50,11 @@ function detectCategory(name: string) {
   const l = name.toLowerCase();
   // Related Kitabs categories - return folder name as category key
   if (config.relatedKitabsCategories[l]) return l;
-  // Semester categories
-  if (l.includes('sheet')) return 'sheet';
-  if (l.includes('previous question') || l.includes('question')) return 'question';
-  if (l === 'notes' || l === 'note') return 'note';
-  if (l.includes('syllabus')) return 'syllabus';
+  // Semester categories - map actual GitHub folder names to category keys
+  if (l === 'sheet') return 'sheet';
+  if (l === 'notes' || l === 'note') return 'notes';
+  if (l === 'previous questions' || l.includes('previous question')) return 'questions';
+  if (l === 'syllabus') return 'syllabus';
   return 'other';
 }
 
@@ -79,24 +80,42 @@ function getPdfPageKey(filePath: string) {
 export interface Profile {
   universityId: string;
   name: string;
+  title: string;
+  shortForm: string;
+  department: string;
+  isCR: boolean;
+  isACR: boolean;
   email: string;
   whatsapp: string;
   semester: string;
   image: string;
+  role: UserRole;
+  isBanned: boolean;
   githubLogin: string;
   githubToken: string;
+  githubInstallationId: string;
+  githubAvatar: string;
   facebook: string;
   twitter: string;
   linkedin: string;
   website: string;
+  company: string;
+  companyUrl: string;
+  publicEmail: string;
   hideWhatsapp: boolean;
   hideUniversityId: boolean;
+  hideSemester: boolean;
+  hideEmail: boolean;
 }
 
 const defaultProfile: Profile = {
-  universityId: '', name: '', email: '', whatsapp: '', semester: '', image: '',
-  githubLogin: '', githubToken: '', facebook: '', twitter: '', linkedin: '', website: '',
-  hideWhatsapp: false, hideUniversityId: false,
+  universityId: '', name: '', title: '', shortForm: '', department: '', isCR: false, isACR: false, email: '', whatsapp: '', semester: '', image: '',
+  role: 'user',
+  isBanned: false,
+  githubLogin: '', githubToken: '', githubInstallationId: '', githubAvatar: '',
+  facebook: '', twitter: '', linkedin: '', website: '',
+  company: '', companyUrl: '', publicEmail: '',
+  hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false,
 };
 
 /* ─── store ─── */
@@ -173,6 +192,7 @@ interface AppState {
   getSemesters: () => Semester[];
   getCategories: (semId: string) => Category[];
   getCourses: (semId: string, catKey: string) => [string, any[]][];
+  getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string) => { files: any[]; folders: any[] };
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -211,8 +231,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await fetch('/api/profile');
       if (res.ok) {
         const data = await res.json();
-        const updates: Record<string, any> = { profile: { ...defaultProfile, ...data } };
+        const email = data.email || '';
+        const emailRole = email ? config.detectRole(email) : 'user';
+        // DB role overrides email-based role (admin set someone as manager via admin panel)
+        const role = data.role && data.role !== 'user' ? data.role : emailRole;
+        const updates: Record<string, any> = { profile: { ...defaultProfile, ...data, role } };
         if (data.githubToken) updates.githubToken = data.githubToken;
+        if (data.githubInstallationId) updates.githubInstallationId = data.githubInstallationId;
+        if (data.githubLogin) updates.githubLogin = data.githubLogin;
+        if (data.githubAvatar) updates.githubAvatar = data.githubAvatar;
         set(updates);
       } else {
         const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -255,6 +282,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   setGithubToken: (token: string) => set({ githubToken: token }),
 
   loadTree: async (token?: string) => {
+    // Try cached tree first (valid for 10 minutes)
+    const CACHE_KEY = 'qs_tree_cache';
+    const CACHE_TTL = 10 * 60 * 1000;
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_TTL && data?.tree?.length > 0) {
+          const filtered = data.tree.filter((item: any) => {
+            const parts = item.path.split('/');
+            const fileName = parts[parts.length - 1];
+            const ext = fileName.split('.').pop()?.toLowerCase() || '';
+            if (item.type === 'blob') {
+              if (['.gitkeep', 'README.md', 'LICENSE'].includes(fileName)) return false;
+              if (['js', 'json', 'yml', 'yaml', 'css', 'html', 'md', 'lock'].includes(ext)) return false;
+              if (!config.academicExtensions.includes(ext)) return false;
+            }
+            return true;
+          });
+          set({ tree: filtered, loading: false });
+          return; // use cache, skip API call
+        }
+      }
+    } catch {}
+
     set({ loading: true, error: '' });
     try {
       const headers: Record<string, string> = {};
@@ -262,6 +314,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await fetch('/api/github', { headers });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      // Cache the response
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() })); } catch {}
       const filtered = (data.tree || []).filter((item: any) => {
         const parts = item.path.split('/');
         const fileName = parts[parts.length - 1];
@@ -463,9 +517,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         set({ contributors: data });
+      } else {
+        set({ contributors: [] });
       }
     } catch (err) {
       console.warn('Failed to load contributors:', err);
+      set({ contributors: [] });
     }
     set({ contributorsLoading: false });
   },
@@ -532,8 +589,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const s = sems.get(sem)!;
       s.files++;
 
-      // Course name is at parts[2] only when structure is sem/cat_folder/course/file (4+ parts)
-      if (parts.length >= 4 && parts[2]) {
+      if (parts.length === 3) {
+        s.courses.add(parts[1]);
+      } else if (parts.length === 2) {
+        s.courses.add('General');
+      } else if (parts.length >= 4 && parts[2]) {
         s.courses.add(parts[2]);
       }
     });
@@ -618,13 +678,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       const rel = item.path.substring(prefix.length);
       const parts = rel.split('/');
 
-      // Must be: cat_folder/course_name/file  (3+ parts after sem prefix)
-      if (parts.length < 3) return;
+      if (parts.length < 2) return;
 
       const catFolder = parts[0];
       if (!catFolders.has(catFolder)) return;
 
-      const courseName = parts[1];
+      let courseName: string;
+      if (parts.length === 2) {
+        courseName = 'General';
+      } else {
+        courseName = parts[1];
+      }
       if (!courseName) return;
 
       if (!courses.has(courseName)) courses.set(courseName, []);
@@ -632,6 +696,76 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
 
     return Array.from(courses.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  },
+
+  getSearchResults: (query, typeFilter, yearFilter, semFilter) => {
+    const uploadTree = get().getUploadTree();
+    const q = query.toLowerCase().trim();
+    if (!q && !typeFilter && !yearFilter && !semFilter) return { files: [], folders: [] };
+
+    const matchedFiles: any[] = [];
+    const matchedFolders = new Map<string, { id: string; label: string; type: string; path: string; count: number }>();
+
+    uploadTree.forEach((item: any) => {
+      if (item.type !== 'blob') return;
+      const parts = item.path.split('/');
+      const sem = parts[0];
+      const catFolder = parts[1] || '';
+      const courseName = parts[2] || '';
+      const fileName = parts[parts.length - 1] || '';
+      const ext = fileName.split('.').pop()?.toLowerCase() || '';
+
+      // Semester filter
+      if (semFilter && sem !== semFilter) return;
+
+      // File type filter
+      if (typeFilter && getMimeFromExt(ext) !== typeFilter) return;
+
+      // Year filter
+      if (yearFilter && extractYear(fileName) !== yearFilter) return;
+
+      // Search query match
+      if (q) {
+        const semLabel = config.semesters.find(s => s.id === sem)?.label || sem.replace(/-/g, ' ');
+        const catCfg = config.categories[catFolder as keyof typeof config.categories];
+        const catLabel = catCfg?.label || catFolder;
+        const matchFileName = fileName.toLowerCase().includes(q);
+        const matchCourse = courseName.toLowerCase().includes(q);
+        const matchCat = catLabel.toLowerCase().includes(q);
+        const matchSem = semLabel.toLowerCase().includes(q);
+        const matchCatFolder = catFolder.toLowerCase().includes(q);
+        if (!matchFileName && !matchCourse && !matchCat && !matchSem && !matchCatFolder) return;
+      }
+
+      matchedFiles.push({ ...item, sem, catFolder, courseName, fileName });
+
+      // Track matched folders
+      const semKey = `sem:${sem}`;
+      if (!matchedFolders.has(semKey)) {
+        const semCfg = config.semesters.find(s => s.id === sem);
+        matchedFolders.set(semKey, { id: sem, label: semCfg?.label || sem.replace(/-/g, ' '), type: 'semester', path: sem, count: 0 });
+      }
+      matchedFolders.get(semKey)!.count++;
+
+      if (catFolder) {
+        const catKey = `cat:${sem}/${catFolder}`;
+        if (!matchedFolders.has(catKey)) {
+          const catCfg = config.categories[catFolder as keyof typeof config.categories];
+          matchedFolders.set(catKey, { id: catFolder, label: catCfg?.label || catFolder, type: 'category', path: `${sem}/${catFolder}`, count: 0 });
+        }
+        matchedFolders.get(catKey)!.count++;
+      }
+
+      if (courseName) {
+        const courseKey = `course:${sem}/${catFolder}/${courseName}`;
+        if (!matchedFolders.has(courseKey)) {
+          matchedFolders.set(courseKey, { id: courseName, label: courseName, type: 'course', path: `${sem}/${catFolder}/${courseName}`, count: 0 });
+        }
+        matchedFolders.get(courseKey)!.count++;
+      }
+    });
+
+    return { files: matchedFiles, folders: Array.from(matchedFolders.values()) };
   },
 }));
 

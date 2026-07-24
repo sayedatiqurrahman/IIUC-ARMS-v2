@@ -11,21 +11,69 @@ model Profile {
   userId          String   @unique
   email           String?
   name            String?
+  title           String?
+  shortForm       String?
+  department      String?
+  isCR            Boolean  @default(false)
+  isACR           Boolean  @default(false)
   universityId    String?
   whatsapp        String?
   semester        String?
   image           String?
+  role            String?  @default("user")
+  isBanned        Boolean  @default(false)
   githubLogin     String?
   githubToken     String?
+  githubInstallationId String?
+  githubAvatar    String?
+  totpSecret      String?
+  totpEnabled     Boolean  @default(false)
   facebook        String?
   twitter         String?
   linkedin        String?
   website         String?
+  company         String?
+  companyUrl      String?
+  publicEmail     String?
   hideWhatsapp    Boolean  @default(false)
   hideUniversityId Boolean @default(false)
+  hideSemester    Boolean  @default(false)
+  hideEmail       Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([githubLogin])
   @@index([email])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  action    String
+  userId    String
+  userName  String?
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model FacultyMember {
+  id          String   @id @default(cuid())
+  department  String
+  name        String
+  title       String?
+  email       String?
+  phone       String?
+  shortForm   String?
+  memberType  String   @default("faculty")
+  isCR        Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([department])
+  @@index([email])
+  @@index([name])
 }
