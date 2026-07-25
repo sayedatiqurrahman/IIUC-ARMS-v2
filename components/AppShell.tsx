@@ -34,10 +34,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const loadProfile = useAppStore(s => s.loadProfile);
   const loadRecentReads = useAppStore(s => s.loadRecentReads);
   const navigateToDashboard = useAppStore(s => s.navigateToDashboard);
+  const loadOnboarding = useAppStore(s => s.loadOnboarding);
+  const setStoreOnboarding = useAppStore(s => s.setOnboardingData);
 
   useEffect(() => {
     loadTree(session?.accessToken || '');
     loadRecentReads();
+    loadOnboarding();
     // Check onboarding
     const data = getOnboardingData();
     if (!data) {
@@ -289,6 +292,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {showOnboarding && (
         <OnboardingModal
           onComplete={(data) => {
+            setStoreOnboarding(data);
             setShowOnboarding(false);
             setOnboardingDone(true);
           }}

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { config, UserRole } from './config';
 import { extractYear } from './utils';
+import { getOnboardingData, setOnboardingData as saveOnboarding, clearOnboardingData as clearOnboardingStorage, type OnboardingData } from '@/components/OnboardingModal';
 
 /* ─── types ─── */
 export type View = 'semesters' | 'categories' | 'courses' | 'files' | 'history' | 'contributors' | 'routine' | 'dashboard' | 'search';
@@ -175,6 +176,11 @@ interface AppState {
   loadContributors: () => Promise<void>;
   loadRoutine: () => Promise<void>;
 
+  onboardingData: OnboardingData | null;
+  setOnboardingData: (data: OnboardingData) => void;
+  loadOnboarding: () => void;
+  clearOnboarding: () => void;
+
   getUploadTree: () => any[];
   getSemesters: () => Semester[];
   getCategories: (semId: string) => Category[];
@@ -202,6 +208,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   uploadOpen: false,
   recentReads: [],
+
+  onboardingData: null,
+  setOnboardingData: (data) => {
+    saveOnboarding(data);
+    set({ onboardingData: data });
+  },
+  loadOnboarding: () => {
+    set({ onboardingData: getOnboardingData() });
+  },
+  clearOnboarding: () => {
+    clearOnboardingStorage();
+    set({ onboardingData: null });
+  },
 
   imgZoom: 100,
   imgRotation: 0,

@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
 import { getMimeFromExt, getFileIconByType, esc, timeAgo, extractYear } from '@/lib/utils';
-import { getOnboardingData, clearOnboardingData } from '@/components/OnboardingModal';
 
 export default function BrowsePage() {
   const { data: session } = useSession();
@@ -24,6 +23,7 @@ export default function BrowsePage() {
 
   const loading = useAppStore(s => s.loading);
   const error = useAppStore(s => s.error);
+  const onboardData = useAppStore(s => s.onboardingData);
   const view = useAppStore(s => s.view);
   const currentSem = useAppStore(s => s.currentSem);
   const currentCat = useAppStore(s => s.currentCat);
@@ -99,7 +99,6 @@ export default function BrowsePage() {
   });
 
   // Onboarding-based personalization
-  const onboardData = getOnboardingData();
   const userSemesterId = onboardData
     ? config.semesters.find(s => s.label === onboardData.semester)?.id
     : null;

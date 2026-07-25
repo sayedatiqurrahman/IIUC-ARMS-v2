@@ -7,7 +7,6 @@ import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
-import { getOnboardingData, clearOnboardingData } from '@/components/OnboardingModal';
 
 interface RoutinePeriod {
   name: string;
@@ -341,6 +340,8 @@ export default function RoutineView() {
   const routineLoading = useAppStore(s => s.routineLoading);
   const loadRoutine = useAppStore(s => s.loadRoutine);
   const profile = useAppStore(s => s.profile);
+  const onboardData = useAppStore(s => s.onboardingData);
+  const clearOnboarding = useAppStore(s => s.clearOnboarding);
   const printRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
   const [hasAllSemDraft, setHasAllSemDraft] = useState(false);
@@ -361,7 +362,6 @@ export default function RoutineView() {
   const routines = sharedRoutines;
 
   // Onboarding-based personalization for routines
-  const onboardData = getOnboardingData();
   const userSemesterLabel = onboardData?.semester || null;
   const userGender = onboardData?.gender || null;
   const isMySemesterOnly = onboardData?.fileView === 'my-semester-only' && userSemesterLabel;
@@ -655,7 +655,7 @@ export default function RoutineView() {
                 Showing only <strong className="text-dark-text">{onboardData.semester}</strong> routines for <strong className="text-dark-text">{userGender === 'male' ? 'Male' : 'Female'}</strong>.
               </span>
               <button
-                onClick={() => { clearOnboardingData(); window.location.reload(); }}
+                onClick={() => { clearOnboarding(); window.location.reload(); }}
                 className="ml-auto px-3 py-1.5 rounded-lg bg-qsis/10 border border-qsis/30 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/20 transition-colors flex-shrink-0"
               >
                 <i className="fas fa-edit mr-1"></i> Change Preference
