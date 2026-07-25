@@ -92,6 +92,19 @@ export const TEACHER_TITLES = [
   'Instructor',
 ];
 
+export const STAFF_DESIGNATIONS = [
+  'Office Assistant',
+  'Lab Assistant',
+  'Librarian',
+  'Accountant',
+  'Data Entry Operator',
+  'Technician',
+  'Administrative Officer',
+  'Secretary',
+  'Student Counselor',
+  'Staff',
+];
+
 export function findDepartment(deptId: string): { faculty: Faculty; department: Department } | null {
   for (const faculty of FACULTIES) {
     const dept = faculty.departments.find(d => d.id === deptId);

@@ -3,7 +3,7 @@
 import { signIn } from 'next-auth/react';
 import { useState, useEffect } from 'react';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, sendMagicLink } from '@/lib/firebase';
-import { useRecaptcha } from '@/lib/useRecaptcha';
+import { useTurnstile } from '@/lib/useTurnstile';
 import { config } from '@/lib/config';
 
 interface LoginModalProps {
@@ -21,23 +21,24 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
-  const [recaptchaReady, setRecaptchaReady] = useState(false);
+  const [turnstileReady, setTurnstileReady] = useState(false);
   const [loginMode, setLoginMode] = useState<'password' | 'magiclink'>('password');
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [totpStep, setTotpStep] = useState(false);
   const [totpCode, setTotpCode] = useState('');
   const [pendingCredentials, setPendingCredentials] = useState<{ idToken: string; email: string } | null>(null);
-  const recaptchaContainerId = 'login-recaptcha-container';
-  const { renderCheckbox, getToken, reset } = useRecaptcha();
+  const turnstileContainerId = 'login-turnstile-container';
+  const { renderWidget, getToken, reset } = useTurnstile();
+  const isDev = process.env.NODE_ENV === 'development';
 
   useEffect(() => {
     if (isOpen) {
       const timer = setTimeout(() => {
-        renderCheckbox(recaptchaContainerId, 'LOGIN').then(() => setRecaptchaReady(true));
+        renderWidget(turnstileContainerId, 'LOGIN').then(() => setTurnstileReady(true));
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, renderCheckbox]);
+  }, [isOpen, renderWidget]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -48,7 +49,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       setShowForgotPassword(false);
       setForgotPasswordEmail('');
       setForgotPasswordSent(false);
-      setRecaptchaReady(false);
+      setTurnstileReady(false);
       setLoginMode('password');
       setMagicLinkSent(false);
       setTotpStep(false);
@@ -63,19 +64,36 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     return config.emailRegex.test(email) || config.ownerEmails.includes(email);
   }
 
+  async function verifyTurnstileToken(): Promise<boolean> {
+    if (isDev) return true;
+    const token = getToken(turnstileContainerId);
+    if (!token) { setError('Please complete the captcha verification'); return false; }
+    try {
+      const res = await fetch('/api/auth/turnstile/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      if (!data.success) { setError('Captcha verification failed. Please try again.'); reset(); return false; }
+      return true;
+    } catch { setError('Captcha verification failed. Please try again.'); reset(); return false; }
+  }
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
     if (!isValidEmail(email)) {
-      setError('Only IIUC departmental emails are allowed (e.g. q233099@ugrad.iiuc.ac.bd)');
+      setError('Only IIUC departmental emails are allowed (e.g. q{your_id}@ugrad.iiuc.ac.bd)');
       return;
     }
 
     setLoading(true);
 
     try {
+      // Turnstile verified server-side via auth-options for email+password login
       // Pre-check if user is banned
       if (!isSignUp) {
         const banCheck = await fetch('/api/auth/check-ban', {
@@ -93,6 +111,9 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
       let user: any;
       if (isSignUp) {
+        const turnstileValid = await verifyTurnstileToken();
+        if (!turnstileValid) { setLoading(false); return; }
+
         const result = await signUpWithEmail(email, password);
         user = result.user;
         setSuccess('Account created! A verification email has been sent to your inbox. Please verify your email before signing in. Check your spam/junk folder if you don\'t see it.');
@@ -124,7 +145,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       }
 
       const idToken = await user.getIdToken();
-      const recaptchaToken = getToken(recaptchaContainerId);
+      const turnstileToken = getToken(turnstileContainerId);
 
       const result = await signIn('credentials', {
         idToken,
@@ -132,7 +153,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         name: email.split('@')[0],
         image: '',
         login: email.split('@')[0],
-        recaptchaToken,
+        turnstileToken,
         redirect: false,
       });
 
@@ -169,13 +190,16 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setSuccess('');
     setLoading(true);
     try {
+      const turnstileValid = await verifyTurnstileToken();
+      if (!turnstileValid) { setLoading(false); return; }
+
       const { idToken } = await signInWithGoogle();
       const result = await signIn('credentials', {
         idToken,
         redirect: false,
       });
       if (result?.error) {
-        setError('Only IIUC departmental emails are allowed. Please use your university email (e.g. q233099@ugrad.iiuc.ac.bd).');
+        setError('Only IIUC departmental emails are allowed. Please use your university email (e.g. q{your_id}@ugrad.iiuc.ac.bd).');
         setLoading(false);
       } else if (result?.ok) {
         onClose();
@@ -228,6 +252,9 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
     setLoading(true);
     try {
+      const turnstileValid = await verifyTurnstileToken();
+      if (!turnstileValid) { setLoading(false); return; }
+
       await sendMagicLink(email);
       setMagicLinkSent(true);
       setSuccess('Magic link sent! Check your email inbox.');
@@ -248,6 +275,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setLoading(true);
 
     try {
+      // Turnstile verified server-side via auth-options for TOTP login
       const res = await fetch('/api/auth/totp/verify', {
         method: 'POST',
         headers: { Authorization: `Bearer ${pendingCredentials?.idToken}` },
@@ -261,14 +289,14 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         return;
       }
 
-      const recaptchaToken = getToken(recaptchaContainerId);
+      const turnstileToken = getToken(turnstileContainerId);
       const result = await signIn('credentials', {
         idToken: pendingCredentials!.idToken,
         email: pendingCredentials!.email,
         name: pendingCredentials!.email.split('@')[0],
         image: '',
         login: pendingCredentials!.email.split('@')[0],
-        recaptchaToken,
+        turnstileToken,
         redirect: false,
       });
 
@@ -316,7 +344,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   <input
                     type="email"
                     className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors"
-                    placeholder="q233099@ugrad.iiuc.ac.bd"
+                    placeholder="q&#123;your_id&#125;@ugrad.iiuc.ac.bd"
                     value={forgotPasswordEmail}
                     onChange={(e) => setForgotPasswordEmail(e.target.value)}
                     required
@@ -377,7 +405,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
               <i className="fas fa-exclamation-triangle text-yellow-500 mt-0.5 flex-shrink-0"></i>
               <div>
                 <span className="text-dark-text font-semibold">Only IIUC departmental emails allowed</span>
-                <p className="text-dark-text2 mt-1">When clicking &quot;Continue with Google&quot;, make sure to select your university email (e.g. <strong className="text-yellow-500">q233099@ugrad.iiuc.ac.bd</strong>). Personal Gmail accounts will be rejected.</p>
+                <p className="text-dark-text2 mt-1">When clicking &quot;Continue with Google&quot;, make sure to select your university email (e.g. <strong className="text-yellow-500">q&#123;your_id&#125;@ugrad.iiuc.ac.bd</strong>). Personal Gmail accounts will be rejected.</p>
               </div>
             </div>
           </div>
@@ -450,7 +478,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
             <button
               className="flex items-center justify-center gap-3 w-full py-2.5 px-4 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text font-semibold text-[0.85rem] hover:bg-dark-bg hover:border-qsis transition-all cursor-pointer"
               onClick={handleGoogleLogin}
-              disabled={loading}
+              disabled={loading || !turnstileReady}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -578,7 +606,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 <input
                   type="email"
                   className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors"
-                  placeholder="q233099@ugrad.iiuc.ac.bd"
+                  placeholder="q&#123;your_id&#125;@ugrad.iiuc.ac.bd"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -598,11 +626,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                       required
                     />
                   </div>
-
-                  {/* reCAPTCHA Checkbox */}
-                  <div className="mb-4 flex justify-center">
-                    <div id={recaptchaContainerId}></div>
-                  </div>
                 </>
               )}
 
@@ -613,9 +636,14 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 </p>
               )}
 
+              {/* Turnstile Widget — always visible for all modes */}
+              <div className="mb-4 flex justify-center">
+                <div id={turnstileContainerId}></div>
+              </div>
+
               <button
                 type="submit"
-                disabled={loading || (loginMode === 'password' && !recaptchaReady)}
+                disabled={loading || !turnstileReady}
                 className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-[0.85rem] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (

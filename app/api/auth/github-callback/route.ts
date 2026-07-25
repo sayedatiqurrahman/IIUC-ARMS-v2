@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { config } from '@/lib/config';
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
@@ -51,22 +52,33 @@ export async function GET(req: NextRequest) {
             },
           });
           connected = true;
-          console.log('[GitHub Callback] Saved githubLogin:', githubUser.login, 'for', email);
+
+          // Auto-star both repos
+          for (const { owner, repo } of config.githubStarRepos) {
+            try {
+              await fetch(`https://api.github.com/user/starred/${owner}/${repo}`, {
+                method: 'PUT',
+                headers: {
+                  Authorization: `token ${tokenData.access_token}`,
+                  Accept: 'application/vnd.github.v3+json',
+                  'Content-Length': '0',
+                },
+              });
+            } catch {}
+          }
         } catch (err) {
-          console.error('[GitHub Callback] DB save failed:', err);
+          // DB save failed
         }
       }
-    } else {
-      console.error('[GitHub Callback] No access_token:', tokenData);
     }
-  } catch (err) {
-    console.error('[GitHub Callback] Error:', err);
+  } catch {
+    // GitHub OAuth error
   }
 
   return new Response(
     `<script>
       if (window.opener) {
-        window.opener.postMessage({ type: 'github-connected', connected: ${connected}, token: ${JSON.stringify(accessToken)} }, '*');
+        window.opener.postMessage({ type: 'github-connected', connected: ${connected}, token: ${JSON.stringify(accessToken)} }, ${JSON.stringify(process.env.NEXTAUTH_URL || 'http://localhost:3000')});
         window.close();
       } else {
         window.location.href = '/dashboard';

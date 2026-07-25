@@ -7,26 +7,23 @@ export async function GET(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     const email = await getUserEmail(req);
     if (!email) {
-      console.error('[Profile GET] No user email — unauthorized');
       return NextResponse.json({ error: 'Unauthorized — not signed in' }, { status: 401 });
     }
 
     const userId = email;
     const profile = await prisma.profile.findUnique({ where: { userId } });
-    console.log('[Profile GET] email:', email, 'found:', !!profile);
 
     if (profile?.githubToken && isEncrypted(profile.githubToken)) {
       try {
         profile.githubToken = decrypt(profile.githubToken);
       } catch {
-        console.error('[Profile GET] Failed to decrypt githubToken');
+        // Failed to decrypt token — leave as-is
       }
     }
 
     return NextResponse.json(profile || { userId, email });
   } catch (err: any) {
-    console.error('[Profile GET] Error:', err.message, err.stack);
-    return NextResponse.json({ error: 'Database unavailable', details: err.message }, { status: 503 });
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
   }
 }
 
@@ -35,7 +32,6 @@ export async function POST(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     const email = await getUserEmail(req);
     if (!email) {
-      console.error('[Profile POST] No user email — unauthorized');
       return NextResponse.json({ error: 'Unauthorized — not signed in' }, { status: 401 });
     }
 
@@ -85,11 +81,9 @@ export async function POST(req: NextRequest) {
       update: updateData,
       create: createData as any,
     });
-    console.log('[Profile POST] Saved for:', userId, 'fields:', Object.keys(updateData));
 
     return NextResponse.json(profile);
   } catch (err: any) {
-    console.error('[Profile POST] Error:', err.message, err.stack);
-    return NextResponse.json({ error: 'Database unavailable', details: err.message }, { status: 503 });
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
   }
 }

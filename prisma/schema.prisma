@@ -77,3 +77,45 @@ model FacultyMember {
   @@index([email])
   @@index([name])
 }
+
+model SemesterCourse {
+  id          String   @id @default(cuid())
+  semester    String
+  code        String
+  title       String
+  teacher     String?
+  room        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([semester])
+  @@unique([semester, code])
+}
+
+model PublishedRoutine {
+  id            String   @id @default(cuid())
+  routineId     String
+  semester      String
+  session       String?
+  branch        String?
+  gender        String?
+  academicYear  String?
+  department    String?
+  university    String?
+  room          String?
+  periods       Json
+  days          Json
+  courses       Json
+  slots         Json
+  malePeriods   Json?
+  femalePeriods Json?
+  maleSlots     Json?
+  femaleSlots   Json?
+  publishedBy   String?
+  publishedAt   DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([routineId])
+  @@index([semester])
+  @@index([expiresAt])
+}

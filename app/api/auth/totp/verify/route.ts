@@ -38,8 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[TOTP Verify] Error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'TOTP verification failed' }, { status: 500 });
   }
 }

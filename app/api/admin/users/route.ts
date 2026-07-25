@@ -30,17 +30,22 @@ export async function GET(req: NextRequest) {
       where.department = callerDept;
     }
 
-    const profiles = await prisma.profile.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
+    let profiles: any[] = [];
+    try {
+      profiles = await prisma.profile.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch {
+      profiles = [];
+    }
 
     let firebaseUsers: any[] = [];
     try {
       const listResult = await adminAuth.listUsers(1000);
       firebaseUsers = listResult.users || [];
-    } catch (err) {
-      console.error('[Admin Users] Firebase listUsers error:', err);
+    } catch {
+      // Continue with profiles only
     }
 
     const profileMap = new Map(profiles.map(p => [p.email?.toLowerCase(), p]));
@@ -111,9 +116,8 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ users: result });
-  } catch (err: any) {
-    console.error('[Admin Users] Error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
   }
 }
 
@@ -123,7 +127,8 @@ export async function POST(req: NextRequest) {
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const effectiveRole = config.getEffectiveRole(email);
-    if (effectiveRole !== 'admin' && effectiveRole !== 'manager') {
+    const isOwner = config.ownerEmails.includes(email.toLowerCase());
+    if (effectiveRole !== 'admin' && effectiveRole !== 'teacher' && effectiveRole !== 'manager') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -158,64 +163,95 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ─── BAN ───
     if (action === 'ban') {
-      if (targetEffectiveRole === 'admin') {
-        return NextResponse.json({ error: 'Cannot ban an admin' }, { status: 403 });
+      // Admin can ban anyone except other admins (unless owner)
+      if (effectiveRole === 'admin') {
+        if (targetEffectiveRole === 'admin' && !isOwner) {
+          return NextResponse.json({ error: 'Cannot ban an admin' }, { status: 403 });
+        }
+        if (targetEffectiveRole === 'admin' && isOwner) {
+          return NextResponse.json({ error: 'Cannot ban the owner' }, { status: 403 });
+        }
+        await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: true } });
+        return NextResponse.json({ success: true, message: 'User banned' });
       }
-      await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: true } });
-      return NextResponse.json({ success: true, message: 'User banned' });
+      // Teacher can ban: students, users, managers (not admins, not other teachers)
+      if (effectiveRole === 'teacher') {
+        if (targetEffectiveRole === 'admin') {
+          return NextResponse.json({ error: 'Teachers cannot ban admins' }, { status: 403 });
+        }
+        if (targetEffectiveRole === 'teacher') {
+          return NextResponse.json({ error: 'Teachers cannot ban other teachers' }, { status: 403 });
+        }
+        await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: true } });
+        return NextResponse.json({ success: true, message: 'User banned' });
+      }
+      // Manager can ban: students, users only (not teachers, not managers, not admins)
+      if (effectiveRole === 'manager') {
+        if (targetEffectiveRole === 'admin' || targetEffectiveRole === 'teacher' || targetEffectiveRole === 'manager') {
+          return NextResponse.json({ error: 'Managers cannot ban admins, teachers, or other managers' }, { status: 403 });
+        }
+        await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: true } });
+        return NextResponse.json({ success: true, message: 'User banned' });
+      }
     }
 
+    // ─── UNBAN ───
     if (action === 'unban') {
+      if (effectiveRole !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can unban' }, { status: 403 });
+      }
       await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: false } });
       return NextResponse.json({ success: true, message: 'User unbanned' });
     }
 
+    // ─── SET ROLE ───
     if (action === 'setRole') {
       const { newRole } = body;
       if (!['admin', 'manager', 'teacher', 'student', 'user'].includes(newRole)) {
         return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
       }
-
-      // Manager restrictions
-      if (effectiveRole === 'manager') {
-        if (newRole === 'admin' || newRole === 'manager') {
-          return NextResponse.json({ error: 'Managers cannot promote to admin or manager' }, { status: 403 });
-        }
-        if (targetEffectiveRole === 'admin' || targetEffectiveRole === 'manager') {
-          return NextResponse.json({ error: 'Managers cannot change admin/manager roles' }, { status: 403 });
-        }
+      // Only admin can set roles
+      if (effectiveRole !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can change roles' }, { status: 403 });
       }
-
       if (targetEmail.toLowerCase() === email.toLowerCase() && newRole !== 'admin') {
         return NextResponse.json({ error: 'Cannot demote yourself' }, { status: 400 });
       }
-
       await prisma.profile.update({ where: { userId: targetEmail }, data: { role: newRole } });
       return NextResponse.json({ success: true, message: `Role changed to ${newRole}` });
     }
 
+    // ─── TOGGLE CR ───
     if (action === 'toggleCR') {
       const { isCR } = body;
       if (targetEffectiveRole === 'admin') {
         return NextResponse.json({ error: 'Cannot change CR status of admin' }, { status: 403 });
       }
+      // Manager can only make CR in own department
+      if (effectiveRole === 'manager' && targetProfile?.department && callerProfile?.department && targetProfile.department !== callerProfile.department) {
+        return NextResponse.json({ error: 'Managers can only make CR in their own department' }, { status: 403 });
+      }
       await prisma.profile.update({ where: { userId: targetEmail }, data: { isCR: !!isCR, ...(isCR ? { isACR: false } : {}) } });
       return NextResponse.json({ success: true, message: isCR ? 'Made CR' : 'Removed CR' });
     }
 
+    // ─── TOGGLE ACR ───
     if (action === 'toggleACR') {
       const { isACR } = body;
       if (targetEffectiveRole === 'admin') {
         return NextResponse.json({ error: 'Cannot change ACR status of admin' }, { status: 403 });
+      }
+      if (effectiveRole === 'manager' && targetProfile?.department && callerProfile?.department && targetProfile.department !== callerProfile.department) {
+        return NextResponse.json({ error: 'Managers can only manage ACR in their own department' }, { status: 403 });
       }
       await prisma.profile.update({ where: { userId: targetEmail }, data: { isACR: !!isACR } });
       return NextResponse.json({ success: true, message: isACR ? 'Made ACR' : 'Removed ACR' });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
-  } catch (err: any) {
-    console.error('[Admin Action] Error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Admin action failed' }, { status: 500 });
   }
 }

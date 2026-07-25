@@ -9,6 +9,13 @@ import { ExamSlot, DEFAULT_EXAM_SLOTS, loadExamSlots, saveExamSlots, getEnabledS
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import { FACULTIES, findDepartment } from '@/lib/departments';
 
+function getDefaultSession(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  return month < 6 ? `Spring - ${year}` : `Autumn - ${year}`;
+}
+
 interface ExamCourse {
   code: string;
   title: string;
@@ -51,7 +58,7 @@ export default function ExamRoutineView() {
   const { data: session } = useSession();
   const profile = useAppStore(s => s.profile);
 
-  const [viewMode, setViewMode] = useState<'manager' | 'builder' | 'preview' | 'slots'>('manager');
+  const [viewMode, setViewMode] = useState<'manager' | 'builder' | 'preview' | 'slots' | 'allBranch'>('manager');
   const [examSlots, setExamSlots] = useState<ExamSlot[]>([]);
   const [examRoutines, setExamRoutines] = useState<ExamRoutineItem[]>([]);
   const [publishedRoutines, setPublishedRoutines] = useState<ExamRoutineItem[]>([]);
@@ -233,10 +240,13 @@ export default function ExamRoutineView() {
               </button>
             )}
             {canPublish && (
-              <button onClick={startNew} className="routine-btn routine-btn-primary">
-                <i className="fas fa-plus mr-1"></i>New Exam Routine
+              <button onClick={() => setViewMode('allBranch')} className="routine-btn routine-btn-accent">
+                <i className="fas fa-layer-group mr-1"></i>All Semester
               </button>
             )}
+            <button onClick={startNew} className="routine-btn routine-btn-primary">
+              <i className="fas fa-plus mr-1"></i>New Exam Routine
+            </button>
           </div>
         )}
         {viewMode !== 'manager' && (
@@ -409,6 +419,47 @@ export default function ExamRoutineView() {
           rows={rows} slots={enabledSlots}
           publishedBy={publishedRoutines.find(r => r.id === editingId)?.publishedBy}
         />
+      )}
+
+      {/* ═══════ ALL BRANCH EXAM ROUTINE ═══════ */}
+      {viewMode === 'allBranch' && (
+        <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-[0.95rem] font-bold text-dark-text"><i className="fas fa-layer-group text-qsis mr-2"></i>All Semester Exam Routine</h3>
+              <p className="text-[0.75rem] text-dark-text2 mt-0.5">Create exam routines for all 8 semesters from one place.</p>
+            </div>
+            <button onClick={() => setViewMode('manager')} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
+          </div>
+          <div className="space-y-2">
+            {config.semesters.map((sem, idx) => {
+              const existingDraft = examRoutines.find(r => r.semester === sem.id);
+              const existingPub = publishedRoutines.find(r => r.semester === sem.id);
+              const display = existingPub || existingDraft;
+              const isPublished = !!existingPub;
+              return (
+                <div key={sem.id} className={`flex items-center justify-between p-3 rounded-lg border ${isPublished ? 'border-green-500/30 bg-green-500/5' : 'border-dark-border bg-dark-bg'}`}>
+                  <div className="flex items-center gap-3">
+                    <span className="w-7 h-7 rounded-full flex items-center justify-center text-[0.68rem] font-bold" style={{ background: isPublished ? '#166534' : 'var(--bg3)', color: '#fff' }}>{idx + 1}</span>
+                    <span className="text-[0.85rem] font-semibold text-dark-text">{sem.label}</span>
+                    {isPublished && <span className="text-[0.65rem] text-green-400 font-semibold"><i className="fas fa-globe mr-1"></i>Published</span>}
+                    {!isPublished && existingDraft?.isDraft && <span className="text-[0.65rem] text-yellow-400 font-semibold"><i className="fas fa-pen mr-1"></i>Draft</span>}
+                  </div>
+                  <div className="flex gap-2">
+                    {display ? (
+                      <>
+                        <button onClick={() => { editRoutine(display); }} className="routine-btn" style={{ fontSize: '0.75rem', padding: '6px 12px' }}><i className="fas fa-edit mr-1"></i>Edit</button>
+                        <button onClick={() => { setEditingId(display.id); setRows(display.rows); setSemester(display.semester); setSessionVal(display.session); setDepartment(display.department); setExamType(display.examType); setViewMode('preview'); }} className="routine-btn" style={{ fontSize: '0.75rem', padding: '6px 12px' }}><i className="fas fa-eye mr-1"></i>View</button>
+                      </>
+                    ) : (
+                      <button onClick={() => { setEditingId(null); setSemester(sem.id); setSessionVal(getDefaultSession()); setDepartment('qsis'); setExamType('Midterm'); setRows([getDefaultRow(examSlots)]); setViewMode('builder'); }} className="routine-btn routine-btn-primary" style={{ fontSize: '0.75rem', padding: '6px 12px' }}><i className="fas fa-plus mr-1"></i>Create</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </section>
   );

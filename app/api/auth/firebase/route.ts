@@ -1,41 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import { verifyTurnstile } from '@/lib/verifyTurnstile';
 
 export async function POST(req: NextRequest) {
   try {
-    const { idToken, recaptchaToken } = await req.json();
+    const { idToken, turnstileToken } = await req.json();
 
     if (!idToken) {
       return NextResponse.json({ error: 'Firebase ID token required' }, { status: 400 });
     }
 
-    // Verify reCAPTCHA if token provided
-    if (recaptchaToken && process.env.RECAPTCHA_SECRET_KEY) {
+    // Verify Turnstile if token provided
+    if (turnstileToken && process.env.TURNSTILE_SECRET) {
       try {
-        const recaptchaRes = await fetch(
-          `https://recaptchaenterprise.googleapis.com/v1/projects/qsis-arms/assessments?key=${process.env.RECAPTCHA_SECRET_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: {
-                token: recaptchaToken,
-                expectedAction: 'LOGIN',
-                siteKey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY,
-              },
-            }),
-          }
-        );
-
-        if (recaptchaRes.ok) {
-          const recaptchaData = await recaptchaRes.json();
-          if (recaptchaData.score < 0.5) {
-            return NextResponse.json({ error: 'reCAPTCHA verification failed' }, { status: 403 });
-          }
+        const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || undefined;
+        const turnstileValid = await verifyTurnstile(turnstileToken, ip);
+        if (!turnstileValid) {
+          return NextResponse.json({ error: 'Turnstile verification failed' }, { status: 403 });
         }
-      } catch (err) {
-        console.warn('reCAPTCHA verification skipped:', err);
+      } catch {
+        // Turnstile verification skipped
       }
     }
 

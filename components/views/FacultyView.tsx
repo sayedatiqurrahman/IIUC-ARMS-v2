@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-import { FACULTIES, TEACHER_TITLES, findDepartment } from '@/lib/departments';
+import { FACULTIES, TEACHER_TITLES, STAFF_DESIGNATIONS, findDepartment } from '@/lib/departments';
 import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
@@ -33,6 +33,7 @@ export default function FacultyView() {
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [titleFilter, setTitleFilter] = useState('');
+  const [memberTypeFilter, setMemberTypeFilter] = useState<'all' | 'faculty' | 'staff'>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<FacultyMember>>({});
   const [saving, setSaving] = useState(false);
@@ -42,6 +43,7 @@ export default function FacultyView() {
     if (deptFilter) params.set('department', deptFilter);
     if (search) params.set('search', search);
     if (titleFilter) params.set('title', titleFilter);
+    if (memberTypeFilter !== 'all') params.set('memberType', memberTypeFilter);
     setLoading(true);
     fetch(`/api/faculty?${params}`)
       .then(r => r.json())
@@ -49,7 +51,7 @@ export default function FacultyView() {
       .catch(() => setLoading(false));
   };
 
-  useEffect(() => { fetchMembers(); }, [deptFilter, search, titleFilter]);
+  useEffect(() => { fetchMembers(); }, [deptFilter, search, titleFilter, memberTypeFilter]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, FacultyMember[]>();
@@ -69,6 +71,9 @@ export default function FacultyView() {
     }
     return counts;
   }, [members]);
+
+  const facultyCount = members.filter(m => m.memberType === 'faculty').length;
+  const staffCount = members.filter(m => m.memberType === 'staff').length;
 
   const canEditMember = (m: FacultyMember) => {
     if (!canEdit) return false;
@@ -118,6 +123,74 @@ export default function FacultyView() {
     />
   );
 
+  const renderMemberCard = (m: FacultyMember) => {
+    const isEditing = editingId === m.id;
+    const isStaff = m.memberType === 'staff';
+    return (
+      <div key={m.id} className={`bg-dark-bg2 border rounded-xl p-4 transition-all group ${isEditing ? 'border-qsis' : 'border-dark-border hover:border-qsis/50'}`}>
+        <div className="flex items-start gap-3">
+          <div className={`w-11 h-11 rounded-full border border-dark-border flex items-center justify-center flex-shrink-0 ${isStaff ? 'bg-gradient-to-br from-blue-500/20 to-blue-400/10' : 'bg-gradient-to-br from-qsis/20 to-accent/20'}`}>
+            <span className={`text-[0.72rem] font-bold ${isStaff ? 'text-blue-400' : 'text-qsis'}`}>{m.shortForm || m.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            {isEditing ? (
+              <div className="space-y-1.5">
+                <EditInput field="name" placeholder="Full name" />
+                <EditInput field="title" placeholder="Designation" />
+                <EditInput field="shortForm" placeholder="Short form (e.g. GH)" />
+                <EditInput field="email" placeholder="Email" />
+                <EditInput field="phone" placeholder="Phone number" />
+              </div>
+            ) : (
+              <>
+                <h4 className="text-[0.85rem] font-bold text-dark-text truncate">{m.name}</h4>
+                {m.title && <p className={`text-[0.72rem] font-medium ${isStaff ? 'text-blue-400' : 'text-qsis'}`}>{m.title}</p>}
+                {m.email && (
+                  <a href={`mailto:${m.email}`} className="text-[0.7rem] text-dark-text3 hover:text-qsis transition-colors flex items-center gap-1 mt-0.5 no-underline">
+                    <i className="fas fa-envelope text-[0.6rem]"></i>
+                    <span className="truncate">{m.email}</span>
+                  </a>
+                )}
+                {m.phone && (
+                  <a href={`tel:${m.phone}`} className="text-[0.7rem] text-dark-text3 hover:text-qsis transition-colors flex items-center gap-1 mt-0.5 no-underline">
+                    <i className="fas fa-phone text-[0.6rem]"></i>
+                    <span>{m.phone}</span>
+                  </a>
+                )}
+              </>
+            )}
+          </div>
+          {canEditMember(m) && !isEditing && (
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+              <button onClick={() => startEdit(m)} className="px-1.5 py-1 rounded bg-dark-bg border border-dark-border text-dark-text2 hover:text-qsis text-[0.65rem] cursor-pointer transition-all" title="Edit">
+                <i className="fas fa-pen"></i>
+              </button>
+              <button onClick={async () => {
+                if (!confirm(`Remove ${m.name} from directory?`)) return;
+                const res = await fetch(`/api/faculty?id=${m.id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) { showToast(`${m.name} removed`, 'success'); fetchMembers(); }
+                else showToast(data.error || 'Failed', 'error');
+              }} className="px-1.5 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 text-[0.65rem] cursor-pointer transition-all border-none" title="Delete">
+                <i className="fas fa-trash"></i>
+              </button>
+            </div>
+          )}
+        </div>
+        {isEditing && (
+          <div className="flex gap-2 mt-3 pt-3 border-t border-dark-border">
+            <button onClick={() => saveEdit(m.id)} disabled={saving} className="flex-1 px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">
+              {saving ? <i className="fas fa-spinner fa-spin mr-1"></i> : <i className="fas fa-check mr-1"></i>} Save
+            </button>
+            <button onClick={cancelEdit} disabled={saving} className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text2 text-[0.72rem] font-semibold cursor-pointer hover:text-dark-text disabled:opacity-50">
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <section className="mb-5">
       <div className="mb-6">
@@ -132,7 +205,7 @@ export default function FacultyView() {
 
       {/* Filters */}
       <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4 mb-5">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="md:col-span-1">
             <label className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-search mr-1"></i>Search</label>
             <input
@@ -142,6 +215,18 @@ export default function FacultyView() {
               placeholder="Search by name, short form, or designation..."
               className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
             />
+          </div>
+          <div>
+            <label className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-users mr-1"></i>Type</label>
+            <select
+              value={memberTypeFilter}
+              onChange={e => setMemberTypeFilter(e.target.value as 'all' | 'faculty' | 'staff')}
+              className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
+            >
+              <option value="all">All ({members.length})</option>
+              <option value="faculty">Faculty ({facultyCount})</option>
+              <option value="staff">Staff ({staffCount})</option>
+            </select>
           </div>
           <div>
             <label className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-building mr-1"></i>Department</label>
@@ -167,16 +252,21 @@ export default function FacultyView() {
               onChange={e => setTitleFilter(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
             >
-              <option value="">All Faculty ({members.length})</option>
+              <option value="">All ({titleCounts.size})</option>
               {TEACHER_TITLES.map(t => (
                 <option key={t} value={t}>{t} ({titleCounts.get(t) || 0})</option>
               ))}
+              <optgroup label="Staff Designations">
+                {STAFF_DESIGNATIONS.map(s => (
+                  <option key={s} value={s}>{s} ({titleCounts.get(s) || 0})</option>
+                ))}
+              </optgroup>
             </select>
           </div>
         </div>
-        {(search || deptFilter || titleFilter) && (
+        {(search || deptFilter || titleFilter || memberTypeFilter !== 'all') && (
           <button
-            onClick={() => { setSearch(''); setDeptFilter(''); setTitleFilter(''); }}
+            onClick={() => { setSearch(''); setDeptFilter(''); setTitleFilter(''); setMemberTypeFilter('all'); }}
             className="mt-2 text-[0.72rem] text-dark-text2 hover:text-qsis bg-transparent border-none cursor-pointer"
           >
             <i className="fas fa-times mr-1"></i>Clear all filters
@@ -197,100 +287,39 @@ export default function FacultyView() {
           <p className="text-[0.75rem] text-dark-text3 mt-1">Try adjusting your filters</p>
         </div>
       ) : (
-        Array.from(grouped.entries()).map(([deptLabel, deptMembers]) => (
-          <div key={deptLabel} className="mb-6">
-            <h3 className="text-[0.9rem] font-bold text-dark-text mb-3 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-qsis"></span>
-              {deptLabel}
-              <span className="text-[0.72rem] text-dark-text3 font-normal">({deptMembers.length})</span>
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {deptMembers.map(m => {
-                const isEditing = editingId === m.id;
-                return (
-                  <div key={m.id} className={`bg-dark-bg2 border rounded-xl p-4 transition-all group ${isEditing ? 'border-qsis' : 'border-dark-border hover:border-qsis/50'}`}>
-                    <div className="flex items-start gap-3">
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-qsis/20 to-accent/20 border border-dark-border flex items-center justify-center flex-shrink-0">
-                        <span className="text-[0.72rem] font-bold text-qsis">{m.shortForm || m.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        {isEditing ? (
-                          <div className="space-y-1.5">
-                            <EditInput field="name" placeholder="Full name" />
-                            <EditInput field="title" placeholder="Designation" />
-                            <EditInput field="shortForm" placeholder="Short form (e.g. GH)" />
-                            <EditInput field="email" placeholder="Email" />
-                            <EditInput field="phone" placeholder="Phone number" />
-                          </div>
-                        ) : (
-                          <>
-                            <h4 className="text-[0.85rem] font-bold text-dark-text truncate">{m.name}</h4>
-                            {m.title && <p className="text-[0.72rem] text-qsis font-medium">{m.title}</p>}
-                            {m.email && (
-                              <a href={`mailto:${m.email}`} className="text-[0.7rem] text-dark-text3 hover:text-qsis transition-colors flex items-center gap-1 mt-0.5 no-underline">
-                                <i className="fas fa-envelope text-[0.6rem]"></i>
-                                <span className="truncate">{m.email}</span>
-                              </a>
-                            )}
-                            {m.phone && (
-                              <a href={`tel:${m.phone}`} className="text-[0.7rem] text-dark-text3 hover:text-qsis transition-colors flex items-center gap-1 mt-0.5 no-underline">
-                                <i className="fas fa-phone text-[0.6rem]"></i>
-                                <span>{m.phone}</span>
-                              </a>
-                            )}
-                          </>
-                        )}
-                      </div>
-                      {canEditMember(m) && !isEditing && (
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
-                          <button
-                            onClick={() => startEdit(m)}
-                            className="px-1.5 py-1 rounded bg-dark-bg border border-dark-border text-dark-text2 hover:text-qsis text-[0.65rem] cursor-pointer transition-all"
-                            title="Edit"
-                          >
-                            <i className="fas fa-pen"></i>
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (!confirm(`Remove ${m.name} from faculty?`)) return;
-                              const res = await fetch(`/api/faculty?id=${m.id}`, { method: 'DELETE' });
-                              const data = await res.json();
-                              if (data.success) { showToast(`${m.name} removed`, 'success'); fetchMembers(); }
-                              else showToast(data.error || 'Failed', 'error');
-                            }}
-                            className="px-1.5 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 text-[0.65rem] cursor-pointer transition-all border-none"
-                            title="Delete"
-                          >
-                            <i className="fas fa-trash"></i>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {isEditing && (
-                      <div className="flex gap-2 mt-3 pt-3 border-t border-dark-border">
-                        <button
-                          onClick={() => saveEdit(m.id)}
-                          disabled={saving}
-                          className="flex-1 px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50"
-                        >
-                          {saving ? <i className="fas fa-spinner fa-spin mr-1"></i> : <i className="fas fa-check mr-1"></i>}
-                          Save
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          disabled={saving}
-                          className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text2 text-[0.72rem] font-semibold cursor-pointer hover:text-dark-text disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
+        Array.from(grouped.entries()).map(([deptLabel, deptMembers]) => {
+          const facultyMembers = deptMembers.filter(m => m.memberType === 'faculty');
+          const staffMembers = deptMembers.filter(m => m.memberType === 'staff');
+          return (
+            <div key={deptLabel} className="mb-6">
+              <h3 className="text-[0.9rem] font-bold text-dark-text mb-3 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-qsis"></span>
+                {deptLabel}
+                <span className="text-[0.72rem] text-dark-text3 font-normal">({deptMembers.length})</span>
+              </h3>
+              {facultyMembers.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-[0.78rem] font-semibold text-green-400 mb-2 flex items-center gap-1.5">
+                    <i className="fas fa-chalkboard-teacher"></i> Faculty ({facultyMembers.length})
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {facultyMembers.map(m => renderMemberCard(m))}
                   </div>
-                );
-              })}
+                </div>
+              )}
+              {staffMembers.length > 0 && (
+                <div>
+                  <h4 className="text-[0.78rem] font-semibold text-blue-400 mb-2 flex items-center gap-1.5">
+                    <i className="fas fa-headset"></i> Staff ({staffMembers.length})
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {staffMembers.map(m => renderMemberCard(m))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        ))
+          );
+        })
       )}
     </section>
   );

@@ -43,8 +43,6 @@ export async function getInstallationInfo(installationId: number): Promise<{ acc
     headers: { Authorization: `Bearer ${jwt}`, Accept: 'application/vnd.github.v3+json' },
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    console.error(`[GitHub App] getInstallationInfo failed: ${res.status}`, err.message || '');
     return null;
   }
   const data = await res.json();

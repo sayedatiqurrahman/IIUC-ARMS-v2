@@ -77,8 +77,7 @@ export async function POST(req: NextRequest) {
     if (!token && installationId) {
       try {
         token = await getInstallationAccessToken(installationId);
-      } catch (err: any) {
-        console.error('[Upload] Failed to refresh installation token:', err.message);
+      } catch {
         return NextResponse.json(
           { error: 'GitHub connection expired. Please reconnect from Dashboard.', code: 'TOKEN_EXPIRED' },
           { status: 401 }
@@ -332,8 +331,7 @@ export async function POST(req: NextRequest) {
       pr: { url: prData.html_url, number: prData.number },
       isOwner: false,
     });
-  } catch (err: any) {
-    console.error('[Upload] Error:', err.message, err.stack);
-    return NextResponse.json({ error: err.message || 'Upload failed' }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
 }

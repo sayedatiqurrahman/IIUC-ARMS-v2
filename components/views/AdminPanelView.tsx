@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
 import { useAppStore } from '@/lib/store';
-import { FACULTIES, TEACHER_TITLES } from '@/lib/departments';
+import { FACULTIES, TEACHER_TITLES, STAFF_DESIGNATIONS } from '@/lib/departments';
 
 interface UserRecord {
   email: string;
@@ -31,8 +31,8 @@ interface ActivityLog {
   id: string;
   action: string;
   details: string;
-  email: string;
-  name: string;
+  userId: string;
+  userName: string | null;
   createdAt: string;
 }
 
@@ -64,7 +64,7 @@ export default function AdminPanelView() {
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [showAddAdmin, setShowAddAdmin] = useState(false);
   const [facultyList, setFacultyList] = useState<any[]>([]);
-  const [facultyForm, setFacultyForm] = useState({ department: '', name: '', title: '', email: '', phone: '', shortForm: '' });
+  const [facultyForm, setFacultyForm] = useState({ department: '', name: '', title: '', email: '', phone: '', shortForm: '', memberType: 'faculty' });
   const [facultySaving, setFacultySaving] = useState(false);
 
   const email = session?.user?.email || profile.email || '';
@@ -263,7 +263,7 @@ export default function AdminPanelView() {
       const data = await res.json();
       if (data.success) {
         showToast(`${facultyForm.name} added to faculty`, 'success');
-        setFacultyForm({ department: '', name: '', title: '', email: '', phone: '', shortForm: '' });
+        setFacultyForm({ department: '', name: '', title: '', email: '', phone: '', shortForm: '', memberType: 'faculty' });
         loadFaculty(facultyForm.department);
       } else {
         showToast(data.error || 'Failed to add', 'error');
@@ -308,7 +308,13 @@ export default function AdminPanelView() {
     switch (action) {
       case 'file_upload': return { label: 'File Upload', icon: 'fa-upload', color: 'text-blue-400' };
       case 'routine_publish': return { label: 'Routine Published', icon: 'fa-calendar-check', color: 'text-green-400' };
-      default: return { label: action, icon: 'fa-circle', color: 'text-gray-400' };
+      case 'routine_unpublish_all': return { label: 'Routine Unpublished', icon: 'fa-calendar-minus', color: 'text-yellow-400' };
+      case 'user_ban': return { label: 'User Banned', icon: 'fa-ban', color: 'text-red-400' };
+      case 'user_unban': return { label: 'User Unbanned', icon: 'fa-check-circle', color: 'text-green-400' };
+      case 'role_change': return { label: 'Role Changed', icon: 'fa-user-tag', color: 'text-orange-400' };
+      case 'github_connect': return { label: 'GitHub Connected', icon: 'fab fa-github', color: 'text-purple-400' };
+      case 'login': return { label: 'User Login', icon: 'fa-sign-in-alt', color: 'text-qsis' };
+      default: return { label: action.replace(/_/g, ' '), icon: 'fa-circle', color: 'text-gray-400' };
     }
   };
 
@@ -332,102 +338,84 @@ export default function AdminPanelView() {
   const UserRow = ({ u }: { u: UserRecord }) => {
     const isSelf = u.email === email;
     const uRole = u.role || 'user';
-    const canEditRole = !isSelf && (isAdmin || (isManager && uRole !== 'admin' && uRole !== 'manager'));
-    const canBan = !isSelf && uRole !== 'admin' && (isAdmin || isManager);
+    const isOwner = config.ownerEmails.includes(u.email.toLowerCase());
+    const canEditRole = !isSelf && !isOwner && (isAdmin || (isManager && uRole !== 'admin' && uRole !== 'manager'));
+    const canBan = !isSelf && !isOwner && uRole !== 'admin' && (isAdmin || isManager);
     const canToggleCR = !isSelf && (isAdmin || isManager);
     const canToggleACR = !isSelf && (isAdmin || isManager);
-    const canPromoteManager = isAdmin && !isSelf;
+    const canPromoteManager = isAdmin && !isSelf && !isOwner;
 
     return (
-      <div className={`px-4 py-3 flex items-center gap-3 transition-colors ${u.isBanned ? 'bg-red-500/5 opacity-60' : 'hover:bg-dark-bg/50'}`}>
-        <img src={u.githubAvatar || u.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email)}&background=6366f1&color=fff&bold=true&size=40`} alt="" className="w-9 h-9 rounded-full border border-dark-border object-cover" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[0.82rem] font-medium text-dark-text truncate">{u.name || u.email.split('@')[0]}</span>
-            {getRoleBadge(u.role, u)}
-            {u.isCR && <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 text-[0.6rem] font-bold">CR</span>}
-            {u.isACR && <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 text-[0.6rem] font-bold">ACR</span>}
-            {u.isBanned && <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 text-[0.6rem] font-bold">BANNED</span>}
-            {u.title && <span className="text-[0.65rem] text-qsis italic">{u.title}</span>}
-            {u.githubLogin && <i className="fab fa-github text-[0.65rem] text-dark-text3"></i>}
+      <div className={`bg-dark-bg2 border rounded-xl p-4 transition-all hover:border-qsis/30 ${u.isBanned ? 'border-red-500/30 opacity-60' : 'border-dark-border'}`}>
+        <div className="flex items-start gap-3">
+          {/* Avatar */}
+          <div className="relative flex-shrink-0">
+            <img src={u.githubAvatar || u.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email)}&background=6366f1&color=fff&bold=true&size=48`} alt="" className="w-11 h-11 rounded-full border-2 border-dark-border object-cover" />
+            {u.isBanned && <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center"><i className="fas fa-ban text-white text-[0.45rem]"></i></div>}
           </div>
-          <p className="text-[0.7rem] text-dark-text3 truncate">{u.email}{u.universityId ? ` (${u.universityId})` : ''}{u.semester ? ` — ${u.semester}` : ''}</p>
-          {u.lastSignIn && <p className="text-[0.6rem] text-dark-text3 mt-0.5">Last seen: {formatDate(u.lastSignIn)}</p>}
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end">
-          {/* CR/ACR toggles */}
-          {canToggleCR && (
-            <>
-              <button
-                onClick={() => handleToggleCR(u.email, !!u.isCR)}
-                disabled={actionLoading === u.email + 'cr'}
-                className={`px-1.5 py-1 rounded text-[0.65rem] font-semibold cursor-pointer border-none disabled:opacity-50 ${
-                  u.isCR ? 'bg-purple-500/20 text-purple-300' : 'bg-dark-bg3 text-dark-text2 hover:text-purple-400'
-                }`}
-                title={u.isCR ? 'Remove CR' : 'Make CR'}
-              >
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+              <span className="text-[0.85rem] font-semibold text-dark-text truncate">{u.name || u.email.split('@')[0]}</span>
+              {getRoleBadge(u.role, u)}
+              {u.isCR && <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 text-[0.6rem] font-bold">CR</span>}
+              {u.isACR && <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 text-[0.6rem] font-bold">ACR</span>}
+              {isOwner && <span className="px-1.5 py-0.5 rounded-md bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-bold"><i className="fas fa-star mr-0.5"></i>Owner</span>}
+              {u.githubLogin && <a href={`https://github.com/${u.githubLogin}`} target="_blank" rel="noopener noreferrer" className="text-dark-text3 hover:text-dark-text"><i className="fab fa-github text-[0.7rem]"></i></a>}
+            </div>
+            <p className="text-[0.72rem] text-dark-text3 truncate">{u.email}{u.universityId ? ` (${u.universityId})` : ''}{u.semester ? ` — ${u.semester}` : ''}</p>
+            {u.lastSignIn && <p className="text-[0.62rem] text-dark-text3 mt-0.5"><i className="fas fa-clock mr-0.5"></i>{formatDate(u.lastSignIn)}</p>}
+          </div>
+          {/* Actions */}
+          <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+            {canToggleCR && (
+              <button onClick={() => handleToggleCR(u.email, !!u.isCR)} disabled={actionLoading === u.email + 'cr'}
+                className={`px-2 py-1 rounded-lg text-[0.65rem] font-semibold cursor-pointer border transition-all disabled:opacity-50 ${
+                  u.isCR ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-purple-400 hover:border-purple-500/30'
+                }`} title={u.isCR ? 'Remove CR' : 'Make CR'}>
                 {actionLoading === u.email + 'cr' ? <i className="fas fa-spinner fa-spin"></i> : 'CR'}
               </button>
-              <button
-                onClick={() => handleToggleACR(u.email, !!u.isACR)}
-                disabled={actionLoading === u.email + 'acr'}
-                className={`px-1.5 py-1 rounded text-[0.65rem] font-semibold cursor-pointer border-none disabled:opacity-50 ${
-                  u.isACR ? 'bg-indigo-500/20 text-indigo-300' : 'bg-dark-bg3 text-dark-text2 hover:text-indigo-400'
-                }`}
-                title={u.isACR ? 'Remove ACR' : 'Make ACR'}
-              >
+            )}
+            {canToggleACR && (
+              <button onClick={() => handleToggleACR(u.email, !!u.isACR)} disabled={actionLoading === u.email + 'acr'}
+                className={`px-2 py-1 rounded-lg text-[0.65rem] font-semibold cursor-pointer border transition-all disabled:opacity-50 ${
+                  u.isACR ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-indigo-400 hover:border-indigo-500/30'
+                }`} title={u.isACR ? 'Remove ACR' : 'Make ACR'}>
                 {actionLoading === u.email + 'acr' ? <i className="fas fa-spinner fa-spin"></i> : 'ACR'}
               </button>
-            </>
-          )}
-          {/* Role select */}
-          {canEditRole && (
-            <select
-              value={uRole}
-              onChange={e => handleSetRole(u.email, e.target.value)}
-              disabled={actionLoading === u.email + 'role'}
-              className="px-1.5 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.68rem] cursor-pointer disabled:opacity-50"
-            >
-              <option value="user">User</option>
-              <option value="student">Student</option>
-              <option value="teacher">Teacher</option>
-              {isAdmin && <option value="manager">Manager</option>}
-              {isSuperAdmin && <option value="admin">Admin</option>}
-            </select>
-          )}
-          {/* Manager quick toggle (admin only) */}
-          {canPromoteManager && (
-            <button
-              onClick={() => handleToggleManager(u.email, uRole)}
-              disabled={actionLoading === u.email + 'manager'}
-              className={`px-1.5 py-1 rounded text-[0.65rem] font-semibold cursor-pointer border-none disabled:opacity-50 ${
-                uRole === 'manager' ? 'bg-orange-500/20 text-orange-300' : 'bg-dark-bg3 text-dark-text2 hover:text-orange-400'
-              }`}
-              title={uRole === 'manager' ? 'Remove Manager' : 'Make Manager'}
-            >
-              {actionLoading === u.email + 'manager' ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-user-shield"></i>}
-            </button>
-          )}
-          {/* Ban/Unban */}
-          {canBan && (
-            u.isBanned ? (
-              <button
-                onClick={() => handleBan(u.email, true)}
-                disabled={actionLoading === u.email + 'unban'}
-                className="px-2 py-1 rounded bg-green-500/15 text-green-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-green-500/25 border-none disabled:opacity-50"
-              >
-                {actionLoading === u.email + 'unban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Unban</>}
+            )}
+            {canEditRole && (
+              <select value={uRole} onChange={e => handleSetRole(u.email, e.target.value)} disabled={actionLoading === u.email + 'role'}
+                className="px-2 py-1 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.68rem] cursor-pointer disabled:opacity-50">
+                <option value="user">User</option>
+                <option value="student">Student</option>
+                <option value="teacher">Teacher</option>
+                {isAdmin && <option value="manager">Manager</option>}
+                {isSuperAdmin && <option value="admin">Admin</option>}
+              </select>
+            )}
+            {canPromoteManager && (
+              <button onClick={() => handleToggleManager(u.email, uRole)} disabled={actionLoading === u.email + 'manager'}
+                className={`px-2 py-1 rounded-lg text-[0.65rem] font-semibold cursor-pointer border transition-all disabled:opacity-50 ${
+                  uRole === 'manager' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-orange-400 hover:border-orange-500/30'
+                }`} title={uRole === 'manager' ? 'Remove Manager' : 'Make Manager'}>
+                {actionLoading === u.email + 'manager' ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-user-shield"></i>}
               </button>
-            ) : (
-              <button
-                onClick={() => handleBan(u.email, false)}
-                disabled={actionLoading === u.email + 'ban'}
-                className="px-2 py-1 rounded bg-red-500/15 text-red-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/25 border-none disabled:opacity-50"
-              >
-                {actionLoading === u.email + 'ban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-ban mr-0.5"></i>Ban</>}
-              </button>
-            )
-          )}
+            )}
+            {canBan && (
+              u.isBanned ? (
+                <button onClick={() => handleBan(u.email, true)} disabled={actionLoading === u.email + 'unban'}
+                  className="px-2.5 py-1 rounded-lg bg-green-500/15 text-green-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-green-500/25 border border-green-500/20 disabled:opacity-50">
+                  {actionLoading === u.email + 'unban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Unban</>}
+                </button>
+              ) : (
+                <button onClick={() => handleBan(u.email, false)} disabled={actionLoading === u.email + 'ban'}
+                  className="px-2.5 py-1 rounded-lg bg-red-500/15 text-red-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/25 border border-red-500/20 disabled:opacity-50">
+                  {actionLoading === u.email + 'ban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-ban mr-0.5"></i>Ban</>}
+                </button>
+              )
+            )}
+          </div>
         </div>
       </div>
     );
@@ -507,18 +495,38 @@ export default function AdminPanelView() {
           {activities.length > 0 && (
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
               <h3 className="text-sm font-semibold text-dark-text mb-3"><i className="fas fa-clock text-qsis mr-2"></i>Recent Activity</h3>
-              {activities.slice(0, 5).map(a => {
-                const fa = formatAction(a.action);
-                return (
-                  <div key={a.id} className="flex items-center gap-3 py-2 border-b border-dark-border last:border-0">
-                    <i className={`fas ${fa.icon} ${fa.color} text-sm`}></i>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[0.78rem] text-dark-text truncate">{a.details}</p>
-                      <p className="text-[0.65rem] text-dark-text3">{a.name || a.email} &middot; {formatDate(a.createdAt)}</p>
+              <div className="space-y-0">
+                {activities.slice(0, 8).map(a => {
+                  const fa = formatAction(a.action);
+                  let detailText = a.action.replace(/_/g, ' ');
+                  try {
+                    const d = JSON.parse(a.details);
+                    if (d.count) detailText += ` (${d.count})`;
+                    if (d.semester) detailText = `${d.semester}${d.branch ? ' / ' + d.branch : ''}`;
+                    if (d.publisher) detailText += ` by ${d.publisher}`;
+                  } catch {
+                    if (a.details) detailText = a.details;
+                  }
+                  return (
+                    <div key={a.id} className="flex items-center gap-3 py-2.5 border-b border-dark-border/50 last:border-0">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${fa.color.replace('text-', 'bg-').replace('400', '500/15').replace('500', '500/15')}`}>
+                        <i className={`fas ${fa.icon} ${fa.color} text-xs`}></i>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[0.78rem] font-medium text-dark-text">{fa.label}</span>
+                        </div>
+                        <p className="text-[0.68rem] text-dark-text3 truncate">{a.userName || a.userId} &middot; {formatDate(a.createdAt)}</p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              {activities.length > 8 && (
+                <button onClick={() => setActiveTab('activity')} className="mt-2 text-[0.72rem] text-qsis hover:underline cursor-pointer bg-transparent border-none">
+                  View all {activities.length} activities <i className="fas fa-arrow-right ml-1"></i>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -541,7 +549,9 @@ export default function AdminPanelView() {
               <button onClick={handleAddAdmin} disabled={!newAdminEmail.trim()} className="px-4 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">Add</button>
             </div>
           )}
-          {users.map(u => <UserRow key={u.email} u={u} />)}
+          <div className="flex flex-col gap-2">
+            {users.map(u => <UserRow key={u.email} u={u} />)}
+          </div>
         </div>
       )}
 
@@ -552,7 +562,9 @@ export default function AdminPanelView() {
             <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-user-shield text-orange-400 mr-2"></i>Managers ({users.length})</h3>
             <p className="text-[0.75rem] text-dark-text3 mt-1">Managers can manage users, upload files, and publish routines. They cannot change admin roles or promote other managers.</p>
           </div>
-          {users.map(u => <UserRow key={u.email} u={u} />)}
+          <div className="flex flex-col gap-2">
+            {users.map(u => <UserRow key={u.email} u={u} />)}
+          </div>
           {users.length === 0 && <p className="text-dark-text3 text-sm text-center py-8">No managers assigned yet</p>}
         </div>
       )}
@@ -574,7 +586,9 @@ export default function AdminPanelView() {
               className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-[0.78rem] w-60"
             />
           </div>
-          {users.map(u => <UserRow key={u.email} u={u} />)}
+          <div className="flex flex-col gap-2">
+            {users.map(u => <UserRow key={u.email} u={u} />)}
+          </div>
         </div>
       )}
 
@@ -586,7 +600,7 @@ export default function AdminPanelView() {
 
           {/* Add Faculty Form */}
           <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4 mb-5">
-            <h4 className="text-[0.82rem] font-semibold text-dark-text mb-3"><i className="fas fa-plus-circle text-qsis mr-1"></i>Add New Faculty</h4>
+            <h4 className="text-[0.82rem] font-semibold text-dark-text mb-3"><i className="fas fa-plus-circle text-qsis mr-1"></i>Add New Faculty / Staff</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div>
                 <label className="text-[0.7rem] text-dark-text2 block mb-1">Department *</label>
@@ -606,6 +620,17 @@ export default function AdminPanelView() {
                 </select>
               </div>
               <div>
+                <label className="text-[0.7rem] text-dark-text2 block mb-1">Type *</label>
+                <select
+                  value={facultyForm.memberType || 'faculty'}
+                  onChange={e => setFacultyForm(f => ({ ...f, memberType: e.target.value, title: '' }))}
+                  className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
+                >
+                  <option value="faculty">Faculty</option>
+                  <option value="staff">Staff</option>
+                </select>
+              </div>
+              <div>
                 <label className="text-[0.7rem] text-dark-text2 block mb-1">Full Name *</label>
                 <input type="text" value={facultyForm.name} onChange={e => setFacultyForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Prof. Dr. Gias Uddin Hafiz" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
               </div>
@@ -613,7 +638,7 @@ export default function AdminPanelView() {
                 <label className="text-[0.7rem] text-dark-text2 block mb-1">Designation</label>
                 <select value={facultyForm.title} onChange={e => setFacultyForm(f => ({ ...f, title: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
                   <option value="">Select designation...</option>
-                  {TEACHER_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+                  {(facultyForm.memberType === 'staff' ? STAFF_DESIGNATIONS : TEACHER_TITLES).map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div>
@@ -622,7 +647,7 @@ export default function AdminPanelView() {
               </div>
               <div>
                 <label className="text-[0.7rem] text-dark-text2 block mb-1">Email</label>
-                <input type="email" value={facultyForm.email} onChange={e => setFacultyForm(f => ({ ...f, email: e.target.value }))} placeholder="email@example.com" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+                <input type="email" value={facultyForm.email} onChange={e => setFacultyForm(f => ({ ...f, email: e.target.value }))} placeholder="yourname@iiuc.ac.bd" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
               </div>
               <div>
                 <label className="text-[0.7rem] text-dark-text2 block mb-1">Phone</label>
@@ -630,7 +655,7 @@ export default function AdminPanelView() {
               </div>
             </div>
             <button onClick={handleAddFaculty} disabled={facultySaving || !facultyForm.department || !facultyForm.name} className="mt-3 px-4 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">
-              {facultySaving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Adding...</> : <><i className="fas fa-plus mr-1"></i>Add Faculty Member</>}
+              {facultySaving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Adding...</> : <><i className="fas fa-plus mr-1"></i>Add Member</>}
             </button>
           </div>
 
@@ -679,7 +704,7 @@ export default function AdminPanelView() {
                 <i className={`fas ${fa.icon} ${fa.color} text-sm`}></i>
                 <div className="flex-1 min-w-0">
                   <p className="text-[0.78rem] text-dark-text">{a.details}</p>
-                  <p className="text-[0.65rem] text-dark-text3">{a.name || a.email} &middot; {formatDate(a.createdAt)}</p>
+                  <p className="text-[0.65rem] text-dark-text3">{a.userName || a.userId} &middot; {formatDate(a.createdAt)}</p>
                 </div>
               </div>
             );

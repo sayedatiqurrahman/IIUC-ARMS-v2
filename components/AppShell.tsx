@@ -8,6 +8,7 @@ import { useAppStore, getSavedPdfPage } from '@/lib/store';
 import LoginModal from '@/components/LoginModal';
 import UploadModal from '@/components/UploadModal';
 import PdfViewer from '@/components/PdfViewer';
+import OnboardingModal, { getOnboardingData, type OnboardingData } from '@/components/OnboardingModal';
 import { useState, useEffect, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { config } from '@/lib/config';
@@ -18,6 +19,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingDone, setOnboardingDone] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const goHome = useAppStore(s => s.goHome);
@@ -35,6 +38,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadTree(session?.accessToken || '');
     loadRecentReads();
+    // Check onboarding
+    const data = getOnboardingData();
+    if (!data) {
+      setShowOnboarding(true);
+    } else {
+      setOnboardingDone(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -273,6 +283,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ONBOARDING MODAL */}
+      {showOnboarding && (
+        <OnboardingModal
+          onComplete={(data) => {
+            setShowOnboarding(false);
+            setOnboardingDone(true);
+          }}
+          onClose={() => setShowOnboarding(false)}
+        />
       )}
 
       {/* LOGIN MODAL */}

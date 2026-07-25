@@ -43,8 +43,7 @@ export async function POST(req: NextRequest) {
       otpauthURL,
       qrCode: qrCodeDataUrl,
     });
-  } catch (err: any) {
-    console.error('[TOTP Setup] Error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'TOTP setup failed' }, { status: 500 });
   }
 }

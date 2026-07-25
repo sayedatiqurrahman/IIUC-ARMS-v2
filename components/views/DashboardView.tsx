@@ -32,7 +32,7 @@ export default function DashboardView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
-    universityId: '', name: '', title: '', shortForm: '', department: '', whatsapp: '', semester: '',
+    universityId: '', name: '', whatsapp: '', semester: '',
     facebook: '', twitter: '', linkedin: '', website: '',
     company: '', companyUrl: '', publicEmail: '',
     hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false,
@@ -43,16 +43,38 @@ export default function DashboardView() {
   const effectiveRole = config.getEffectiveRole(email, profile.role);
   const isStudent = effectiveRole === 'student';
   const isTeacherOrAbove = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
+  const isTeacherEmail = /@iiuc\.ac\.bd$/i.test(email) && !/@ugrad\.iiuc\.ac\.bd$/i.test(email);
   const [ghUser, setGhUser] = useState<any>(null);
   const [ghStats, setGhStats] = useState<any>(null);
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [patInput, setPatInput] = useState('');
   const [patLoading, setPatLoading] = useState(false);
 
+  const [totpEnabled, setTotpEnabled] = useState(false);
+  const [totpLoading, setTotpLoading] = useState(false);
+  const [totpSetupMode, setTotpSetupMode] = useState(false);
+  const [totpQR, setTotpQR] = useState('');
+  const [totpSecret, setTotpSecret] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+  const [totpMsg, setTotpMsg] = useState('');
+  const [totpErrMsg, setTotpErrMsg] = useState('');
+  const [totpDisableMode, setTotpDisableMode] = useState(false);
+  const [totpDisableCode, setTotpDisableCode] = useState('');
+
   // Load profile from DB on mount — ensures GitHub connection persists across reloads
   useEffect(() => {
     loadProfile();
   }, []);
+
+  // Check TOTP status on mount
+  useEffect(() => {
+    const user = (session as any)?.user;
+    if (!user?.email) return;
+    fetch('/api/auth/totp/check')
+      .then(r => r.json())
+      .then(d => { if (d.totpEnabled) setTotpEnabled(true); })
+      .catch(() => {});
+  }, [session]);
 
   // Auto-extract university ID from email if not set
   useEffect(() => {
@@ -213,6 +235,13 @@ export default function DashboardView() {
       setShowTokenModal(false);
       setPatInput('');
       showToast(`Connected as @${ghUser.login}!`, 'success');
+      // Auto-star both repos
+      for (const { owner, repo } of config.githubStarRepos) {
+        fetch(`https://api.github.com/user/starred/${owner}/${repo}`, {
+          method: 'PUT',
+          headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Length': '0' },
+        }).catch(() => {});
+      }
     } catch {
       showToast('Failed to connect. Please try again.', 'error');
     } finally {
@@ -256,6 +285,58 @@ export default function DashboardView() {
     profile.linkedin && { icon: 'fab fa-linkedin', label: 'LinkedIn', url: profile.linkedin },
   ].filter(Boolean) as { icon: string; label: string; url: string }[];
 
+  // ─── TOTP / 2FA handlers ───
+  const handleTotpSetup = async () => {
+    setTotpErrMsg(''); setTotpMsg(''); setTotpLoading(true);
+    try {
+      const res = await fetch('/api/auth/totp/setup', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { setTotpErrMsg(data.error || 'Failed to start setup'); setTotpLoading(false); return; }
+      setTotpQR(data.qrCode);
+      setTotpSecret(data.secret);
+      setTotpSetupMode(true);
+    } catch { setTotpErrMsg('Failed to connect to server'); }
+    finally { setTotpLoading(false); }
+  };
+
+  const handleTotpVerify = async () => {
+    if (totpCode.length !== 6) return;
+    setTotpErrMsg(''); setTotpMsg(''); setTotpLoading(true);
+    try {
+      const res = await fetch('/api/auth/totp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: totpCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setTotpErrMsg(data.error || 'Invalid code'); setTotpLoading(false); return; }
+      setTotpEnabled(true);
+      setTotpSetupMode(false);
+      setTotpQR(''); setTotpSecret(''); setTotpCode('');
+      setTotpMsg('Two-factor authentication enabled!');
+    } catch { setTotpErrMsg('Verification failed'); }
+    finally { setTotpLoading(false); }
+  };
+
+  const handleTotpDisable = async () => {
+    if (totpDisableCode.length !== 6) return;
+    setTotpErrMsg(''); setTotpMsg(''); setTotpLoading(true);
+    try {
+      const res = await fetch('/api/auth/totp/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: totpDisableCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setTotpErrMsg(data.error || 'Invalid code'); setTotpLoading(false); return; }
+      setTotpEnabled(false);
+      setTotpDisableMode(false);
+      setTotpDisableCode('');
+      setTotpMsg('Two-factor authentication disabled.');
+    } catch { setTotpErrMsg('Failed to disable'); }
+    finally { setTotpLoading(false); }
+  };
+
   return (
     <section className="mb-5">
       <div className="flex items-center justify-between mb-4">
@@ -283,7 +364,7 @@ export default function DashboardView() {
                 <h4 className="text-[1.1rem] font-bold">{displayName}</h4>
                 {hasGitHub && ghUser && (
                   <a href={`https://github.com/${ghUser.login}`} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors flex items-center gap-1">
-                    <i className="fab fa-github"></i> {profile.title || `@${ghUser.login}`}
+                    <i className="fab fa-github"></i> @{ghUser.login}
                   </a>
                 )}
               </div>
@@ -315,9 +396,6 @@ export default function DashboardView() {
               setProfileForm({
                 universityId: autoId,
                 name: profile.name || '',
-                title: profile.title || '',
-                shortForm: profile.shortForm || '',
-                department: profile.department || '',
                 whatsapp: profile.whatsapp,
                 semester: profile.semester,
                 facebook: profile.facebook,
@@ -341,11 +419,9 @@ export default function DashboardView() {
 
         {/* Profile Completion */}
         {(() => {
-          const studentFields = [profile.universityId, profile.name, profile.whatsapp, profile.semester];
-          const teacherFields = [profile.name, profile.shortForm, profile.department, profile.title];
-          const fields = isStudent ? studentFields : teacherFields;
-          const filled = fields.filter(Boolean).length;
-          const pct = Math.round((filled / fields.length) * 100);
+          const commonFields = [profile.name, profile.universityId, profile.whatsapp, profile.semester];
+          const filled = commonFields.filter(Boolean).length;
+          const pct = Math.round((filled / commonFields.length) * 100);
           return (
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
@@ -367,46 +443,6 @@ export default function DashboardView() {
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
                 <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Sayed Atiqur Rahman" value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} />
               </div>
-              <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Short Form / Initials</label>
-                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. SAR" value={profileForm.shortForm} onChange={e => setProfileForm(p => ({ ...p, shortForm: e.target.value.toUpperCase() }))} />
-              </div>
-              <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Faculty</label>
-                <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
-                  value={(() => { const found = FACULTIES.find(f => f.departments.some(d => d.id === profileForm.department)); return found?.id || ''; })()}
-                  onChange={e => setProfileForm(p => ({ ...p, department: '' }))}
-                >
-                  <option value="">Select faculty...</option>
-                  {FACULTIES.map(f => <option key={f.id} value={f.id}>{f.shortName} — {f.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Department</label>
-                <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
-                  value={profileForm.department}
-                  onChange={e => setProfileForm(p => ({ ...p, department: e.target.value }))}
-                >
-                  <option value="">Select department...</option>
-                  {FACULTIES.flatMap(f => f.departments.map(d => (
-                    <option key={d.id} value={d.id}>{f.shortName} / {d.shortName} — {d.name}</option>
-                  )))}
-                </select>
-              </div>
-              {/* Designation — teachers, admin, manager only */}
-              {isTeacherOrAbove && (
-                <div>
-                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Designation / Title</label>
-                  <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" value={profileForm.title} onChange={e => setProfileForm(p => ({ ...p, title: e.target.value }))}>
-                    <option value="">Select designation...</option>
-                    {TEACHER_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
-                    <option value="__custom">Other (type below)</option>
-                  </select>
-                  {profileForm.title === '__custom' && (
-                    <input type="text" className="w-full mt-1 px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="Type your designation" value="" onChange={e => setProfileForm(p => ({ ...p, title: e.target.value }))} autoFocus />
-                  )}
-                </div>
-              )}
               {/* University ID — students only */}
               {isStudent && (
                 <div>
@@ -491,12 +527,10 @@ export default function DashboardView() {
           <>
             {/* Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-              {isStudent && (
+              {profile.universityId && (
                 <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                   <span className="text-[0.7rem] text-dark-text2 block mb-1">University ID</span>
-                  <span className={`text-[0.85rem] font-semibold ${profile.universityId ? 'text-qsis' : 'text-dark-text2'}`}>
-                    {profile.universityId || 'Not set'}
-                  </span>
+                  <span className="text-[0.85rem] font-semibold text-qsis">{profile.universityId}</span>
                 </div>
               )}
               {profile.department && (
@@ -526,10 +560,10 @@ export default function DashboardView() {
                   {profile.whatsapp || 'Not set'}
                 </span>
               </div>
-              {isStudent && (
+              {profile.semester && (
                 <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                   <span className="text-[0.7rem] text-dark-text2 block mb-1">Semester</span>
-                  <span className={`text-[0.85rem] font-semibold ${profile.semester ? '' : 'text-dark-text2'}`}>{profile.semester ? config.semesters.find(s => s.id === profile.semester)?.label || profile.semester : 'Not set'}</span>
+                  <span className="text-[0.85rem] font-semibold">{config.semesters.find(s => s.id === profile.semester)?.label || profile.semester}</span>
                 </div>
               )}
             </div>
@@ -582,7 +616,7 @@ export default function DashboardView() {
       </div>
 
       {/* ═══════════════ TEACHER INFO ═══════════════ */}
-      {isTeacherOrAbove && (
+      {isTeacherEmail && (
         <TeacherInfoSection email={email} profile={profile} />
       )}
 
@@ -725,6 +759,105 @@ export default function DashboardView() {
             <p className="text-[0.68rem] text-dark-text2 text-center">
               GitHub App is easiest. PAT is needed only for contributor badge.
             </p>
+          </div>
+        )}
+      </div>
+
+      {/* ═══════════════ SECURITY / 2FA ═══════════════ */}
+      <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
+        <h4 className="text-[0.95rem] font-semibold mb-3"><i className="fas fa-shield-alt"></i> Security</h4>
+
+        {totpMsg && (
+          <div className="mb-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-[0.8rem]">
+            <i className="fas fa-check-circle mr-2"></i>{totpMsg}
+          </div>
+        )}
+        {totpErrMsg && (
+          <div className="mb-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
+            <i className="fas fa-exclamation-circle mr-2"></i>{totpErrMsg}
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-dark-bg3 border border-dark-border mb-3">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${totpEnabled ? 'bg-green-500/20' : 'bg-dark-bg'}`}>
+            <i className={`fas ${totpEnabled ? 'fa-check-circle text-green-500' : 'fa-shield-alt text-dark-text2'}`}></i>
+          </div>
+          <div className="flex-1">
+            <span className="text-[0.85rem] font-semibold block">Two-Factor Authentication (TOTP)</span>
+            <span className="text-[0.72rem] text-dark-text2">
+              {totpEnabled ? 'Enabled — your account is protected with an authenticator app' : 'Not enabled — add an extra layer of security to your account'}
+            </span>
+          </div>
+          <span className={`text-[0.7rem] font-bold px-2 py-1 rounded-full ${totpEnabled ? 'bg-green-500/20 text-green-400' : 'bg-dark-bg text-dark-text2'}`}>
+            {totpEnabled ? 'ON' : 'OFF'}
+          </span>
+        </div>
+
+        {!totpEnabled && !totpSetupMode && (
+          <button onClick={handleTotpSetup} disabled={totpLoading}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-qsis text-qsis bg-transparent text-[0.82rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors disabled:opacity-50">
+            {totpLoading ? <><i className="fas fa-spinner fa-spin"></i> Loading...</> : <><i className="fas fa-lock"></i> Set Up Authenticator</>}
+          </button>
+        )}
+
+        {totpSetupMode && (
+          <div className="mt-2">
+            <p className="text-[0.78rem] text-dark-text2 mb-3">
+              <strong>Step 1:</strong> Open Google Authenticator (or any TOTP app) and scan this QR code.
+            </p>
+            {totpQR && (
+              <div className="flex justify-center mb-3">
+                <img src={totpQR} alt="TOTP QR Code" className="rounded-xl border border-dark-border" style={{ width: 200, height: 200 }} />
+              </div>
+            )}
+            <div className="mb-3 p-2 rounded-lg bg-dark-bg3 border border-dark-border">
+              <p className="text-[0.72rem] text-dark-text2 mb-1">Manual key (if you can&apos;t scan):</p>
+              <code className="text-[0.82rem] text-qsis font-mono break-all">{totpSecret}</code>
+            </div>
+            <p className="text-[0.78rem] text-dark-text2 mb-2">
+              <strong>Step 2:</strong> Enter the 6-digit code from your authenticator app.
+            </p>
+            <div className="flex gap-2 items-center">
+              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={totpCode}
+                onChange={e => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000" autoFocus
+                className="px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[1.1rem] tracking-[0.3em] text-center outline-none focus:border-qsis transition-colors font-mono" style={{ width: 130 }} />
+              <button onClick={handleTotpVerify} disabled={totpLoading || totpCode.length !== 6}
+                className="px-4 py-2 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">
+                {totpLoading ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-1"></i> Verify & Enable</>}
+              </button>
+              <button onClick={() => { setTotpSetupMode(false); setTotpQR(''); setTotpSecret(''); setTotpCode(''); setTotpErrMsg(''); }}
+                className="px-3 py-2 rounded-xl border border-dark-border bg-transparent text-dark-text2 text-[0.78rem] font-semibold cursor-pointer hover:text-dark-text transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {totpEnabled && !totpDisableMode && (
+          <button onClick={() => setTotpDisableMode(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-500/40 text-red-400 bg-transparent text-[0.82rem] font-semibold cursor-pointer hover:bg-red-500/10 transition-colors">
+            <i className="fas fa-unlock"></i> Disable Two-Factor Auth
+          </button>
+        )}
+
+        {totpDisableMode && (
+          <div className="mt-2">
+            <p className="text-[0.78rem] text-dark-text2 mb-2">Enter your authenticator code to disable 2FA:</p>
+            <div className="flex gap-2 items-center">
+              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={totpDisableCode}
+                onChange={e => setTotpDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000" autoFocus
+                className="px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[1.1rem] tracking-[0.3em] text-center outline-none focus:border-qsis transition-colors font-mono" style={{ width: 130 }} />
+              <button onClick={handleTotpDisable} disabled={totpLoading || totpDisableCode.length !== 6}
+                className="px-4 py-2 rounded-xl bg-red-500 text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                {totpLoading ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-times mr-1"></i> Disable</>}
+              </button>
+              <button onClick={() => { setTotpDisableMode(false); setTotpDisableCode(''); setTotpErrMsg(''); }}
+                className="px-3 py-2 rounded-xl border border-dark-border bg-transparent text-dark-text2 text-[0.78rem] font-semibold cursor-pointer hover:text-dark-text transition-colors">
+                Cancel
+              </button>
+            </div>
           </div>
         )}
       </div>

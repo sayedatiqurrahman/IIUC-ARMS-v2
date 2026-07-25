@@ -85,7 +85,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
       </head>
       <body className="min-h-screen">
-        <Script src="https://www.google.com/recaptcha/enterprise.js?render=6LcR-WAtAAAAAJhcElM2R7BVtnipP88bqio0AKUs" strategy="beforeInteractive" />
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

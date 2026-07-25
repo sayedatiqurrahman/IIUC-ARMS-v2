@@ -7,11 +7,15 @@ import Link from 'next/link';
 import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
 import { getMimeFromExt, getFileIconByType, esc, timeAgo, extractYear } from '@/lib/utils';
+import { getOnboardingData, clearOnboardingData } from '@/components/OnboardingModal';
 
 export default function BrowsePage() {
   const { data: session } = useSession();
   const profile = useAppStore(s => s.profile);
-  const [showWelcome, setShowWelcome] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('qs-welcome-dismissed') !== 'true';
+  });
 
   const email = session?.user?.email || profile.email || '';
   const userRole = email ? config.detectRole(email) : null;
@@ -93,6 +97,27 @@ export default function BrowsePage() {
     }
     return true;
   });
+
+  // Onboarding-based personalization
+  const onboardData = getOnboardingData();
+  const userSemesterId = onboardData
+    ? config.semesters.find(s => s.label === onboardData.semester)?.id
+    : null;
+  const isMySemesterOnly = onboardData?.fileView === 'my-semester-only' && userSemesterId;
+
+  // Apply onboarding sorting/filtering to semesters
+  const personalizedSemesters = (() => {
+    if (!userSemesterId) return filteredSemesters;
+    if (isMySemesterOnly) {
+      // Only show user's semester + related kitabs
+      return filteredSemesters.filter(s => s.id === userSemesterId || s.isRelated);
+    }
+    // all-prioritized: sort user's semester to top (non-related only)
+    const userSem = filteredSemesters.find(s => s.id === userSemesterId && !s.isRelated);
+    if (!userSem) return filteredSemesters;
+    const rest = filteredSemesters.filter(s => !(s.id === userSemesterId && !s.isRelated));
+    return [userSem, ...rest];
+  })();
 
   const filteredCategories = categories.filter(ce => {
     const catConfig = config.categories[ce.cat as keyof typeof config.categories] || config.categories.other;
@@ -196,7 +221,7 @@ export default function BrowsePage() {
                 )}
               </p>
             </div>
-            <button onClick={() => setShowWelcome(false)} className="text-dark-text3 hover:text-dark-text text-sm ml-3 mt-1 flex-shrink-0" title="Dismiss">
+            <button onClick={() => { setShowWelcome(false); localStorage.setItem('qs-welcome-dismissed', 'true'); }} className="text-dark-text3 hover:text-dark-text text-sm ml-3 mt-1 flex-shrink-0" title="Dismiss">
               <i className="fas fa-times"></i>
             </button>
           </div>
@@ -349,23 +374,47 @@ export default function BrowsePage() {
       {!loading && !error && !isSearching && view === 'semesters' && (
         <section className="mb-5">
           <h3 className="text-base font-semibold flex items-center gap-2 mb-3"><i className="fas fa-book"></i> Select Semester</h3>
-          {filteredSemesters.length === 0 && (
+
+          {/* Edit preference banner for my-semester-only */}
+          {isMySemesterOnly && onboardData && (
+            <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-qsis/30 bg-qsis/5 text-[0.8rem]">
+              <i className="fas fa-filter text-qsis flex-shrink-0"></i>
+              <span className="text-dark-text2">
+                Showing only <strong className="text-dark-text">{onboardData.semester}</strong> files.
+              </span>
+              <button
+                onClick={() => { clearOnboardingData(); window.location.reload(); }}
+                className="ml-auto px-3 py-1.5 rounded-lg bg-qsis/10 border border-qsis/30 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/20 transition-colors flex-shrink-0"
+              >
+                <i className="fas fa-edit mr-1"></i> Change Preference
+              </button>
+            </div>
+          )}
+
+          {personalizedSemesters.length === 0 && (
             <div className="text-center py-8 text-dark-text2">
               <i className="fas fa-search text-3xl mb-3 block opacity-40"></i>
               <p>No semesters match your search.</p>
             </div>
           )}
           <div className="flex flex-col gap-2">
-            {filteredSemesters.filter(s => !s.isRelated).map(sem => (
-              <div key={sem.id} className="flex items-center gap-4 p-[18px_20px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-qsis hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:translate-x-1 transition-all" onClick={() => navigateToSemester(sem.id)}>
+            {personalizedSemesters.filter(s => !s.isRelated).map((sem, idx) => (
+              <div key={sem.id} className={`flex items-center gap-4 p-[18px_20px] bg-dark-bg2 border rounded-xl cursor-pointer hover:border-qsis hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:translate-x-1 transition-all ${idx === 0 && userSemesterId === sem.id && !isMySemesterOnly ? 'border-qsis/40 ring-1 ring-qsis/20' : 'border-dark-border'}`} onClick={() => navigateToSemester(sem.id)}>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-qsis to-accent flex items-center justify-center text-white text-[1.2rem] flex-shrink-0"><i className="fas fa-book"></i></div>
-                <div className="text-[1.05rem] font-bold">{sem.label}</div>
-                <div className="text-[0.8rem] text-dark-text2 ml-auto">{sem.courses} courses &middot; {sem.files} files</div>
+                <div className="flex-1">
+                  <div className="text-[1.05rem] font-bold flex items-center gap-2">
+                    {sem.label}
+                    {idx === 0 && userSemesterId === sem.id && !isMySemesterOnly && (
+                      <span className="text-[0.65rem] px-2 py-0.5 rounded-full bg-qsis/15 text-qsis font-semibold">Your Semester</span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-[0.8rem] text-dark-text2">{sem.courses} courses &middot; {sem.files} files</div>
               </div>
             ))}
           </div>
 
-          {filteredSemesters.filter(s => s.isRelated).map(sem => (
+          {!isMySemesterOnly && personalizedSemesters.filter(s => s.isRelated).map(sem => (
             <div key={sem.id} className="mt-4 flex items-center gap-4 p-[18px_20px] bg-gradient-to-r from-dark-bg2 to-accent/5 border border-accent/30 rounded-xl cursor-pointer hover:border-accent hover:shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:translate-x-1 transition-all" onClick={() => navigateToSemester(sem.id)}>
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-qsis flex items-center justify-center text-white text-[1.2rem] flex-shrink-0"><i className="fas fa-book-open"></i></div>
               <div className="flex-1">
@@ -555,6 +604,23 @@ export default function BrowsePage() {
             </div>
           )}
         </section>
+      )}
+
+      {/* Support Our Work Banner */}
+      {!loading && !error && view === 'semesters' && (
+        <div className="mt-8 bg-gradient-to-br from-qsis/5 to-accent/5 border border-qsis/20 rounded-2xl p-6 text-center">
+          <h4 className="text-[1.05rem] font-bold text-dark-text mb-2"><i className="fas fa-heart text-red-400 mr-2"></i>Support Our Work</h4>
+          <p className="text-[0.82rem] text-dark-text2 mb-4 max-w-md mx-auto">If this project helps you, please give us a star on GitHub. It motivates us to keep building and maintaining this resource for the IIUC community.</p>
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <a href="https://github.com/sayedatiqurrahman/QSIS-ARMS-v2" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-qsis to-accent text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(34,197,94,0.3)] hover:scale-105 transition-all">
+              <i className="fas fa-star"></i> Star QSIS-ARMS v2<span className="text-[0.7rem] opacity-80">(Web App)</span>
+            </a>
+            <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:scale-105 transition-all">
+              <i className="fas fa-star"></i> Star Academic Files<span className="text-[0.7rem] opacity-80">(Data Repo)</span>
+            </a>
+          </div>
+          <p className="text-[0.72rem] text-dark-text2 mt-3"><i className="fas fa-code-branch mr-1"></i>Fork either repo to contribute — check out the README for guidelines!</p>
+        </div>
       )}
     </>
   );

@@ -45,15 +45,14 @@ export async function GET(req: NextRequest) {
       { headers: { 'Content-Type': 'text/html' } }
     );
 
-  } catch (err: any) {
-    console.error('[Install Callback] Error:', err.message);
+  } catch {
     return new Response(
       `<script>
         if (window.opener) {
-          window.opener.postMessage({ type: 'github-install-done', error: ${JSON.stringify(err.message)} }, '*');
+          window.opener.postMessage({ type: 'github-install-done', error: 'Installation failed' }, '*');
           window.close();
         } else {
-          window.location.href = '/dashboard?error=${encodeURIComponent(err.message)}';
+          window.location.href = '/dashboard?error=installation_failed';
         }
       </script>`,
       { headers: { 'Content-Type': 'text/html' } }

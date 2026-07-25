@@ -16,7 +16,6 @@ async function ghFetch(url: string, token: string, retries = 2): Promise<Respons
       const res = await fetch(url, { headers: ghHeaders(token) });
       if ((res.status === 403 || res.status === 429) && i < retries) {
         const wait = 2000 * (i + 1);
-        console.log(`[GitHub] ${res.status} on ${url}, retrying in ${wait}ms...`);
         await new Promise(r => setTimeout(r, wait));
         continue;
       }
@@ -38,7 +37,6 @@ async function ghPost(url: string, token: string, body: any, retries = 2): Promi
       const res = await fetch(url, { method: 'POST', headers: ghHeaders(token), body: JSON.stringify(body) });
       if ((res.status === 403 || res.status === 429) && i < retries) {
         const wait = 2000 * (i + 1);
-        console.log(`[GitHub] ${res.status} on POST ${url}, retrying in ${wait}ms...`);
         await new Promise(r => setTimeout(r, wait));
         continue;
       }
@@ -87,7 +85,6 @@ export async function uploadFilesToGitHub(
 
     const githubUser = await userRes.json();
     const isOwner = githubUser.login === config.owner;
-    console.log(`[GitHub Upload] User: ${githubUser.login}, isOwner: ${isOwner}`);
 
     let targetOwner = config.owner;
     let targetRepo = config.repo;
@@ -98,7 +95,6 @@ export async function uploadFilesToGitHub(
       const forkCheck = await ghFetch(`${GITHUB_API}/repos/${forkFullName}`, token, 0);
 
       if (forkCheck.status === 404) {
-        console.log(`[GitHub Upload] Forking repo for ${githubUser.login}...`);
         const forkRes = await ghPost(`${GITHUB_API}/repos/${config.owner}/${config.repo}/forks`, token, { default_branch_only: true });
 
         if (!forkRes.ok) {
@@ -109,10 +105,7 @@ export async function uploadFilesToGitHub(
         for (let i = 0; i < 10; i++) {
           await new Promise(r => setTimeout(r, 2000));
           const check = await ghFetch(`${GITHUB_API}/repos/${forkFullName}`, token, 0);
-          if (check.ok) {
-            console.log(`[GitHub Upload] Fork ready after ${(i + 1) * 2}s`);
-            break;
-          }
+          if (check.ok) break;
           if (i === 9) return { success: false, error: 'Fork is taking too long. Please try again in a moment.' };
         }
       } else if (!forkCheck.ok) {
@@ -126,7 +119,6 @@ export async function uploadFilesToGitHub(
     if (!repoRes.ok) return { success: false, error: `Cannot access repository (${repoRes.status})` };
     const repoData = await repoRes.json();
     const defaultBranch = repoData.default_branch;
-    console.log(`[GitHub Upload] Default branch: ${defaultBranch}`);
 
     // Step 4: Get base SHA from target repo
     const baseRefRes = await ghFetch(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/git/refs/heads/${defaultBranch}`, token);
@@ -136,11 +128,9 @@ export async function uploadFilesToGitHub(
     }
     const baseRefData = await baseRefRes.json();
     const baseSha = baseRefData.object.sha;
-    console.log(`[GitHub Upload] Base SHA: ${baseSha.substring(0, 7)}`);
 
     // Step 5: Create branch
     const branch = `upload/${Date.now()}`;
-    console.log(`[GitHub Upload] Creating branch: ${branch}`);
 
     const createBranchRes = await ghPost(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/git/refs`, token, {
       ref: `refs/heads/${branch}`,
@@ -149,25 +139,22 @@ export async function uploadFilesToGitHub(
 
     if (!createBranchRes.ok && createBranchRes.status !== 422) {
       const errBody = await createBranchRes.json().catch(() => ({}));
-      console.error(`[GitHub Upload] Branch creation failed:`, errBody);
 
       // Check if it's a permission issue
       if (createBranchRes.status === 403) {
         return {
           success: false,
-          error: `Permission denied (403). Your GitHub token may need "repo" scope. Please disconnect and reconnect GitHub from Dashboard. Error: ${errBody.message || 'Forbidden'}`,
+          error: `Permission denied (403). Your GitHub token may need "repo" scope. Please disconnect and reconnect GitHub from Dashboard.`,
           tokenExpired: true,
         };
       }
       return { success: false, error: `Failed to create branch: ${errBody.message || createBranchRes.status}` };
     }
-    console.log(`[GitHub Upload] Branch created successfully`);
 
     // Step 6: Upload files one by one
     let uploadedCount = 0;
     for (const file of files) {
       const filePath = `${config.uploadPath}/${file.path}`;
-      console.log(`[GitHub Upload] Uploading: ${filePath}`);
 
       let fileSha: string | undefined;
       try {
@@ -193,16 +180,13 @@ export async function uploadFilesToGitHub(
 
       if (!putRes.ok) {
         const err = await putRes.json().catch(() => ({}));
-        console.error(`[GitHub Upload] File upload failed:`, err);
         return { success: false, error: err.message || `Failed to upload ${file.path} (${putRes.status})` };
       }
       uploadedCount++;
-      console.log(`[GitHub Upload] Uploaded ${uploadedCount}/${files.length}: ${filePath}`);
     }
 
     // Step 7: Create PR
     const prHead = isOwner ? branch : `${githubUser.login}:${branch}`;
-    console.log(`[GitHub Upload] Creating PR: ${prHead} -> ${defaultBranch}`);
 
     const prRes = await ghPost(`${GITHUB_API}/repos/${config.owner}/${config.repo}/pulls`, token, {
       title: message,
@@ -210,7 +194,6 @@ export async function uploadFilesToGitHub(
         `## QSIS-ARMS File Upload`,
         ``,
         `**Contributor:** ${githubUser.name || githubUser.login} (@${githubUser.login})`,
-        `**Email:** ${githubUser.email || 'N/A'}`,
         ``,
         `### Files`,
         files.map(f => `- \`${f.path}\``).join('\n'),
@@ -224,16 +207,13 @@ export async function uploadFilesToGitHub(
 
     if (!prRes.ok) {
       const err = await prRes.json().catch(() => ({}));
-      console.error(`[GitHub Upload] PR creation failed:`, err);
       return { success: false, error: err.message || `Failed to create Pull Request (${prRes.status})` };
     }
 
     const prData = await prRes.json();
-    console.log(`[GitHub Upload] PR created: ${prData.html_url}`);
     return { success: true, prUrl: prData.html_url };
 
   } catch (err: any) {
-    console.error('[GitHub Upload] Error:', err);
     return { success: false, error: err.message || 'Network error. Please check your connection and try again.' };
   }
 }

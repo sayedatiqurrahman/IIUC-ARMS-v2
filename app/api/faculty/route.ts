@@ -15,14 +15,14 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const department = url.searchParams.get('department');
     const search = url.searchParams.get('search') || '';
-    const role = url.searchParams.get('role');
+    const memberType = url.searchParams.get('memberType') || url.searchParams.get('role');
     const title = url.searchParams.get('title') || '';
 
     const { prisma } = await import('@/lib/prisma');
 
     const where: any = {};
     if (department) where.department = department;
-    if (role) where.memberType = role;
+    if (memberType) where.memberType = memberType;
     if (title) where.title = title;
     if (search) {
       const q = search.toLowerCase();
@@ -40,9 +40,8 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ members });
-  } catch (err: any) {
-    console.error('[Faculty] Error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to load faculty' }, { status: 500 });
   }
 }
 
@@ -81,9 +80,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, member });
-  } catch (err: any) {
-    console.error('[Faculty] Create error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to create' }, { status: 500 });
   }
 }
 
@@ -116,9 +114,8 @@ export async function PUT(req: NextRequest) {
 
     const updated = await prisma.facultyMember.update({ where: { id }, data });
     return NextResponse.json({ success: true, member: updated });
-  } catch (err: any) {
-    console.error('[Faculty] Update error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
   }
 }
 
@@ -142,8 +139,7 @@ export async function DELETE(req: NextRequest) {
 
     await prisma.facultyMember.delete({ where: { id } });
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Faculty] Delete error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
   }
 }

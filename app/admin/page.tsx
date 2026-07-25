@@ -4,16 +4,23 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import AdminPanelView from '@/components/views/AdminPanelView';
+import { config } from '@/lib/config';
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
+  const email = (session as any)?.user?.email || '';
+  const effectiveRole = config.getEffectiveRole(email);
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/');
     }
-  }, [status, router]);
+    if (status === 'authenticated' && effectiveRole !== 'admin') {
+      router.push('/');
+    }
+  }, [status, effectiveRole, router]);
 
   if (status === 'loading') {
     return (
@@ -36,7 +43,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!session) return null;
+  if (!session || effectiveRole !== 'admin') return null;
 
   return <AdminPanelView />;
 }

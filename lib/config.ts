@@ -9,8 +9,8 @@ export const config = {
   founderName: 'Sayed Atiqur Rahman',
   founderAgency: 'Programming Light',
   adobeClientId: process.env.NEXT_PUBLIC_ADOBE_CLIENT_ID || '',
-  recaptchaSiteKey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '',
-  emailRegex: /^q\d{5,8}@ugrad\.iiuc\.ac\.bd$/i,
+  turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '',
+  emailRegex: /^(?:q\d{5,8}@ugrad\.iiuc\.ac\.bd|[^@]+@iiuc\.ac\.bd)$/i,
   adminEmails: [
     's.atiqurrahman2003@gmail.com',
     'quranicsciencesclub@gmail.com',
@@ -58,6 +58,10 @@ export const config = {
   maxFilesPerUpload: 10,
   maxUploadSizeMB: 50,
   academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','webp','csv'],
+  githubStarRepos: [
+    { owner: 'sayedatiqurrahman', repo: 'QSIS-ACADEMIC-FILES-MANAFGER', label: 'QSIS Academic Files' },
+    { owner: 'sayedatiqurrahman', repo: 'QSIS-ARMS-v2', label: 'QSIS-ARMS Source Code' },
+  ],
   semesters: [
     { id: '1st-semister', label: '1st Semester' },
     { id: '2nd-semister', label: '2nd Semester' },

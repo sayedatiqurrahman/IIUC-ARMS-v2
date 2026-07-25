@@ -2,14 +2,15 @@ import GitHubProvider from 'next-auth/providers/github';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import type { NextAuthOptions } from 'next-auth';
 
-const IIUC_EMAIL_REGEX = /^q\d{5,8}@ugrad\.iiuc\.ac\.bd$/i;
+const IIUC_STUDENT_REGEX = /^q\d{5,8}@ugrad\.iiuc\.ac\.bd$/i;
+const IIUC_TEACHER_REGEX = /^[^@]+@iiuc\.ac\.bd$/i;
 const OWNER_EMAILS = [
   'quranicsciencesclub@gmail.com',
   's.atiqurrahman2003@gmail.com',
 ];
 
 function isAllowedEmail(email: string): boolean {
-  return IIUC_EMAIL_REGEX.test(email) || OWNER_EMAILS.includes(email);
+  return IIUC_STUDENT_REGEX.test(email) || IIUC_TEACHER_REGEX.test(email) || OWNER_EMAILS.includes(email);
 }
 
 async function verifyFirebaseToken(idToken: string) {
@@ -36,9 +37,21 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         name: { label: 'Name', type: 'text' },
         image: { label: 'Image', type: 'text' },
+        turnstileToken: { label: 'Turnstile Token', type: 'text' },
       },
       async authorize(credentials) {
         if (!credentials?.idToken) return null;
+
+        // Verify Turnstile token
+        if (credentials.turnstileToken) {
+          try {
+            const { verifyTurnstile } = await import('@/lib/verifyTurnstile');
+            const turnstileValid = await verifyTurnstile(credentials.turnstileToken);
+            if (!turnstileValid) return null;
+          } catch (err) {
+            console.warn('Turnstile verification skipped');
+          }
+        }
 
         // Try Firebase Admin verification first
         const decoded = await verifyFirebaseToken(credentials.idToken);

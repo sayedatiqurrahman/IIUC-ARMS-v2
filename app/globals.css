@@ -1778,3 +1778,120 @@ button { font-family: inherit; }
     margin: 20mm;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ROUTINE — MOBILE: HORIZONTAL SCROLL (no responsive shrinking)
+   ═══════════════════════════════════════════════════════════ */
+.routine-preview-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .routine-preview-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+  }
+
+  .routine-preview-scroll .routine-export {
+    min-width: 920px;
+    width: 920px;
+    max-width: 920px;
+    border-radius: 12px;
+  }
+
+  /* Builder / Card responsive only — NOT the print view */
+  .routine-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .routine-builder-steps {
+    padding: 14px 16px;
+  }
+
+  .routine-step-label {
+    font-size: 0.65rem;
+  }
+
+  .routine-card {
+    padding: 14px;
+  }
+
+  .routine-card-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .routine-page-header {
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .routine-page-title {
+    font-size: 0.9rem;
+  }
+
+  .routine-page-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .routine-builder-steps {
+    gap: 4px;
+    padding: 10px 12px;
+  }
+
+  .routine-step-num {
+    width: 22px;
+    height: 22px;
+    font-size: 0.6rem;
+  }
+
+  .routine-step-label {
+    font-size: 0.58rem;
+  }
+
+  .routine-step-line {
+    width: 16px;
+  }
+
+  .routine-card {
+    padding: 12px;
+  }
+
+  .routine-card-header {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .routine-card-actions {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .routine-card-btn {
+    font-size: 0.65rem;
+    padding: 4px 8px;
+  }
+
+  .routine-btn {
+    font-size: 0.72rem;
+    padding: 6px 10px;
+  }
+
+  .routine-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .routine-manager-grid {
+    grid-template-columns: 1fr;
+  }
+}

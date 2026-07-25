@@ -10,7 +10,7 @@ function AuthErrorContent() {
   const error = searchParams.get('error');
 
   const messages: Record<string, string> = {
-    'invalid-email': 'Only IIUC departmental emails are allowed (e.g. q233099@ugrad.iiuc.ac.bd). Please sign in with your university email.',
+    'invalid-email': 'Only IIUC departmental emails are allowed (e.g. q{your_id}@ugrad.iiuc.ac.bd). Please sign in with your university email.',
     'account-banned': 'Your account has been suspended by an administrator. You cannot access the system. Contact admin for more information.',
     'CredentialsSignin': 'Invalid email or password. Please try again.',
     'default': 'An authentication error occurred. Please try again.',

@@ -14,6 +14,11 @@ export async function GET(req: NextRequest) {
 
     const { prisma } = await import('@/lib/prisma');
 
+    // Auto-cleanup: delete activity logs older than 3 months
+    const activityCutoff = new Date();
+    activityCutoff.setMonth(activityCutoff.getMonth() - 3);
+    await prisma.activityLog.deleteMany({ where: { createdAt: { lt: activityCutoff } } });
+
     const url = new URL(req.url);
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
     const offset = parseInt(url.searchParams.get('offset') || '0');
@@ -38,22 +43,30 @@ export async function GET(req: NextRequest) {
     ]);
 
     const totalUsers = await prisma.profile.count();
+    const bannedUsers = await prisma.profile.count({ where: { isBanned: true } });
     const githubConnected = await prisma.profile.count({ where: { githubLogin: { not: null } } });
-    const profileComplete = await prisma.profile.count({ where: { universityId: { not: null }, name: { not: null } } });
+
+    const roleMap: Record<string, number> = {};
+    for (const r of userStats) {
+      roleMap[r.role || 'user'] = r._count;
+    }
 
     return NextResponse.json({
       activities,
       total,
       stats: {
-        totalUsers,
+        total: totalUsers,
+        admins: roleMap['admin'] || 0,
+        teachers: roleMap['teacher'] || 0,
+        students: roleMap['student'] || 0,
+        managers: roleMap['manager'] || 0,
+        users: (roleMap['user'] || 0) + (roleMap['student'] || 0),
+        banned: bannedUsers,
         githubConnected,
-        profileComplete,
-        byRole: userStats.map(r => ({ role: r.role || 'user', count: r._count })),
       },
     });
-  } catch (err: any) {
-    console.error('[Activity] Error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to load activity' }, { status: 500 });
   }
 }
 
@@ -80,8 +93,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, log });
-  } catch (err: any) {
-    console.error('[Activity] Log error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to log activity' }, { status: 500 });
   }
 }

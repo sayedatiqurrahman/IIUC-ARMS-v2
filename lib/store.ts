@@ -31,20 +31,7 @@ export interface Category {
   folders: string[];
 }
 
-/* ─── helpers ─── */
-function getRawUrl(path: string) {
-  return `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${config.uploadPath}/${path}`;
-}
-
-function getMimeFromExt(ext: string) {
-  const e = ext.toLowerCase();
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(e)) return 'image';
-  if (e === 'pdf') return 'pdf';
-  if (['doc', 'docx'].includes(e)) return 'doc';
-  if (['xls', 'xlsx', 'csv'].includes(e)) return 'sheet';
-  if (['ppt', 'pptx'].includes(e)) return 'ppt';
-  return 'other';
-}
+import { getRawUrl, getMimeFromExt } from './utils';
 
 function detectCategory(name: string) {
   const l = name.toLowerCase();
@@ -243,10 +230,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         set(updates);
       } else {
         const err = await res.json().catch(() => ({ error: res.statusText }));
-        console.error('[Profile] Load failed:', res.status, err);
       }
-    } catch (err) {
-      console.error('[Profile] Load error:', err);
+    } catch {
     }
   },
   updateProfile: async (p) => {
@@ -265,15 +250,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ profile: { ...defaultProfile, ...data } });
       } else {
         const err = await res.json().catch(() => ({ error: res.statusText }));
-        console.error('[Profile] Save failed:', res.status, err);
         set({ profile: snapshot });
         if (typeof window !== 'undefined') {
           const { showToast } = await import('@/lib/utils');
           showToast(`Failed to save: ${err.error || 'Unknown error'}`, 'error');
         }
       }
-    } catch (err) {
-      console.error('[Profile] Save error:', err);
+    } catch {
       set({ profile: snapshot });
     }
   },
@@ -520,8 +503,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ contributors: [] });
       }
-    } catch (err) {
-      console.warn('Failed to load contributors:', err);
+    } catch {
       set({ contributors: [] });
     }
     set({ contributorsLoading: false });
@@ -537,8 +519,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ routineData: [] });
       }
-    } catch (err) {
-      console.warn('Failed to load routine:', err);
+    } catch {
       set({ routineData: [] });
     }
     set({ routineLoading: false });

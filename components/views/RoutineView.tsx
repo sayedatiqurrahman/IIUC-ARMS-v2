@@ -1,12 +1,13 @@
 'use client';
 
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, forwardRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
+import { getOnboardingData, clearOnboardingData } from '@/components/OnboardingModal';
 
 interface RoutinePeriod {
   name: string;
@@ -33,6 +34,7 @@ interface RoutineItem {
   semester: string;
   session: string;
   branch: string | null;
+  gender: 'male' | 'female' | 'both' | null;
   academicYear: string;
   department: string;
   university: string;
@@ -41,6 +43,10 @@ interface RoutineItem {
   days: string[];
   courses: RoutineCourse[];
   slots: RoutineSlot[];
+  malePeriods?: RoutinePeriod[];
+  femalePeriods?: RoutinePeriod[];
+  maleSlots?: RoutineSlot[];
+  femaleSlots?: RoutineSlot[];
   createdAt?: number;
   published?: boolean;
   isDraft?: boolean;
@@ -135,15 +141,32 @@ function savePublishedRoutines(routines: RoutineItem[]) {
   localStorage.setItem(LS_PUBLISHED, JSON.stringify(routines));
 }
 
+async function fetchPublishedRoutinesFromDB(): Promise<RoutineItem[]> {
+  try {
+    const res = await fetch('/api/published-routines');
+    const data = await res.json();
+    if (data.success && Array.isArray(data.routines)) {
+      localStorage.setItem(LS_PUBLISHED, JSON.stringify(data.routines));
+      return data.routines;
+    }
+  } catch {}
+  return loadPublishedRoutines();
+}
+
 interface DraftData {
   semester?: string;
   branch?: string | null;
+  gender?: 'male' | 'female' | 'both' | null;
   session?: string;
   room?: string;
   periods?: RoutinePeriod[];
   days?: string[];
   courses?: RoutineCourse[];
   slots?: RoutineSlot[];
+  malePeriods?: RoutinePeriod[];
+  femalePeriods?: RoutinePeriod[];
+  maleSlots?: RoutineSlot[];
+  femaleSlots?: RoutineSlot[];
   step?: string;
 }
 
@@ -163,7 +186,153 @@ function clearDraft() {
   localStorage.removeItem(LS_DRAFT);
 }
 
-type ViewMode = 'manager' | 'preview' | 'builder';
+/* ─── All Semester Draft (unified) ─── */
+const LS_ALL_SEM_DRAFT = 'qsis-all-sem-draft';
+
+const DEFAULT_FEMALE_PERIODS: RoutinePeriod[] = [
+  { name: '1st Period', start: '8:20 AM', end: '9:10 AM' },
+  { name: '2nd Period', start: '9:10 AM', end: '10:00 AM' },
+  { name: '3rd Period', start: '10:00 AM', end: '10:50 AM' },
+  { name: '4th Period', start: '10:50 AM', end: '11:40 AM' },
+  { name: '5th Period', start: '11:40 AM', end: '12:30 PM' },
+  { name: '6th Period', start: '12:30 PM', end: '01:20 PM' },
+];
+
+interface AllSemesterDraftSection {
+  branch: string | null;
+  gender: 'male' | 'female';
+  room: string;
+  slots: RoutineSlot[];
+}
+
+interface AllSemesterDraftSemester {
+  name: string;
+  courses: RoutineCourse[];
+  sections: AllSemesterDraftSection[];
+  maleRoom: string;
+  femaleRoom: string;
+}
+
+interface AllSemesterDraft {
+  id: string;
+  session: string;
+  days: string[];
+  draftGender: 'male' | 'female' | 'both';
+  malePeriods: RoutinePeriod[];
+  femalePeriods: RoutinePeriod[];
+  semesters: AllSemesterDraftSemester[];
+}
+
+function loadAllSemDraft(): AllSemesterDraft | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(LS_ALL_SEM_DRAFT);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveAllSemDraft(draft: AllSemesterDraft) {
+  localStorage.setItem(LS_ALL_SEM_DRAFT, JSON.stringify(draft));
+}
+
+function clearAllSemDraft() {
+  localStorage.removeItem(LS_ALL_SEM_DRAFT);
+}
+
+function createEmptyDraft(): AllSemesterDraft {
+  return {
+    id: `all-sem-${Date.now()}`,
+    session: getDefaultSession(),
+    days: [...DEFAULT_DAYS],
+    draftGender: 'both',
+    malePeriods: [...DEFAULT_PERIODS],
+    femalePeriods: [...DEFAULT_FEMALE_PERIODS],
+    semesters: SEMESTERS.map(name => ({ name, courses: [], sections: [], maleRoom: '', femaleRoom: '' })),
+  };
+}
+
+interface TeacherConflict {
+  semester: string;
+  gender: string;
+  section: string;
+  courseCode: string;
+  courseTitle: string;
+  teacher: string;
+  day: string;
+  period: number;
+}
+
+function findTeacherConflicts(
+  draft: AllSemesterDraft,
+  teacherName: string,
+  day: string,
+  periodIdx: number,
+  excludeKey: string,
+  tempGenderSlots?: Record<string, Record<string, Record<number, string>>>
+): TeacherConflict[] {
+  if (!teacherName) return [];
+  const conflicts: TeacherConflict[] = [];
+
+  // Check section-based slots
+  for (const sem of draft.semesters) {
+    for (const sec of sem.sections) {
+      const key = `${sem.name}-${sec.gender}-${sec.branch || 'main'}`;
+      if (key === excludeKey) continue;
+      for (const slot of sec.slots) {
+        if (slot.day !== day || slot.period !== periodIdx) continue;
+        const course = sem.courses.find(c => c.code === slot.course);
+        if (course && course.teacher === teacherName) {
+          conflicts.push({
+            semester: sem.name,
+            gender: sec.gender,
+            section: sec.branch || 'Main',
+            courseCode: course.code,
+            courseTitle: course.title,
+            teacher: teacherName,
+            day: slot.day,
+            period: slot.period,
+          });
+        }
+      }
+    }
+  }
+
+  // Check tempGenderSlots (no-sections mode)
+  if (tempGenderSlots) {
+    for (const [semName, genders] of Object.entries(tempGenderSlots)) {
+      for (const [gender, cells] of Object.entries(genders)) {
+        const key = `${semName}-${gender}-all`;
+        if (key === excludeKey) continue;
+        const sem = draft.semesters.find(s => s.name === semName);
+        if (!sem) continue;
+        for (const [cellKey, courseCode] of Object.entries(cells)) {
+          if (!courseCode) continue;
+          const [cDay, periodStr] = cellKey.split(':');
+          if (cDay !== day || parseInt(periodStr) !== periodIdx) continue;
+          const course = sem.courses.find(c => c.code === courseCode);
+          if (course && course.teacher === teacherName) {
+            conflicts.push({
+              semester: semName,
+              gender: gender as 'male' | 'female',
+              section: 'Main',
+              courseCode: course.code,
+              courseTitle: course.title,
+              teacher: teacherName,
+              day: cDay,
+              period: periodIdx,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return conflicts;
+}
+
+type AllSemBuilderStep = 'info' | 'courses' | 'periods' | 'assign';
+
+type ViewMode = 'manager' | 'preview' | 'builder' | 'allBranch';
 
 export default function RoutineView() {
   const router = useRouter();
@@ -174,6 +343,8 @@ export default function RoutineView() {
   const profile = useAppStore(s => s.profile);
   const printRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [hasAllSemDraft, setHasAllSemDraft] = useState(false);
+  const [allSemDraftData, setAllSemDraftData] = useState<AllSemesterDraft | null>(null);
 
   const [viewMode, setViewMode] = useState<ViewMode>('manager');
   const [myRoutines, setMyRoutines] = useState<RoutineItem[]>([]);
@@ -184,15 +355,48 @@ export default function RoutineView() {
   const email = session?.user?.email || profile.email || '';
   const isOwner = config.ownerEmails.includes(email);
   const canPublish = config.canPublishRoutine(email, profile) || isOwner;
+  const canCreateAllBranch = config.canPublishRoutine(email, profile) || isOwner;
 
   const sharedRoutines: RoutineItem[] = Array.isArray(routineData) ? routineData : [];
   const routines = sharedRoutines;
-  const allVisibleRoutines = [...publishedRoutines, ...sharedRoutines];
+
+  // Onboarding-based personalization for routines
+  const onboardData = getOnboardingData();
+  const userSemesterLabel = onboardData?.semester || null;
+  const userGender = onboardData?.gender || null;
+  const isMySemesterOnly = onboardData?.fileView === 'my-semester-only' && userSemesterLabel;
+
+  // Filter routine by user's gender
+  const filterByGender = (r: RoutineItem): boolean => {
+    if (!userGender) return true;
+    if (r.gender === 'both' || r.gender === null) return true;
+    return r.gender === userGender;
+  };
+
+  const allVisibleRoutines = (() => {
+    const all = [...publishedRoutines, ...sharedRoutines].filter(filterByGender);
+    if (!userSemesterLabel) return all;
+    if (isMySemesterOnly) {
+      return all.filter(r => r.semester === userSemesterLabel);
+    }
+    // all-prioritized: user's semester routines first
+    const userRoutines = all.filter(r => r.semester === userSemesterLabel);
+    const otherRoutines = all.filter(r => r.semester !== userSemesterLabel);
+    return [...userRoutines, ...otherRoutines];
+  })();
+
   const currentPreview = myRoutines.find(r => r.id === selectedId) || allVisibleRoutines.find(r => r.id === selectedId) || null;
 
   useEffect(() => {
     setMyRoutines(loadMyRoutines());
     setPublishedRoutines(loadPublishedRoutines());
+    const allSemDraft = loadAllSemDraft();
+    setHasAllSemDraft(!!allSemDraft);
+    setAllSemDraftData(allSemDraft);
+    // Load published routines from DB (with auto-cleanup)
+    fetchPublishedRoutinesFromDB().then(r => {
+      setPublishedRoutines(r);
+    });
   }, []);
 
   useEffect(() => {
@@ -251,13 +455,11 @@ export default function RoutineView() {
     const myUpdated = myRoutines.map(r => r.id === routine.id ? { ...r, isDraft: false } : r);
     persistMyRoutines(myUpdated);
 
-    fetch('/api/activity', {
+    // Save to DB
+    fetch('/api/published-routines', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'routine_publish',
-        details: JSON.stringify({ semester: routine.semester, branch: routine.branch, publisher: publisherName }),
-      }),
+      body: JSON.stringify({ routines: [published] }),
     }).catch(() => {});
 
     showToast('Routine published! All users can now see it.', 'success');
@@ -277,36 +479,57 @@ export default function RoutineView() {
       const el = printRef.current;
       const domtoimage = (await import('dom-to-image-more')).default;
 
-      const dataUrl = await domtoimage.toPng(el, {
+      const exportContainer = document.createElement('div');
+      exportContainer.style.cssText = 'position:fixed;left:-9999px;top:0;width:920px;z-index:-1;opacity:0;pointer-events:none;background:#fff;padding:0;margin:0';
+      document.body.appendChild(exportContainer);
+
+      const clone = el.cloneNode(true) as HTMLElement;
+      clone.style.width = '920px';
+      clone.style.minWidth = '920px';
+      clone.style.maxWidth = '920px';
+      clone.style.margin = '0';
+      clone.style.border = '2px solid #166534';
+      clone.style.borderRadius = '12px';
+      clone.style.overflow = 'hidden';
+      exportContainer.appendChild(clone);
+
+      clone.querySelectorAll<HTMLElement>('.routine-course-code').forEach(n => { n.style.whiteSpace = 'nowrap'; });
+      clone.querySelectorAll<HTMLElement>('.routine-course-title').forEach(n => { n.style.whiteSpace = 'normal'; n.style.overflowWrap = 'break-word'; });
+      clone.querySelectorAll<HTMLElement>('.routine-course-teacher').forEach(n => { n.style.whiteSpace = 'nowrap'; });
+      clone.querySelectorAll<HTMLElement>('.routine-th').forEach(n => { n.style.whiteSpace = 'nowrap'; });
+      clone.querySelectorAll<HTMLElement>('.routine-time-text').forEach(n => { n.style.whiteSpace = 'nowrap'; });
+      clone.querySelectorAll<HTMLElement>('.routine-time-sub').forEach(n => { n.style.whiteSpace = 'nowrap'; });
+      clone.querySelectorAll<HTMLElement>('.routine-period-name').forEach(n => { n.style.whiteSpace = 'nowrap'; });
+
+      const badges = clone.querySelector('.routine-badges') as HTMLElement | null;
+      if (badges) { badges.style.flexWrap = 'nowrap'; badges.style.justifyContent = 'center'; }
+
+      const table = clone.querySelector('.routine-table') as HTMLElement | null;
+      if (table) {
+        table.style.tableLayout = 'fixed';
+        table.style.width = '100%';
+        const ths = Array.from(table.querySelectorAll<HTMLElement>('.routine-th'));
+        const dayCount = ths.length - 1;
+        if (dayCount > 0) {
+          ths[0].style.width = '110px';
+          const dayWidth = `calc((100% - 110px) / ${dayCount})`;
+          for (let i = 1; i < ths.length; i++) ths[i].style.width = dayWidth;
+        }
+      }
+
+      await new Promise(r => setTimeout(r, 200));
+
+      const dataUrl = await domtoimage.toPng(clone, {
         quality: 0.95,
         pixelRatio: 3,
         bgcolor: '#ffffff',
         cacheBust: true,
-        filter: (node: HTMLElement) => {
-          return !node.classList?.contains('no-print');
-        },
-        onclone: (clone: Node) => {
-          const doc = clone.ownerDocument;
-          if (!doc) return;
-
-          const root = doc.querySelector('.routine-export') as HTMLElement | null;
-          if (root) {
-            root.style.width = '920px';
-            root.style.minWidth = '920px';
-            root.style.maxWidth = '920px';
-          }
-
-          doc.querySelectorAll<HTMLElement>('.routine-course-code').forEach(el => {
-            el.style.whiteSpace = 'nowrap';
-          });
-
-          const badges = doc.querySelector('.routine-badges') as HTMLElement | null;
-          if (badges) {
-            badges.style.flexWrap = 'nowrap';
-            badges.style.justifyContent = 'center';
-          }
-        },
+        width: 920,
+        style: { borderRadius: '12px', overflow: 'hidden' },
+        filter: (node: HTMLElement) => !node.classList?.contains('no-print'),
       });
+
+      document.body.removeChild(exportContainer);
 
       if (format === 'pdf') {
         const { jsPDF } = await import('jspdf');
@@ -317,27 +540,25 @@ export default function RoutineView() {
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfW = pdf.internal.pageSize.getWidth();
         const pdfH = pdf.internal.pageSize.getHeight();
-        const margin = 15;
-        const imgW = pdfW - margin * 2;
-        const imgH = (img.height * imgW) / img.width;
+        const margin = 10;
+        const contentW = pdfW - margin * 2;
+        const contentH = pdfH - margin * 2;
+        const imgRatio = img.width / img.height;
+        const contentRatio = contentW / contentH;
 
-        if (imgH <= pdfH - margin * 2) {
-          pdf.addImage(dataUrl, 'PNG', margin, margin, imgW, imgH);
+        let drawW: number, drawH: number;
+        if (imgRatio > contentRatio) {
+          drawW = contentW;
+          drawH = contentW / imgRatio;
         } else {
-          const pageContentH = pdfH - margin * 2;
-          const sourceH = (pageContentH / imgH) * img.height;
-          let yPos = 0;
-          while (yPos < img.height) {
-            if (yPos > 0) pdf.addPage();
-            const sliceCanvas = document.createElement('canvas');
-            sliceCanvas.width = img.width;
-            sliceCanvas.height = Math.min(sourceH, img.height - yPos);
-            const ctx = sliceCanvas.getContext('2d')!;
-            ctx.drawImage(img, 0, yPos, img.width, sliceCanvas.height, 0, 0, img.width, sliceCanvas.height);
-            pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgW, (sliceCanvas.height * imgW) / img.width);
-            yPos += sourceH;
-          }
+          drawH = contentH;
+          drawW = contentH * imgRatio;
         }
+
+        const xOffset = margin + (contentW - drawW) / 2;
+        const yOffset = margin + (contentH - drawH) / 2;
+
+        pdf.addImage(dataUrl, 'PNG', xOffset, yOffset, drawW, drawH);
         pdf.save(`QSIS-Routine-${currentPreview?.semester || 'Routine'}.pdf`);
       } else {
         const link = document.createElement('a');
@@ -392,14 +613,57 @@ export default function RoutineView() {
               <p className="routine-page-sub">Manage and view your class schedules</p>
             </div>
             <div className="routine-page-actions">
-              <button className="routine-btn routine-btn-primary" onClick={() => { setEditingId(null); setViewMode('builder'); }}>
+              <button className="routine-btn routine-btn-primary" onClick={() => {
+                const draftId = `draft-${Date.now()}`;
+                const draft: RoutineItem = {
+                  id: draftId,
+                  semester: SEMESTERS[0],
+                  branch: null,
+                  gender: null,
+                  session: getDefaultSession(),
+                  room: '',
+                  academicYear: new Date().getFullYear().toString(),
+                  department: 'Department of Qur\'anic Sciences & Islamic Studies',
+                  university: 'International Islamic University Chittagong',
+                  periods: [...DEFAULT_PERIODS],
+                  days: [...DEFAULT_DAYS],
+                  courses: [],
+                  slots: [],
+                  createdAt: Date.now(),
+                  isDraft: true,
+                };
+                persistMyRoutines([...myRoutines, draft]);
+                setEditingId(draftId);
+                setViewMode('builder');
+              }}>
                 <i className="fas fa-plus"></i> Create New
               </button>
+              {canCreateAllBranch && (
+                <button className="routine-btn routine-btn-accent" onClick={() => setViewMode('allBranch')}>
+                  <i className="fas fa-layer-group"></i> All Semester Routine Routine
+                </button>
+              )}
               <button className="routine-btn routine-btn-ghost" onClick={() => router.push('/')}><i className="fas fa-arrow-left"></i> Back</button>
             </div>
           </div>
 
-          {myRoutines.length === 0 && allVisibleRoutines.length === 0 ? (
+          {/* Edit preference banner for my-semester-only */}
+          {isMySemesterOnly && onboardData && (
+            <div className="mb-4 no-print flex items-center gap-3 px-4 py-3 rounded-xl border border-qsis/30 bg-qsis/5 text-[0.8rem]">
+              <i className="fas fa-filter text-qsis flex-shrink-0"></i>
+              <span className="text-dark-text2">
+                Showing only <strong className="text-dark-text">{onboardData.semester}</strong> routines for <strong className="text-dark-text">{userGender === 'male' ? 'Male' : 'Female'}</strong>.
+              </span>
+              <button
+                onClick={() => { clearOnboardingData(); window.location.reload(); }}
+                className="ml-auto px-3 py-1.5 rounded-lg bg-qsis/10 border border-qsis/30 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/20 transition-colors flex-shrink-0"
+              >
+                <i className="fas fa-edit mr-1"></i> Change Preference
+              </button>
+            </div>
+          )}
+
+          {myRoutines.length === 0 && allVisibleRoutines.length === 0 && !hasAllSemDraft ? (
             <div className="routine-empty-state">
               <div className="routine-empty-icon"><i className="fas fa-calendar-plus"></i></div>
               <h4>No Routines Yet</h4>
@@ -410,6 +674,43 @@ export default function RoutineView() {
             </div>
           ) : (
             <>
+              {hasAllSemDraft && (
+                <div className="routine-manager-section">
+                  <h4 className="routine-manager-section-title"><i className="fas fa-layer-group"></i> All Semester Routine Draft</h4>
+                  <div className="routine-manager-grid">
+                    <div className="routine-card routine-card-draft" style={{ borderStyle: 'dashed' }}>
+                      <div className="routine-card-header">
+                        <div>
+                          <h4 className="routine-card-title">All Semester Routine</h4>
+                          <p className="routine-card-meta">{allSemDraftData?.session || 'Untitled'}</p>
+                        </div>
+                        <span className="routine-card-draft-badge"><i className="fas fa-pen"></i> Draft</span>
+                      </div>
+                      <div className="routine-card-body">
+                        <p className="routine-card-info">
+                          <i className="fas fa-layer-group"></i> {allSemDraftData?.semesters?.length || 0} semesters · {allSemDraftData?.draftGender === 'both' ? 'Male & Female' : allSemDraftData?.draftGender === 'male' ? 'Male Only' : 'Female Only'}
+                        </p>
+                      </div>
+                      <div className="routine-card-actions">
+                        <button className="routine-card-btn routine-card-btn-view" onClick={() => setViewMode('allBranch')}>
+                          <i className="fas fa-edit"></i> Continue Editing
+                        </button>
+                        <button className="routine-card-btn routine-card-btn-delete" onClick={() => {
+                          if (confirm('Delete all-semester draft?')) {
+                            clearAllSemDraft();
+                            setHasAllSemDraft(false);
+                            setAllSemDraftData(null);
+                            showToast('Draft deleted', 'success');
+                          }
+                        }}>
+                          <i className="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {myRoutines.length > 0 && (
                 <div className="routine-manager-section">
                   <h4 className="routine-manager-section-title"><i className="fas fa-user-edit"></i> My Routines</h4>
@@ -458,7 +759,7 @@ export default function RoutineView() {
         <>
           <div className="routine-page-header no-print">
             <div>
-              <h3 className="routine-page-title"><i className="fas fa-eye"></i> {currentPreview.semester}{currentPreview.branch ? ` - Branch ${currentPreview.branch}` : ''}</h3>
+              <h3 className="routine-page-title"><i className="fas fa-eye"></i> {currentPreview.semester}{currentPreview.gender ? ` — ${currentPreview.gender === 'male' ? 'Male' : 'Female'} Branch` : ''}{currentPreview.branch ? ` - Branch ${currentPreview.branch}` : ''}</h3>
               <p className="routine-page-sub">Session: {currentPreview.session}</p>
             </div>
             <div className="routine-page-actions">
@@ -468,10 +769,790 @@ export default function RoutineView() {
               <button className="routine-btn routine-btn-ghost" onClick={() => setViewMode('manager')}><i className="fas fa-arrow-left"></i> Back</button>
             </div>
           </div>
-          <RoutinePrintView ref={printRef} routine={currentPreview} />
+          <div className="routine-preview-scroll">
+            <RoutinePrintView ref={printRef} routine={currentPreview} />
+          </div>
         </>
       )}
+
+      {/* ─── ALL SEMESTER ROUTINE VIEW ─── */}
+      {viewMode === 'allBranch' && (
+        <AllSemesterView
+          publishedRoutines={publishedRoutines}
+          onView={handleView}
+          onPublish={(routines) => {
+            const publisherName = session?.user?.name || profile.name || 'Unknown';
+            let updated: RoutineItem[];
+            if (routines.length === 0) {
+              updated = [];
+            } else {
+              updated = publishedRoutines.filter(r => !routines.some(nr => nr.semester === r.semester && nr.gender === r.gender && nr.branch === r.branch));
+              routines.forEach(r => {
+                updated.push({ ...r, publishedBy: { name: publisherName }, publishedAt: Date.now() });
+              });
+            }
+            setPublishedRoutines(updated);
+            savePublishedRoutines(updated);
+            // Save to DB
+            fetch('/api/published-routines', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ routines: updated.filter(r => routines.some(nr => nr.id === r.id)) }),
+            }).catch(() => {});
+          }}
+          onBack={() => setViewMode('manager')}
+        />
+      )}
     </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   ALL SEMESTER ROUTINE VIEW — 4-Step Builder
+   Unified draft with room per section, teacher conflicts
+   ═══════════════════════════════════════════════════════ */
+
+function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
+  publishedRoutines: RoutineItem[];
+  onView: (id: string) => void;
+  onPublish: (routines: RoutineItem[]) => void;
+  onBack: () => void;
+}) {
+  const [draft, setDraft] = useState<AllSemesterDraft>(() => {
+    const existing = loadAllSemDraft();
+    if (existing) {
+      if (!existing.malePeriods) existing.malePeriods = [...DEFAULT_PERIODS];
+      if (!existing.femalePeriods) existing.femalePeriods = [...DEFAULT_FEMALE_PERIODS];
+      if (!existing.draftGender) existing.draftGender = 'both';
+      for (const sem of existing.semesters) {
+        if (!('maleRoom' in sem)) (sem as any).maleRoom = '';
+        if (!('femaleRoom' in sem)) (sem as any).femaleRoom = '';
+      }
+      return existing;
+    }
+    const fresh = createEmptyDraft();
+    saveAllSemDraft(fresh);
+    return fresh;
+  });
+  const [step, setStep] = useState<AllSemBuilderStep>('info');
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [addingSem, setAddingSem] = useState(false);
+  const [newSemName, setNewSemName] = useState('');
+  const [expandedSemCourses, setExpandedSemCourses] = useState<number | null>(null);
+  const [periodTab, setPeriodTab] = useState<'male' | 'female'>('male');
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [conflictMap, setConflictMap] = useState<Record<string, string[]>>({});
+
+  // Temporary slots for gender-level grid (no sections)
+  const [tempGenderSlots, setTempGenderSlots] = useState<Record<string, Record<string, Record<number, string>>>>({});
+
+  useEffect(() => {
+    const timer = setTimeout(() => saveAllSemDraft(draft), 600);
+    return () => clearTimeout(timer);
+  }, [draft]);
+
+  useEffect(() => {
+    const newConflicts: Record<string, string[]> = {};
+    // Check section-based slots
+    for (const sem of draft.semesters) {
+      for (const sec of sem.sections) {
+        const refPeriods = sec.gender === 'male' ? draft.malePeriods : draft.femalePeriods;
+        const classPeriods = refPeriods.filter(p => !p.isBreak);
+        const key = `${sem.name}-${sec.gender}-${sec.branch || 'main'}`;
+        for (const slot of sec.slots) {
+          const course = sem.courses.find(c => c.code === slot.course);
+          if (!course?.teacher) continue;
+          const cpIdx = classPeriods.reduce((acc, p, i) => i <= slot.period && !p.isBreak ? acc + 1 : acc, 0) - 1;
+          const conflicts = findTeacherConflicts(draft, course.teacher, slot.day, cpIdx, key, tempGenderSlots);
+          if (conflicts.length > 0) {
+            const cellKey = `${key}:${slot.day}:${cpIdx}`;
+            newConflicts[cellKey] = conflicts.map(c => `${c.semester} / ${c.gender} / ${c.section} — ${c.courseCode} (${c.teacher})`);
+          }
+        }
+      }
+    }
+    // Check tempGenderSlots (no-sections mode)
+    for (const [semName, genders] of Object.entries(tempGenderSlots)) {
+      for (const [gender, cells] of Object.entries(genders)) {
+        const refPeriods = gender === 'male' ? draft.malePeriods : draft.femalePeriods;
+        const classPeriods = refPeriods.filter(p => !p.isBreak);
+        const key = `${semName}-${gender}-all`;
+        for (const [cellKey, courseCode] of Object.entries(cells)) {
+          if (!courseCode) continue;
+          const [day, periodStr] = cellKey.split(':');
+          const periodIdx = parseInt(periodStr);
+          const sem = draft.semesters.find(s => s.name === semName);
+          const course = sem?.courses.find(c => c.code === courseCode);
+          if (!course?.teacher) continue;
+          const cpIdx = classPeriods.reduce((acc, p, i) => i <= periodIdx && !p.isBreak ? acc + 1 : acc, 0) - 1;
+          const conflicts = findTeacherConflicts(draft, course.teacher, day, cpIdx, key, tempGenderSlots);
+          if (conflicts.length > 0) {
+            const ck = `${key}:${day}:${cpIdx}`;
+            newConflicts[ck] = conflicts.map(c => `${c.semester} / ${c.gender} / ${c.section} — ${c.courseCode} (${c.teacher})`);
+          }
+        }
+      }
+    }
+    setConflictMap(newConflicts);
+  }, [draft, tempGenderSlots]);
+
+  // Load saved courses from DB on mount and populate semesters
+  useEffect(() => {
+    fetch('/api/semester-courses')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success || !data.courses?.length) return;
+        // Group courses by semester
+        const courseMap: Record<string, { code: string; title: string; teacher: string; room: string }[]> = {};
+        for (const c of data.courses) {
+          if (!courseMap[c.semester]) courseMap[c.semester] = [];
+          courseMap[c.semester].push({ code: c.code, title: c.title, teacher: c.teacher || '', room: c.room || '' });
+        }
+        // Populate semesters that have saved courses
+        setDraft(prev => {
+          const updated = { ...prev };
+          updated.semesters = prev.semesters.map(sem => {
+            const saved = courseMap[sem.name];
+            if (saved && sem.courses.length === 0) {
+              return { ...sem, courses: saved };
+            }
+            return sem;
+          });
+          saveAllSemDraft(updated);
+          return updated;
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  // Save courses to DB when they change (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      for (const sem of draft.semesters) {
+        if (sem.courses.length === 0) continue;
+        fetch('/api/semester-courses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ semester: sem.name, courses: sem.courses }),
+        }).catch(() => {});
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [draft.semesters]);
+
+  const updateDraft = (patch: Partial<AllSemesterDraft>) => setDraft(prev => ({ ...prev, ...patch }));
+  const toggle = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const steps: { key: AllSemBuilderStep; label: string; icon: string; num: number }[] = [
+    { key: 'info', label: 'Basic Info', icon: 'info-circle', num: 1 },
+    { key: 'courses', label: 'Add Courses', icon: 'book', num: 2 },
+    { key: 'periods', label: 'Time Periods', icon: 'clock', num: 3 },
+    { key: 'assign', label: 'Assign Grid', icon: 'table', num: 4 },
+  ];
+  const currentStepIdx = steps.findIndex(s => s.key === step);
+
+  const addSemester = () => {
+    const name = newSemName.trim();
+    if (!name) return;
+    if (draft.semesters.some(s => s.name === name)) { showToast('Semester already exists', 'error'); return; }
+    updateDraft({ semesters: [...draft.semesters, { name, courses: [], sections: [], maleRoom: '', femaleRoom: '' }] });
+    setNewSemName(''); setAddingSem(false);
+  };
+
+  const removeSemester = (idx: number) => {
+    if (!confirm(`Delete "${draft.semesters[idx].name}"?`)) return;
+    updateDraft({ semesters: draft.semesters.filter((_, i) => i !== idx) });
+  };
+
+  const addSectionToSem = (semIdx: number, gender: 'male' | 'female') => {
+    const sem = draft.semesters[semIdx];
+    const genderSections = sem.sections.filter(s => s.gender === gender);
+    const existingBranches = genderSections.map(s => s.branch).filter(Boolean) as string[];
+    const nextLetter = String.fromCharCode(65 + existingBranches.length);
+    const newSection: AllSemesterDraftSection = { branch: nextLetter, gender, room: '', slots: [] };
+    const updated = { ...draft };
+    updated.semesters = [...updated.semesters];
+    updated.semesters[semIdx] = { ...updated.semesters[semIdx], sections: [...updated.semesters[semIdx].sections, newSection] };
+    setDraft(updated);
+  };
+
+  const removeSectionFromSem = (semIdx: number, sectionIdx: number) => {
+    if (!confirm('Delete this section?')) return;
+    const updated = { ...draft };
+    updated.semesters = [...updated.semesters];
+    updated.semesters[semIdx] = { ...updated.semesters[semIdx], sections: updated.semesters[semIdx].sections.filter((_, i) => i !== sectionIdx) };
+    setDraft(updated);
+  };
+
+  const updateSectionRoom = (semIdx: number, sectionIdx: number, room: string) => {
+    const updated = { ...draft };
+    updated.semesters = [...updated.semesters];
+    updated.semesters[semIdx] = { ...updated.semesters[semIdx], sections: [...updated.semesters[semIdx].sections] };
+    updated.semesters[semIdx].sections[sectionIdx] = { ...updated.semesters[semIdx].sections[sectionIdx], room };
+    setDraft(updated);
+  };
+
+  const setSlotInSection = (semIdx: number, sectionIdx: number, day: string, period: number, courseCode: string) => {
+    const updated = { ...draft };
+    updated.semesters = [...updated.semesters];
+    updated.semesters[semIdx] = { ...updated.semesters[semIdx], sections: [...updated.semesters[semIdx].sections] };
+    const sec = { ...updated.semesters[semIdx].sections[sectionIdx] };
+    if (courseCode === '') {
+      sec.slots = sec.slots.filter(s => !(s.day === day && s.period === period));
+    } else if (sec.slots.find(s => s.day === day && s.period === period)) {
+      sec.slots = sec.slots.map(s => s.day === day && s.period === period ? { ...s, course: courseCode } : s);
+    } else {
+      sec.slots = [...sec.slots, { day, period, course: courseCode }];
+    }
+    updated.semesters[semIdx].sections[sectionIdx] = sec;
+    setDraft(updated);
+  };
+
+  const addCourseToSem = (semIdx: number) => {
+    const updated = { ...draft };
+    updated.semesters = [...updated.semesters];
+    updated.semesters[semIdx] = { ...updated.semesters[semIdx], courses: [...updated.semesters[semIdx].courses, { code: '', title: '', teacher: '', room: '' }] };
+    setDraft(updated);
+  };
+
+  const updateSemCourse = (semIdx: number, cIdx: number, field: keyof RoutineCourse, value: string) => {
+    const updated = { ...draft };
+    updated.semesters = [...updated.semesters];
+    const courses = [...updated.semesters[semIdx].courses];
+    courses[cIdx] = { ...courses[cIdx], [field]: value };
+    updated.semesters[semIdx] = { ...updated.semesters[semIdx], courses };
+    setDraft(updated);
+  };
+
+  const removeSemCourse = (semIdx: number, cIdx: number) => {
+    const updated = { ...draft };
+    updated.semesters = [...updated.semesters];
+    updated.semesters[semIdx] = { ...updated.semesters[semIdx], courses: updated.semesters[semIdx].courses.filter((_, i) => i !== cIdx) };
+    setDraft(updated);
+  };
+
+  const updatePeriods = (gender: 'male' | 'female', periods: RoutinePeriod[]) => {
+    updateDraft(gender === 'male' ? { malePeriods: periods } : { femalePeriods: periods });
+  };
+
+  const handlePublishAll = () => {
+    if (Object.keys(conflictMap).length > 0) {
+      showToast('Cannot publish — teacher conflicts detected! Fix all conflicts first.', 'error');
+      return;
+    }
+    const routines: RoutineItem[] = [];
+    for (const sem of draft.semesters) {
+      for (const gender of getGendersToShow()) {
+        const genderSections = sem.sections.filter(s => s.gender === gender);
+        const genderRoomKey = gender === 'male' ? 'maleRoom' : 'femaleRoom';
+        if (genderSections.length > 0) {
+          for (const section of genderSections) {
+            const isMale = section.gender === 'male';
+            const refPeriods = isMale ? draft.malePeriods : draft.femalePeriods;
+            routines.push({
+              id: `pub-${Date.now()}-${sem.name.replace(/\s/g, '')}-${section.gender}-${section.branch || 'main'}-${Math.random().toString(36).slice(2, 6)}`,
+              semester: sem.name, branch: section.branch, gender: section.gender,
+              session: draft.session, room: section.room,
+              academicYear: new Date().getFullYear().toString(),
+              department: 'Department of Qur\'anic Sciences & Islamic Studies',
+              university: 'International Islamic University Chittagong',
+              periods: refPeriods, days: draft.days,
+              courses: sem.courses, slots: section.slots,
+              createdAt: Date.now(), published: true, isDraft: false,
+            });
+          }
+        } else {
+          const refPeriods = gender === 'male' ? draft.malePeriods : draft.femalePeriods;
+          // Convert tempGenderSlots to RoutineSlot[]
+          const genderSlots: RoutineSlot[] = [];
+          const semGenderSlots = tempGenderSlots[sem.name]?.[gender] || {};
+          for (const [key, course] of Object.entries(semGenderSlots)) {
+            if (course) {
+              const [day, periodStr] = key.split(':');
+              genderSlots.push({ day, period: parseInt(periodStr), course });
+            }
+          }
+          routines.push({
+            id: `pub-${Date.now()}-${sem.name.replace(/\s/g, '')}-${gender}-all-${Math.random().toString(36).slice(2, 6)}`,
+            semester: sem.name, branch: null, gender,
+            session: draft.session, room: sem[genderRoomKey],
+            academicYear: new Date().getFullYear().toString(),
+            department: 'Department of Qur\'anic Sciences & Islamic Studies',
+            university: 'International Islamic University Chittagong',
+            periods: refPeriods, days: draft.days,
+            courses: sem.courses, slots: genderSlots,
+            createdAt: Date.now(), published: true, isDraft: false,
+          });
+        }
+      }
+    }
+    if (routines.length === 0) { showToast('No sections to publish', 'error'); return; }
+    if (!confirm(`Publish ${routines.length} routine(s)?`)) return;
+    onPublish(routines);
+    showToast(`${routines.length} routines published!`, 'success');
+  };
+
+  const getGendersToShow = (): ('male' | 'female')[] => {
+    if (draft.draftGender === 'both') return ['male', 'female'];
+    return [draft.draftGender];
+  };
+
+  return (
+    <>
+      <div className="routine-page-header no-print">
+        <div>
+          <h3 className="routine-page-title"><i className="fas fa-layer-group"></i> All Semester Routine</h3>
+          <p className="routine-page-sub">4-step builder for all semesters, genders &amp; sections with separate rooms</p>
+        </div>
+        <div className="routine-page-actions">
+          <button className="routine-btn routine-btn-save" onClick={handlePublishAll}><i className="fas fa-share-alt"></i> Publish All</button>
+          <button className="routine-btn routine-btn-ghost" onClick={onBack}><i className="fas fa-arrow-left"></i> Back</button>
+        </div>
+      </div>
+
+      <div className="routine-builder-steps">
+        {steps.map((s, idx) => (
+          <div key={s.key} className={`routine-step ${step === s.key ? 'active' : ''} ${idx < currentStepIdx ? 'completed' : ''}`}>
+            <div className="routine-step-num">{idx < currentStepIdx ? <i className="fas fa-check"></i> : s.num}</div>
+            <span className="routine-step-label">{s.label}</span>
+            {idx < steps.length - 1 && <div className="routine-step-line"></div>}
+          </div>
+        ))}
+      </div>
+
+      {/* ═══════════════ STEP 1: BASIC INFO ═══════════════ */}
+      {step === 'info' && (
+        <div className="routine-builder-section">
+          <h4><i className="fas fa-info-circle"></i> Basic Information</h4>
+          <div className="routine-form-grid">
+            <div className="routine-form-group">
+              <label>Session</label>
+              <input value={draft.session} onChange={e => updateDraft({ session: e.target.value })} placeholder="e.g. Autumn - 2026" />
+            </div>
+            <div className="routine-form-group">
+              <label>Gender</label>
+              <select value={draft.draftGender} onChange={e => updateDraft({ draftGender: e.target.value as 'male' | 'female' | 'both' })}>
+                <option value="male">Male Only</option>
+                <option value="female">Female Only</option>
+                <option value="both">Both (Male &amp; Female)</option>
+              </select>
+            </div>
+            <div className="routine-form-group routine-form-full">
+              <label>Class Days</label>
+              <div className="routine-day-selector">
+                {['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(d => (
+                  <button key={d} type="button" className={`routine-day-btn ${draft.days.includes(d) ? 'active' : ''}`}
+                    onClick={() => updateDraft({ days: draft.days.includes(d) ? draft.days.filter(dd => dd !== d) : [...draft.days, d].sort() })}>
+                    <span className="routine-day-short">{d.slice(0, 3)}</span>
+                    <span className="routine-day-full">{d}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="routine-form-group routine-form-full" style={{ marginTop: 12 }}>
+            <label>Semesters</label>
+            {draft.semesters.map((sem, semIdx) => {
+              const semExpanded = expanded[`sem-${semIdx}`];
+              const gendersToShow = getGendersToShow();
+              return (
+                <div key={sem.name} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
+                  <div onClick={() => toggle(`sem-${semIdx}`)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', cursor: 'pointer', background: semExpanded ? 'var(--bg3)' : 'transparent' }}>
+                    <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--bg3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text2)', border: '1px solid var(--border)' }}>{semIdx + 1}</span>
+                    <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: 600 }}>{sem.name}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text3, #94a3b8)' }}>{sem.courses.length} courses, {sem.sections.length} sections</span>
+                    <button onClick={e => { e.stopPropagation(); removeSemester(semIdx); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3, #94a3b8)', fontSize: '0.7rem', padding: 4 }}><i className="fas fa-trash-alt"></i></button>
+                    <i className={`fas fa-chevron-${semExpanded ? 'up' : 'down'}`} style={{ fontSize: '0.7rem', color: 'var(--text2)' }}></i>
+                  </div>
+                  {semExpanded && (
+                    <div style={{ padding: '0 12px 12px', borderTop: '1px solid var(--border)' }}>
+                      {gendersToShow.map(gender => {
+                        const genderSections = sem.sections.filter(s => s.gender === gender);
+                        const gColor = gender === 'male' ? '#3b82f6' : '#ec4899';
+                        const genderRoomKey = gender === 'male' ? 'maleRoom' : 'femaleRoom';
+                        return (
+                          <div key={gender} style={{ marginTop: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: gColor }}>
+                                <i className={`fas fa-${gender === 'male' ? 'mars' : 'venus'}`} style={{ marginRight: 4 }}></i>
+                                {gender === 'male' ? 'Male' : 'Female'}
+                              </span>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--text3, #94a3b8)' }}>({genderSections.length} sections)</span>
+                              {genderSections.length === 0 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+                                  <label style={{ fontSize: '0.7rem', color: 'var(--text2)' }}>Room:</label>
+                                  <input value={sem[genderRoomKey]} onChange={e => {
+                                    const updated = { ...draft };
+                                    updated.semesters = [...updated.semesters];
+                                    updated.semesters[semIdx] = { ...updated.semesters[semIdx], [genderRoomKey]: e.target.value };
+                                    setDraft(updated);
+                                  }} placeholder="e.g. Room 301"
+                                    style={{ width: 130, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.75rem', outline: 'none' }} />
+                                </div>
+                              )}
+                              <button onClick={() => addSectionToSem(semIdx, gender)} style={{ marginLeft: 'auto', fontSize: '0.68rem', padding: '2px 8px', borderRadius: 6, border: `1px solid ${gColor}40`, background: `${gColor}10`, color: gColor, cursor: 'pointer' }}>
+                                <i className="fas fa-plus" style={{ marginRight: 2 }}></i> Section
+                              </button>
+                            </div>
+                            {genderSections.length === 0 && (
+                              <p style={{ fontSize: '0.72rem', color: 'var(--text3, #94a3b8)', paddingLeft: 20, marginBottom: 4 }}>No sections — using gender room above</p>
+                            )}
+                            {genderSections.map((sec) => {
+                              const secIdx = sem.sections.indexOf(sec);
+                              return (
+                                <div key={secIdx} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px 4px 20px', fontSize: '0.78rem' }}>
+                                  <span style={{ fontWeight: 600, minWidth: 70 }}>Section {sec.branch || 'Main'}</span>
+                                  <input value={sec.room} onChange={e => updateSectionRoom(semIdx, secIdx, e.target.value)} placeholder="Room (optional)"
+                                    style={{ width: 140, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.75rem', outline: 'none' }} />
+                                  <button onClick={() => removeSectionFromSem(semIdx, secIdx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.68rem', padding: 2 }}><i className="fas fa-trash-alt"></i></button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {addingSem ? (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <input autoFocus value={newSemName} onChange={e => setNewSemName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSemester()}
+                  placeholder="e.g. 9th Semester" style={{ flex: 1, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', outline: 'none' }} />
+                <button className="routine-btn routine-btn-primary" onClick={addSemester} style={{ fontSize: '0.75rem' }}><i className="fas fa-check"></i> Add</button>
+                <button className="routine-btn routine-btn-ghost" onClick={() => { setAddingSem(false); setNewSemName(''); }} style={{ fontSize: '0.75rem' }}><i className="fas fa-times"></i></button>
+              </div>
+            ) : (
+              <button className="routine-add-btn" onClick={() => setAddingSem(true)} style={{ marginTop: 8 }}><i className="fas fa-plus"></i> Add Semester</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ STEP 2: COURSES PER SEMESTER ═══════════════ */}
+      {step === 'courses' && (
+        <div className="routine-builder-section">
+          <h4><i className="fas fa-book"></i> Courses per Semester</h4>
+          <p style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 12 }}>Courses are shared across all sections and genders within a semester.</p>
+          {draft.semesters.map((sem, semIdx) => (
+            <div key={sem.name} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, marginBottom: 12, overflow: 'hidden' }}>
+              <div onClick={() => setExpandedSemCourses(expandedSemCourses === semIdx ? null : semIdx)}
+                style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, background: expandedSemCourses === semIdx ? 'var(--bg3)' : 'transparent' }}>
+                <span style={{ fontWeight: 600, fontSize: '0.88rem', flex: 1 }}>{sem.name}</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text3, #94a3b8)' }}>{sem.courses.length} courses</span>
+                <i className={`fas fa-chevron-${expandedSemCourses === semIdx ? 'up' : 'down'}`} style={{ fontSize: '0.7rem', color: 'var(--text2)' }}></i>
+              </div>
+              {expandedSemCourses === semIdx && (
+                <div style={{ padding: '0 16px 12px' }}>
+                  {sem.courses.map((c, cIdx) => (
+                    <div key={cIdx} className="routine-course-item">
+                      <div className="routine-course-num">{cIdx + 1}</div>
+                      <div className="routine-course-fields">
+                        <input className="routine-input-sm" placeholder="Code (e.g. QSM-3601)" value={c.code} onChange={e => updateSemCourse(semIdx, cIdx, 'code', e.target.value)} />
+                        <input placeholder="Course Title" value={c.title} onChange={e => updateSemCourse(semIdx, cIdx, 'title', e.target.value)} />
+                        <div className="routine-course-row-2">
+                          <TeacherAutocomplete value={c.teacher} onChange={val => updateSemCourse(semIdx, cIdx, 'teacher', val)} placeholder="Teacher name" />
+                          <input className="routine-input-sm" placeholder="Room" value={c.room} onChange={e => updateSemCourse(semIdx, cIdx, 'room', e.target.value)} />
+                        </div>
+                      </div>
+                      <button className="routine-remove-btn" onClick={() => removeSemCourse(semIdx, cIdx)}><i className="fas fa-trash-alt"></i></button>
+                    </div>
+                  ))}
+                  <button className="routine-add-btn" onClick={() => addCourseToSem(semIdx)} style={{ marginTop: 8 }}><i className="fas fa-plus"></i> Add Course to {sem.name}</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ═══════════════ STEP 3: TIME PERIODS ═══════════════ */}
+      {step === 'periods' && (
+        <div className="routine-builder-section">
+          <h4><i className="fas fa-clock"></i> Time Periods</h4>
+          {draft.draftGender === 'both' && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button type="button" className={`routine-btn ${periodTab === 'male' ? 'routine-btn-primary' : 'routine-btn-outline'}`}
+                onClick={() => setPeriodTab('male')} style={{ background: periodTab === 'male' ? '#3b82f6' : undefined, color: periodTab === 'male' ? '#fff' : undefined }}>
+                <i className="fas fa-mars" style={{ marginRight: 4 }}></i> Male Periods
+              </button>
+              <button type="button" className={`routine-btn ${periodTab === 'female' ? 'routine-btn-primary' : 'routine-btn-outline'}`}
+                onClick={() => setPeriodTab('female')} style={{ background: periodTab === 'female' ? '#ec4899' : undefined, color: periodTab === 'female' ? '#fff' : undefined }}>
+                <i className="fas fa-venus" style={{ marginRight: 4 }}></i> Female Periods
+              </button>
+            </div>
+          )}
+          {draft.draftGender !== 'both' && (
+            <p style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 12 }}>
+              <i className="fas fa-info-circle" style={{ marginRight: 4 }}></i>
+              {draft.draftGender === 'male' ? 'Male' : 'Female'} time periods only.
+            </p>
+          )}
+          <PeriodEditor
+            periods={periodTab === 'male' || draft.draftGender === 'male' ? draft.malePeriods : draft.femalePeriods}
+            onChange={(periods) => updatePeriods(periodTab === 'male' || draft.draftGender === 'male' ? 'male' : 'female', periods)}
+          />
+        </div>
+      )}
+
+      {/* ═══════════════ STEP 4: ASSIGN GRID ═══════════════ */}
+      {step === 'assign' && (
+        <div className="routine-builder-section">
+          <h4><i className="fas fa-table"></i> Assign Courses to Schedule</h4>
+          <p style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 12 }}>
+            <i className="fas fa-info-circle" style={{ marginRight: 4 }}></i>
+            Red cells = teacher assigned elsewhere at same time. Hover for details.
+          </p>
+          {draft.semesters.map((sem, semIdx) => (
+            <div key={sem.name} style={{ marginBottom: 16 }}>
+              {getGendersToShow().map(gender => {
+                const genderSections = sem.sections.filter(s => s.gender === gender);
+                const gColor = gender === 'male' ? '#3b82f6' : '#ec4899';
+                const genderRoomKey = gender === 'male' ? 'maleRoom' : 'femaleRoom';
+                const refPeriods = gender === 'male' ? draft.malePeriods : draft.femalePeriods;
+                return (
+                  <div key={gender} style={{ marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: gColor }}>
+                        <i className={`fas fa-${gender === 'male' ? 'mars' : 'venus'}`} style={{ marginRight: 4 }}></i>
+                        {sem.name} — {gender === 'male' ? 'Male' : 'Female'}
+                      </span>
+                      {genderSections.length === 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text2)' }}>Room:</label>
+                          <input value={sem[genderRoomKey]} onChange={e => {
+                            const updated = { ...draft };
+                            updated.semesters = [...updated.semesters];
+                            updated.semesters[semIdx] = { ...updated.semesters[semIdx], [genderRoomKey]: e.target.value };
+                            setDraft(updated);
+                          }} placeholder="e.g. Room 301"
+                            style={{ width: 120, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.78rem', outline: 'none' }} />
+                        </div>
+                      )}
+                      <button onClick={() => addSectionToSem(semIdx, gender)} className="routine-add-btn" style={{ fontSize: '0.68rem', padding: '3px 8px' }}>
+                        <i className="fas fa-plus"></i> Add Section
+                      </button>
+                    </div>
+                    {genderSections.length === 0 && (
+                      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
+                        {sem.courses.length === 0 ? (
+                          <p style={{ padding: '8px 12px', fontSize: '0.75rem', color: 'var(--text3, #94a3b8)' }}>Add courses in Step 2 first.</p>
+                        ) : (
+                          <div style={{ overflowX: 'auto' }}>
+                            <table className="routine-grid-table">
+                              <thead>
+                                <tr>
+                                  <th>Period</th>
+                                  {draft.days.map(d => <th key={d}>{d.slice(0, 3)}</th>)}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(() => {
+                                  let cpCounter = -1;
+                                  return refPeriods.map((p, pIdx) => {
+                                    if (p.isBreak) {
+                                      return (
+                                        <tr key={`break-${pIdx}`} className="routine-grid-break">
+                                          <td className="routine-grid-time">{p.start} - {p.end}</td>
+                                          {draft.days.map(d => <td key={d}>Break</td>)}
+                                        </tr>
+                                      );
+                                    }
+                                    cpCounter++;
+                                    const cpIdx = cpCounter;
+                                    return (
+                                      <tr key={`period-${semIdx}-all-${cpIdx}`}>
+                                        <td className="routine-grid-time">
+                                          <div>{p.name}</div>
+                                          <small>{p.start} - {p.end}</small>
+                                        </td>
+                                        {draft.days.map(d => {
+                                          const currentVal = tempGenderSlots[sem.name]?.[gender]?.[`${d}:${cpIdx}`] || '';
+                                          return (
+                                            <td key={`${d}-${cpIdx}`}>
+                                              <select value={currentVal} onChange={e => {
+                                                const val = e.target.value;
+                                                setTempGenderSlots(prev => {
+                                                  const next = { ...prev };
+                                                  if (!next[sem.name]) next[sem.name] = {};
+                                                  if (!next[sem.name][gender]) next[sem.name][gender] = {};
+                                                  next[sem.name][gender] = { ...next[sem.name][gender], [`${d}:${cpIdx}`]: val };
+                                                  return next;
+                                                });
+                                              }}>
+                                                <option value="">-- Off Day --</option>
+                                                {sem.courses.map(c => <option key={c.code} value={c.code}>{c.code} - {c.title}{c.teacher ? ` (${c.teacher})` : ''}</option>)}
+                                              </select>
+                                            </td>
+                                          );
+                                        })}
+                                      </tr>
+                                    );
+                                  });
+                                })()}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {genderSections.map((sec) => {
+                      const secIdx = sem.sections.indexOf(sec);
+                      const semKey = `${sem.name}-${gender}-${sec.branch || 'main'}`;
+                      return (
+                        <div key={secIdx} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg3)' }}>
+                            <span style={{ fontWeight: 700, fontSize: '0.8rem' }}>Section {sec.branch || 'Main'}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <label style={{ fontSize: '0.72rem', color: 'var(--text2)' }}>Room:</label>
+                              <input value={sec.room} onChange={e => updateSectionRoom(semIdx, secIdx, e.target.value)}
+                                placeholder="e.g. Room 301" style={{ width: 120, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.78rem', outline: 'none' }} />
+                            </div>
+                            <button onClick={() => removeSectionFromSem(semIdx, secIdx)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.68rem' }}><i className="fas fa-trash-alt"></i></button>
+                          </div>
+                          {sem.courses.length === 0 ? (
+                            <p style={{ padding: '8px 12px', fontSize: '0.75rem', color: 'var(--text3, #94a3b8)' }}>Add courses in Step 2 first.</p>
+                          ) : (
+                            <div style={{ overflowX: 'auto' }}>
+                              <table className="routine-grid-table">
+                                <thead>
+                                  <tr>
+                                    <th>Period</th>
+                                    {draft.days.map(d => <th key={d}>{d.slice(0, 3)}</th>)}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(() => {
+                                    let cpCounter = -1;
+                                    return refPeriods.map((p, pIdx) => {
+                                      if (p.isBreak) {
+                                        return (
+                                          <tr key={`break-${pIdx}`} className="routine-grid-break">
+                                            <td className="routine-grid-time">{p.start} - {p.end}</td>
+                                            {draft.days.map(d => <td key={d}>Break</td>)}
+                                          </tr>
+                                        );
+                                      }
+                                      cpCounter++;
+                                      const cpIdx = cpCounter;
+                                      return (
+                                        <tr key={`period-${semIdx}-${secIdx}-${cpIdx}`}>
+                                          <td className="routine-grid-time">
+                                            <div>{p.name}</div>
+                                            <small>{p.start} - {p.end}</small>
+                                          </td>
+                                          {draft.days.map(d => {
+                                            const currentSlot = sec.slots.find(s => s.day === d && s.period === cpIdx);
+                                            const cellKey = `${semKey}:${d}:${cpIdx}`;
+                                            const conflicts = conflictMap[cellKey] || [];
+                                            const hasConflict = conflicts.length > 0;
+                                            return (
+                                              <td key={`${d}-${cpIdx}`} style={hasConflict ? { background: '#ef444420', position: 'relative' } : undefined}
+                                                onMouseEnter={hasConflict ? (e) => setTooltip({ x: e.clientX, y: e.clientY - 40, text: conflicts.join('\n') }) : undefined}
+                                                onMouseLeave={hasConflict ? () => setTooltip(null) : undefined}>
+                                                <select value={currentSlot?.course || ''} onChange={e => setSlotInSection(semIdx, secIdx, d, cpIdx, e.target.value)}
+                                                  style={hasConflict ? { borderColor: '#ef4444', background: '#ef444410' } : undefined}>
+                                                  <option value="">-- Off Day --</option>
+                                                  {sem.courses.map(c => <option key={c.code} value={c.code}>{c.code} - {c.title}{c.teacher ? ` (${c.teacher})` : ''}</option>)}
+                                                </select>
+                                              </td>
+                                            );
+                                          })}
+                                        </tr>
+                                      );
+                                    });
+                                  })()}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Tooltip */}
+      {tooltip && (
+        <div style={{ position: 'fixed', left: tooltip.x, top: tooltip.y, zIndex: 9999, background: '#1e293b', color: '#fff', padding: '8px 12px', borderRadius: 8, fontSize: '0.72rem', maxWidth: 320, whiteSpace: 'pre-line', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', pointerEvents: 'none' }}>
+          <strong style={{ color: '#ef4444' }}>⚠ Teacher Conflict:</strong>{'\n'}{tooltip.text}
+        </div>
+      )}
+
+      {/* Nav */}
+      <div className="routine-builder-nav">
+        <button className="routine-btn routine-btn-ghost" onClick={onBack}><i className="fas fa-times"></i> Back</button>
+        <div className="routine-builder-nav-right">
+          {currentStepIdx > 0 && (
+            <button className="routine-btn routine-btn-outline" onClick={() => setStep(steps[currentStepIdx - 1].key)}>
+              <i className="fas fa-arrow-left"></i> Previous
+            </button>
+          )}
+          {currentStepIdx < steps.length - 1 ? (
+            <button className="routine-btn routine-btn-primary" onClick={() => setStep(steps[currentStepIdx + 1].key)}>
+              Next <i className="fas fa-arrow-right"></i>
+            </button>
+          ) : (
+            <button className="routine-btn routine-btn-save" onClick={handlePublishAll}>
+              <i className="fas fa-share-alt"></i> Publish All
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   PERIOD EDITOR — reusable for male/female periods
+   ═══════════════════════════════════════════════════════ */
+function PeriodEditor({ periods, onChange }: { periods: RoutinePeriod[]; onChange: (p: RoutinePeriod[]) => void }) {
+  const classPeriods = periods.filter(p => !p.isBreak);
+  const addPeriod = () => onChange([...periods, { name: `Period ${classPeriods.length + 1}`, start: '10:40 AM', end: '11:30 AM' }]);
+  const updatePeriod = (idx: number, field: keyof RoutinePeriod, value: string | boolean) => {
+    const p = [...periods]; p[idx] = { ...p[idx], [field]: value }; onChange(p);
+  };
+  const removePeriod = (idx: number) => onChange(periods.filter((_, i) => i !== idx));
+  const movePeriod = (idx: number, dir: -1 | 1) => {
+    const p = [...periods]; const ni = idx + dir;
+    if (ni < 0 || ni >= p.length) return;
+    [p[idx], p[ni]] = [p[ni], p[idx]]; onChange(p);
+  };
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <button className="routine-add-btn" onClick={addPeriod}><i className="fas fa-plus"></i> Add Period</button>
+      </div>
+      <div className="routine-period-list">
+        {periods.map((p, idx) => (
+          <div key={idx} className={`routine-period-item ${p.isBreak ? 'break' : ''}`}>
+            <div className="routine-period-drag">
+              <button disabled={idx === 0} onClick={() => movePeriod(idx, -1)}><i className="fas fa-chevron-up"></i></button>
+              <button disabled={idx === periods.length - 1} onClick={() => movePeriod(idx, 1)}><i className="fas fa-chevron-down"></i></button>
+            </div>
+            <div className="routine-period-fields">
+              <input className="routine-period-name" placeholder="Period name" value={p.name} onChange={e => updatePeriod(idx, 'name', e.target.value)} />
+              <div className="routine-period-times">
+                <input type="time" value={to24h(p.start)} onChange={e => updatePeriod(idx, 'start', to12h(e.target.value))} />
+                <span className="routine-period-sep">to</span>
+                <input type="time" value={to24h(p.end)} onChange={e => updatePeriod(idx, 'end', to12h(e.target.value))} />
+              </div>
+            </div>
+            <label className="routine-break-toggle">
+              <input type="checkbox" checked={!!p.isBreak} onChange={e => updatePeriod(idx, 'isBreak', e.target.checked)} />
+              <span>Break</span>
+            </label>
+            <button className="routine-remove-btn-sm" onClick={() => removePeriod(idx)}><i className="fas fa-times"></i></button>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -495,8 +1576,15 @@ function RoutineCard({ routine, isPublished, onView, onEdit, onDelete, onDuplica
 
   return (
     <div className={`routine-card ${isPublished ? 'routine-card-published' : ''}`}>
-      <div className="routine-card-header">
+        <div className="routine-card-header">
         <div className="routine-card-semester">{routine.semester}</div>
+        {routine.gender && routine.gender !== 'both' && <span className="routine-card-badge" style={{ background: routine.gender === 'male' ? '#3b82f6' : '#ec4899', color: '#fff' }}>
+          <i className={`fas fa-${routine.gender === 'male' ? 'mars' : 'venus'}`} style={{ marginRight: 4 }}></i>
+          {routine.gender === 'male' ? 'Male' : 'Female'}
+        </span>}
+        {routine.gender === 'both' && <span className="routine-card-badge" style={{ background: 'linear-gradient(90deg, #3b82f6 50%, #ec4899 50%)', color: '#fff' }}>
+          Male &amp; Female
+        </span>}
         {routine.branch && <span className="routine-card-badge">Branch {routine.branch}</span>}
         {isPublished && <span className="routine-card-published-badge"><i className="fas fa-globe"></i> Published</span>}
         {!isPublished && routine.isDraft && <span className="routine-card-draft-badge"><i className="fas fa-pen"></i> Draft</span>}
@@ -528,10 +1616,109 @@ function RoutineCard({ routine, isPublished, onView, onEdit, onDelete, onDuplica
 /* ═══════════════════════════════════════════════════════
    ROUTINE PRINT VIEW — Beautiful University Layout
    ═══════════════════════════════════════════════════════ */
-import { forwardRef } from 'react';
+
+function RoutineTable({ periods, slots, days, courses, label }: { periods: RoutinePeriod[]; slots: RoutineSlot[]; days: string[]; courses: RoutineCourse[]; label?: string }) {
+  const classPeriods = periods.filter(p => !p.isBreak);
+  const isOffDayLocal = (day: string) => {
+    return classPeriods.every((_, i) => !slots.find(s => s.day === day && s.period === i));
+  };
+
+  return (
+    <div>
+      {label && (
+        <div style={{ background: label === 'Male' ? '#3b82f6' : '#ec4899', color: '#fff', textAlign: 'center', padding: '8px 16px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.5px' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'6px'}}>{label === 'Male' ? <g><circle cx="10" cy="14" r="5"/><path d="M19 5l-5.4 5.4"/><path d="M15 5h4V1"/></g> : <g><circle cx="12" cy="12" r="5"/><path d="M12 7v0M12 17v0"/></g>}</svg>
+          {label} Section
+        </div>
+      )}
+      <div className="routine-table-wrapper">
+        <table className="routine-table">
+          <thead>
+            <tr>
+              <th className="routine-th routine-th-time">Time</th>
+              {days.map(day => (
+                <th key={day} className="routine-th">{day}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {periods.map((period, pIdx) => {
+              if (period.isBreak) {
+                const nonOffDays = days.filter(day => !isOffDayLocal(day));
+                const midIdx = Math.floor(nonOffDays.length / 2);
+                return (
+                  <tr key={pIdx} className="routine-break-row">
+                    <td className="routine-td routine-td-time routine-break-time">
+                      <div className="routine-time-text">{period.start}</div>
+                      <div className="routine-time-sub">{period.end}</div>
+                    </td>
+                    {days.map((day) => {
+                      const offDay = isOffDayLocal(day);
+                      if (offDay) return null;
+                      const showLabel = nonOffDays.indexOf(day) === midIdx;
+                      return (
+                        <td key={day} className="routine-td routine-break-cell">
+                          {showLabel ? <span className="routine-break-label">{period.name}</span> : null}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              }
+              const classPeriodIdx = classPeriods.findIndex((_, i) => {
+                let count = 0;
+                for (let j = 0; j <= pIdx; j++) { if (!periods[j].isBreak) count++; }
+                return count - 1 === i;
+              }) ?? pIdx;
+              return (
+                <tr key={pIdx}>
+                  <td className="routine-td routine-td-time">
+                    <div className="routine-period-name">{period.name}</div>
+                    <div className="routine-time-text">{period.start}</div>
+                    <div className="routine-time-sub">{period.end}</div>
+                  </td>
+                  {days.map(day => {
+                    const offDay = isOffDayLocal(day);
+                    if (offDay) {
+                      if (pIdx === 0) {
+                        return (
+                          <td key={day} className="routine-td routine-offday-cell" rowSpan={periods.length}>
+                            <div className="routine-offday-vertical">OFF DAY</div>
+                          </td>
+                        );
+                      }
+                      return null;
+                    }
+                    const slot = slots.find(s => s.day === day && s.period === classPeriodIdx) || null;
+                    const course = slot ? courses.find(c => c.code === slot.course) || null : null;
+                    return (
+                      <td key={day} className="routine-td">
+                        {slot && course ? (
+                          <div className="routine-course">
+                            <span className="routine-course-code">{course.code}</span>
+                            <span className="routine-course-title">{course.title}</span>
+                            <span className="routine-course-teacher">{course.teacher}</span>
+                          </div>
+                        ) : (
+                          <span className="routine-empty">&mdash;</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({ routine }, ref) => {
-  const classPeriods = routine.periods.filter(p => !p.isBreak);
+  const isBoth = routine.gender === 'both';
+  const hasMaleData = isBoth && routine.malePeriods && routine.malePeriods.length > 0;
+  const hasFemaleData = isBoth && routine.femalePeriods && routine.femalePeriods.length > 0;
   return (
     <div ref={ref} className="routine-export">
       <div className="routine-header">
@@ -558,7 +1745,14 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
             </span>
             {routine.branch && <span className="routine-badge routine-badge-branch">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'6px'}}><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>
-              Branch {routine.branch}
+              Section {routine.branch}
+            </span>}
+            {routine.gender && routine.gender !== 'both' && <span className="routine-badge" style={{ background: routine.gender === 'male' ? '#3b82f6' : '#ec4899', color: '#fff' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'6px'}}>{routine.gender === 'male' ? <g><circle cx="10" cy="14" r="5"/><path d="M19 5l-5.4 5.4"/><path d="M15 5h4V1"/></g> : <g><circle cx="12" cy="12" r="5"/><path d="M12 7v0M12 17v0"/></g>}</svg>
+              {routine.gender === 'male' ? 'Male' : 'Female'}
+            </span>}
+            {routine.gender === 'both' && <span className="routine-badge" style={{ background: 'linear-gradient(90deg, #3b82f6 50%, #ec4899 50%)', color: '#fff' }}>
+              Male &amp; Female
             </span>}
             <span className="routine-badge routine-badge-session">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'6px'}}><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M17 14h-6"/><path d="M13 18H7"/><path d="M7 14h.01"/><path d="M17 18h.01"/></svg>
@@ -572,90 +1766,18 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
         </div>
       </div>
 
-      <div className="routine-table-wrapper">
-        <table className="routine-table">
-          <thead>
-            <tr>
-              <th className="routine-th routine-th-time">Time</th>
-              {routine.days.map(day => (
-                <th key={day} className="routine-th">{day}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {routine.periods.map((period, pIdx) => {
-              if (period.isBreak) {
-                const nonOffDays = routine.days.filter(day => !isOffDay(day, routine.periods, routine.slots));
-                const midIdx = Math.floor(nonOffDays.length / 2);
-                return (
-                  <tr key={pIdx} className="routine-break-row">
-                    <td className="routine-td routine-td-time routine-break-time">
-                      <div className="routine-time-text">{period.start}</div>
-                      <div className="routine-time-sub">{period.end}</div>
-                    </td>
-                    {routine.days.map((day, dIdx) => {
-                      const offDay = isOffDay(day, routine.periods, routine.slots);
-                      if (offDay) return null;
-                      const showLabel = nonOffDays.indexOf(day) === midIdx;
-                      return (
-                        <td key={day} className="routine-td routine-break-cell">
-                          {showLabel ? <span className="routine-break-label">{period.name}</span> : null}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              }
-              const classPeriodIdx = classPeriods.findIndex((_, i) => {
-                let count = 0;
-                for (let j = 0; j <= pIdx; j++) { if (!routine.periods[j].isBreak) count++; }
-                return count - 1 === i;
-              }) ?? pIdx;
-              return (
-                <tr key={pIdx}>
-                  <td className="routine-td routine-td-time">
-                    <div className="routine-period-name">{period.name}</div>
-                    <div className="routine-time-text">{period.start}</div>
-                    <div className="routine-time-sub">{period.end}</div>
-                  </td>
-                  {routine.days.map(day => {
-                    const offDay = isOffDay(day, routine.periods, routine.slots);
-                    if (offDay) {
-                      if (pIdx === 0) {
-                        return (
-                          <td key={day} className="routine-td routine-offday-cell" rowSpan={routine.periods.length}>
-                            <div className="routine-offday-vertical">OFF DAY</div>
-                          </td>
-                        );
-                      }
-                      return null;
-                    }
-                    const slot = getSlot(day, classPeriodIdx, routine.slots);
-                    const course = slot ? getCourse(slot.course, routine.courses) : null;
-                    return (
-                      <td key={day} className="routine-td">
-                        {slot && course ? (
-                          <div className="routine-course">
-                            <span className="routine-course-code">{course.code}</span>
-                            <span className="routine-course-title">{course.title}</span>
-                            <span className="routine-course-teacher">{course.teacher}</span>
-                          </div>
-                        ) : (
-                          <span className="routine-empty">&mdash;</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {isBoth && hasMaleData ? (
+        <>
+          <RoutineTable periods={routine.malePeriods!} slots={routine.maleSlots || []} days={routine.days} courses={routine.courses} label="Male" />
+          <RoutineTable periods={routine.femalePeriods!} slots={routine.femaleSlots || []} days={routine.days} courses={routine.courses} label="Female" />
+        </>
+      ) : (
+        <RoutineTable periods={routine.periods} slots={routine.slots} days={routine.days} courses={routine.courses} />
+      )}
 
       {routine.courses.length > 0 && (
         <div className="routine-legend">
-          <h4 className="routine-legend-title"><i className="fas fa-book-open"></i> Course Information</h4>
+          <h4 className="routine-legend-title"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 32 32" fill="#166534" style={{display:'inline-block',verticalAlign:'-0.2em',marginRight:'8px'}}><path d="M15 25.875v-19.625c0 0-2.688-2.25-6.5-2.25s-6.5 2-6.5 2v19.875c0 0 2.688-1.938 6.5-1.938s6.5 1.938 6.5 1.938zM29 25.875v-19.625c0 0-2.688-2.25-6.5-2.25s-6.5 2-6.5 2v19.875c0 0 2.688-1.938 6.5-1.938s6.5 1.938 6.5 1.938zM31 8h-1v19h-12v1h-5v-1h-12v-19h-1v20h12v1h7.062l-0.062-1h12v-20z"/></svg> Course Information</h4>
           <div className="routine-legend-table-wrapper">
             <table className="routine-legend-table">
               <thead>
@@ -716,12 +1838,18 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
   const [step, setStep] = useState<BuilderStep>('info');
   const [semester, setSemester] = useState(existing?.semester || SEMESTERS[0]);
   const [branch, setBranch] = useState(existing?.branch || '');
+  const [gender, setGender] = useState<'male' | 'female' | 'both' | null>(existing?.gender || null);
   const [session, setSession] = useState(existing?.session || getDefaultSession());
   const [room, setRoom] = useState(existing?.room || '');
   const [periods, setPeriods] = useState<RoutinePeriod[]>(existing?.periods || [...DEFAULT_PERIODS]);
   const [days, setDays] = useState<string[]>(existing?.days || [...DEFAULT_DAYS]);
   const [courses, setCourses] = useState<RoutineCourse[]>(existing?.courses || []);
   const [slots, setSlots] = useState<RoutineSlot[]>(existing?.slots || []);
+  const [malePeriods, setMalePeriods] = useState<RoutinePeriod[]>(existing?.malePeriods || [...DEFAULT_PERIODS]);
+  const [femalePeriods, setFemalePeriods] = useState<RoutinePeriod[]>(existing?.femalePeriods || [...DEFAULT_PERIODS]);
+  const [maleSlots, setMaleSlots] = useState<RoutineSlot[]>(existing?.maleSlots || []);
+  const [femaleSlots, setFemaleSlots] = useState<RoutineSlot[]>(existing?.femaleSlots || []);
+  const [periodTab, setPeriodTab] = useState<'male' | 'female'>('male');
   const [draftSaved, setDraftSaved] = useState(false);
 
   useEffect(() => {
@@ -730,12 +1858,17 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
     if (draft) {
       if (draft.semester) setSemester(draft.semester);
       if (draft.branch !== undefined) setBranch(draft.branch || '');
+      if (draft.gender !== undefined) setGender(draft.gender || null);
       if (draft.session) setSession(draft.session);
       if (draft.room !== undefined) setRoom(draft.room || '');
       if (draft.periods) setPeriods(draft.periods);
       if (draft.days) setDays(draft.days);
       if (draft.courses) setCourses(draft.courses);
       if (draft.slots) setSlots(draft.slots);
+      if (draft.malePeriods) setMalePeriods(draft.malePeriods);
+      if (draft.femalePeriods) setFemalePeriods(draft.femalePeriods);
+      if (draft.maleSlots) setMaleSlots(draft.maleSlots);
+      if (draft.femaleSlots) setFemaleSlots(draft.femaleSlots);
       if (draft.step) setStep(draft.step as BuilderStep);
       showToast('Draft restored from previous session', 'success');
     }
@@ -744,18 +1877,47 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
   useEffect(() => {
     if (existing) return;
     const timer = setTimeout(() => {
-      saveDraft({ semester, branch, session, room, periods, days, courses, slots, step });
+      saveDraft({ semester, branch, gender, session, room, periods, days, courses, slots, malePeriods, femalePeriods, maleSlots, femaleSlots, step });
       setDraftSaved(true);
       setTimeout(() => setDraftSaved(false), 2000);
     }, 1000);
     return () => clearTimeout(timer);
-  }, [semester, branch, session, room, periods, days, courses, slots, step, existing]);
+  }, [semester, branch, gender, session, room, periods, days, courses, slots, malePeriods, femalePeriods, maleSlots, femaleSlots, step, existing]);
 
   const classPeriods = periods.filter(p => !p.isBreak);
-  const nonBreakIdx = (pIdx: number) => {
+  const nonBreakIdx = (pIdx: number, refPeriods: RoutinePeriod[]) => {
     let count = 0;
-    for (let i = 0; i <= pIdx; i++) { if (!periods[i].isBreak) count++; }
+    for (let i = 0; i <= pIdx; i++) { if (!refPeriods[i].isBreak) count++; }
     return count - 1;
+  };
+
+  const isBoth = gender === 'both';
+  const activePeriods = isBoth ? (periodTab === 'male' ? malePeriods : femalePeriods) : periods;
+  const activeSlots = isBoth ? (periodTab === 'male' ? maleSlots : femaleSlots) : slots;
+  const setActivePeriods = isBoth ? (periodTab === 'male' ? setMalePeriods : setFemalePeriods) : setPeriods;
+  const setActiveSlots = isBoth ? (periodTab === 'male' ? setMaleSlots : setFemaleSlots) : setSlots;
+
+  const activeClassPeriods = activePeriods.filter(p => !p.isBreak);
+
+  const addPeriodForActive = () => setActivePeriods([...activePeriods, { name: `Period ${activeClassPeriods.length + 1}`, start: '10:40 AM', end: '11:30 AM' }]);
+  const updatePeriodForActive = (idx: number, field: keyof RoutinePeriod, value: string | boolean) => {
+    const p = [...activePeriods]; p[idx] = { ...p[idx], [field]: value }; setActivePeriods(p);
+  };
+  const removePeriodForActive = (idx: number) => setActivePeriods(activePeriods.filter((_, i) => i !== idx));
+  const movePeriodForActive = (idx: number, dir: -1 | 1) => {
+    const p = [...activePeriods]; const ni = idx + dir;
+    if (ni < 0 || ni >= p.length) return;
+    [p[idx], p[ni]] = [p[ni], p[idx]]; setActivePeriods(p);
+  };
+
+  const setSlotForActive = (day: string, period: number, courseCode: string) => {
+    if (courseCode === '') {
+      setActiveSlots(activeSlots.filter(s => !(s.day === day && s.period === period)));
+    } else if (activeSlots.find(s => s.day === day && s.period === period)) {
+      setActiveSlots(activeSlots.map(s => s.day === day && s.period === period ? { ...s, course: courseCode } : s));
+    } else {
+      setActiveSlots([...activeSlots, { day, period, course: courseCode }]);
+    }
   };
 
   const steps: { key: BuilderStep; label: string; icon: string; num: number }[] = [
@@ -817,11 +1979,12 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
     if (!semester) { showToast('Please select semester', 'error'); return; }
     const routine: RoutineItem = {
       id: existing?.id || `my-${Date.now()}`,
-      semester, branch: branch || null, session, room: room || '',
+      semester, branch: branch || null, gender, session, room: room || '',
       academicYear: existing?.academicYear || new Date().getFullYear().toString(),
       department: existing?.department || 'Department of Qur\'anic Sciences & Islamic Studies',
       university: existing?.university || 'International Islamic University Chittagong',
       periods, days, courses, slots,
+      ...(isBoth ? { malePeriods, femalePeriods, maleSlots, femaleSlots } : {}),
       createdAt: existing?.createdAt || Date.now(),
       isDraft: true,
     };
@@ -855,8 +2018,17 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
               <select value={semester} onChange={e => setSemester(e.target.value)}>{SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}</select>
             </div>
             <div className="routine-form-group">
-              <label>Branch <span className="routine-label-optional">(optional)</span></label>
+              <label>Section <span className="routine-label-optional">(optional)</span></label>
               <input placeholder="e.g. A, B" value={branch} onChange={e => setBranch(e.target.value)} />
+            </div>
+            <div className="routine-form-group">
+              <label>Branch</label>
+              <select value={gender || ''} onChange={e => setGender((e.target.value || null) as 'male' | 'female' | 'both' | null)}>
+                <option value="">None</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="both">Both (Male &amp; Female)</option>
+              </select>
             </div>
             <div className="routine-form-group">
               <label>Session</label>
@@ -917,29 +2089,39 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
       {step === 'periods' && (
         <div className="routine-builder-section">
           <div className="routine-builder-section-header">
-            <h4><i className="fas fa-clock"></i> Time Periods</h4>
-            <button className="routine-add-btn" onClick={addPeriod}><i className="fas fa-plus"></i> Add Period</button>
+            <h4><i className="fas fa-clock"></i> Time Periods{isBoth ? ` — ${periodTab === 'male' ? 'Male' : 'Female'}` : ''}</h4>
+            <button className="routine-add-btn" onClick={addPeriodForActive}><i className="fas fa-plus"></i> Add Period</button>
           </div>
+          {isBoth && (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <button type="button" className={`routine-btn ${periodTab === 'male' ? 'routine-btn-primary' : 'routine-btn-outline'}`} onClick={() => setPeriodTab('male')} style={{ background: periodTab === 'male' ? '#3b82f6' : undefined, color: periodTab === 'male' ? '#fff' : undefined }}>
+                <i className="fas fa-mars" style={{ marginRight: 4 }}></i> Male Periods
+              </button>
+              <button type="button" className={`routine-btn ${periodTab === 'female' ? 'routine-btn-primary' : 'routine-btn-outline'}`} onClick={() => setPeriodTab('female')} style={{ background: periodTab === 'female' ? '#ec4899' : undefined, color: periodTab === 'female' ? '#fff' : undefined }}>
+                <i className="fas fa-venus" style={{ marginRight: 4 }}></i> Female Periods
+              </button>
+            </div>
+          )}
           <div className="routine-period-list">
-            {periods.map((p, idx) => (
+            {activePeriods.map((p, idx) => (
               <div key={idx} className={`routine-period-item ${p.isBreak ? 'break' : ''}`}>
                 <div className="routine-period-drag">
-                  <button disabled={idx === 0} onClick={() => movePeriod(idx, -1)}><i className="fas fa-chevron-up"></i></button>
-                  <button disabled={idx === periods.length - 1} onClick={() => movePeriod(idx, 1)}><i className="fas fa-chevron-down"></i></button>
+                  <button disabled={idx === 0} onClick={() => movePeriodForActive(idx, -1)}><i className="fas fa-chevron-up"></i></button>
+                  <button disabled={idx === activePeriods.length - 1} onClick={() => movePeriodForActive(idx, 1)}><i className="fas fa-chevron-down"></i></button>
                 </div>
                 <div className="routine-period-fields">
-                  <input className="routine-period-name" placeholder="Period name" value={p.name} onChange={e => updatePeriod(idx, 'name', e.target.value)} />
+                  <input className="routine-period-name" placeholder="Period name" value={p.name} onChange={e => updatePeriodForActive(idx, 'name', e.target.value)} />
                   <div className="routine-period-times">
-                    <input type="time" value={to24h(p.start)} onChange={e => updatePeriod(idx, 'start', to12h(e.target.value))} />
+                    <input type="time" value={to24h(p.start)} onChange={e => updatePeriodForActive(idx, 'start', to12h(e.target.value))} />
                     <span className="routine-period-sep">to</span>
-                    <input type="time" value={to24h(p.end)} onChange={e => updatePeriod(idx, 'end', to12h(e.target.value))} />
+                    <input type="time" value={to24h(p.end)} onChange={e => updatePeriodForActive(idx, 'end', to12h(e.target.value))} />
                   </div>
                 </div>
                 <label className="routine-break-toggle">
-                  <input type="checkbox" checked={!!p.isBreak} onChange={e => updatePeriod(idx, 'isBreak', e.target.checked)} />
+                  <input type="checkbox" checked={!!p.isBreak} onChange={e => updatePeriodForActive(idx, 'isBreak', e.target.checked)} />
                   <span>Break</span>
                 </label>
-                <button className="routine-remove-btn-sm" onClick={() => removePeriod(idx)}><i className="fas fa-times"></i></button>
+                <button className="routine-remove-btn-sm" onClick={() => removePeriodForActive(idx)}><i className="fas fa-times"></i></button>
               </div>
             ))}
           </div>
@@ -948,7 +2130,17 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
 
       {step === 'assign' && (
         <div className="routine-builder-section">
-          <h4><i className="fas fa-table"></i> Assign Courses to Schedule</h4>
+          <h4><i className="fas fa-table"></i> Assign Courses to Schedule{isBoth ? ` — ${periodTab === 'male' ? 'Male' : 'Female'}` : ''}</h4>
+          {isBoth && (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <button type="button" className={`routine-btn ${periodTab === 'male' ? 'routine-btn-primary' : 'routine-btn-outline'}`} onClick={() => setPeriodTab('male')} style={{ background: periodTab === 'male' ? '#3b82f6' : undefined, color: periodTab === 'male' ? '#fff' : undefined }}>
+                <i className="fas fa-mars" style={{ marginRight: 4 }}></i> Male Schedule
+              </button>
+              <button type="button" className={`routine-btn ${periodTab === 'female' ? 'routine-btn-primary' : 'routine-btn-outline'}`} onClick={() => setPeriodTab('female')} style={{ background: periodTab === 'female' ? '#ec4899' : undefined, color: periodTab === 'female' ? '#fff' : undefined }}>
+                <i className="fas fa-venus" style={{ marginRight: 4 }}></i> Female Schedule
+              </button>
+            </div>
+          )}
           <p className="routine-builder-hint">Select a course for each day/period. Leave empty for Off Day.</p>
           {courses.length === 0 ? (
             <div className="routine-empty-courses">
@@ -965,7 +2157,7 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
                   </tr>
                 </thead>
                 <tbody>
-                  {periods.map((p, pIdx) => {
+                  {activePeriods.map((p, pIdx) => {
                     if (p.isBreak) {
                       return (
                         <tr key={pIdx} className="routine-grid-break">
@@ -974,7 +2166,7 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
                         </tr>
                       );
                     }
-                    const cpIdx = nonBreakIdx(pIdx);
+                    const cpIdx = nonBreakIdx(pIdx, activePeriods);
                     return (
                       <tr key={pIdx}>
                         <td className="routine-grid-time">
@@ -982,10 +2174,10 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
                           <small>{p.start} - {p.end}</small>
                         </td>
                         {days.map(d => {
-                          const currentSlot = getSlot(d, cpIdx, slots);
+                          const currentSlot = getSlot(d, cpIdx, activeSlots);
                           return (
                             <td key={d}>
-                              <select value={currentSlot?.course || ''} onChange={e => setSlot(d, cpIdx, e.target.value)}>
+                              <select value={currentSlot?.course || ''} onChange={e => setSlotForActive(d, cpIdx, e.target.value)}>
                                 <option value="">-- Off Day --</option>
                                 {courses.map(c => <option key={c.code} value={c.code}>{c.code} - {c.title}</option>)}
                               </select>
