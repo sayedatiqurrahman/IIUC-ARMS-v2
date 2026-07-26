@@ -5,7 +5,7 @@
 ## Live: [qsis-arms.eu.cc](https://qsis-arms.eu.cc)
 
 ## Community
-- **WhatsApp Channel:** [Join for updates](https://whatsapp.com/channel/0029VbD78MI3gvWcocoFdR1g)
+- **WhatsApp Community:** [Join for updates](https://chat.whatsapp.com/BVsl3W6ep6D0JMyRzOIhUy)
 - **Telegram Channel:** [Join for updates & discussion](https://t.me/iiuc_arms)
 
 ## Features

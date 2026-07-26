@@ -231,10 +231,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div>
               <h4 className="text-[0.85rem] font-semibold text-dark-text mb-3">Community</h4>
               <div className="flex flex-col gap-2.5">
-                <a href="https://whatsapp.com/channel/0029VbD78MI3gvWcocoFdR1g" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
+                <a href="https://chat.whatsapp.com/BVsl3W6ep6D0JMyRzOIhUy" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
                   <div className="w-7 h-7 rounded-md bg-green-500/20 flex items-center justify-center"><i className="fab fa-whatsapp text-green-400 text-sm"></i></div>
-                  <span className="text-[0.78rem] text-dark-text2 group-hover:text-green-400 transition-colors">WhatsApp Channel</span>
+                  <span className="text-[0.78rem] text-dark-text2 group-hover:text-green-400 transition-colors">WhatsApp Community</span>
                 </a>
+                <p className="text-[0.62rem] text-dark-text3 mt-0.5 ml-9.5">
+                  <i className="fas fa-info-circle mr-1 text-green-400/60"></i>Your info stays hidden until you join a group
+                </p>
                 <a href="https://t.me/iiuc_arms" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
                   <div className="w-7 h-7 rounded-md bg-blue-500/20 flex items-center justify-center"><i className="fab fa-telegram text-blue-400 text-sm"></i></div>
                   <span className="text-[0.78rem] text-dark-text2 group-hover:text-blue-400 transition-colors">Telegram Channel</span>
