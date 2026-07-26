@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
+import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 function canManageFaculty(email: string, profileRole?: string, profileDept?: string, targetDept?: string): boolean {
   const role = config.getEffectiveRole(email, profileRole);
@@ -11,6 +12,8 @@ function canManageFaculty(email: string, profileRole?: string, profileDept?: str
 }
 
 export async function GET(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.faculty);
+  if (!rl.success) return rl.response!;
   try {
     const url = new URL(req.url);
     const department = url.searchParams.get('department');
@@ -46,6 +49,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.faculty);
+  if (!rl.success) return rl.response!;
   try {
     const body = await req.json();
     const { department, name, title, email, phone, shortForm, memberType } = body;
@@ -86,6 +91,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.faculty);
+  if (!rl.success) return rl.response!;
   try {
     const body = await req.json();
     const { id, name, title, email, phone, shortForm, memberType } = body;
@@ -120,6 +127,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.faculty);
+  if (!rl.success) return rl.response!;
   try {
     const url = new URL(req.url);
     const id = url.searchParams.get('id');

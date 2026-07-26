@@ -209,7 +209,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   uploadOpen: false,
   recentReads: [],
 
-  onboardingData: null,
+  onboardingData: typeof window !== 'undefined' ? getOnboardingData() : null,
   setOnboardingData: (data) => {
     saveOnboarding(data);
     set({ onboardingData: data });

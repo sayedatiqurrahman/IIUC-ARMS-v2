@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyTurnstile } from '@/lib/verifyTurnstile';
+import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.turnstile);
+  if (!rl.success) return rl.response!;
   try {
     const { token } = await req.json();
 

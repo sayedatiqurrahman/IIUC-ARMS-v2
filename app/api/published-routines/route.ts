@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
+import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 const ROUTINE_TTL_MONTHS = 7;
 const ACTIVITY_TTL_MONTHS = 3;
@@ -24,6 +25,8 @@ async function cleanupOldActivityLogs(prisma: any) {
 }
 
 export async function GET(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.general);
+  if (!rl.success) return rl.response!;
   try {
     const { prisma } = await import('@/lib/prisma');
 
@@ -73,6 +76,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.general);
+  if (!rl.success) return rl.response!;
   try {
     const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -154,6 +159,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.general);
+  if (!rl.success) return rl.response!;
   try {
     const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

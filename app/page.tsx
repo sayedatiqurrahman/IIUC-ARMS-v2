@@ -24,6 +24,7 @@ export default function BrowsePage() {
   const loading = useAppStore(s => s.loading);
   const error = useAppStore(s => s.error);
   const onboardData = useAppStore(s => s.onboardingData);
+  const clearOnboarding = useAppStore(s => s.clearOnboarding);
   const view = useAppStore(s => s.view);
   const currentSem = useAppStore(s => s.currentSem);
   const currentCat = useAppStore(s => s.currentCat);
@@ -382,7 +383,7 @@ export default function BrowsePage() {
                 Showing only <strong className="text-dark-text">{onboardData.semester}</strong> files.
               </span>
               <button
-                onClick={() => { clearOnboardingData(); window.location.reload(); }}
+                onClick={() => { clearOnboarding(); window.location.reload(); }}
                 className="ml-auto px-3 py-1.5 rounded-lg bg-qsis/10 border border-qsis/30 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/20 transition-colors flex-shrink-0"
               >
                 <i className="fas fa-edit mr-1"></i> Change Preference

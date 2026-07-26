@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
+import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.totp);
+  if (!rl.success) return rl.response!;
   try {
     const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

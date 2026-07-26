@@ -5,6 +5,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { getInstallationAccessToken } from '@/lib/github-app';
 import { decrypt, isEncrypted } from '@/lib/crypto';
+import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 export const maxDuration = 10;
 
@@ -27,6 +28,8 @@ async function ghPut(url: string, token: string, body: any) {
 }
 
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.upload);
+  if (!rl.success) return rl.response!;
   try {
     let token = '';
     let installationId: number | null = null;

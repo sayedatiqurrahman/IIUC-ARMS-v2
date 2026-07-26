@@ -31,7 +31,17 @@ export default function FacultyView() {
   const [members, setMembers] = useState<FacultyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [deptFilter, setDeptFilter] = useState('');
+  const [deptFilter, setDeptFilter] = useState(() => {
+    // Default to user's department from onboarding or profile
+    if (myDept) return myDept;
+    if (typeof window !== 'undefined') {
+      try {
+        const onboard = JSON.parse(localStorage.getItem('qsis-onboarding') || '{}');
+        return onboard.department || "Qur'anic Sciences and Islamic Studies";
+      } catch {}
+    }
+    return "Qur'anic Sciences and Islamic Studies";
+  });
   const [titleFilter, setTitleFilter] = useState('');
   const [memberTypeFilter, setMemberTypeFilter] = useState<'all' | 'faculty' | 'staff'>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -239,7 +249,7 @@ export default function FacultyView() {
               {FACULTIES.map(f => (
                 <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
                   {f.departments.map(d => (
-                    <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>
+                    <option key={d.id} value={d.name}>{d.shortName} — {d.name}</option>
                   ))}
                 </optgroup>
               ))}
