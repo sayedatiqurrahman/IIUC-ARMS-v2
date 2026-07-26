@@ -45,7 +45,8 @@ export function makeId(path: string) {
 }
 
 export function getRawUrl(path: string) {
-  return `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${config.uploadPath}/${path}`;
+  const encoded = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+  return `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${config.uploadPath}/${encoded}`;
 }
 
 export function extractYear(name: string): string {
