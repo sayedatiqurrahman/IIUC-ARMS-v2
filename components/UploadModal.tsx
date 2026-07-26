@@ -33,7 +33,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   const email = (session as any)?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
-  const canUploadAnyDept = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
+  const canUploadAnyDept = effectiveRole === 'admin';
 
   // Resolve user's department ID from profile or onboarding
   const userDeptId = (() => {

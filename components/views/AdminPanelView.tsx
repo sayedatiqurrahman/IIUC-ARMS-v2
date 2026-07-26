@@ -81,7 +81,8 @@ export default function AdminPanelView() {
   const effectiveRole = config.getEffectiveRole(email, profile.role);
   const isAdmin = effectiveRole === 'admin';
   const isManager = effectiveRole === 'manager';
-  const hasAdminAccess = isAdmin || isManager;
+  const isTeacherOrAbove = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
+  const hasAdminAccess = isAdmin || isManager || effectiveRole === 'teacher';
 
   useEffect(() => {
     if (!hasAdminAccess) return;
@@ -431,7 +432,7 @@ export default function AdminPanelView() {
         <div className="text-center py-20">
           <i className="fas fa-shield-alt text-4xl text-red-400 mb-4 block opacity-30"></i>
           <p className="text-[1rem] text-dark-text2 mb-2">Access Denied</p>
-          <p className="text-[0.82rem] text-dark-text2 opacity-60">You need admin or manager privileges to view this page.</p>
+          <p className="text-[0.82rem] text-dark-text2 opacity-60">You need admin, manager, or teacher privileges to view this page.</p>
           <button onClick={() => router.push('/')} className="mt-4 px-4 py-2 bg-qsis text-white rounded-lg text-sm">Go Home</button>
         </div>
       </section>
@@ -556,14 +557,14 @@ export default function AdminPanelView() {
   };
 
   const TABS: { key: Tab; label: string; icon: string; color: string; show: boolean }[] = [
-    { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', color: 'text-qsis', show: true },
+    { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', color: 'text-qsis', show: isAdmin || isManager },
     { key: 'admins', label: 'Admins', icon: 'fa-crown', color: 'text-red-400', show: isSuperAdmin },
     { key: 'managers', label: 'Managers', icon: 'fa-user-shield', color: 'text-orange-400', show: isAdmin },
-    { key: 'teachers', label: 'Teachers', icon: 'fa-chalkboard-teacher', color: 'text-green-400', show: true },
-    { key: 'students', label: 'Students', icon: 'fa-user-graduate', color: 'text-blue-400', show: true },
-    { key: 'users', label: 'All Users', icon: 'fa-users', color: 'text-dark-text2', show: true },
-    { key: 'faculty', label: 'Faculty', icon: 'fa-building', color: 'text-teal-400', show: isAdmin },
-    { key: 'activity', label: 'Activity Log', icon: 'fa-history', color: 'text-yellow-400', show: true },
+    { key: 'teachers', label: 'Teachers', icon: 'fa-chalkboard-teacher', color: 'text-green-400', show: isAdmin || isManager },
+    { key: 'students', label: 'Students', icon: 'fa-user-graduate', color: 'text-blue-400', show: isAdmin || isManager },
+    { key: 'users', label: 'All Users', icon: 'fa-users', color: 'text-dark-text2', show: isAdmin || isManager },
+    { key: 'faculty', label: 'Faculty', icon: 'fa-building', color: 'text-teal-400', show: isAdmin || isManager || effectiveRole === 'teacher' },
+    { key: 'activity', label: 'Activity Log', icon: 'fa-history', color: 'text-yellow-400', show: isAdmin || isManager },
   ];
 
   return (
@@ -573,7 +574,7 @@ export default function AdminPanelView() {
           <i className="fas fa-shield-alt text-qsis"></i>Admin Panel
         </h2>
         <p className="text-[0.82rem] text-dark-text2 mt-1">
-          {isAdmin ? 'Full admin access' : 'Manager access — you can manage users but cannot change admin roles'}
+          {isAdmin ? 'Full admin access' : isManager ? 'Manager access — you can manage users but cannot change admin roles' : 'Teacher access — you can manage faculty members'}
         </p>
       </div>
 
