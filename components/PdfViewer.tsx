@@ -23,6 +23,14 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
   }, [filePath]);
 
   useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      if (e.data?.type === 'pdf-close') onClose();
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onClose]);
+
+  useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
     }
@@ -33,19 +41,31 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
   const viewerUrl = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(url)}#page=${savedPage}`;
 
   return (
-    <div className="fixed inset-0 z-[1500] bg-black">
-      <button
-        onClick={onClose}
-        title="Close (Esc)"
-        className="absolute top-[6px] right-[8px] z-[9999] w-[32px] h-[32px] rounded-md bg-[#ef4444] hover:bg-[#dc2626] text-white border-none cursor-pointer flex items-center justify-center text-[0.8rem] shadow-md transition-all"
-      >
-        <i className="fas fa-times"></i>
-      </button>
+    <div className="fixed inset-0 z-[1500]">
       <iframe
         src={viewerUrl}
         className="w-full h-full border-none"
         title={name}
       />
+      <button
+        onClick={onClose}
+        title="Close (Esc)"
+        className="fixed z-[9999] flex items-center justify-center border-none cursor-pointer font-bold transition-colors"
+        style={{
+          top: '4px',
+          right: '6px',
+          width: '32px',
+          height: '32px',
+          borderRadius: '4px',
+          background: '#ef4444',
+          color: '#fff',
+          fontSize: '14px',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = '#dc2626'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = '#ef4444'; }}
+      >
+        ✕
+      </button>
     </div>
   );
 }

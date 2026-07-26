@@ -421,7 +421,7 @@ function ImageViewer({ item, onClose }: { item: any; onClose: () => void }) {
         <button className="pdf-btn" onClick={zoomOut} title="Zoom Out"><i className="fas fa-minus"></i></button>
         <span className="text-[0.8rem] font-semibold min-w-[40px] text-center">{zoom}%</span>
         <button className="pdf-btn" onClick={zoomIn} title="Zoom In"><i className="fas fa-plus"></i></button>
-        <button className="pdf-btn" onClick={fit} title="Fit"><i className="fas fa-expand"></i> Fit</button>
+        <button className="pdf-btn" onClick={fit} title="Fit"><i className="fas fa-expand"></i></button>
         <button className="pdf-btn" onClick={rotate} title="Rotate"><i className="fas fa-redo"></i></button>
         <button className="pdf-btn" onClick={handToggle} title="Hand/Pan"><i className="fas fa-hand-paper"></i></button>
         <button className="pdf-btn" onClick={onClose} title="Close" style={{background:'#ef4444',color:'white',borderRadius:'7px'}}><i className="fas fa-times"></i></button>
