@@ -32,7 +32,7 @@ export default function DashboardView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
-    universityId: '', name: '', whatsapp: '', semester: '', section: '',
+    universityId: '', name: '', whatsapp: '', semester: '', section: '', department: '',
     facebook: '', twitter: '', linkedin: '', website: '',
     company: '', companyUrl: '', publicEmail: '',
     hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false,
@@ -407,6 +407,7 @@ export default function DashboardView() {
                 whatsapp: profile.whatsapp,
                 semester: profile.semester,
                 section: profile.section || '',
+                department: profile.department || '',
                 facebook: profile.facebook,
                 twitter: profile.twitter,
                 linkedin: profile.linkedin,
@@ -448,6 +449,17 @@ export default function DashboardView() {
           <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
             <h5 className="text-[0.85rem] font-semibold mb-3"><i className="fas fa-user-edit text-qsis mr-2"></i>Edit Profile</h5>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1">Department</label>
+                <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" value={profileForm.department} onChange={e => setProfileForm(p => ({ ...p, department: e.target.value }))}>
+                  <option value="">Select department...</option>
+                  {FACULTIES.map(f => (
+                    <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
+                      {f.departments.map(d => <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
                 <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Sayed Atiqur Rahman" value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} />
