@@ -47,7 +47,7 @@ function detectCategory(name: string) {
 }
 
 function getPdfPageKey(filePath: string) {
-  return 'pdf_page_' + btoa(unescape(encodeURIComponent(filePath))).replace(/[=+/]/g, '');
+  return 'pdf-page-' + filePath;
 }
 
 /*

@@ -1675,17 +1675,10 @@ button { font-family: inherit; }
   overflow: hidden;
 }
 
-/* WebViewer theme overrides */
-.pdf-webviewer .App {
-  height: 100% !important;
-}
-
-.pdf-webviewer .HeaderContainer {
-  display: none !important;
-}
-
-.pdf-webviewer .ToolsContainer {
-  top: 0 !important;
+.pdf-webviewer iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
 }
 
 /* ═══════════════════════════════════════════════════════════

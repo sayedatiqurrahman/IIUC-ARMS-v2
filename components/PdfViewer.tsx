@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface PdfViewerProps {
   url: string;
@@ -10,76 +10,39 @@ interface PdfViewerProps {
 }
 
 export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerProps) {
-  const viewerRef = useRef<HTMLDivElement>(null);
-  const instanceRef = useRef<any>(null);
+  const [savedPage, setSavedPage] = useState(1);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    if (!viewerRef.current || instanceRef.current) return;
-
-    let cancelled = false;
-
-    async function init() {
-      const WebViewerModule = (await import('@pdftron/pdfjs-express')).default;
-      if (cancelled || !viewerRef.current) return;
-
-      const instance = await WebViewerModule(
-        {
-          path: '/webviewer/lib',
-          initialDoc: url,
-          licenseKey: 'demo',
-          disableLogs: true,
-        },
-        viewerRef.current,
-      );
-
-      if (cancelled) return;
-      instanceRef.current = instance;
-
-      const { documentViewer, annotationManager, Tools } = instance.Core;
-      annotationManager.setIsAdminUser(true);
-
-      instance.UI.setTheme('dark');
-
-      documentViewer.addEventListener('documentLoaded', () => {
-        documentViewer.setToolMode(Tools.ToolNames.PAN);
-        try {
-          const saved = localStorage.getItem(`pdf-page-${filePath}`);
-          if (saved) {
-            const pageNum = parseInt(saved);
-            if (pageNum > 0) documentViewer.setCurrentPage(pageNum, false);
-          }
-        } catch {}
-      });
-
-      documentViewer.addEventListener('pageChanged', (e: any) => {
-        try {
-          localStorage.setItem(`pdf-page-${filePath}`, String(e.pageNumber));
-        } catch {}
-      });
-
-      try {
-        const iframe = viewerRef.current.querySelector('iframe');
-        if (iframe?.contentDocument) {
-          const style = iframe.contentDocument.createElement('style');
-          style.textContent = `
-            [class*="watermark"], [class*="Watermark"] { display: none !important; }
-            [data-element="watermark"] { display: none !important; }
-          `;
-          iframe.contentDocument.head.appendChild(style);
-        }
-      } catch {}
-    }
-
-    init();
-
-    return () => {
-      cancelled = true;
-      if (instanceRef.current) {
-        try { instanceRef.current.Core?.documentViewer?.closeAllDocuments(); } catch {}
-        instanceRef.current = null;
+    try {
+      const saved = localStorage.getItem(`pdf-page-${filePath}`);
+      if (saved) {
+        const pageNum = parseInt(saved);
+        if (pageNum > 0) setSavedPage(pageNum);
       }
-    };
-  }, [url, filePath]);
+    } catch {}
+  }, [filePath]);
+
+  useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      if (e.data?.type === 'pdf-page-change' && e.data.filePath === filePath) {
+        try { localStorage.setItem(`pdf-page-${filePath}`, String(e.data.page)); } catch {}
+      }
+      if (e.data?.type === 'pdf-close') onClose();
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [filePath, onClose]);
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  const viewerUrl = `/pdf-viewer/viewer.html?file=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}&path=${encodeURIComponent(filePath)}#page=${savedPage}`;
 
   return (
     <div className="pdf-viewer-overlay" onClick={onClose}>
@@ -93,7 +56,16 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
             <span>{name}</span>
           </div>
         </div>
-        <div className="pdf-webviewer" ref={viewerRef}></div>
+        <div className="pdf-webviewer">
+          <iframe
+            ref={iframeRef}
+            src={viewerUrl}
+            className="w-full h-full border-none rounded-b-xl"
+            title={name}
+            allow="annotation"
+            style={{ minHeight: 'calc(100vh - 120px)' }}
+          />
+        </div>
       </div>
     </div>
   );
