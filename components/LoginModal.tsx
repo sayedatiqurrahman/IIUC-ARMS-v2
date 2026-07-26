@@ -25,8 +25,10 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [loginMode, setLoginMode] = useState<'password' | 'magiclink'>('password');
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [totpStep, setTotpStep] = useState(false);
+  const [totpAvailable, setTotpAvailable] = useState(false);
   const [totpCode, setTotpCode] = useState('');
   const [pendingCredentials, setPendingCredentials] = useState<{ idToken: string; email: string } | null>(null);
+  const [magicLink2faSent, setMagicLink2faSent] = useState(false);
   const turnstileContainerId = 'login-turnstile-container';
   const { renderWidget, getToken, reset } = useTurnstile();
   const isDev = process.env.NODE_ENV === 'development';
@@ -53,8 +55,10 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       setLoginMode('password');
       setMagicLinkSent(false);
       setTotpStep(false);
+      setTotpAvailable(false);
       setTotpCode('');
       setPendingCredentials(null);
+      setMagicLink2faSent(false);
     }
   }, [isOpen]);
 
@@ -131,37 +135,19 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         }
 
         const idToken = await user.getIdToken();
+
+        // Check TOTP status
         const totpRes = await fetch('/api/auth/totp/check', {
           headers: { Authorization: `Bearer ${idToken}` },
         });
         const totpData = await totpRes.json();
 
-        if (totpData.totpEnabled) {
-          setPendingCredentials({ idToken, email });
-          setTotpStep(true);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const idToken = await user.getIdToken();
-      const turnstileToken = getToken(turnstileContainerId);
-
-      const result = await signIn('credentials', {
-        idToken,
-        email,
-        name: email.split('@')[0],
-        image: '',
-        login: email.split('@')[0],
-        turnstileToken,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError('Invalid email or password');
-        reset();
-      } else {
-        onClose();
+        // Always require 2FA — store credentials and show 2FA screen
+        setPendingCredentials({ idToken, email });
+        setTotpAvailable(!!totpData.totpEnabled);
+        setTotpStep(true);
+        setLoading(false);
+        return;
       }
     } catch (err: any) {
       if (isSignUp && err.code === 'auth/email-already-in-use') {
@@ -547,7 +533,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
           {totpStep && (
             <div>
               <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-[0.8rem]">
-                <i className="fas fa-shield-alt mr-2"></i>Two-factor authentication required. Enter the 6-digit code from your authenticator app.
+                <i className="fas fa-shield-alt mr-2"></i>Two-factor authentication required. Enter the 6-digit code from your authenticator app, or use a magic link.
               </div>
 
               {error && (
@@ -556,41 +542,84 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 </div>
               )}
 
-              <form onSubmit={handleTotpVerify}>
-                <div className="mb-4">
-                  <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">Authenticator Code</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={6}
-                    className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[1.2rem] tracking-[0.3em] text-center outline-none focus:border-qsis transition-colors font-mono"
-                    placeholder="000000"
-                    value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    autoFocus
-                    required
-                  />
+              {/* Success message for magic link */}
+              {magicLink2faSent && (
+                <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-[0.8rem]">
+                  <i className="fas fa-check-circle mr-2"></i>Magic link sent! Check your email inbox.
                 </div>
+              )}
 
+              {/* TOTP Input */}
+              {totpAvailable && !magicLink2faSent && (
+                <form onSubmit={handleTotpVerify}>
+                  <div className="mb-4">
+                    <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">Authenticator Code</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[1.2rem] tracking-[0.3em] text-center outline-none focus:border-qsis transition-colors font-mono"
+                      placeholder="000000"
+                      value={totpCode}
+                      onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      autoFocus
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || totpCode.length !== 6}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-[0.85rem] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <><i className="fas fa-spinner fa-spin mr-2"></i>Verifying...</>
+                    ) : (
+                      <><i className="fas fa-check-circle mr-2"></i>Verify & Sign In</>
+                    )}
+                  </button>
+                </form>
+              )}
+
+              {/* Divider and Magic Link option */}
+              {totpAvailable && !magicLink2faSent && (
+                <div className="flex items-center gap-3 my-4">
+                  <div className="flex-1 h-px bg-dark-border"></div>
+                  <span className="text-[0.72rem] text-dark-text2">or</span>
+                  <div className="flex-1 h-px bg-dark-border"></div>
+                </div>
+              )}
+
+              {/* Magic Link Button */}
+              {!magicLink2faSent && (
                 <button
-                  type="submit"
-                  disabled={loading || totpCode.length !== 6}
-                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-[0.85rem] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  type="button"
+                  disabled={loading}
+                  className="w-full py-2.5 px-4 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text font-semibold text-[0.85rem] cursor-pointer hover:border-qsis hover:text-qsis transition-all disabled:opacity-50"
+                  onClick={async () => {
+                    if (!pendingCredentials) return;
+                    setLoading(true);
+                    setError('');
+                    try {
+                      await sendMagicLink(pendingCredentials.email);
+                      setMagicLink2faSent(true);
+                    } catch {
+                      setError('Failed to send magic link. Please try again.');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
                 >
-                  {loading ? (
-                    <><i className="fas fa-spinner fa-spin mr-2"></i>Verifying...</>
-                  ) : (
-                    <><i className="fas fa-check-circle mr-2"></i>Verify & Sign In</>
-                  )}
+                  <i className="fas fa-envelope mr-2"></i>Send Magic Link to {pendingCredentials?.email}
                 </button>
-              </form>
+              )}
 
-              <div className="mt-3 text-center">
+              <div className="mt-4 text-center">
                 <button
                   type="button"
                   className="text-[0.78rem] text-dark-text2 hover:text-qsis bg-transparent border-none cursor-pointer hover:underline"
-                  onClick={() => { setTotpStep(false); setTotpCode(''); setPendingCredentials(null); setError(''); }}
+                  onClick={() => { setTotpStep(false); setTotpCode(''); setPendingCredentials(null); setMagicLink2faSent(false); setError(''); setSuccess(''); }}
                 >
                   <i className="fas fa-arrow-left mr-1"></i>Back to login
                 </button>

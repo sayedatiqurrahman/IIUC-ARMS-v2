@@ -53,6 +53,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (status === 'authenticated') {
       loadProfile();
+      // Close login modal when session is established (e.g. magic link in another tab)
+      setLoginModalOpen(false);
     }
   }, [status]);
 
