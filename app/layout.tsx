@@ -6,7 +6,7 @@ import Providers from '@/components/Providers';
 import AppShell from '@/components/AppShell';
 import './globals.css';
 
-const siteUrl = 'https://qsis-arms.vercel.app';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://qsis-arms.eu.cc';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
