@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { FACULTIES, TEACHER_TITLES, STAFF_DESIGNATIONS, findDepartment } from '@/lib/departments';
 import { config } from '@/lib/config';
@@ -40,22 +40,23 @@ export default function FacultyView() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<FacultyMember>>({});
   const [saving, setSaving] = useState(false);
+  const isEditing = useRef(false);
 
-  const fetchMembers = () => {
+  const fetchMembers = useCallback(() => {
     const params = new URLSearchParams();
     if (deptFilter) params.set('department', deptFilter);
     if (search) params.set('search', search);
     if (titleFilter) params.set('title', titleFilter);
     if (memberTypeFilter !== 'all') params.set('memberType', memberTypeFilter);
     if (!canEdit) params.set('visibleOnly', 'true');
-    setLoading(true);
+    if (!isEditing.current) setLoading(true);
     fetch(`/api/faculty?${params}`)
       .then(r => r.json())
       .then(data => { setMembers(data.members || []); setLoading(false); })
       .catch(() => setLoading(false));
-  };
+  }, [deptFilter, search, titleFilter, memberTypeFilter, canEdit]);
 
-  useEffect(() => { fetchMembers(); }, [deptFilter, search, titleFilter, memberTypeFilter]);
+  useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, FacultyMember[]>();
@@ -88,11 +89,12 @@ export default function FacultyView() {
   };
 
   const startEdit = (m: FacultyMember) => {
+    isEditing.current = true;
     setEditingId(m.id);
     setEditForm({ name: m.name, title: m.title, shortForm: m.shortForm, email: m.email, phone: m.phone });
   };
 
-  const cancelEdit = () => { setEditingId(null); setEditForm({}); };
+  const cancelEdit = () => { isEditing.current = false; setEditingId(null); setEditForm({}); };
 
   const saveEdit = async (id: string) => {
     setSaving(true);
@@ -105,6 +107,7 @@ export default function FacultyView() {
       const data = await res.json();
       if (data.success) {
         showToast('Updated successfully', 'success');
+        isEditing.current = false;
         cancelEdit();
         fetchMembers();
       } else {
@@ -117,15 +120,7 @@ export default function FacultyView() {
     }
   };
 
-  const EditInput = ({ field, placeholder, className }: { field: keyof FacultyMember; placeholder?: string; className?: string }) => (
-    <input
-      type="text"
-      value={(editForm[field] as string) || ''}
-      onChange={e => setEditForm(f => ({ ...f, [field]: e.target.value }))}
-      placeholder={placeholder}
-      className={`px-2 py-1 rounded border border-qsis/50 bg-dark-bg text-dark-text text-[0.78rem] outline-none ${className || ''}`}
-    />
-  );
+  const editInputClass = 'px-2 py-1 rounded border border-qsis/50 bg-dark-bg text-dark-text text-[0.78rem] outline-none w-full';
 
   const renderMemberCard = (m: FacultyMember) => {
     const isEditing = editingId === m.id;
@@ -139,11 +134,11 @@ export default function FacultyView() {
           <div className="flex-1 min-w-0">
             {isEditing ? (
               <div className="space-y-1.5">
-                <EditInput field="name" placeholder="Full name" />
-                <EditInput field="title" placeholder="Designation" />
-                <EditInput field="shortForm" placeholder="Short form (e.g. GH)" />
-                <EditInput field="email" placeholder="Email" />
-                <EditInput field="phone" placeholder="Phone number" />
+                <input type="text" value={(editForm.name as string) || ''} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" className={editInputClass} />
+                <input type="text" value={(editForm.title as string) || ''} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} placeholder="Designation" className={editInputClass} />
+                <input type="text" value={(editForm.shortForm as string) || ''} onChange={e => setEditForm(f => ({ ...f, shortForm: e.target.value }))} placeholder="Short form (e.g. GH)" className={editInputClass} />
+                <input type="text" value={(editForm.email as string) || ''} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder="Email" className={editInputClass} />
+                <input type="text" value={(editForm.phone as string) || ''} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="Phone number" className={editInputClass} />
               </div>
             ) : (
               <>
@@ -239,7 +234,7 @@ export default function FacultyView() {
               onChange={e => setDeptFilter(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
             >
-              <option value="">All Departments</option>
+              <option value="" disabled hidden>Select a department...</option>
               {FACULTIES.map(f => (
                 <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
                   {f.departments.map(d => (

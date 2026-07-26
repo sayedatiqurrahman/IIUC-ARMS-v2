@@ -516,7 +516,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   openFile: (item) => {
     const ext = item.path.split('/').pop()?.split('.').pop()?.toLowerCase() || '';
     const mime = getMimeFromExt(ext);
-    const rawUrl = getRawUrl(item.path, item.githubPath);
+    const githubPath = item.githubPath || (item.department ? item.department + '/' + item.path : item.path);
+    const rawUrl = getRawUrl(item.path, githubPath);
     const viewerItem: ViewerItem = {
       path: item.path,
       name: item.path.split('/').pop() || '',
