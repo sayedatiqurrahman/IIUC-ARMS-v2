@@ -95,6 +95,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No routines provided' }, { status: 400 });
     }
 
+    // Teacher can only publish routines for their own department
+    if (effectiveRole === 'teacher') {
+      const callerProfile = await prisma.profile.findUnique({ where: { userId: email } });
+      const teacherDept = callerProfile?.department;
+      if (teacherDept) {
+        for (const r of routines) {
+          if (r.department && r.department !== teacherDept) {
+            return NextResponse.json({ error: `Teachers can only publish routines for their own department (${teacherDept})` }, { status: 403 });
+          }
+        }
+      }
+    }
+
     // Set expiry 7 months from now
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + ROUTINE_TTL_MONTHS);

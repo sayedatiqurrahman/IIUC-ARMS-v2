@@ -32,15 +32,14 @@ export default function FacultyView() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState(() => {
-    // Default to user's department from onboarding or profile
     if (myDept) return myDept;
     if (typeof window !== 'undefined') {
       try {
         const onboard = JSON.parse(localStorage.getItem('qsis-onboarding') || '{}');
-        return onboard.department || "Qur'anic Sciences and Islamic Studies";
+        return onboard.department || '';
       } catch {}
     }
-    return "Qur'anic Sciences and Islamic Studies";
+    return '';
   });
   const [titleFilter, setTitleFilter] = useState('');
   const [memberTypeFilter, setMemberTypeFilter] = useState<'all' | 'faculty' | 'staff'>('all');
@@ -68,7 +67,7 @@ export default function FacultyView() {
     const map = new Map<string, FacultyMember[]>();
     for (const m of members) {
       const found = findDepartment(m.department);
-      const key = found ? `${found.faculty.shortName} / ${found.department.shortName}` : m.department;
+      const key = found ? found.department.name : m.department;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(m);
     }
@@ -250,7 +249,7 @@ export default function FacultyView() {
               {FACULTIES.map(f => (
                 <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
                   {f.departments.map(d => (
-                    <option key={d.id} value={d.name}>{d.shortName} — {d.name}</option>
+                    <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>
                   ))}
                 </optgroup>
               ))}

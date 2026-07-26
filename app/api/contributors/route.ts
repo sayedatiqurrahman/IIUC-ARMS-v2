@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { config } from '@/lib/config';
+import { FACULTIES } from '@/lib/departments';
 
 interface Contributor {
   id: string;
@@ -15,6 +16,8 @@ interface Contributor {
   prCount: number;
   role: string;
   roleType: 'developer' | 'resource_provider' | 'both';
+  department: string;
+  section: string;
   universityId: string;
   whatsapp: string;
   semester: string;
@@ -33,10 +36,32 @@ interface Contributor {
   source: 'github' | 'db' | 'both';
 }
 
-const OWNER_EMAILS = [
-  'quranicsciencesclub@gmail.com',
-  's.atiqurrahman2003@gmail.com',
-];
+function getDeptLabel(deptId: string): string {
+  for (const f of FACULTIES) {
+    for (const d of f.departments) {
+      if (d.id === deptId) return d.name;
+    }
+  }
+  return deptId;
+}
+
+function getDeptShortName(deptId: string): string {
+  for (const f of FACULTIES) {
+    for (const d of f.departments) {
+      if (d.id === deptId) return d.shortName;
+    }
+  }
+  return deptId;
+}
+
+function getFacultyName(deptId: string): string {
+  for (const f of FACULTIES) {
+    for (const d of f.departments) {
+      if (d.id === deptId) return f.shortName;
+    }
+  }
+  return '';
+}
 
 async function getDbProfiles(): Promise<any[]> {
   try {
@@ -71,6 +96,7 @@ export async function GET() {
       id, login, name: login, title: '', email: '', avatar_url: avatar, html_url: htmlUrl,
       contributions: 0, v2Contributions: 0, dataContributions: 0, prCount: 0,
       role: 'Contributor', roleType: 'developer',
+      department: '', section: '',
       universityId: '', whatsapp: '', semester: '',
       facebook: '', twitter: '', linkedin: '', website: '',
       company: '', companyUrl: '', publicEmail: '',
@@ -119,16 +145,13 @@ export async function GET() {
     else if (isData) c.roleType = 'resource_provider';
   }
 
-  // Merge DB profiles by githubLogin first, then by email
+  // Merge DB profiles
   for (const p of dbProfiles) {
     let matchedContributor: Contributor | undefined;
 
-    // Match by githubLogin
     if (p.githubLogin) {
       matchedContributor = map.get(p.githubLogin);
     }
-
-    // Match by email prefix as fallback
     if (!matchedContributor && p.email) {
       const loginFromEmail = p.email.split('@')[0];
       matchedContributor = map.get(loginFromEmail);
@@ -137,10 +160,11 @@ export async function GET() {
     const profileComplete = !!(p.universityId && p.whatsapp && p.semester);
 
     if (matchedContributor) {
-      // Email: only show if publicEmail is explicitly set by the user
       matchedContributor.email = p.publicEmail || '';
       matchedContributor.name = p.name || matchedContributor.name;
       matchedContributor.title = p.title || matchedContributor.title;
+      matchedContributor.department = p.department || '';
+      matchedContributor.section = p.section || '';
       matchedContributor.universityId = p.universityId || matchedContributor.universityId;
       matchedContributor.whatsapp = p.whatsapp || matchedContributor.whatsapp;
       matchedContributor.semester = p.semester || matchedContributor.semester;
@@ -158,7 +182,6 @@ export async function GET() {
       matchedContributor.profileComplete = profileComplete;
       matchedContributor.source = 'both';
     }
-    // DB-only users (no GitHub activity) are NOT shown in contributors list
   }
 
   const contributors = Array.from(map.values()).sort((a, b) => {
@@ -168,6 +191,15 @@ export async function GET() {
     if (a.roleType !== 'both' && b.roleType === 'both') return 1;
     return b.contributions - a.contributions;
   });
+
+  // Enrich with department labels
+  for (const c of contributors) {
+    if (c.department) {
+      (c as any).departmentLabel = getDeptLabel(c.department);
+      (c as any).departmentShortName = getDeptShortName(c.department);
+      (c as any).facultyName = getFacultyName(c.department);
+    }
+  }
 
   return NextResponse.json(contributors);
 }
