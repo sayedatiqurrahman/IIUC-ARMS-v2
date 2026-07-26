@@ -8,14 +8,26 @@ import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
 import { installGitHubApp } from '@/lib/github-install';
 
+const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_MONTH = new Date().getMonth() + 1;
+const CURRENT_SEASON = CURRENT_MONTH >= 4 && CURRENT_MONTH <= 9 ? 'Spring' : 'Autumn';
+
+function isPdf(name: string) { return name.toLowerCase().endsWith('.pdf'); }
+function isImage(name: string) { return /\.(jpg|jpeg|png|gif|webp)$/i.test(name); }
+function isDocsOnly(name: string) { return /\.(pdf|doc|docx|ppt|pptx)$/i.test(name); }
+
+interface FileWithMeta {
+  file: File;
+  year: string;
+  yearRange: string;
+}
+
 interface CourseGroup {
   id: number;
   code: string;
   title: string;
-  files: File[];
-  examSession?: string;
-  yearRange?: string;
-  sessionType?: string;
+  files: FileWithMeta[];
+  examSession: string;
 }
 
 interface UploadModalProps {
@@ -37,11 +49,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   // Resolve user's department ID from profile or onboarding
   const userDeptId = (() => {
-    const deptName = profile.department || onboardData?.department || '';
-    if (!deptName) return '';
+    const deptVal = profile.department || onboardData?.department || '';
+    if (!deptVal) return '';
     for (const f of FACULTIES) {
       for (const d of f.departments) {
-        if (d.name === deptName) return d.id;
+        if (d.id === deptVal || d.name === deptVal) return d.id;
       }
     }
     return '';
@@ -59,7 +71,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [department, setDepartment] = useState(userDeptId);
   const [semester, setSemester] = useState(profile.semester || '');
   const [category, setCategory] = useState('');
-  const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, code: '', title: '', files: [] }]);
+  const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, code: '', title: '', files: [], examSession: '' }]);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -69,7 +81,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const needsDepartment = !userDeptId;
 
   const totalFiles = courses.reduce((sum, c) => sum + c.files.length, 0);
-  const totalSizeMB = courses.reduce((sum, c) => sum + c.files.reduce((s, f) => s + f.size, 0), 0) / (1024 * 1024);
+  const totalSizeMB = courses.reduce((sum, c) => sum + c.files.reduce((s, f) => s + f.file.size, 0), 0) / (1024 * 1024);
 
   function updateCourse(id: number, patch: Partial<CourseGroup>) {
     setCourses(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
@@ -78,7 +90,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   function addCourse() {
     if (courses.length >= 5) return;
     const newId = Math.max(0, ...courses.map(c => c.id)) + 1;
-    setCourses(prev => [...prev, { id: newId, code: '', title: '', files: [] }]);
+    setCourses(prev => [...prev, { id: newId, code: '', title: '', files: [], examSession: '' }]);
   }
 
   function removeCourse(id: number) {
@@ -90,15 +102,28 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const selected = Array.from(e.target.files || []);
     const course = courses.find(c => c.id === courseId);
     const currentCourseFiles = course?.files.length || 0;
+    const isNotes = category === config.categories.notes.folder;
+    const isQuestions = category === config.categories.questions.folder;
+    const isLimitedCategory = isNotes || isQuestions;
+    const maxFiles = isLimitedCategory ? 1 : 5;
 
-    if (currentCourseFiles + selected.length > 5) {
-      alert('Max 5 files per course.');
+    if (currentCourseFiles + selected.length > maxFiles) {
+      alert(isLimitedCategory ? 'Only 1 file allowed for Previous Questions / Notes.' : `Max 5 files per course.`);
       return;
     }
 
-    const valid = selected.filter(f => f.size <= config.maxUploadSizeMB * 1024 * 1024);
-    if (valid.length < selected.length) {
-      alert(`${selected.length - valid.length} file(s) exceeded ${config.maxUploadSizeMB}MB and were skipped.`);
+    let filtered = selected;
+    if (isNotes) {
+      filtered = selected.filter(f => isDocsOnly(f.name));
+      if (filtered.length < selected.length) alert('Notes only accept PDF, DOC/DOCX, PPT/PPTX files.');
+    } else if (isQuestions) {
+      filtered = selected.filter(f => isPdf(f.name) || isImage(f.name));
+      if (filtered.length < selected.length) alert('Previous Questions only accept PDF or image files.');
+    }
+
+    const valid = filtered.filter(f => f.size <= config.maxUploadSizeMB * 1024 * 1024);
+    if (valid.length < filtered.length) {
+      alert(`${filtered.length - valid.length} file(s) exceeded ${config.maxUploadSizeMB}MB and were skipped.`);
     }
 
     const newTotal = totalFiles - currentCourseFiles + valid.length;
@@ -107,13 +132,35 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       return;
     }
 
-    const newTotalSize = (totalSizeMB * 1024 * 1024 - (course?.files.reduce((s, f) => s + f.size, 0) || 0) + valid.reduce((s, f) => s + f.size, 0)) / (1024 * 1024);
+    const newTotalSize = (totalSizeMB * 1024 * 1024 - (course?.files.reduce((s, f) => s + f.file.size, 0) || 0) + valid.reduce((s, f) => s + f.size, 0)) / (1024 * 1024);
     if (newTotalSize > 50) {
       alert('Total upload size cannot exceed 50MB.');
       return;
     }
 
-    updateCourse(courseId, { files: [...(course?.files || []), ...valid] });
+    const defaultSession = CURRENT_SEASON;
+    const newFiles: FileWithMeta[] = valid.map(f => {
+      if (isNotes) {
+        return { file: f, year: String(CURRENT_YEAR), yearRange: '' };
+      }
+      if (isQuestions) {
+        if (isPdf(f.name)) {
+          return { file: f, year: '', yearRange: `${CURRENT_YEAR}-${CURRENT_YEAR}` };
+        }
+        return { file: f, year: String(CURRENT_YEAR), yearRange: '' };
+      }
+      return { file: f, year: '', yearRange: '' };
+    });
+
+    const patch: Partial<CourseGroup> = { files: [...(course?.files || []), ...newFiles] };
+    if ((isNotes || isQuestions) && !course?.examSession) {
+      if (isQuestions && valid.length > 0 && isPdf(valid[0].name)) {
+        patch.examSession = 'Both';
+      } else {
+        patch.examSession = CURRENT_SEASON;
+      }
+    }
+    updateCourse(courseId, patch);
     if (fileInputRefs.current[courseId]) fileInputRefs.current[courseId]!.value = '';
   }
 
@@ -141,7 +188,12 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   function canSubmit(): boolean {
     if (!department || !semester || !category) return false;
-    return courses.some(c => c.code.trim() && c.files.length > 0);
+    const isNotes = category === config.categories.notes.folder;
+    return courses.some(c => {
+      if (!c.code.trim() || c.files.length === 0) return false;
+      if (isNotes && !c.examSession) return false;
+      return true;
+    });
   }
 
   async function handleSubmit() {
@@ -176,8 +228,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           ? `${course.code.trim()}-${course.title.trim()}`
           : course.code.trim();
 
-        for (const file of course.files) {
-          const base64 = await file.arrayBuffer().then(buf => {
+        for (const fileMeta of course.files) {
+          const base64 = await fileMeta.file.arrayBuffer().then(buf => {
             const bytes = new Uint8Array(buf);
             let binary = '';
             for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
@@ -186,18 +238,17 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
           let filePath: string;
           if (semester === config.relatedKitabsFolder) {
-            // Related Kitabs: shariah/related-kitabs/{category}/{folder}/{file}
-            filePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${folderName}/${file.name}`;
+            filePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${folderName}/${fileMeta.file.name}`;
           } else if (semester === config.relatedSourcesFolder) {
-            // Related Sources: {faculty-id}/related-sources/{folder}/{file}
             const facId = getFacultyIdForDepartment(department) || department;
-            filePath = `${facId}/${config.relatedSourcesFolder}/${folderName}/${file.name}`;
-          } else if (category === config.categories.questions.folder && course.examSession) {
-            // Previous Questions with session metadata: {dept}/{sem}/{cat}/{course}/{session}/{file}
-            filePath = `${department}/${semester}/${category}/${folderName}/${course.examSession}/${file.name}`;
+            filePath = `${facId}/${config.relatedSourcesFolder}/${folderName}/${fileMeta.file.name}`;
+          } else if ((category === config.categories.questions.folder || category === config.categories.notes.folder) && course.examSession) {
+            const yearPart = isPdf(fileMeta.file.name) ? (fileMeta.yearRange || '') : (fileMeta.year || '');
+            filePath = yearPart
+              ? `${department}/${semester}/${category}/${folderName}/${course.examSession}/${yearPart}/${fileMeta.file.name}`
+              : `${department}/${semester}/${category}/${folderName}/${course.examSession}/${fileMeta.file.name}`;
           } else {
-            // Regular: {dept}/{sem}/{cat}/{folder}/{file}
-            filePath = `${department}/${semester}/${category}/${folderName}/${file.name}`;
+            filePath = `${department}/${semester}/${category}/${folderName}/${fileMeta.file.name}`;
           }
 
           allFiles.push({ path: filePath, content: base64 });
@@ -208,16 +259,20 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       const message = `Add ${courseList} (${category}) — ${semester}`;
 
       // Use server-side API route (uses GITHUB_TOKEN env for write access)
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 55000);
       const res = await fetch('/api/github/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: allFiles, message, githubToken: token }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
       const data = await res.json();
 
       if (data.success) {
         setResult({ success: true, prUrl: data.pr?.url });
-        setCourses([{ id: 1, code: '', title: '', files: [] }]);
+        setCourses([{ id: 1, code: '', title: '', files: [], examSession: '' }]);
         // Refresh tree cache so newly uploaded files appear immediately
         try { localStorage.removeItem('qs_tree_cache'); } catch {}
         useAppStore.getState().loadTree(session?.accessToken || '');
@@ -231,7 +286,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         }
       }
     } catch (err: any) {
-      setResult({ success: false, error: err.message || 'Network error' });
+      const msg = err?.name === 'AbortError'
+        ? 'Upload timed out. The file may be too large or the server is slow. Try fewer files.'
+        : err.message || 'Network error';
+      const isAuthErr = /token expired|reconnect|401|403/i.test(msg);
+      setResult({ success: false, error: msg, tokenExpired: isAuthErr });
     } finally {
       setUploading(false);
     }
@@ -348,15 +407,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           <button className="text-dark-text2 cursor-pointer bg-transparent border-none" onClick={onClose}><i className="fas fa-times"></i></button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-dark-border">
-          <button className={`flex-1 py-2.5 text-[0.82rem] font-semibold border-none cursor-pointer transition-all ${activeTab === 'direct' ? 'bg-transparent text-qsis border-b-2 border-b-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text'}`} onClick={() => setActiveTab('direct')}>
-            <i className="fas fa-cloud-upload-alt mr-1.5"></i>Direct Upload
-          </button>
-          <button className={`flex-1 py-2.5 text-[0.82rem] font-semibold border-none cursor-pointer transition-all ${activeTab === 'repo' ? 'bg-transparent text-qsis border-b-2 border-b-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text'}`} onClick={() => setActiveTab('repo')}>
-            <i className="fab fa-github mr-1.5"></i>Upload from Repository
-          </button>
-        </div>
+        {/* Tabs - only show if repo tab has content */}
 
         <div className="p-5 max-h-[80vh] overflow-y-auto">
 
@@ -384,239 +435,9 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             </div>
           )}
 
-          {/* ═══════════ TAB 1: Upload from Repository ═══════════ */}
-          {activeTab === 'repo' && (
-            <div>
-              <div className="text-center mb-4">
-                <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-qsis/10 flex items-center justify-center">
-                  <i className="fab fa-github text-2xl text-qsis"></i>
-                </div>
-                <h3 className="text-[1rem] font-bold mb-1">Upload Directly on GitHub</h3>
-                <p className="text-[0.8rem] text-dark-text2">Upload files manually through GitHub&apos;s web interface. Perfect for small uploads or if you prefer full control.</p>
-              </div>
 
-              {/* Quick Links */}
-              <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-4">
-                <p className="text-[0.72rem] text-dark-text2 mb-2 font-semibold"><i className="fas fa-bolt text-qsis mr-1"></i> Quick Links</p>
-                <div className="flex flex-wrap gap-2">
-                  <a href="https://github.com/signup" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-[0.7rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all no-underline">
-                    <i className="fab fa-github"></i> Create GitHub Account
-                  </a>
-                  <a href="https://github.com/login" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-[0.7rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all no-underline">
-                    <i className="fas fa-sign-in-alt"></i> Sign In to GitHub
-                  </a>
-                  <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-[0.7rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all no-underline">
-                    <i className="fas fa-code-branch"></i> Fork Repository
-                  </a>
-                </div>
-              </div>
-
-              {/* Step by step guide */}
-              <div className="space-y-4">
-                {/* Step 1: Fork */}
-                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-[0.72rem] font-bold text-qsis">1</span>
-                    </div>
-                    <h4 className="text-[0.85rem] font-semibold">Fork the Repository</h4>
-                  </div>
-                  <div className="ml-9 space-y-2">
-                    <p className="text-[0.78rem] text-dark-text2">
-                      You need your own copy of the repo to upload files. Click <strong>Fork</strong> to create a copy under your GitHub account.
-                    </p>
-                    <div className="bg-dark-bg border border-dark-border rounded-lg p-2.5 text-[0.72rem] text-dark-text2">
-                      <i className="fas fa-info-circle text-qsis mr-1.5"></i>
-                      <strong>Why fork?</strong> You can&apos;t upload directly to the main repo. Forking creates your personal copy, then you submit a Pull Request to share your files.
-                    </div>
-                    <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-qsis/10 border border-qsis/20 text-qsis text-[0.75rem] font-semibold hover:bg-qsis/20 transition-all no-underline">
-                      <i className="fas fa-code-branch"></i> Fork Now
-                    </a>
-                  </div>
-                </div>
-
-                {/* Step 2: Open Your Fork */}
-                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-[0.72rem] font-bold text-qsis">2</span>
-                    </div>
-                    <h4 className="text-[0.85rem] font-semibold">Open Your Fork</h4>
-                  </div>
-                  <div className="ml-9 space-y-2">
-                    <p className="text-[0.78rem] text-dark-text2">
-                      After forking, you&apos;ll be on your own copy (<code className="bg-dark-bg px-1 rounded text-qsis">github.com/YOUR-USERNAME/QSIS-ACADEMIC-FILES-MANAFGER</code>).
-                    </p>
-                    <p className="text-[0.78rem] text-dark-text2">
-                      Click <strong>Add file</strong> &rarr; <strong>Upload files</strong>.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 3: Folder Structure */}
-                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-[0.72rem] font-bold text-qsis">3</span>
-                    </div>
-                    <h4 className="text-[0.85rem] font-semibold">Navigate to the Correct Folder</h4>
-                  </div>
-                  <p className="text-[0.78rem] text-dark-text2 ml-9 mb-2">
-                    Your files must go inside the correct path. Follow this structure:
-                  </p>
-                  <div className="ml-9 bg-dark-bg border border-dark-border rounded-lg p-3 font-mono text-[0.72rem]">
-                    <div className="text-qsis mb-1">upload_academic_files/</div>
-                    <div className="pl-3 text-dark-text2 mb-1">└── <span className="text-orange-400">[your-department]/</span> <span className="text-dark-text3">(e.g. cse, qsis, eee)</span></div>
-                    <div className="pl-6 text-dark-text2 mb-1">└── <span className="text-accent">[semester]/</span></div>
-                    <div className="pl-9 text-dark-text2 mb-1">└── <span className="text-yellow-400">[category]/</span></div>
-                    <div className="pl-12 text-dark-text2 mb-1">└── <span className="text-green-400">[CourseCode-CourseTitle]/</span></div>
-                    <div className="pl-15 text-dark-text2">└── <span className="text-blue-400">your-file.pdf</span></div>
-                  </div>
-                </div>
-
-                {/* Step 4: Choose Path + Create Folders */}
-                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
-                  <div className="flex items-center gap-2.5 mb-3">
-                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-[0.72rem] font-bold text-qsis">4</span>
-                    </div>
-                    <h4 className="text-[0.85rem] font-semibold">Choose the Correct Path &amp; Create Folders</h4>
-                  </div>
-
-                  {/* How to create folders */}
-                  <div className="ml-9 mb-4">
-                    <div className="p-2.5 rounded-lg bg-yellow-500/5 border border-yellow-500/20 mb-3">
-                      <p className="text-[0.75rem] text-dark-text2">
-                        <i className="fas fa-lightbulb text-yellow-500 mr-1.5"></i>
-                        <strong>GitHub has no &quot;Create Folder&quot; button.</strong> Folders are created automatically when you type a path in the filename field.
-                      </p>
-                    </div>
-                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-folder-plus text-qsis mr-1.5"></i>How to Create Folders:</p>
-                    <div className="space-y-2">
-                      <div className="p-2.5 rounded-lg bg-dark-bg border border-dark-border">
-                        <p className="text-[0.72rem] font-semibold text-dark-text mb-1"><i className="fas fa-check-circle text-green-400 mr-1"></i> Method 1 — Upload with path (Recommended)</p>
-                        <ol className="list-decimal ml-4 space-y-1 text-[0.72rem] text-dark-text2">
-                          <li>Select your file(s) to upload</li>
-                          <li>In the commit box, type the full path as the filename:</li>
-                        </ol>
-                        <div className="mt-1.5 bg-dark-bg3 border border-dark-border rounded-lg p-2 font-mono text-[0.68rem]">
-                          <span className="text-orange-400">cse</span><span className="text-dark-text2">/</span><span className="text-qsis">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208</span><span className="text-dark-text2">/</span><span className="text-blue-400">file.pdf</span>
-                        </div>
-                        <p className="text-[0.65rem] text-green-400 mt-1"><i className="fas fa-check mr-1"></i>GitHub creates all folders automatically!</p>
-                      </div>
-                      <div className="p-2.5 rounded-lg bg-dark-bg border border-dark-border">
-                        <p className="text-[0.72rem] font-semibold text-dark-text mb-1"><i className="fas fa-check-circle text-green-400 mr-1"></i> Method 2 — Create empty folder first</p>
-                        <ol className="list-decimal ml-4 space-y-1 text-[0.72rem] text-dark-text2">
-                          <li>Click <strong>Add file</strong> &rarr; <strong>Create new file</strong></li>
-                          <li>Type path + <code className="bg-dark-bg3 px-1 rounded">.gitkeep</code> as filename</li>
-                        </ol>
-                        <div className="mt-1.5 bg-dark-bg3 border border-dark-border rounded-lg p-2 font-mono text-[0.68rem]">
-                          <span className="text-orange-400">cse</span><span className="text-dark-text2">/</span><span className="text-qsis">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208</span><span className="text-dark-text2">/</span><span className="text-blue-400">.gitkeep</span>
-                        </div>
-                        <p className="text-[0.65rem] text-dark-text3 mt-1"><i className="fas fa-info-circle text-qsis mr-1"></i><code className="bg-dark-bg3 px-1 rounded">.gitkeep</code> is a placeholder that keeps the folder in Git.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Department */}
-                  <div className="ml-9 mb-3">
-                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-building text-orange-400 mr-1.5"></i>Department — pick yours first:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {FACULTIES.flatMap(f => f.departments.map(d => (
-                        <span key={d.id} className="px-2 py-1 rounded bg-dark-bg border border-dark-border text-[0.65rem] text-dark-text2 font-mono">{d.id}/</span>
-                      )))}
-                    </div>
-                    <p className="text-[0.65rem] text-dark-text3 mt-1"><i className="fas fa-info-circle text-qsis mr-1"></i>Use the department short ID: cse, qsis, eee, ba, etc.</p>
-                  </div>
-
-                  {/* Semester */}
-                  <div className="ml-9 mb-3">
-                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-calendar text-accent mr-1.5"></i>Semester — pick yours:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {config.semesters.map(s => (
-                        <span key={s.id} className="px-2 py-1 rounded bg-dark-bg border border-dark-border text-[0.65rem] text-dark-text2 font-mono">{s.id}/</span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Category */}
-                  <div className="ml-9 mb-3">
-                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-folder text-yellow-400 mr-1.5"></i>Category — choose what you&apos;re uploading:</p>
-                    <div className="flex flex-col gap-1.5">
-                      {Object.entries(config.categories).map(([key, cat]) => (
-                        <div key={key} className="flex items-center gap-2">
-                          <span className="px-2 py-1 rounded bg-dark-bg border border-dark-border text-[0.65rem] text-dark-text2 font-mono w-[120px]">{key}/</span>
-                          <span className="text-[0.72rem] text-dark-text2">{cat.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Course folder */}
-                  <div className="ml-9 mb-3">
-                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-book text-green-400 mr-1.5"></i>Course Folder — naming format:</p>
-                    <div className="bg-dark-bg border border-dark-border rounded-lg p-2.5 font-mono text-[0.72rem]">
-                      <span className="text-green-400">CourseCode-CourseTitle</span><span className="text-dark-text2">/</span>
-                    </div>
-                    <div className="mt-1.5 flex flex-col gap-1">
-                      <p className="text-[0.7rem] text-dark-text2"><i className="fas fa-check text-green-400 mr-1.5"></i><code className="bg-dark-bg px-1 rounded text-qsis">FSC-1208-IslamicStudies/</code></p>
-                      <p className="text-[0.7rem] text-dark-text2"><i className="fas fa-check text-green-400 mr-1.5"></i><code className="bg-dark-bg px-1 rounded text-qsis">MAT-1101/</code> <span className="text-dark-text3">(title optional)</span></p>
-                      <p className="text-[0.7rem] text-dark-text2"><i className="fas fa-check text-green-400 mr-1.5"></i><code className="bg-dark-bg px-1 rounded text-qsis">ENG-2201-EnglishI/</code></p>
-                    </div>
-                  </div>
-
-                  {/* Full example */}
-                  <div className="ml-9">
-                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-lightbulb text-yellow-400 mr-1.5"></i>Full Example — CSE dept, 3rd Semester sheets for FSC-1208:</p>
-                    <div className="bg-dark-bg border border-dark-border rounded-lg p-3 font-mono text-[0.72rem] leading-relaxed">
-                      <span className="text-qsis">upload_academic_files</span><span className="text-dark-text2">/</span><span className="text-orange-400">cse</span><span className="text-dark-text2">/</span><span className="text-accent">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208-IslamicStudies</span><span className="text-dark-text2">/</span><span className="text-blue-400">Midterm-Sheet.pdf</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 5: Upload & Commit */}
-                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-[0.72rem] font-bold text-qsis">5</span>
-                    </div>
-                    <h4 className="text-[0.85rem] font-semibold">Upload &amp; Commit</h4>
-                  </div>
-                  <div className="ml-9 space-y-2">
-                    <p className="text-[0.78rem] text-dark-text2">
-                      Drag &amp; drop your files or click <strong>choose your files</strong>. Then fill in the commit message:
-                    </p>
-                    <div className="bg-dark-bg border border-dark-border rounded-lg p-2.5 font-mono text-[0.72rem]">
-                      <span className="text-dark-text2">Commit message:</span>{' '}
-                      <span className="text-qsis">Add FSC-1208 (Sheets) — 3rd-semister</span>
-                    </div>
-                    <p className="text-[0.78rem] text-dark-text2">
-                      Select <strong>&quot;Commit directly to the main branch&quot;</strong> and click <strong>Commit changes</strong>.
-                    </p>
-                    <div className="flex items-center gap-2 mt-2 p-2 rounded-lg bg-green-500/5 border border-green-500/20">
-                      <i className="fas fa-check-circle text-green-400 text-[0.8rem]"></i>
-                      <span className="text-[0.75rem] text-green-400">That&apos;s it! Your files will appear in the app within 5 minutes.</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Supported files */}
-                <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
-                  <p className="text-[0.78rem] font-semibold mb-2"><i className="fas fa-info-circle text-qsis mr-1.5"></i>Supported File Types</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['PDF', 'DOC/DOCX', 'XLS/XLSX', 'PPT/PPTX', 'JPG/PNG', 'CSV'].map(t => (
-                      <span key={t} className="px-2 py-0.5 rounded bg-dark-bg border border-dark-border text-[0.65rem] text-dark-text2">{t}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ═══════════ TAB 2: Direct Upload ═══════════ */}
-          {activeTab === 'direct' && (
-            <>
-              {result?.success ? (
+          {/* ═══════════ Direct Upload ═══════════ */}
+          {result?.success ? (
                 <div className="text-center py-6">
                   <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-green-500/10 flex items-center justify-center">
                     <i className="fas fa-check-circle text-2xl text-green-500"></i>
@@ -687,6 +508,10 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
                   {/* Course Groups */}
                   {courses.map((course, idx) => {
+                    const folderName = course.code.trim()
+                      ? (course.title.trim() ? `${course.code.trim()}-${course.title.trim()}` : course.code.trim())
+                      : '';
+                    const isLimitedCategory = category === config.categories.questions.folder || category === config.categories.notes.folder;
                     const folderPreview = course.code.trim()
                       ? (course.title.trim() ? `${course.code.trim()}-${course.title.trim()}` : course.code.trim())
                       : '';
@@ -715,17 +540,23 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                       </div>
 
                       {category === config.categories.questions.folder && (
-                        <div className="grid grid-cols-2 gap-2 mb-2">
-                          <div>
-                            <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
-                            <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. Autumn2026, Spring2024" value={course.examSession || ''} onChange={e => updateCourse(course.id, { examSession: e.target.value })} />
-                            <p className="text-[0.6rem] text-dark-text3 mt-0.5">Used to filter: Autumn2026, Spring2024, 2022-2025-Spring</p>
-                          </div>
-                          <div>
-                            <label className="text-[0.72rem] text-dark-text2 block mb-1">Year Range (PDFs)</label>
-                            <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. 2022-2025, 2026" value={course.yearRange || ''} onChange={e => updateCourse(course.id, { yearRange: e.target.value })} />
-                            <p className="text-[0.6rem] text-dark-text3 mt-0.5">For PDFs: which years this covers</p>
-                          </div>
+                        <div className="mb-2">
+                          <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
+                          <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={course.examSession} onChange={e => updateCourse(course.id, { examSession: e.target.value })}>
+                            <option value="Both">Both (Autumn + Spring)</option>
+                            <option value="Autumn">Autumn</option>
+                            <option value="Spring">Spring</option>
+                          </select>
+                        </div>
+                      )}
+                      {category === config.categories.notes.folder && (
+                        <div className="mb-2">
+                          <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
+                          <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={course.examSession} onChange={e => updateCourse(course.id, { examSession: e.target.value })}>
+                            <option value="">Select session...</option>
+                            <option value="Autumn">Autumn</option>
+                            <option value="Spring">Spring</option>
+                          </select>
                         </div>
                       )}
 
@@ -737,44 +568,98 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                               ? `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${folderPreview}/`
                                 : semester === config.relatedSourcesFolder
                                   ? `${getFacultyIdForDepartment(department) || department}/${config.relatedSourcesFolder}/${folderPreview}/`
-                                : category === config.categories.questions.folder && course.examSession
-                                  ? `${department}/${semester}/${category}/${folderPreview}/${course.examSession}/`
+                                : (category === config.categories.questions.folder || category === config.categories.notes.folder) && course.examSession
+                                  ? `${department}/${semester}/${category}/${folderPreview}/${course.examSession}/...`
                                   : `${department}/${semester}/${category}/${folderPreview}/`
                             }
-                            <span className="text-dark-text2">*.{/* files go here */}</span>
                           </span>
                         </div>
                       )}
 
-                      <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv" onChange={e => handleFilesForCourse(course.id, e)} />
+                      <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept={category === config.categories.notes.folder ? '.pdf,.doc,.docx,.ppt,.pptx' : category === config.categories.questions.folder ? '.pdf,.jpg,.jpeg,.png,.gif,.webp' : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv'} onChange={e => handleFilesForCourse(course.id, e)} />
                       <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => fileInputRefs.current[course.id]?.click()}>
                         <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
                         <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
-                        <p className="text-[0.65rem] text-dark-text2">Max 5 files, {config.maxUploadSizeMB}MB each</p>
+                        <p className="text-[0.65rem] text-dark-text2">{isLimitedCategory ? '1 file only' : `Max 5 files, ${config.maxUploadSizeMB}MB each`}</p>
                       </div>
 
                       {course.files.length > 0 && (
                         <div className="mt-2 flex flex-col gap-1.5">
-                          {course.files.map((file, fi) => {
-                            const folderName = course.title.trim()
-                              ? `${course.code.trim()}-${course.title.trim()}`
-                              : course.code.trim() || 'untitled';
-                            const fullPath = `${department || '...'}/${semester || '...'}/${category || '...'}/${folderName}/${file.name}`;
+                          {course.files.map((fileMeta, fi) => {
+                            const isNotes = category === config.categories.notes.folder;
+                            const isQuestions = category === config.categories.questions.folder;
+                            const fileIsPdf = isPdf(fileMeta.file.name);
                             return (
-                              <div key={fi} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border">
-                                <div className="text-[0.95rem] flex-shrink-0">{getFileIcon(file.name)}</div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[0.75rem] font-semibold truncate">{file.name}</div>
-                                  <div className="text-[0.62rem] text-qsis font-mono truncate mt-0.5">
-                                    <i className="fas fa-folder-open mr-1 text-[0.55rem]"></i>{fullPath}
+                              <div key={fi} className="p-2 rounded-lg bg-dark-bg border border-dark-border">
+                                <div className="flex items-center gap-2">
+                                  <div className="text-[0.95rem] flex-shrink-0">{getFileIcon(fileMeta.file.name)}</div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-[0.75rem] font-semibold truncate">{fileMeta.file.name}</div>
                                   </div>
+                                  <div className="text-[0.62rem] text-dark-text2 flex-shrink-0">{formatSize(fileMeta.file.size)}</div>
+                                  <button className="w-5 h-5 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.65rem] hover:bg-red-500/20" onClick={() => removeFileFromCourse(course.id, fi)}>
+                                    <i className="fas fa-times"></i>
+                                  </button>
                                 </div>
-                                <div className="text-[0.62rem] text-dark-text2 flex-shrink-0">{formatSize(file.size)}</div>
-                              <button className="w-5 h-5 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.65rem] hover:bg-red-500/20" onClick={() => removeFileFromCourse(course.id, fi)}>
-                                <i className="fas fa-times"></i>
-                              </button>
-                            </div>
-                          )})}
+                                {(isNotes || isQuestions) && (
+                                  <div className="mt-1.5">
+                                    {isQuestions && fileIsPdf ? (
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <label className="text-[0.62rem] text-dark-text3 block mb-0.5">From Year</label>
+                                          <input
+                                            type="number"
+                                            min={CURRENT_YEAR - 10}
+                                            max={CURRENT_YEAR}
+                                            className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            value={fileMeta.yearRange.split('-')[0] || ''}
+                                            onChange={e => {
+                                              const toYear = fileMeta.yearRange.split('-')[1] || String(CURRENT_YEAR);
+                                              const newFiles = [...course.files];
+                                              newFiles[fi] = { ...newFiles[fi], yearRange: `${e.target.value}-${toYear}` };
+                                              updateCourse(course.id, { files: newFiles });
+                                            }}
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="text-[0.62rem] text-dark-text3 block mb-0.5">To Year</label>
+                                          <input
+                                            type="number"
+                                            min={CURRENT_YEAR - 10}
+                                            max={CURRENT_YEAR + 5}
+                                            className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            value={fileMeta.yearRange.split('-')[1] || ''}
+                                            onChange={e => {
+                                              const fromYear = fileMeta.yearRange.split('-')[0] || String(CURRENT_YEAR);
+                                              const newFiles = [...course.files];
+                                              newFiles[fi] = { ...newFiles[fi], yearRange: `${fromYear}-${e.target.value}` };
+                                              updateCourse(course.id, { files: newFiles });
+                                            }}
+                                          />
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div>
+                                        <label className="text-[0.62rem] text-dark-text3 block mb-0.5">Year</label>
+                                        <input
+                                          type="number"
+                                          min={CURRENT_YEAR - 10}
+                                          max={CURRENT_YEAR + 5}
+                                          className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          value={fileMeta.year}
+                                          onChange={e => {
+                                            const newFiles = [...course.files];
+                                            newFiles[fi] = { ...newFiles[fi], year: e.target.value };
+                                            updateCourse(course.id, { files: newFiles });
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -862,8 +747,6 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                   </button>
                 </>
               )}
-            </>
-          )}
         </div>
       </div>
     </div>

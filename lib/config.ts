@@ -24,6 +24,7 @@ export const config = {
   ownerEmails: [
     'quranicsciencesclub@gmail.com',
     's.atiqurrahman2003@gmail.com',
+    'q233099@ugrad.iiuc.ac.bd',
   ],
   detectRole: (email: string): UserRole => {
     const lower = email.toLowerCase();

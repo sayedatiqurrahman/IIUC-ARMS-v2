@@ -30,42 +30,15 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
     return () => window.removeEventListener('message', handleMessage);
   }, [onClose]);
 
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-
-  const viewerUrl = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(url)}#page=${savedPage}`;
+  const viewerUrl = `/pdfjs/viewer.html?file=${encodeURIComponent(url)}&path=${encodeURIComponent(filePath)}#page=${savedPage}`;
 
   return (
-    <div className="fixed inset-0 z-[1500]">
+    <div className="fixed inset-0 z-[1500] bg-black">
       <iframe
         src={viewerUrl}
         className="w-full h-full border-none"
         title={name}
       />
-      <button
-        onClick={onClose}
-        title="Close (Esc)"
-        className="fixed z-[9999] flex items-center justify-center border-none cursor-pointer font-bold transition-colors"
-        style={{
-          top: '4px',
-          right: '6px',
-          width: '32px',
-          height: '32px',
-          borderRadius: '4px',
-          background: '#ef4444',
-          color: '#fff',
-          fontSize: '14px',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.background = '#dc2626'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = '#ef4444'; }}
-      >
-        ✕
-      </button>
     </div>
   );
 }

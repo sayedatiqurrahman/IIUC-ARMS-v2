@@ -160,25 +160,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* MOBILE BOTTOM NAV */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-dark-bg2 border-t border-dark-border safe-bottom">
         <div className="flex items-center justify-around py-2 px-1">
-          <Link href="/" className={`flex flex-col items-center gap-[2px] px-3 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isBrowse ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+          <Link href="/" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isBrowse ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
             <i className="fas fa-book-open text-[1rem]"></i>
             <span className="text-[0.62rem] font-medium">Browse</span>
           </Link>
-          <Link href="/history" className={`flex flex-col items-center gap-[2px] px-3 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/history') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+          <Link href="/history" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/history') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
             <i className="fas fa-history text-[1rem]"></i>
             <span className="text-[0.62rem] font-medium">History</span>
           </Link>
-          <Link href="/routine" className={`flex flex-col items-center gap-[2px] px-3 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/routine') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+          <button className="flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all bg-transparent text-qsis" onClick={() => setUploadOpen(true)}>
+            <div className="w-9 h-9 -mt-4 rounded-full bg-qsis flex items-center justify-center shadow-lg shadow-qsis/30">
+              <i className="fas fa-plus text-white text-[0.9rem]"></i>
+            </div>
+            <span className="text-[0.62rem] font-medium">Upload</span>
+          </button>
+          <Link href="/routine" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/routine') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
             <i className="fas fa-calendar-alt text-[1rem]"></i>
             <span className="text-[0.62rem] font-medium">Routine</span>
           </Link>
-          <Link href="/contributors" className={`flex flex-col items-center gap-[2px] px-3 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/contributors') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+          <Link href="/contributors" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/contributors') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
             <i className="fas fa-users text-[1rem]"></i>
             <span className="text-[0.62rem] font-medium">Team</span>
-          </Link>
-          <Link href="/faculty" className={`flex flex-col items-center gap-[2px] px-3 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/faculty') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
-            <i className="fas fa-chalkboard-teacher text-[1rem]"></i>
-            <span className="text-[0.62rem] font-medium">Faculty</span>
           </Link>
         </div>
       </div>

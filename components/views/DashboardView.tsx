@@ -429,9 +429,11 @@ export default function DashboardView() {
 
         {/* Profile Completion */}
         {(() => {
-          const commonFields = [profile.name, profile.universityId, profile.whatsapp, profile.semester, profile.section];
-          const filled = commonFields.filter(Boolean).length;
-          const pct = Math.round((filled / commonFields.length) * 100);
+          const studentFields = [profile.name, profile.universityId, profile.whatsapp, profile.semester, profile.section];
+          const teacherFields = [profile.name, profile.whatsapp];
+          const fields = isStudent ? studentFields : teacherFields;
+          const filled = fields.filter(Boolean).length;
+          const pct = Math.round((filled / fields.length) * 100);
           return (
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
@@ -555,10 +557,12 @@ export default function DashboardView() {
           <>
             {/* Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-              {profile.universityId && (
+              {isStudent && (
                 <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                   <span className="text-[0.7rem] text-dark-text2 block mb-1">University ID</span>
-                  <span className="text-[0.85rem] font-semibold text-qsis">{profile.universityId}</span>
+                  <span className={`text-[0.85rem] font-semibold ${profile.universityId ? 'text-qsis' : 'text-dark-text2'}`}>
+                    {profile.universityId || 'Not set'}
+                  </span>
                 </div>
               )}
               {profile.department && (

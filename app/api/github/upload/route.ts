@@ -7,7 +7,7 @@ import { getInstallationAccessToken } from '@/lib/github-app';
 import { decrypt, isEncrypted } from '@/lib/crypto';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
-export const maxDuration = 10;
+export const maxDuration = 60;
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -125,6 +125,12 @@ export async function POST(req: NextRequest) {
     // ── OWNER: Direct commit to main (fast, no branch/PR) ──
     if (isOwner) {
       const repoRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}`, token);
+      if (repoRes.status === 401 || repoRes.status === 403) {
+        return NextResponse.json(
+          { error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', code: 'TOKEN_EXPIRED' },
+          { status: 401 }
+        );
+      }
       if (!repoRes.ok) throw new Error(`Cannot access repo: ${repoRes.status}`);
       const repoData = await repoRes.json();
       const defaultBranch = repoData.default_branch;
@@ -149,6 +155,9 @@ export async function POST(req: NextRequest) {
         if (fileSha) putBody.sha = fileSha;
 
         const putRes = await ghPut(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${filePath}`, token, putBody);
+        if (putRes.status === 401 || putRes.status === 403) {
+          throw new Error('GitHub token expired. Please reconnect your GitHub account.');
+        }
         if (!putRes.ok) {
           const err = await putRes.json().catch(() => ({}));
           throw new Error(err.message || `Failed to upload ${file.path}`);
@@ -243,11 +252,23 @@ export async function POST(req: NextRequest) {
     const targetRepo = config.repo;
 
     const repoRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}`, token);
+    if (repoRes.status === 401 || repoRes.status === 403) {
+      return NextResponse.json(
+        { error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', code: 'TOKEN_EXPIRED' },
+        { status: 401 }
+      );
+    }
     if (!repoRes.ok) throw new Error(`Cannot access repo`);
     const repoData2 = await repoRes.json();
     const defaultBranch = repoData2.default_branch;
 
     const baseRefRes = await ghFetch(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/git/refs/heads/${defaultBranch}`, token);
+    if (baseRefRes.status === 401 || baseRefRes.status === 403) {
+      return NextResponse.json(
+        { error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', code: 'TOKEN_EXPIRED' },
+        { status: 401 }
+      );
+    }
     if (!baseRefRes.ok) throw new Error(`Cannot read branch`);
     const baseRefData = await baseRefRes.json();
     const baseBranchSha = baseRefData.object.sha;
@@ -273,6 +294,9 @@ export async function POST(req: NextRequest) {
         branch,
       };
       const putRes = await ghPut(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/contents/${filePath}`, token, putBody);
+      if (putRes.status === 401 || putRes.status === 403) {
+        throw new Error('GitHub token expired. Please reconnect your GitHub account.');
+      }
       if (!putRes.ok) {
         const err = await putRes.json().catch(() => ({}));
         throw new Error(err.message || `Failed to upload ${file.path}`);
@@ -334,7 +358,15 @@ export async function POST(req: NextRequest) {
       pr: { url: prData.html_url, number: prData.number },
       isOwner: false,
     });
-  } catch {
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+  } catch (e: any) {
+    console.error('[upload] error:', e?.message || e);
+    const msg = e?.message || '';
+    if (msg.includes('401') || msg.includes('403') || msg.includes('Bad credentials') || msg.includes('Requires authentication')) {
+      return NextResponse.json(
+        { error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', code: 'TOKEN_EXPIRED' },
+        { status: 401 }
+      );
+    }
+    return NextResponse.json({ error: msg || 'Upload failed' }, { status: 500 });
   }
 }
