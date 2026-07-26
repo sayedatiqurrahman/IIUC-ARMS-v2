@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (!profile?.totpSecret) return NextResponse.json({ error: 'TOTP not set up' }, { status: 400 });
 
     const totp = new TOTP({
-      issuer: 'QSIS-ARMS',
+      issuer: 'IIUC-ARMS',
       label: email,
       algorithm: 'SHA1',
       digits: 6,

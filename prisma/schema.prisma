@@ -69,6 +69,7 @@ model FacultyMember {
   shortForm   String?
   memberType  String   @default("faculty")
   isCR        Boolean  @default(false)
+  isVisible   Boolean  @default(false)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -118,4 +119,25 @@ model PublishedRoutine {
   @@index([routineId])
   @@index([semester])
   @@index([expiresAt])
+}
+
+model FacultyRequest {
+  id          String   @id @default(cuid())
+  requesterId String
+  department  String
+  name        String
+  title       String?
+  email       String?
+  phone       String?
+  shortForm   String?
+  memberType  String   @default("faculty")
+  notes       String?
+  status      String   @default("pending")
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([requesterId])
+  @@index([status])
+  @@index([department])
 }

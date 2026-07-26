@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { config } from '@/lib/config';
+import { FACULTIES, getFacultyIdForDepartment } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
@@ -12,6 +13,9 @@ interface CourseGroup {
   code: string;
   title: string;
   files: File[];
+  examSession?: string;
+  yearRange?: string;
+  sessionType?: string;
 }
 
 interface UploadModalProps {
@@ -25,6 +29,30 @@ interface UploadModalProps {
 export default function UploadModal({ session, status, profile, onLogin, onClose }: UploadModalProps) {
   const githubToken = useAppStore(s => s.githubToken);
   const setGithubToken = useAppStore(s => s.setGithubToken);
+  const onboardData = useAppStore(s => s.onboardingData);
+
+  // Resolve user's department ID from profile or onboarding
+  const userDeptId = (() => {
+    const deptName = profile.department || onboardData?.department || '';
+    if (!deptName) return '';
+    for (const f of FACULTIES) {
+      for (const d of f.departments) {
+        if (d.name === deptName) return d.id;
+      }
+    }
+    return '';
+  })();
+
+  const userDeptName = (() => {
+    if (!userDeptId) return '';
+    for (const f of FACULTIES) {
+      const d = f.departments.find(dd => dd.id === userDeptId);
+      if (d) return `${d.shortName} — ${d.name}`;
+    }
+    return '';
+  })();
+
+  const [department, setDepartment] = useState(userDeptId);
   const [semester, setSemester] = useState(profile.semester || '');
   const [category, setCategory] = useState('');
   const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, code: '', title: '', files: [] }]);
@@ -34,6 +62,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [activeTab, setActiveTab] = useState<'repo' | 'direct'>('direct');
 
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!githubToken || !!profile.githubToken;
+  const needsDepartment = !userDeptId;
 
   const totalFiles = courses.reduce((sum, c) => sum + c.files.length, 0);
   const totalSizeMB = courses.reduce((sum, c) => sum + c.files.reduce((s, f) => s + f.size, 0), 0) / (1024 * 1024);
@@ -107,15 +136,18 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   }
 
   function canSubmit(): boolean {
-    if (!semester || !category) return false;
+    if (!department || !semester || !category) return false;
     return courses.some(c => c.code.trim() && c.files.length > 0);
   }
 
   async function handleSubmit() {
-    if (!semester || !category) {
-      alert('Please select semester and category.');
+    if (!department || !semester || !category) {
+      alert('Please select department, semester, and category.');
       return;
     }
+
+    // For related-sources, category is auto-set
+    const effectiveCategory = semester === config.relatedSourcesFolder ? config.relatedSourcesFolder : category;
 
     const validCourses = courses.filter(c => c.code.trim() && c.files.length > 0);
     if (validCourses.length === 0) {
@@ -147,10 +179,24 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
             return btoa(binary);
           });
-          allFiles.push({
-            path: `${semester}/${category}/${folderName}/${file.name}`,
-            content: base64,
-          });
+
+          let filePath: string;
+          if (semester === config.relatedKitabsFolder) {
+            // Related Kitabs: shariah/related-kitabs/{category}/{folder}/{file}
+            filePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${folderName}/${file.name}`;
+          } else if (semester === config.relatedSourcesFolder) {
+            // Related Sources: {faculty-id}/related-sources/{folder}/{file}
+            const facId = getFacultyIdForDepartment(department) || department;
+            filePath = `${facId}/${config.relatedSourcesFolder}/${folderName}/${file.name}`;
+          } else if (category === config.categories.questions.folder && course.examSession) {
+            // Previous Questions with session metadata: {dept}/{sem}/{cat}/{course}/{session}/{file}
+            filePath = `${department}/${semester}/${category}/${folderName}/${course.examSession}/${file.name}`;
+          } else {
+            // Regular: {dept}/{sem}/{cat}/{folder}/{file}
+            filePath = `${department}/${semester}/${category}/${folderName}/${file.name}`;
+          }
+
+          allFiles.push({ path: filePath, content: base64 });
         }
       }
 
@@ -310,6 +356,30 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
         <div className="p-5 max-h-[80vh] overflow-y-auto">
 
+          {/* Block upload if department not set */}
+          {needsDepartment && (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-500/10 flex items-center justify-center">
+                <i className="fas fa-exclamation-triangle text-2xl text-orange-400"></i>
+              </div>
+              <h3 className="text-[1rem] font-bold text-dark-text mb-2">Complete Your Profile First</h3>
+              <p className="text-[0.82rem] text-dark-text2 mb-4 max-w-sm mx-auto">
+                You need to set your <strong>department</strong> before uploading files. This ensures your files go to the right department folder.
+              </p>
+              <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 max-w-sm mx-auto mb-4">
+                <p className="text-[0.75rem] text-dark-text2 mb-2">Go to your profile or run onboarding to set your department:</p>
+                <ol className="list-decimal ml-4 space-y-1 text-[0.72rem] text-dark-text2 text-left">
+                  <li>Click your avatar &rarr; <strong>Dashboard</strong></li>
+                  <li>Update your <strong>Department</strong> field</li>
+                  <li>Save and come back here</li>
+                </ol>
+              </div>
+              <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold cursor-pointer border-none hover:opacity-90">
+                <i className="fas fa-arrow-left mr-1.5"></i>Go Back &amp; Complete Profile
+              </button>
+            </div>
+          )}
+
           {/* ═══════════ TAB 1: Upload from Repository ═══════════ */}
           {activeTab === 'repo' && (
             <div>
@@ -392,10 +462,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                   </p>
                   <div className="ml-9 bg-dark-bg border border-dark-border rounded-lg p-3 font-mono text-[0.72rem]">
                     <div className="text-qsis mb-1">upload_academic_files/</div>
-                    <div className="pl-3 text-dark-text2 mb-1">└── <span className="text-accent">[your-semester]/</span></div>
-                    <div className="pl-6 text-dark-text2 mb-1">└── <span className="text-yellow-400">[category]/</span></div>
-                    <div className="pl-9 text-dark-text2 mb-1">└── <span className="text-green-400">[CourseCode-CourseTitle]/</span></div>
-                    <div className="pl-12 text-dark-text2">└── <span className="text-blue-400">your-file.pdf</span></div>
+                    <div className="pl-3 text-dark-text2 mb-1">└── <span className="text-orange-400">[your-department]/</span> <span className="text-dark-text3">(e.g. cse, qsis, eee)</span></div>
+                    <div className="pl-6 text-dark-text2 mb-1">└── <span className="text-accent">[semester]/</span></div>
+                    <div className="pl-9 text-dark-text2 mb-1">└── <span className="text-yellow-400">[category]/</span></div>
+                    <div className="pl-12 text-dark-text2 mb-1">└── <span className="text-green-400">[CourseCode-CourseTitle]/</span></div>
+                    <div className="pl-15 text-dark-text2">└── <span className="text-blue-400">your-file.pdf</span></div>
                   </div>
                 </div>
 
@@ -425,7 +496,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                           <li>In the commit box, type the full path as the filename:</li>
                         </ol>
                         <div className="mt-1.5 bg-dark-bg3 border border-dark-border rounded-lg p-2 font-mono text-[0.68rem]">
-                          <span className="text-qsis">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208</span><span className="text-dark-text2">/</span><span className="text-blue-400">file.pdf</span>
+                          <span className="text-orange-400">cse</span><span className="text-dark-text2">/</span><span className="text-qsis">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208</span><span className="text-dark-text2">/</span><span className="text-blue-400">file.pdf</span>
                         </div>
                         <p className="text-[0.65rem] text-green-400 mt-1"><i className="fas fa-check mr-1"></i>GitHub creates all folders automatically!</p>
                       </div>
@@ -436,11 +507,22 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                           <li>Type path + <code className="bg-dark-bg3 px-1 rounded">.gitkeep</code> as filename</li>
                         </ol>
                         <div className="mt-1.5 bg-dark-bg3 border border-dark-border rounded-lg p-2 font-mono text-[0.68rem]">
-                          <span className="text-qsis">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208</span><span className="text-dark-text2">/</span><span className="text-blue-400">.gitkeep</span>
+                          <span className="text-orange-400">cse</span><span className="text-dark-text2">/</span><span className="text-qsis">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208</span><span className="text-dark-text2">/</span><span className="text-blue-400">.gitkeep</span>
                         </div>
                         <p className="text-[0.65rem] text-dark-text3 mt-1"><i className="fas fa-info-circle text-qsis mr-1"></i><code className="bg-dark-bg3 px-1 rounded">.gitkeep</code> is a placeholder that keeps the folder in Git.</p>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Department */}
+                  <div className="ml-9 mb-3">
+                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-building text-orange-400 mr-1.5"></i>Department — pick yours first:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {FACULTIES.flatMap(f => f.departments.map(d => (
+                        <span key={d.id} className="px-2 py-1 rounded bg-dark-bg border border-dark-border text-[0.65rem] text-dark-text2 font-mono">{d.id}/</span>
+                      )))}
+                    </div>
+                    <p className="text-[0.65rem] text-dark-text3 mt-1"><i className="fas fa-info-circle text-qsis mr-1"></i>Use the department short ID: cse, qsis, eee, ba, etc.</p>
                   </div>
 
                   {/* Semester */}
@@ -481,9 +563,9 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
                   {/* Full example */}
                   <div className="ml-9">
-                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-lightbulb text-yellow-400 mr-1.5"></i>Full Example — 3rd Semester sheets for FSC-1208:</p>
+                    <p className="text-[0.75rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-lightbulb text-yellow-400 mr-1.5"></i>Full Example — CSE dept, 3rd Semester sheets for FSC-1208:</p>
                     <div className="bg-dark-bg border border-dark-border rounded-lg p-3 font-mono text-[0.72rem] leading-relaxed">
-                      <span className="text-qsis">upload_academic_files</span><span className="text-dark-text2">/</span><span className="text-accent">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208-IslamicStudies</span><span className="text-dark-text2">/</span><span className="text-blue-400">Midterm-Sheet.pdf</span>
+                      <span className="text-qsis">upload_academic_files</span><span className="text-dark-text2">/</span><span className="text-orange-400">cse</span><span className="text-dark-text2">/</span><span className="text-accent">3rd-semister</span><span className="text-dark-text2">/</span><span className="text-yellow-400">sheet</span><span className="text-dark-text2">/</span><span className="text-green-400">FSC-1208-IslamicStudies</span><span className="text-dark-text2">/</span><span className="text-blue-400">Midterm-Sheet.pdf</span>
                     </div>
                   </div>
                 </div>
@@ -544,25 +626,38 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                 </div>
               ) : (
                 <>
-                  {/* Semester & Category */}
+                  {/* Department, Semester & Category */}
                   <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[0.72rem] text-dark-text2 block mb-1">Department *</label>
+                        <div className="w-full px-2.5 py-2 rounded-lg border border-qsis/30 bg-qsis/5 text-dark-text text-[0.82rem] flex items-center gap-1.5">
+                          <i className="fas fa-lock text-qsis text-[0.65rem]"></i>
+                          <span className="font-semibold text-qsis">{userDeptName || department}</span>
+                        </div>
+                        <p className="text-[0.6rem] text-dark-text3 mt-0.5">Files upload to your department only</p>
+                      </div>
                       <div>
                         <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester *</label>
-                        <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={semester} onChange={e => { setSemester(e.target.value); setCategory(''); }}>
+                        <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={semester} onChange={e => { setSemester(e.target.value); setCategory(''); }} disabled={!department}>
                           <option value="">Select...</option>
                           {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                          <option value={config.relatedKitabsFolder}>Related Kitabs</option>
+                          <option value={config.relatedSourcesFolder}>Related Sources (Cross-Semester)</option>
+                          {['qsis', 'dawah', 'hadith'].includes(userDeptId) && (
+                            <option value={config.relatedKitabsFolder}>Related Kitabs (Shariah Faculty)</option>
+                          )}
                         </select>
                       </div>
                       <div>
                         <label className="text-[0.72rem] text-dark-text2 block mb-1">Category *</label>
-                        <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={category} onChange={e => setCategory(e.target.value)}>
+                        <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={category} onChange={e => setCategory(e.target.value)} disabled={!semester}>
                           <option value="">Select...</option>
                           {semester === config.relatedKitabsFolder ? (
                             Object.entries(config.relatedKitabsCategories).map(([key, cat]) => (
                               <option key={key} value={key}>{cat.label}</option>
                             ))
+                          ) : semester === config.relatedSourcesFolder ? (
+                            <option value={config.relatedSourcesFolder}>Related Sources</option>
                           ) : (
                             <>
                               {Object.entries(config.categories).filter(([k]) => k !== 'other').map(([key, cat]) => (
@@ -604,10 +699,34 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                         </div>
                       </div>
 
-                      {folderPreview && semester && category && (
+                      {category === config.categories.questions.folder && (
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <div>
+                            <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
+                            <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. Autumn2026, Spring2024" value={course.examSession || ''} onChange={e => updateCourse(course.id, { examSession: e.target.value })} />
+                            <p className="text-[0.6rem] text-dark-text3 mt-0.5">Used to filter: Autumn2026, Spring2024, 2022-2025-Spring</p>
+                          </div>
+                          <div>
+                            <label className="text-[0.72rem] text-dark-text2 block mb-1">Year Range (PDFs)</label>
+                            <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. 2022-2025, 2026" value={course.yearRange || ''} onChange={e => updateCourse(course.id, { yearRange: e.target.value })} />
+                            <p className="text-[0.6rem] text-dark-text3 mt-0.5">For PDFs: which years this covers</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {folderPreview && department && semester && category && (
                         <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-qsis/5 border border-qsis/10">
                           <span className="text-[0.62rem] text-qsis font-mono">
-                            <i className="fas fa-folder mr-1"></i>{semester}/{category}/{folderPreview}/<span className="text-dark-text2">*.{/* files go here */}</span>
+                            <i className="fas fa-folder mr-1"></i>
+                            {semester === config.relatedKitabsFolder
+                              ? `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${folderPreview}/`
+                                : semester === config.relatedSourcesFolder
+                                  ? `${getFacultyIdForDepartment(department) || department}/${config.relatedSourcesFolder}/${folderPreview}/`
+                                : category === config.categories.questions.folder && course.examSession
+                                  ? `${department}/${semester}/${category}/${folderPreview}/${course.examSession}/`
+                                  : `${department}/${semester}/${category}/${folderPreview}/`
+                            }
+                            <span className="text-dark-text2">*.{/* files go here */}</span>
                           </span>
                         </div>
                       )}
@@ -625,7 +744,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                             const folderName = course.title.trim()
                               ? `${course.code.trim()}-${course.title.trim()}`
                               : course.code.trim() || 'untitled';
-                            const fullPath = `${semester || '...'}/${category || '...'}/${folderName}/${file.name}`;
+                            const fullPath = `${department || '...'}/${semester || '...'}/${category || '...'}/${folderName}/${file.name}`;
                             return (
                               <div key={fi} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border">
                                 <div className="text-[0.95rem] flex-shrink-0">{getFileIcon(file.name)}</div>

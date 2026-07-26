@@ -54,6 +54,7 @@ export default function FacultyView() {
     if (search) params.set('search', search);
     if (titleFilter) params.set('title', titleFilter);
     if (memberTypeFilter !== 'all') params.set('memberType', memberTypeFilter);
+    if (!canEdit) params.set('visibleOnly', 'true');
     setLoading(true);
     fetch(`/api/faculty?${params}`)
       .then(r => r.json())

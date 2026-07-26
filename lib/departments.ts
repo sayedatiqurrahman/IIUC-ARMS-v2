@@ -72,10 +72,10 @@ export const FACULTIES: Faculty[] = [
   },
   {
     id: 'cge',
-    name: 'Center and Institute',
-    shortName: 'CGE',
+    name: 'Center for General Education',
+    shortName: 'CGED',
     departments: [
-      { id: 'cge', name: 'Center for General Education', shortName: 'CGE' },
+      { id: 'cge', name: 'General Education', shortName: 'CGED' },
     ],
   },
 ];
@@ -131,4 +131,13 @@ export function getDepartmentLabel(deptId: string): string {
   const found = findDepartment(deptId);
   if (!found) return deptId;
   return `${found.department.shortName} — ${found.faculty.shortName}`;
+}
+
+export function getFacultyIdForDepartment(deptId: string): string | null {
+  const found = findDepartment(deptId);
+  return found?.faculty.id ?? null;
+}
+
+export function getAllFacultyIds(): string[] {
+  return FACULTIES.map(f => f.id);
 }

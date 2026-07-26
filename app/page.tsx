@@ -1,20 +1,19 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { config } from '@/lib/config';
+import { FACULTIES } from '@/lib/departments';
 import { useAppStore } from '@/lib/store';
 import { getMimeFromExt, getFileIconByType, esc, timeAgo, extractYear } from '@/lib/utils';
 
 export default function BrowsePage() {
   const { data: session } = useSession();
   const profile = useAppStore(s => s.profile);
-  const [showWelcome, setShowWelcome] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('qs-welcome-dismissed') !== 'true';
-  });
+  const [mounted, setMounted] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(true);
 
   const email = session?.user?.email || profile.email || '';
   const userRole = email ? config.detectRole(email) : null;
@@ -25,6 +24,7 @@ export default function BrowsePage() {
   const error = useAppStore(s => s.error);
   const onboardData = useAppStore(s => s.onboardingData);
   const clearOnboarding = useAppStore(s => s.clearOnboarding);
+  const prevOnboardDataRef = useRef(onboardData);
   const view = useAppStore(s => s.view);
   const currentSem = useAppStore(s => s.currentSem);
   const currentCat = useAppStore(s => s.currentCat);
@@ -42,6 +42,7 @@ export default function BrowsePage() {
   const setSearchYear = useAppStore(s => s.setSearchYear);
   const resetFilters = useAppStore(s => s.resetFilters);
   const goHome = useAppStore(s => s.goHome);
+  const navigateToDepartment = useAppStore(s => s.navigateToDepartment);
   const navigateToSemester = useAppStore(s => s.navigateToSemester);
   const navigateToCategory = useAppStore(s => s.navigateToCategory);
   const navigateToCourse = useAppStore(s => s.navigateToCourse);
@@ -53,18 +54,52 @@ export default function BrowsePage() {
   const getCourses = useAppStore(s => s.getCourses);
   const getUploadTree = useAppStore(s => s.getUploadTree);
   const getSearchResults = useAppStore(s => s.getSearchResults);
+  const getUploadDepartments = useAppStore(s => s.getUploadDepartments);
+  const currentDept = useAppStore(s => s.currentDept);
 
   useEffect(() => {
     loadTree(session?.accessToken || '');
+    setShowWelcome(localStorage.getItem('qs-welcome-dismissed') !== 'true');
+    setMounted(true);
   }, []);
 
-  const semesters = getSemesters();
-  const categories = currentSem ? getCategories(currentSem) : [];
-  const courses = currentSem && currentCat ? getCourses(currentSem, currentCat) : [];
+  // Auto-navigate to user's department after onboarding completes
+  useEffect(() => {
+    if (!mounted) return;
+    const prevData = prevOnboardDataRef.current;
+    prevOnboardDataRef.current = onboardData;
+    // Detect transition from null to having data (onboarding just completed)
+    if (!prevData && onboardData && userDeptId && view === 'departments') {
+      navigateToDepartment(userDeptId);
+    }
+  }, [onboardData, mounted]);
+
+  // Onboarding-based personalization
+  const userSemesterId = onboardData
+    ? config.semesters.find(s => s.label === onboardData.semester)?.id
+    : null;
+  const isMySemesterOnly = onboardData?.fileView === 'my-semester-only' && userSemesterId;
+
+  // Department-based personalization: find department ID from onboarding name
+  const userDeptId = (() => {
+    const deptName = onboardData?.department || profile.department || '';
+    if (!deptName) return null;
+    for (const f of FACULTIES) {
+      for (const d of f.departments) {
+        if (d.name === deptName) return d.id;
+      }
+    }
+    return null;
+  })();
+
+  const departments = getUploadDepartments();
+  const semesters = getSemesters(currentDept || userDeptId);
+  const categories = currentSem ? getCategories(currentSem, currentDept || userDeptId) : [];
+  const courses = currentSem && currentCat ? getCourses(currentSem, currentCat, currentDept || userDeptId) : [];
   const uploadTree = getUploadTree();
 
   const isSearching = !!(searchQuery || fileTypeFilter || searchYear || searchSemester);
-  const searchResults = isSearching ? getSearchResults(searchQuery, fileTypeFilter, searchYear, searchSemester) : { files: [], folders: [] };
+  const searchResults = isSearching ? getSearchResults(searchQuery, fileTypeFilter, searchYear, searchSemester, currentDept || userDeptId) : { files: [], folders: [] };
 
   const filteredSemesters = semesters.filter(sem => {
     const matchLabel = !searchQuery || sem.label.toLowerCase().includes(searchQuery.toLowerCase());
@@ -99,18 +134,12 @@ export default function BrowsePage() {
     return true;
   });
 
-  // Onboarding-based personalization
-  const userSemesterId = onboardData
-    ? config.semesters.find(s => s.label === onboardData.semester)?.id
-    : null;
-  const isMySemesterOnly = onboardData?.fileView === 'my-semester-only' && userSemesterId;
-
   // Apply onboarding sorting/filtering to semesters
   const personalizedSemesters = (() => {
     if (!userSemesterId) return filteredSemesters;
     if (isMySemesterOnly) {
-      // Only show user's semester + related kitabs
-      return filteredSemesters.filter(s => s.id === userSemesterId || s.isRelated);
+      // Only show user's semester + related kitabs + related sources
+      return filteredSemesters.filter(s => s.id === userSemesterId || s.isRelated || s.id === config.relatedSourcesFolder);
     }
     // all-prioritized: sort user's semester to top (non-related only)
     const userSem = filteredSemesters.find(s => s.id === userSemesterId && !s.isRelated);
@@ -188,22 +217,22 @@ export default function BrowsePage() {
 
   return (
     <>
-      {/* Hero Section */}
-      {view === 'semesters' && !searchQuery && (
-        <section className="text-center py-8 mb-5">
-          <div className="mb-4">
-            <Image src="/arms-logo.png" alt="QSIS-ARMS" width={150} height={150} className="w-32 h-32 p-2 rounded-lg border-2 border-qsis mx-auto object-contain bg-white mb-4" />
-          </div>
-          <h2 className="text-[1.7rem] font-extrabold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent mb-1.5">QSIS-ARMS</h2>
-          <p className="text-gray-500 text-[0.95rem]">QSIS Academic Resource Management System</p>
-          <div className="flex items-center justify-center gap-2 mt-2.5 flex-wrap">
-            <span className="text-[0.78rem] text-gray-400">Developed by <Link href="https://atiq.is-a.dev" target="_blank" className="no-underline"> <strong className="text-qsis">Sayed Atiqur Rahman</strong> </Link> &mdash; QSIS, IIUC</span>
-          </div>
-        </section>
-      )}
+      {!mounted ? null : (
+      <>
+      {/* Hero Section — always visible */}
+      <section className="text-center py-6 mb-4">
+        <div className="mb-3">
+          <Image src="/arms-logo.png" alt="IIUC-ARMS" width={150} height={150} className="w-28 h-28 p-2 rounded-lg border-2 border-qsis mx-auto object-contain bg-white mb-3" />
+        </div>
+        <h2 className="text-[1.5rem] font-extrabold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent mb-1">IIUC-ARMS</h2>
+        <p className="text-gray-500 text-[0.85rem]">IIUC Academic Resource Management System</p>
+        <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+          <span className="text-[0.75rem] text-gray-400">Developed by <Link href="https://atiq.is-a.dev" target="_blank" className="no-underline"> <strong className="text-qsis">Sayed Atiqur Rahman</strong> </Link> &mdash; QSIS, IIUC</span>
+        </div>
+      </section>
 
       {/* Welcome Banner for Teachers & Admins */}
-      {view === 'semesters' && !searchQuery && isPrivileged && showWelcome && (
+      {view === 'departments' && !searchQuery && isPrivileged && showWelcome && (
         <section className="max-w-[700px] mx-auto mb-5 p-4 rounded-xl border border-qsis/20 bg-gradient-to-r from-qsis/5 to-accent/5">
           <div className="flex items-start justify-between">
             <div>
@@ -211,7 +240,7 @@ export default function BrowsePage() {
                 Assalamu Alaikum{userName ? `, ${userRole === 'teacher' ? 'Sir' : userRole === 'admin' ? 'Sir' : ''}` : ''} {userName || ''} 
               </p>
               <p className="text-[0.82rem] text-dark-text2 leading-relaxed">
-                Welcome to <strong className="text-qsis">QSIS-ARMS</strong>. In sha Allah, we hope you will enjoy exploring the site.
+                Welcome to <strong className="text-qsis">IIUC-ARMS</strong>. In sha Allah, we hope you will enjoy exploring the site.
               </p>
               <p className="text-[0.78rem] text-dark-text3 mt-1">
                 {userRole === 'admin' ? (
@@ -229,23 +258,23 @@ export default function BrowsePage() {
       )}
 
       {/* Stats */}
-      {!isSearching && view === 'semesters' && (
+      {!isSearching && view === 'departments' && (
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-[700px] mx-auto mb-6">
           <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3.5 text-center">
-            <div className="text-[1.3rem] font-bold text-qsis">{semesters.filter(s => !s.isRelated).length}</div>
+            <div className="text-[1.3rem] font-bold text-qsis">{departments.length}</div>
+            <div className="text-[0.7rem] text-dark-text2 mt-0.5">Departments</div>
+          </div>
+          <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3.5 text-center">
+            <div className="text-[1.3rem] font-bold text-accent">8</div>
             <div className="text-[0.7rem] text-dark-text2 mt-0.5">Semesters</div>
           </div>
           <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3.5 text-center">
-            <div className="text-[1.3rem] font-bold text-accent">{semesters.reduce((s, c) => s + c.courses, 0)}</div>
-            <div className="text-[0.7rem] text-dark-text2 mt-0.5">Courses</div>
-          </div>
-          <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3.5 text-center">
-            <div className="text-[1.3rem] font-bold text-yellow-500">{uploadTree.filter((i: any) => i.type === 'blob').length}</div>
+            <div className="text-[1.3rem] font-bold text-yellow-400">{departments.reduce((s, d) => s + d.files, 0)}</div>
             <div className="text-[0.7rem] text-dark-text2 mt-0.5">Files</div>
           </div>
           <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3.5 text-center">
-            <div className="text-[1.3rem] font-bold text-green-500">{config.semesters.length}</div>
-            <div className="text-[0.7rem] text-dark-text2 mt-0.5">Total</div>
+            <div className="text-[1.3rem] font-bold text-pink-400">{recentReads.length}</div>
+            <div className="text-[0.7rem] text-dark-text2 mt-0.5">Recent Reads</div>
           </div>
         </section>
       )}
@@ -312,6 +341,7 @@ export default function BrowsePage() {
               <option key={s.id} value={s.id}>{s.label}</option>
             ))}
             <option value="related-kitabs">Related Kitabs</option>
+            <option value={config.relatedSourcesFolder}>Related Sources</option>
           </select>
           <select
             value={fileTypeFilter}
@@ -370,23 +400,155 @@ export default function BrowsePage() {
         </div>
       )}
 
-      {/* Semester View */}
-      {!loading && !error && !isSearching && view === 'semesters' && (
+      {/* Departments View — grouped by faculty */}
+      {!loading && !error && !isSearching && view === 'departments' && (
         <section className="mb-5">
-          <h3 className="text-base font-semibold flex items-center gap-2 mb-3"><i className="fas fa-book"></i> Select Semester</h3>
-
-          {/* Edit preference banner for my-semester-only */}
-          {isMySemesterOnly && onboardData && (
+          {/* Edit Personalize Banner */}
+          {onboardData && (
             <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-qsis/30 bg-qsis/5 text-[0.8rem]">
-              <i className="fas fa-filter text-qsis flex-shrink-0"></i>
+              <i className="fas fa-user-cog text-qsis flex-shrink-0"></i>
               <span className="text-dark-text2">
-                Showing only <strong className="text-dark-text">{onboardData.semester}</strong> files.
+                Viewing as <strong className="text-dark-text">{onboardData.department?.split(' ').slice(0, 3).join(' ')}</strong> &middot; <strong className="text-dark-text">{onboardData.semester}</strong>
+                {onboardData.fileView === 'my-semester-only' ? ' (My Semester Only)' : ' (All Prioritized)'}
               </span>
               <button
                 onClick={() => { clearOnboarding(); window.location.reload(); }}
                 className="ml-auto px-3 py-1.5 rounded-lg bg-qsis/10 border border-qsis/30 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/20 transition-colors flex-shrink-0"
               >
-                <i className="fas fa-edit mr-1"></i> Change Preference
+                <i className="fas fa-edit mr-1"></i> Edit Personalize
+              </button>
+            </div>
+          )}
+
+          {(() => {
+            // Filter departments based on onboarding preference
+            let visibleDepts = departments;
+            if (onboardData?.fileView === 'my-semester-only' && userDeptId) {
+              visibleDepts = departments.filter(d => d.id === userDeptId);
+            }
+
+            // For "all-prioritized": sort user's department to top of its faculty, and that faculty first
+            const sortedDepts = (() => {
+              if (!userDeptId || onboardData?.fileView === 'my-semester-only') return visibleDepts;
+              // Find user's faculty
+              const userFacultyId = FACULTIES.find(f => f.departments.some(d => d.id === userDeptId))?.id;
+              if (!userFacultyId) return visibleDepts;
+              // Sort: user's dept first, then rest in normal order
+              return [...visibleDepts].sort((a, b) => {
+                if (a.id === userDeptId) return -1;
+                if (b.id === userDeptId) return 1;
+                const aFacIdx = FACULTIES.findIndex(f => f.departments.some(d => d.id === a.id));
+                const bFacIdx = FACULTIES.findIndex(f => f.departments.some(d => d.id === b.id));
+                if (aFacIdx !== bFacIdx) return aFacIdx - bFacIdx;
+                const aFac = FACULTIES[aFacIdx];
+                const bFac = FACULTIES[bFacIdx];
+                const aDeptIdx = aFac?.departments.findIndex(d => d.id === a.id) ?? 0;
+                const bDeptIdx = bFac?.departments.findIndex(d => d.id === b.id) ?? 0;
+                return aDeptIdx - bDeptIdx;
+              });
+            })();
+
+            // Group by faculty, prioritizing user's faculty
+            const facultiesToShow = onboardData?.fileView === 'all-prioritized' && userDeptId
+              ? [...FACULTIES].sort((a, b) => {
+                  if (a.departments.some(d => d.id === userDeptId)) return -1;
+                  if (b.departments.some(d => d.id === userDeptId)) return 1;
+                  return 0;
+                })
+              : FACULTIES;
+
+            if (sortedDepts.length === 0) {
+              return (
+                <div className="text-center py-8 text-dark-text2">
+                  <i className="fas fa-folder-open text-3xl mb-3 block opacity-40"></i>
+                  <p>No departments have files yet.</p>
+                </div>
+              );
+            }
+
+            return facultiesToShow.map(faculty => {
+              const facDepts = sortedDepts.filter(d => {
+                const fac = FACULTIES.find(f => f.id === faculty.id);
+                return fac?.departments.some(dd => dd.id === d.id);
+              });
+              if (facDepts.length === 0) return null;
+              const isUserFaculty = userDeptId && facDepts.some(d => d.id === userDeptId);
+              return (
+                <div key={faculty.id} className="mb-5 last:mb-0">
+                  <div className="flex items-center gap-3 mb-2.5 pb-2 border-b border-dark-border/50">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-qsis/80 to-accent/80 flex items-center justify-center text-white text-[0.7rem] font-bold flex-shrink-0">
+                      <i className="fas fa-graduation-cap"></i>
+                    </div>
+                    <div>
+                      <div className="text-[0.95rem] font-bold text-dark-text">{faculty.name}</div>
+                      <div className="text-[0.65rem] text-dark-text3">{faculty.shortName} &middot; {facDepts.length} departments</div>
+                    </div>
+                    {isUserFaculty && (
+                      <span className="ml-auto text-[0.65rem] px-2 py-0.5 rounded-full bg-qsis/15 text-qsis font-semibold">Your Faculty</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {facDepts.map((dept) => {
+                      const isUserDept = dept.id === userDeptId;
+                      return (
+                        <div key={dept.id} className={`flex items-center gap-4 p-[18px_20px] bg-dark-bg2 border rounded-xl cursor-pointer hover:border-qsis hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:translate-x-1 transition-all ${isUserDept ? 'border-qsis/40 ring-1 ring-qsis/20' : 'border-dark-border'}`} onClick={() => navigateToDepartment(dept.id)}>
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-qsis to-accent flex items-center justify-center text-white text-[1rem] flex-shrink-0">
+                            <i className="fas fa-building"></i>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[0.95rem] font-bold truncate flex items-center gap-2">
+                              {dept.shortName}
+                              {isUserDept && <span className="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-qsis/15 text-qsis font-semibold">You</span>}
+                            </div>
+                            <div className="text-[0.7rem] text-dark-text2 truncate">{dept.name}</div>
+                          </div>
+                          <div className="text-[0.78rem] text-dark-text2 text-right flex-shrink-0">{dept.files} files</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            });
+          })()}
+        </section>
+      )}
+
+      {/* Semester View (inside a department) */}
+      {!loading && !error && !isSearching && view === 'semesters' && (
+        <section className="mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-base font-semibold flex items-center gap-2">
+              <i className="fas fa-book"></i> 
+              {currentDept ? (() => {
+                for (const f of FACULTIES) {
+                  const d = f.departments.find(dd => dd.id === currentDept);
+                  if (d) return d.name;
+                }
+                return 'Semesters';
+              })() : 'Select Semester'}
+            </h3>
+            <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={() => goBack()}>
+              <i className="fas fa-arrow-left"></i> All Departments
+            </button>
+          </div>
+
+          {/* Edit preference banner */}
+          {onboardData && (
+            <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-qsis/30 bg-qsis/5 text-[0.8rem]">
+              <i className="fas fa-filter text-qsis flex-shrink-0"></i>
+              <span className="text-dark-text2">
+                {isMySemesterOnly ? (
+                  <>Showing only <strong className="text-dark-text">{onboardData.semester}</strong> files.</>
+                ) : (
+                  <>Showing all semesters, <strong className="text-dark-text">{onboardData.semester}</strong> prioritized.</>
+                )}
+              </span>
+              <button
+                onClick={() => { clearOnboarding(); window.location.reload(); }}
+                className="ml-auto px-3 py-1.5 rounded-lg bg-qsis/10 border border-qsis/30 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/20 transition-colors flex-shrink-0"
+              >
+                <i className="fas fa-edit mr-1"></i> Edit Personalize
               </button>
             </div>
           )}
@@ -398,32 +560,33 @@ export default function BrowsePage() {
             </div>
           )}
           <div className="flex flex-col gap-2">
-            {personalizedSemesters.filter(s => !s.isRelated).map((sem, idx) => (
-              <div key={sem.id} className={`flex items-center gap-4 p-[18px_20px] bg-dark-bg2 border rounded-xl cursor-pointer hover:border-qsis hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:translate-x-1 transition-all ${idx === 0 && userSemesterId === sem.id && !isMySemesterOnly ? 'border-qsis/40 ring-1 ring-qsis/20' : 'border-dark-border'}`} onClick={() => navigateToSemester(sem.id)}>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-qsis to-accent flex items-center justify-center text-white text-[1.2rem] flex-shrink-0"><i className="fas fa-book"></i></div>
-                <div className="flex-1">
-                  <div className="text-[1.05rem] font-bold flex items-center gap-2">
-                    {sem.label}
-                    {idx === 0 && userSemesterId === sem.id && !isMySemesterOnly && (
-                      <span className="text-[0.65rem] px-2 py-0.5 rounded-full bg-qsis/15 text-qsis font-semibold">Your Semester</span>
+            {personalizedSemesters.map((sem, idx) => {
+              const isRelated = sem.isRelated;
+              const isSources = sem.id === config.relatedSourcesFolder;
+              const isSpecial = isRelated || isSources;
+              return (
+                <div key={sem.id} className={`flex items-center gap-4 p-[18px_20px] ${isSpecial ? 'bg-gradient-to-r from-dark-bg2 to-accent/5 border-accent/30' : 'bg-dark-bg2 border-dark-border'} border rounded-xl cursor-pointer hover:border-qsis hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:translate-x-1 transition-all ${!isSpecial && idx === 0 && userSemesterId === sem.id && !isMySemesterOnly ? 'border-qsis/40 ring-1 ring-qsis/20' : ''}`} onClick={() => navigateToSemester(sem.id)}>
+                  <div className={`w-12 h-12 rounded-xl ${isSpecial ? 'bg-gradient-to-br from-accent to-qsis' : 'bg-gradient-to-br from-qsis to-accent'} flex items-center justify-center text-white text-[1.2rem] flex-shrink-0`}>
+                    <i className={`fas ${isSources ? 'fa-link' : isRelated ? 'fa-book-open' : 'fa-book'}`}></i>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-[1.05rem] font-bold flex items-center gap-2">
+                      {sem.label}
+                      {!isSpecial && idx === 0 && userSemesterId === sem.id && !isMySemesterOnly && (
+                        <span className="text-[0.65rem] px-2 py-0.5 rounded-full bg-qsis/15 text-qsis font-semibold">Your Semester</span>
+                      )}
+                    </div>
+                    {isSpecial && (
+                      <div className="text-[0.75rem] text-dark-text2">
+                        {isSources ? 'Cross-faculty shared resources' : 'Cross-semester & Shariah resources'}
+                      </div>
                     )}
                   </div>
+                  <div className="text-[0.8rem] text-dark-text2">{sem.courses} {isSources ? 'resources' : 'courses'} &middot; {sem.files} files</div>
                 </div>
-                <div className="text-[0.8rem] text-dark-text2">{sem.courses} courses &middot; {sem.files} files</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-
-          {!isMySemesterOnly && personalizedSemesters.filter(s => s.isRelated).map(sem => (
-            <div key={sem.id} className="mt-4 flex items-center gap-4 p-[18px_20px] bg-gradient-to-r from-dark-bg2 to-accent/5 border border-accent/30 rounded-xl cursor-pointer hover:border-accent hover:shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:translate-x-1 transition-all" onClick={() => navigateToSemester(sem.id)}>
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-qsis flex items-center justify-center text-white text-[1.2rem] flex-shrink-0"><i className="fas fa-book-open"></i></div>
-              <div className="flex-1">
-                <div className="text-[1.05rem] font-bold">{sem.label}</div>
-                <div className="text-[0.75rem] text-dark-text2">Cross-semester & Shariah resources</div>
-              </div>
-              <div className="text-[0.8rem] text-dark-text2 text-right">{sem.files} files</div>
-            </div>
-          ))}
         </section>
       )}
 
@@ -433,7 +596,7 @@ export default function BrowsePage() {
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
               <i className="fas fa-folder-open"></i>
-              {currentSem === config.relatedKitabsFolder ? 'Related Kitabs' : config.categories[currentCat as keyof typeof config.categories]?.label || 'Categories'}
+              {currentSem === config.relatedKitabsFolder ? 'Related Kitabs' : currentSem === config.relatedSourcesFolder ? 'Related Sources' : config.categories[currentCat as keyof typeof config.categories]?.label || 'Categories'}
             </h3>
             <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={goHome}>
               <i className="fas fa-arrow-left"></i> Back to Semesters
@@ -448,9 +611,12 @@ export default function BrowsePage() {
           <div className="flex flex-col gap-2">
             {filteredCategories.map(ce => {
               const isRelated = currentSem === config.relatedKitabsFolder;
+              const isSources = currentSem === config.relatedSourcesFolder;
               const catConfig = isRelated
                 ? (config.relatedKitabsCategories[ce.cat as keyof typeof config.relatedKitabsCategories] || { label: ce.cat, icon: 'folder', color: '#94a3b8' })
-                : (config.categories[ce.cat as keyof typeof config.categories] || config.categories.other);
+                : isSources
+                  ? { label: 'Related Sources', icon: 'link', color: '#0ea5e9' }
+                  : (config.categories[ce.cat as keyof typeof config.categories] || config.categories.other);
               return (
                 <div key={ce.cat} className="flex items-center gap-3.5 p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-accent hover:shadow-[0_0_16px_rgba(16,185,129,.2)] hover:translate-x-1 transition-all" onClick={() => navigateToCategory(currentSem, ce.cat)}>
                   <div className="text-[1.5rem]" style={{color: catConfig.color}}><i className={`fas ${catConfig.icon}`}></i></div>
@@ -470,10 +636,12 @@ export default function BrowsePage() {
             <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
               <i className="fas fa-folder-open"></i> {(() => {
                 const isRelated = currentSem === config.relatedKitabsFolder;
+                const isSources = currentSem === config.relatedSourcesFolder;
                 if (isRelated) {
                   const catCfg = config.relatedKitabsCategories[currentCat as keyof typeof config.relatedKitabsCategories];
                   return catCfg?.label || currentCat;
                 }
+                if (isSources) return 'Related Sources';
                 return config.categories[currentCat as keyof typeof config.categories]?.label || currentCat;
               })()}
             </h3>
@@ -613,7 +781,7 @@ export default function BrowsePage() {
           <p className="text-[0.82rem] text-dark-text2 mb-4 max-w-md mx-auto">If this project helps you, please give us a star on GitHub. It motivates us to keep building and maintaining this resource for the IIUC community.</p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <a href="https://github.com/sayedatiqurrahman/QSIS-ARMS-v2" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-qsis to-accent text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(34,197,94,0.3)] hover:scale-105 transition-all">
-              <i className="fas fa-star"></i> Star QSIS-ARMS v2<span className="text-[0.7rem] opacity-80">(Web App)</span>
+               <i className="fas fa-star"></i> Star IIUC-ARMS v2<span className="text-[0.7rem] opacity-80">(Web App)</span>
             </a>
             <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:scale-105 transition-all">
               <i className="fas fa-star"></i> Star Academic Files<span className="text-[0.7rem] opacity-80">(Data Repo)</span>
@@ -621,6 +789,8 @@ export default function BrowsePage() {
           </div>
           <p className="text-[0.72rem] text-dark-text2 mt-3"><i className="fas fa-code-branch mr-1"></i>Fork either repo to contribute — check out the README for guidelines!</p>
         </div>
+      )}
+      </>
       )}
     </>
   );

@@ -90,7 +90,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setSuccess('');
 
     if (!isValidEmail(email)) {
-      setError('Only IIUC departmental emails are allowed (e.g. q{your_id}@ugrad.iiuc.ac.bd)');
+      setError('Only IIUC departmental emails are allowed (e.g. your_id@ugrad.iiuc.ac.bd or name@iiuc.ac.bd)');
       return;
     }
 
@@ -144,7 +144,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
         // Always require 2FA — store credentials and show 2FA screen
         setPendingCredentials({ idToken, email });
-        setTotpAvailable(!!totpData.totpEnabled);
+        setTotpAvailable(totpRes.ok && !!totpData.totpEnabled);
         setTotpStep(true);
         setLoading(false);
         return;
@@ -185,7 +185,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         redirect: false,
       });
       if (result?.error) {
-        setError('Only IIUC departmental emails are allowed. Please use your university email (e.g. q{your_id}@ugrad.iiuc.ac.bd).');
+        setError('Only IIUC departmental emails are allowed. Please use your university email (e.g. your_id@ugrad.iiuc.ac.bd or name@iiuc.ac.bd).');
         setLoading(false);
       } else if (result?.ok) {
         onClose();
@@ -275,14 +275,22 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         return;
       }
 
+      // Refresh the Firebase idToken before signIn to prevent 401
+      const { getAuth } = await import('firebase/auth');
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      let freshIdToken = pendingCredentials!.idToken;
+      if (currentUser) {
+        freshIdToken = await currentUser.getIdToken(true);
+      }
+
       const turnstileToken = getToken(turnstileContainerId);
       const result = await signIn('credentials', {
-        idToken: pendingCredentials!.idToken,
+        idToken: freshIdToken,
         email: pendingCredentials!.email,
         name: pendingCredentials!.email.split('@')[0],
         image: '',
         login: pendingCredentials!.email.split('@')[0],
-        turnstileToken,
         redirect: false,
       });
 
@@ -330,7 +338,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   <input
                     type="email"
                     className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors"
-                    placeholder="q&#123;your_id&#125;@ugrad.iiuc.ac.bd"
+                    placeholder="your_id@ugrad.iiuc.ac.bd"
                     value={forgotPasswordEmail}
                     onChange={(e) => setForgotPasswordEmail(e.target.value)}
                     required
@@ -391,7 +399,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
               <i className="fas fa-exclamation-triangle text-yellow-500 mt-0.5 flex-shrink-0"></i>
               <div>
                 <span className="text-dark-text font-semibold">Only IIUC departmental emails allowed</span>
-                <p className="text-dark-text2 mt-1">When clicking &quot;Continue with Google&quot;, make sure to select your university email (e.g. <strong className="text-yellow-500">q&#123;your_id&#125;@ugrad.iiuc.ac.bd</strong>). Personal Gmail accounts will be rejected.</p>
+                <p className="text-dark-text2 mt-1">When clicking &quot;Continue with Google&quot;, make sure to select your university email (e.g. <strong className="text-yellow-500">your_id@ugrad.iiuc.ac.bd</strong> or <strong className="text-yellow-500">name@iiuc.ac.bd</strong>). Personal Gmail accounts will be rejected.</p>
               </div>
             </div>
           </div>
@@ -635,7 +643,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 <input
                   type="email"
                   className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors"
-                  placeholder="q&#123;your_id&#125;@ugrad.iiuc.ac.bd"
+                  placeholder="your_id@ugrad.iiuc.ac.bd"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required

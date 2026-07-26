@@ -191,7 +191,7 @@ export async function uploadFilesToGitHub(
     const prRes = await ghPost(`${GITHUB_API}/repos/${config.owner}/${config.repo}/pulls`, token, {
       title: message,
       body: [
-        `## QSIS-ARMS File Upload`,
+        `## IIUC-ARMS File Upload`,
         ``,
         `**Contributor:** ${githubUser.name || githubUser.login} (@${githubUser.login})`,
         ``,
@@ -199,7 +199,7 @@ export async function uploadFilesToGitHub(
         files.map(f => `- \`${f.path}\``).join('\n'),
         ``,
         `---`,
-        `*Submitted via QSIS-ARMS v2*`,
+        `*Submitted via IIUC-ARMS v2*`,
       ].join('\n'),
       head: prHead,
       base: defaultBranch,

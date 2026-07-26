@@ -284,7 +284,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         title: message || `Upload: ${files.map((f: any) => f.path.split('/').pop()).join(', ')}`,
         body: [
-          `## QSIS-ARMS File Upload`,
+          `## IIUC-ARMS File Upload`,
           ``,
           `**Contributor:** ${githubUser.name || githubUser.login} (@${githubUser.login})`,
           `**Email:** ${githubUser.email || 'N/A'}`,
@@ -293,7 +293,7 @@ export async function POST(req: NextRequest) {
           files.map((f: any) => `- \`${f.path}\``).join('\n'),
           ``,
           `---`,
-          `*Submitted via QSIS-ARMS v2*`,
+          `*Submitted via IIUC-ARMS v2*`,
         ].join('\n'),
         head: `${githubUser.login}:${branch}`,
         base: await defaultBranch,

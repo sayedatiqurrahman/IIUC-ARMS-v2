@@ -1,7 +1,7 @@
 {
-  "name": "QSIS-ARMS",
-  "short_name": "QSIS-ARMS",
-  "description": "Academic Resource Management System for QSIS, IIUC",
+  "name": "IIUC-ARMS",
+  "short_name": "IIUC-ARMS",
+  "description": "Academic Resource Management System for IIUC Departments",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

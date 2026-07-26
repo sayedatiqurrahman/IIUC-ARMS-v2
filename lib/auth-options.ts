@@ -2,7 +2,7 @@ import GitHubProvider from 'next-auth/providers/github';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import type { NextAuthOptions } from 'next-auth';
 
-const IIUC_STUDENT_REGEX = /^q\d{5,8}@ugrad\.iiuc\.ac\.bd$/i;
+const IIUC_STUDENT_REGEX = /^[^@]+@ugrad\.iiuc\.ac\.bd$/i;
 const IIUC_TEACHER_REGEX = /^[^@]+@iiuc\.ac\.bd$/i;
 const OWNER_EMAILS = [
   'quranicsciencesclub@gmail.com',
@@ -40,14 +40,20 @@ export const authOptions: NextAuthOptions = {
         turnstileToken: { label: 'Turnstile Token', type: 'text' },
       },
       async authorize(credentials) {
-        if (!credentials?.idToken) return null;
+        if (!credentials?.idToken) {
+          console.error('[AUTH] No idToken provided');
+          return null;
+        }
 
         // Verify Turnstile token
         if (credentials.turnstileToken) {
           try {
             const { verifyTurnstile } = await import('@/lib/verifyTurnstile');
             const turnstileValid = await verifyTurnstile(credentials.turnstileToken);
-            if (!turnstileValid) return null;
+            if (!turnstileValid) {
+              console.error('[AUTH] Turnstile verification failed');
+              return null;
+            }
           } catch (err) {
             console.warn('Turnstile verification skipped');
           }
@@ -57,14 +63,25 @@ export const authOptions: NextAuthOptions = {
         const decoded = await verifyFirebaseToken(credentials.idToken);
         if (decoded) {
           const email = decoded.email || credentials.email;
-          if (!email || !isAllowedEmail(email)) return null;
-          if (decoded.email_verified === false) return null;
+          console.log('[AUTH] Firebase verified, email:', email, 'email_verified:', decoded.email_verified);
+          if (!email || !isAllowedEmail(email)) {
+            console.error('[AUTH] Email not allowed:', email);
+            return null;
+          }
+          if (decoded.email_verified === false) {
+            console.error('[AUTH] Email not verified');
+            return null;
+          }
           // Check if user is banned
           try {
             const { prisma } = await import('@/lib/prisma');
             const profile = await prisma.profile.findUnique({ where: { userId: email } });
-            if (profile?.isBanned) return null;
+            if (profile?.isBanned) {
+              console.error('[AUTH] User is banned:', email);
+              return null;
+            }
           } catch {}
+          console.log('[AUTH] Auth successful for:', email);
           return {
             id: decoded.sub || email,
             email,
@@ -76,24 +93,39 @@ export const authOptions: NextAuthOptions = {
         // Fallback: decode JWT manually (for dev/testing)
         try {
           const parts = credentials.idToken.split('.');
-          if (parts.length !== 3) return null;
+          if (parts.length !== 3) {
+            console.error('[AUTH] Invalid JWT format, parts:', parts.length);
+            return null;
+          }
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
           const email = credentials.email || payload.email;
-          if (!email || !isAllowedEmail(email)) return null;
-          if (payload.email_verified === false) return null;
+          console.log('[AUTH] JWT fallback, email:', email, 'email_verified:', payload.email_verified);
+          if (!email || !isAllowedEmail(email)) {
+            console.error('[AUTH] JWT: Email not allowed:', email);
+            return null;
+          }
+          if (payload.email_verified === false) {
+            console.error('[AUTH] JWT: Email not verified');
+            return null;
+          }
           // Check if user is banned
           try {
             const { prisma } = await import('@/lib/prisma');
             const profile = await prisma.profile.findUnique({ where: { userId: email } });
-            if (profile?.isBanned) return null;
+            if (profile?.isBanned) {
+              console.error('[AUTH] JWT: User is banned:', email);
+              return null;
+            }
           } catch {}
+          console.log('[AUTH] JWT fallback successful for:', email);
           return {
             id: payload.sub || email,
             email,
             name: credentials.name || payload.name || email.split('@')[0],
             image: credentials.image || payload.picture || null,
           };
-        } catch {
+        } catch (e) {
+          console.error('[AUTH] JWT fallback error:', e);
           return null;
         }
       },

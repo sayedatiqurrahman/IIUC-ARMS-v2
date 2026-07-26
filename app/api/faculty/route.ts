@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     const search = url.searchParams.get('search') || '';
     const memberType = url.searchParams.get('memberType') || url.searchParams.get('role');
     const title = url.searchParams.get('title') || '';
+    const visibleOnly = url.searchParams.get('visibleOnly') === 'true';
 
     const { prisma } = await import('@/lib/prisma');
 
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
     if (department) where.department = department;
     if (memberType) where.memberType = memberType;
     if (title) where.title = title;
+    if (visibleOnly) where.isVisible = true;
     if (search) {
       const q = search.toLowerCase();
       where.OR = [
@@ -95,7 +97,7 @@ export async function PUT(req: NextRequest) {
   if (!rl.success) return rl.response!;
   try {
     const body = await req.json();
-    const { id, name, title, email, phone, shortForm, memberType } = body;
+    const { id, name, title, email, phone, shortForm, memberType, isVisible } = body;
 
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
@@ -118,11 +120,55 @@ export async function PUT(req: NextRequest) {
     if (phone !== undefined) data.phone = phone || null;
     if (shortForm !== undefined) data.shortForm = shortForm || null;
     if (memberType !== undefined) data.memberType = memberType;
+    if (isVisible !== undefined) data.isVisible = isVisible;
 
     const updated = await prisma.facultyMember.update({ where: { id }, data });
     return NextResponse.json({ success: true, member: updated });
   } catch {
     return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.faculty);
+  if (!rl.success) return rl.response!;
+  try {
+    const body = await req.json();
+    const { ids, isVisible, department, all } = body as {
+      ids?: string[];
+      isVisible?: boolean;
+      department?: string;
+      all?: boolean;
+    };
+
+    if (isVisible === undefined) {
+      return NextResponse.json({ error: 'isVisible required' }, { status: 400 });
+    }
+
+    const callerEmail = await getUserEmail(req);
+    if (!callerEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { prisma } = await import('@/lib/prisma');
+    const callerProfile = await prisma.profile.findUnique({ where: { userId: callerEmail } });
+
+    const where: any = {};
+    if (all) {
+      // admin can toggle all
+    } else if (department) {
+      if (!canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, department)) {
+        return NextResponse.json({ error: 'No permission for this department' }, { status: 403 });
+      }
+      where.department = department;
+    } else if (ids && ids.length > 0) {
+      where.id = { in: ids };
+    } else {
+      return NextResponse.json({ error: 'Provide ids, department, or all flag' }, { status: 400 });
+    }
+
+    const result = await prisma.facultyMember.updateMany({ where, data: { isVisible } });
+    return NextResponse.json({ success: true, count: result.count });
+  } catch {
+    return NextResponse.json({ error: 'Failed to update visibility' }, { status: 500 });
   }
 }
 

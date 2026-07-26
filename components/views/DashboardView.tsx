@@ -705,7 +705,7 @@ export default function DashboardView() {
                     {patLoading ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-1"></i>Save</>}
                   </button>
                 </div>
-                <a href="https://github.com/settings/tokens/new?scopes=repo&description=QSIS-ARMS" target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text2 hover:text-qsis mt-2 inline-block no-underline">
+                <a href="https://github.com/settings/tokens/new?scopes=repo&description=IIUC-ARMS" target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text2 hover:text-qsis mt-2 inline-block no-underline">
                   <i className="fas fa-external-link-alt mr-1"></i>Create new token (No expiry, repo scope)
                 </a>
               </div>
@@ -930,7 +930,7 @@ export default function DashboardView() {
                   <li>Copy the token → paste below</li>
                 </ol>
               </div>
-              <a href="https://github.com/settings/tokens/new?scopes=repo&description=QSIS-ARMS" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-lg border border-qsis/30 bg-qsis/5 text-qsis text-[0.82rem] font-semibold hover:bg-qsis/10 transition-all mb-4 no-underline">
+              <a href="https://github.com/settings/tokens/new?scopes=repo&description=IIUC-ARMS" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-lg border border-qsis/30 bg-qsis/5 text-qsis text-[0.82rem] font-semibold hover:bg-qsis/10 transition-all mb-4 no-underline">
                 <i className="fas fa-external-link-alt"></i> Open GitHub Token Page
               </a>
               <label className="text-[0.78rem] text-dark-text2 block mb-1.5">Paste your token here:</label>

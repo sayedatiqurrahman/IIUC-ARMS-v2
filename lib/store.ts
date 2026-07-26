@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { config, UserRole } from './config';
+import { FACULTIES, getFacultyIdForDepartment, getAllFacultyIds } from './departments';
 import { extractYear } from './utils';
 import { getOnboardingData, setOnboardingData as saveOnboarding, clearOnboardingData as clearOnboardingStorage, type OnboardingData } from '@/components/OnboardingModal';
 
 /* ─── types ─── */
-export type View = 'semesters' | 'categories' | 'courses' | 'files' | 'history' | 'contributors' | 'routine' | 'dashboard' | 'search';
+export type View = 'departments' | 'semesters' | 'categories' | 'courses' | 'files' | 'history' | 'contributors' | 'routine' | 'dashboard' | 'search';
 
 export interface Breadcrumb {
   label: string;
@@ -36,13 +37,12 @@ import { getRawUrl, getMimeFromExt } from './utils';
 
 function detectCategory(name: string) {
   const l = name.toLowerCase();
-  // Related Kitabs categories - return folder name as category key
   if (config.relatedKitabsCategories[l]) return l;
-  // Semester categories - map actual GitHub folder names to category keys
   if (l === 'sheet') return 'sheet';
   if (l === 'notes' || l === 'note') return 'notes';
   if (l === 'previous questions' || l.includes('previous question')) return 'questions';
   if (l === 'syllabus') return 'syllabus';
+  if (l === 'related sources' || l === 'related-sources') return 'related-sources';
   return 'other';
 }
 
@@ -113,6 +113,7 @@ interface AppState {
   error: string;
 
   view: View;
+  currentDept: string;
   currentSem: string;
   currentCat: string;
   breadcrumbs: Breadcrumb[];
@@ -145,6 +146,7 @@ interface AppState {
 
   loadTree: (token?: string) => Promise<void>;
 
+  navigateToDepartment: (deptId: string) => void;
   navigateToSemester: (semId: string) => void;
   navigateToCategory: (semId: string, catKey: string) => void;
   navigateToCourse: (courseName: string) => void;
@@ -182,10 +184,11 @@ interface AppState {
   clearOnboarding: () => void;
 
   getUploadTree: () => any[];
-  getSemesters: () => Semester[];
-  getCategories: (semId: string) => Category[];
-  getCourses: (semId: string, catKey: string) => [string, any[]][];
-  getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string) => { files: any[]; folders: any[] };
+  getUploadDepartments: () => { id: string; name: string; shortName: string; facultyName: string; facultyShortName: string; files: number; semesters: number }[];
+  getSemesters: (departmentId?: string | null) => Semester[];
+  getCategories: (semId: string, departmentId?: string | null) => Category[];
+  getCourses: (semId: string, catKey: string, departmentId?: string | null) => [string, any[]][];
+  getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string, departmentId?: string | null) => { files: any[]; folders: any[] };
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -193,7 +196,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   loading: true,
   error: '',
 
-  view: 'semesters',
+  view: 'departments',
+  currentDept: '',
   currentSem: '',
   currentCat: '',
   breadcrumbs: [],
@@ -336,31 +340,82 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ loading: false });
   },
 
+  navigateToDepartment: (deptId) => {
+    const deptName = (() => {
+      for (const f of FACULTIES) {
+        const d = f.departments.find(dd => dd.id === deptId);
+        if (d) return d.name;
+      }
+      return deptId;
+    })();
+    set({
+      currentDept: deptId,
+      currentSem: '',
+      currentCat: '',
+      view: 'semesters',
+      breadcrumbs: [
+        { label: 'Departments', onClick: () => get().goHome() },
+        { label: deptName },
+      ],
+    });
+  },
+
   navigateToSemester: (semId) => {
+    const { currentDept } = get();
     const isRelated = semId === config.relatedKitabsFolder;
-    const label = isRelated ? 'Related Kitabs' : semId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const isSources = semId === config.relatedSourcesFolder;
+    let label: string;
+    if (isRelated) label = 'Related Kitabs';
+    else if (isSources) label = 'Related Sources';
+    else label = semId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+    const deptName = (() => {
+      if (!currentDept) return '';
+      for (const f of FACULTIES) {
+        const d = f.departments.find(dd => dd.id === currentDept);
+        if (d) return d.name;
+      }
+      return currentDept;
+    })();
+
     set({
       currentSem: semId,
       currentCat: '',
       view: 'categories',
       breadcrumbs: [
-        { label: 'Home', onClick: () => get().goHome() },
+        { label: 'Departments', onClick: () => get().goHome() },
+        ...(currentDept ? [{ label: deptName, onClick: () => get().navigateToDepartment(currentDept) }] : []),
         { label },
       ],
     });
   },
 
   navigateToCategory: (semId, catKey) => {
+    const { currentDept } = get();
     const catConfig = config.categories[catKey as keyof typeof config.categories];
+    const isRelated = semId === config.relatedKitabsFolder;
+    const isSources = semId === config.relatedSourcesFolder;
+    let semLabel: string;
+    if (isRelated) semLabel = 'Related Kitabs';
+    else if (isSources) semLabel = 'Related Sources';
+    else semLabel = semId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+    const deptName = (() => {
+      if (!currentDept) return '';
+      for (const f of FACULTIES) {
+        const d = f.departments.find(dd => dd.id === currentDept);
+        if (d) return d.name;
+      }
+      return currentDept;
+    })();
+
     set({
       currentCat: catKey,
       view: 'courses',
       breadcrumbs: [
-        { label: 'Home', onClick: () => get().goHome() },
-        {
-          label: semId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-          onClick: () => get().navigateToSemester(semId),
-        },
+        { label: 'Departments', onClick: () => get().goHome() },
+        ...(currentDept ? [{ label: deptName, onClick: () => get().navigateToDepartment(currentDept) }] : []),
+        { label: semLabel, onClick: () => get().navigateToSemester(semId) },
         { label: catConfig?.label || catKey },
       ],
     });
@@ -418,15 +473,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   goBack: () => {
-    const { view, currentSem, currentCat, breadcrumbs } = get();
+    const { view, currentDept, currentSem, currentCat } = get();
     if (view === 'files') {
       get().navigateToCategory(currentSem, currentCat);
     } else if (view === 'courses') {
-      if (currentSem) {
-        get().navigateToSemester(currentSem);
+      get().navigateToSemester(currentSem);
+    } else if (view === 'categories') {
+      if (currentDept) {
+        get().navigateToDepartment(currentDept);
       } else {
         get().goHome();
       }
+    } else if (view === 'semesters') {
+      get().goHome();
     } else {
       get().goHome();
     }
@@ -434,7 +493,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   goHome: () => {
     set({
-      view: 'semesters',
+      view: 'departments',
+      currentDept: '',
       currentSem: '',
       currentCat: '',
       breadcrumbs: [],
@@ -546,20 +606,103 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   /* ────────────────────────────────────────────────────────────────
      COMPUTED HELPERS
-     Structure: upload_academic_files / {sem} / {cat_folder} / {course} / {file}
-     After getUploadTree strips prefix: {sem} / {cat_folder} / {course} / {file}
-     parts[0]=sem  parts[1]=cat_folder  parts[2]=course  parts[3]=file
-     Only blobs (item.type === 'blob') are real files.
+     New structure: upload_academic_files / {dept} / {sem} / {cat_folder} / {course} / {file}
+     Legacy (old QSIS): upload_academic_files / {sem} / {cat_folder} / {course} / {file}
+     related-kitabs: upload_academic_files / related-kitabs / ...
+     After getUploadTree strips prefix, each item gets a `department` field.
      ──────────────────────────────────────────────────────────────── */
 
   getUploadTree: () => {
     const { tree } = get();
+    const facultyIds = getAllFacultyIds();
     return tree
       .filter((item) => item.path.startsWith(config.uploadPath + '/'))
-      .map((item) => ({ ...item, path: item.path.substring(config.uploadPath.length + 1) }));
+      .map((item) => {
+        const rel = item.path.substring(config.uploadPath.length + 1);
+        const parts = rel.split('/');
+        const first = parts[0];
+
+        // shariah/related-kitabs/* → department: 'shariah', isRelatedKitabs: true
+        if (first === config.relatedKitabsParent && parts[1] === config.relatedKitabsFolder) {
+          const inner = parts.slice(2).join('/');
+          return { ...item, path: config.relatedKitabsFolder + '/' + inner, department: 'shariah' };
+        }
+
+        // Root related-kitabs/* (legacy) → treat as shariah
+        if (first === config.relatedKitabsFolder) {
+          return { ...item, path: rel, department: 'shariah' };
+        }
+
+        // Faculty-level related-sources: {faculty-id}/related-sources/* → department: faculty-id
+        if (facultyIds.includes(first) && parts[1] === config.relatedSourcesFolder) {
+          const inner = parts.slice(2).join('/');
+          return { ...item, path: config.relatedSourcesFolder + '/' + inner, department: first };
+        }
+
+        // {dept}/{sem}/{cat}/{course}/{file} or {dept}/related-sources/{file} (legacy per-dept)
+        if (config.isDepartmentId(first)) {
+          const inner = parts.slice(1).join('/');
+          return { ...item, path: inner || rel, department: first };
+        }
+
+        // Legacy: {sem}/{cat}/{course}/{file} → 'qsis'
+        return { ...item, path: rel, department: 'qsis' };
+      });
   },
 
-  getSemesters: () => {
+  // Get all departments — always shows every department even if 0 files
+  getUploadDepartments: () => {
+    const uploadTree = get().getUploadTree();
+    const depts = new Map<string, { files: number; semesters: Set<string> }>();
+
+    // Initialize all departments from FACULTIES so they always appear
+    for (const faculty of FACULTIES) {
+      for (const dept of faculty.departments) {
+        depts.set(dept.id, { files: 0, semesters: new Set() });
+      }
+    }
+
+    uploadTree.forEach((item: any) => {
+      if (item.type !== 'blob' || !item.department) return;
+      const dept = item.department;
+      if (!depts.has(dept)) depts.set(dept, { files: 0, semesters: new Set() });
+      const d = depts.get(dept)!;
+      d.files++;
+      const parts = item.path.split('/');
+      const sem = parts[0];
+      if (sem) d.semesters.add(sem);
+    });
+
+    return Array.from(depts.entries()).map(([id, data]) => {
+      const found = (() => {
+        for (const f of FACULTIES) {
+          const dept = f.departments.find(d => d.id === id);
+          if (dept) return { faculty: f, department: dept };
+        }
+        return null;
+      })();
+      return {
+        id,
+        name: found?.department.name || id,
+        shortName: found?.department.shortName || id.toUpperCase(),
+        facultyName: found?.faculty.name || '',
+        facultyShortName: found?.faculty.shortName || '',
+        files: data.files,
+        semesters: data.semesters.size,
+      };
+    }).sort((a, b) => {
+      const aIdx = FACULTIES.findIndex(f => f.departments.some(d => d.id === a.id));
+      const bIdx = FACULTIES.findIndex(f => f.departments.some(d => d.id === b.id));
+      if (aIdx !== bIdx) return aIdx - bIdx;
+      const aFac = FACULTIES[aIdx];
+      const bFac = FACULTIES[bIdx];
+      const aDeptIdx = aFac?.departments.findIndex(d => d.id === a.id) ?? 0;
+      const bDeptIdx = bFac?.departments.findIndex(d => d.id === b.id) ?? 0;
+      return aDeptIdx - bDeptIdx;
+    });
+  },
+
+  getSemesters: (departmentId?: string | null) => {
     const uploadTree = get().getUploadTree();
     const sems = new Map<string, { files: number; courses: Set<string> }>();
 
@@ -568,18 +711,35 @@ export const useAppStore = create<AppState>((set, get) => ({
       sems.set(s.id, { files: 0, courses: new Set() });
     });
 
-    // Related Kitabs entry
-    sems.set(config.relatedKitabsFolder, { files: 0, courses: new Set() });
+    const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
 
     uploadTree.forEach((item: any) => {
       if (item.type !== 'blob') return;
+
+      // Filter: match dept directly, or match faculty (for faculty-level related-sources)
+      if (departmentId) {
+        const matchesDept = item.department === departmentId;
+        const matchesFaculty = facultyId && item.department === facultyId;
+        if (!matchesDept && !matchesFaculty) return;
+      }
+
       const parts = item.path.split('/');
       const sem = parts[0];
       if (!sem) return;
 
-      // Skip related-kitabs folder from semester counts (handled separately)
+      // Related Kitabs
       if (sem === config.relatedKitabsFolder) {
+        if (!sems.has(config.relatedKitabsFolder)) sems.set(config.relatedKitabsFolder, { files: 0, courses: new Set() });
         const s = sems.get(config.relatedKitabsFolder)!;
+        s.files++;
+        if (parts.length >= 3 && parts[1]) s.courses.add(parts[1]);
+        return;
+      }
+
+      // Related Sources
+      if (sem === config.relatedSourcesFolder) {
+        if (!sems.has(config.relatedSourcesFolder)) sems.set(config.relatedSourcesFolder, { files: 0, courses: new Set() });
+        const s = sems.get(config.relatedSourcesFolder)!;
         s.files++;
         if (parts.length >= 3 && parts[1]) s.courses.add(parts[1]);
         return;
@@ -598,28 +758,57 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     });
 
+    const isShariahDept = !departmentId || departmentId === 'shariah' || ['qsis', 'dawah', 'hadith'].includes(departmentId || '');
+
     return Array.from(sems.entries())
       .map(([id, data]) => {
         const cfg = config.semesters.find(s => s.id === id);
         const isRelated = id === config.relatedKitabsFolder;
-        const label = isRelated ? 'Related Kitabs' : (cfg?.label || id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
-        return { id, label, files: data.files, courses: data.courses.size, isRelated };
+        const isSources = id === config.relatedSourcesFolder;
+        let label: string;
+        if (isRelated) label = 'Related Kitabs';
+        else if (isSources) label = 'Related Sources';
+        else label = cfg?.label || id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        return { id, label, files: data.files, courses: data.courses.size, isRelated, isSources };
+      })
+      .filter((s) => {
+        // When viewing a department, always show all 8 semesters (even 0 files)
+        if (departmentId) {
+          if (s.isRelated && !isShariahDept) return false;
+          if (s.isSources) return true;
+          return true;
+        }
+        // No department selected: only show semesters with files
+        if (s.files === 0) return false;
+        if (s.isRelated && !isShariahDept) return false;
+        return true;
       })
       .sort((a, b) => {
         if (a.isRelated) return 1;
         if (b.isRelated) return -1;
+        if (a.isSources) return 1;
+        if (b.isSources) return -1;
         return a.id.localeCompare(b.id);
       });
   },
 
-  getCategories: (semId) => {
+  getCategories: (semId, departmentId?: string | null) => {
     const uploadTree = get().getUploadTree();
     const isRelated = semId === config.relatedKitabsFolder;
+    const isSources = semId === config.relatedSourcesFolder;
     const prefix = semId + '/';
     const folderCounts: Record<string, number> = {};
     const knownFolders = new Set<string>();
+    const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
 
     uploadTree.forEach((item: any) => {
+      // Filter: match dept directly, or match faculty (for faculty-level related-sources)
+      if (departmentId) {
+        const matchesDept = item.department === departmentId;
+        const matchesFaculty = facultyId && item.department === facultyId;
+        if (!matchesDept && !matchesFaculty) return;
+      }
+
       if (!item.path.startsWith(prefix)) return;
       const rel = item.path.substring(prefix.length);
       const parts = rel.split('/');
@@ -659,21 +848,38 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     }
 
+    // For related-sources, show as a single category
+    if (isSources) {
+      return catEntries.map(entry => ({
+        ...entry,
+        label: 'Related Sources',
+        icon: 'book',
+        color: '#0ea5e9',
+      }));
+    }
+
     return catEntries;
   },
 
-  getCourses: (semId, catKey) => {
+  getCourses: (semId, catKey, departmentId?) => {
     const uploadTree = get().getUploadTree();
-    const categories = get().getCategories(semId);
+    const categories = get().getCategories(semId, departmentId);
     const catEntry = categories.find((c) => c.cat === catKey);
     if (!catEntry || catEntry.folders.length === 0) return [];
 
     const catFolders = new Set(catEntry.folders);
     const prefix = semId + '/';
     const courses = new Map<string, any[]>();
+    const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
 
     uploadTree.forEach((item: any) => {
       if (item.type !== 'blob') return;
+      // Filter: match dept directly, or match faculty (for faculty-level related-sources)
+      if (departmentId) {
+        const matchesDept = item.department === departmentId;
+        const matchesFaculty = facultyId && item.department === facultyId;
+        if (!matchesDept && !matchesFaculty) return;
+      }
       if (!item.path.startsWith(prefix)) return;
       const rel = item.path.substring(prefix.length);
       const parts = rel.split('/');
@@ -698,7 +904,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     return Array.from(courses.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   },
 
-  getSearchResults: (query, typeFilter, yearFilter, semFilter) => {
+  getSearchResults: (query, typeFilter, yearFilter, semFilter, departmentId?) => {
     const uploadTree = get().getUploadTree();
     const q = query.toLowerCase().trim();
     if (!q && !typeFilter && !yearFilter && !semFilter) return { files: [], folders: [] };
@@ -708,6 +914,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     uploadTree.forEach((item: any) => {
       if (item.type !== 'blob') return;
+      if (departmentId && item.department !== departmentId && item.department !== null) return;
       const parts = item.path.split('/');
       const sem = parts[0];
       const catFolder = parts[1] || '';

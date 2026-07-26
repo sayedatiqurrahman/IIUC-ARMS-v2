@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
-    const existingTOTP = new TOTP({ issuer: 'QSIS-ARMS', label: email, algorithm: 'SHA1', digits: 6, period: 30 });
+    const existingTOTP = new TOTP({ issuer: 'IIUC-ARMS', label: email, algorithm: 'SHA1', digits: 6, period: 30 });
 
     let secret: InstanceType<typeof Secret>;
     if (profile.totpSecret && profile.totpEnabled) {

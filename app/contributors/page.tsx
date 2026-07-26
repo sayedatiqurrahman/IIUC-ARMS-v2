@@ -1,8 +1,8 @@
 import ContributorsView from '@/components/views/ContributorsView';
 
 export const metadata = {
-  title: 'Contributors - QSIS-ARMS',
-  description: 'Meet the team behind QSIS-ARMS',
+  title: 'Contributors - IIUC-ARMS',
+  description: 'Meet the team behind IIUC-ARMS',
 };
 
 export default function ContributorsPage() {

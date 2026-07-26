@@ -1,3 +1,5 @@
+import { FACULTIES } from './departments';
+
 export type UserRole = 'admin' | 'manager' | 'teacher' | 'student' | 'user';
 
 export const config = {
@@ -6,11 +8,13 @@ export const config = {
   branch: 'main',
   uploadPath: 'upload_academic_files',
   relatedKitabsFolder: 'related-kitabs',
+  relatedKitabsParent: 'shariah',
+  relatedSourcesFolder: 'related-sources',
   founderName: 'Sayed Atiqur Rahman',
   founderAgency: 'Programming Light',
   adobeClientId: process.env.NEXT_PUBLIC_ADOBE_CLIENT_ID || '',
   turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '',
-  emailRegex: /^(?:q\d{5,8}@ugrad\.iiuc\.ac\.bd|[^@]+@iiuc\.ac\.bd)$/i,
+  emailRegex: /^[^@]+@(?:ugrad\.)?iiuc\.ac\.bd$/i,
   adminEmails: [
     's.atiqurrahman2003@gmail.com',
     'quranicsciencesclub@gmail.com',
@@ -60,7 +64,7 @@ export const config = {
   academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','webp','csv'],
   githubStarRepos: [
     { owner: 'sayedatiqurrahman', repo: 'QSIS-ACADEMIC-FILES-MANAFGER', label: 'QSIS Academic Files' },
-    { owner: 'sayedatiqurrahman', repo: 'QSIS-ARMS-v2', label: 'QSIS-ARMS Source Code' },
+    { owner: 'sayedatiqurrahman', repo: 'QSIS-ARMS-v2', label: 'IIUC-ARMS Source Code' },
   ],
   semesters: [
     { id: '1st-semister', label: '1st Semester' },
@@ -86,5 +90,23 @@ export const config = {
     'aqeedah': { label: 'Aqeedah', icon: 'mosque', color: '#ec4899' },
     'seerah': { label: 'Seerah', icon: 'user-graduate', color: '#14b8a6' },
     'general': { label: 'General', icon: 'folder-open', color: '#94a3b8' },
+  },
+
+  // ─── Department folder helpers ──────────────────────────────────
+  allDepartmentIds: (() => {
+    const ids = new Set<string>();
+    ids.add('shariah'); // special: Shariah faculty combined folder
+    for (const f of FACULTIES) {
+      for (const d of f.departments) ids.add(d.id);
+    }
+    return ids;
+  })(),
+
+  isDepartmentId: (id: string): boolean => {
+    return config.allDepartmentIds.has(id);
+  },
+
+  isSemesterId: (id: string): boolean => {
+    return config.semesters.some(s => s.id === id) || id === config.relatedKitabsFolder;
   },
 };

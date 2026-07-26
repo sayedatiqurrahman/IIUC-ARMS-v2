@@ -11,10 +11,10 @@ const siteUrl = 'https://qsis-arms.vercel.app';
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'QSIS-ARMS | Academic Resource Management System',
-    template: '%s | QSIS-ARMS',
+    default: 'IIUC-ARMS | Academic Resource Management System',
+    template: '%s | IIUC-ARMS',
   },
-  description: 'Free open-source academic resource management system for the Department of Qur\'anic Sciences & Islamic Studies (QSIS), International Islamic University Chittagong (IIUC). Browse, share, and manage notes, sheets, syllabi, and previous questions.',
+  description: 'Free open-source academic resource management system for IIUC departments including Qur\'anic Sciences & Islamic Studies (QSIS). Browse, share, and manage notes, sheets, syllabi, and previous questions.',
   keywords: [
     'QSIS', 'IIUC', 'academic resources', 'Quranic Sciences', 'Islamic Studies',
     'IIUC notes', 'previous questions', 'sheets', 'syllabus', 'academic file manager',
@@ -28,23 +28,23 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: siteUrl,
-    siteName: 'QSIS-ARMS',
-    title: 'QSIS-ARMS | Academic Resource Management System',
-    description: 'Free open-source academic resource management system for QSIS, IIUC. Browse, share, and manage notes, sheets, syllabi, and previous questions.',
+    siteName: 'IIUC-ARMS',
+    title: 'IIUC-ARMS | Academic Resource Management System',
+    description: 'Free open-source academic resource management system for IIUC departments. Browse, share, and manage notes, sheets, syllabi, and previous questions.',
     images: [
       {
         url: '/arms-logo.png',
         width: 512,
         height: 512,
-        alt: 'QSIS-ARMS Logo',
+        alt: 'IIUC-ARMS Logo',
         type: 'image/png',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'QSIS-ARMS | Academic Resource Management System',
-    description: 'Free open-source academic resource management system for QSIS, IIUC.',
+    title: 'IIUC-ARMS | Academic Resource Management System',
+    description: 'Free open-source academic resource management system for IIUC departments.',
     images: ['/arms-logo.png'],
     creator: '@sayedatiqurrahman',
   },

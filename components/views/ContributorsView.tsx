@@ -149,7 +149,7 @@ export default function ContributorsView() {
                   {c.whatsapp && !c.hideWhatsapp && (() => {
                     const cleaned = c.whatsapp.replace(/[^0-9]/g, '');
                     const waNumber = cleaned.startsWith('0') ? '880' + cleaned.slice(1) : cleaned.startsWith('880') ? cleaned : cleaned;
-                    const waMessage = encodeURIComponent(`Hi! I came across your profile on QSIS ARMS and would like to connect with you.`);
+                    const waMessage = encodeURIComponent(`Hi! I came across your profile on IIUC-ARMS and would like to connect with you.`);
                     const waUrl = `https://wa.me/${waNumber}?text=${waMessage}`;
                     return (
                       <a href={waUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 mb-2.5 group cursor-pointer no-underline">
@@ -320,7 +320,7 @@ export default function ContributorsView() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-qsis to-accent text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(34,197,94,0.3)] hover:scale-105 transition-all"
             >
-              <i className="fas fa-star"></i> Star QSIS-ARMS v2
+               <i className="fas fa-star"></i> Star IIUC-ARMS v2
               <span className="text-[0.7rem] opacity-80">(Web App)</span>
             </a>
             <a

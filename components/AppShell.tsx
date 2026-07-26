@@ -77,9 +77,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <nav className="sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border">
         <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3 no-underline" onClick={(e) => { e.preventDefault(); goHome(); router.push('/'); }}>
-            <Image src="/arms-logo.png" alt="QSIS-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white" priority />
+            <Image src="/arms-logo.png" alt="IIUC-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white" priority />
             <div>
-              <h1 className="text-[1.1rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">QSIS-ARMS</h1>
+              <h1 className="text-[1.1rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</h1>
               <span className="text-[0.7rem] text-dark-text2 hidden md:block">Academic Resource System</span>
             </div>
           </Link>
@@ -186,12 +186,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* FOOTER */}
       <footer className="bg-dark-bg2 border-t border-dark-border mt-8">
         <div className="max-w-[1200px] mx-auto px-5 py-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-3 mb-3">
-                <Image src="/arms-logo.png" alt="QSIS-ARMS" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-qsis object-contain bg-white" />
+                <Image src="/arms-logo.png" alt="IIUC-ARMS" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-qsis object-contain bg-white" />
                 <div>
-                  <h3 className="text-[0.95rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">QSIS-ARMS</h3>
+                  <h3 className="text-[0.95rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</h3>
                   <span className="text-[0.68rem] text-dark-text2">Academic Resource System</span>
                 </div>
               </div>
@@ -228,9 +228,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </a>
               </div>
             </div>
+            <div>
+              <h4 className="text-[0.85rem] font-semibold text-dark-text mb-3">Community</h4>
+              <div className="flex flex-col gap-2.5">
+                <a href="https://whatsapp.com/channel/0029VbD78MI3gvWcocoFdR1g" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
+                  <div className="w-7 h-7 rounded-md bg-green-500/20 flex items-center justify-center"><i className="fab fa-whatsapp text-green-400 text-sm"></i></div>
+                  <span className="text-[0.78rem] text-dark-text2 group-hover:text-green-400 transition-colors">WhatsApp Channel</span>
+                </a>
+                <a href="https://t.me/iiuc_arms" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
+                  <div className="w-7 h-7 rounded-md bg-blue-500/20 flex items-center justify-center"><i className="fab fa-telegram text-blue-400 text-sm"></i></div>
+                  <span className="text-[0.78rem] text-dark-text2 group-hover:text-blue-400 transition-colors">Telegram Channel</span>
+                </a>
+              </div>
+              <p className="text-[0.65rem] text-dark-text3 mt-2">Get updates &amp; discuss support</p>
+            </div>
           </div>
           <div className="border-t border-dark-border mt-6 pt-5 pb-8  flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-[0.72rem] text-dark-text2">&copy; {new Date().getFullYear()} QSIS-ARMS. All rights reserved.</p>
+            <p className="text-[0.72rem] text-dark-text2">&copy; {new Date().getFullYear()} IIUC-ARMS. All rights reserved.</p>
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
               <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
                 <i className="fas fa-star text-yellow-500"></i> Star Files Repo

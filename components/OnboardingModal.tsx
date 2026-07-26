@@ -113,8 +113,8 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
         {!showCancelForever && step === 0 && (
           <>
             <div className="bg-gradient-to-br from-qsis/20 to-accent/10 px-6 py-8 text-center">
-              <Image src="/arms-logo.png" alt="QSIS-ARMS" width={64} height={64} className="w-16 h-16 p-1 rounded-xl border-2 border-qsis object-contain bg-white mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-dark-text mb-1">Welcome to QSIS-ARMS</h2>
+              <Image src="/arms-logo.png" alt="IIUC-ARMS" width={64} height={64} className="w-16 h-16 p-1 rounded-xl border-2 border-qsis object-contain bg-white mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-dark-text mb-1">Welcome to IIUC-ARMS</h2>
               <p className="text-[0.8rem] text-dark-text2">Let&apos;s personalize your experience. This helps us show you the most relevant files.</p>
             </div>
             <div className="px-6 py-6 space-y-5">

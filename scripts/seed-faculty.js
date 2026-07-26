@@ -5,60 +5,557 @@ require('dotenv/config');
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-const QSIS_FACULTY = [
-  { name: 'Prof. Dr. Gias Uddin Hafiz', title: 'Professor', email: 'giashafiz@yahoo.co.in', shortForm: 'GH', sortOrder: 1 },
-  { name: 'Prof. Dr. B. M. Mofizur Rahman', title: 'Professor', email: 'bmmofiz@yahoo.com', shortForm: 'MR', sortOrder: 2 },
-  { name: 'Prof. Dr. Md. Mustafa Kamil', title: 'Professor', email: 'mkamil2015@gmail.com', shortForm: 'MK', sortOrder: 3 },
-  { name: 'Prof. Dr. Mohammad Rashid zahed', title: 'Professor', email: 'mrzahed1@yahoo.com', shortForm: 'RZ', sortOrder: 4 },
-  { name: 'Dr. Muhammad Sirajuddin', title: 'Associate Professor', email: 'dr.siraj14@gmail.com', shortForm: 'SJ', sortOrder: 5 },
-  { name: 'Dr. Md. Ali Hossain', title: 'Associate Professor', email: 'alihossainiiuc@gmail.com', shortForm: 'AH', sortOrder: 6 },
-  { name: 'Dr. Md.Numan Hasan', title: 'Associate Professor', email: 'numanhasan2000@gmail.com', shortForm: 'NH', sortOrder: 7 },
-  { name: 'Dr. Md. Shafiqur Rahman', title: 'Assistant Professor', email: 'shafiqazhary2003@yahoo.com', shortForm: 'SR', sortOrder: 8 },
-  { name: 'Md. Harunur Rashid', title: 'Assistant Professor', email: 'haruntai@gmail.com', shortForm: 'HR', sortOrder: 9 },
-  { name: 'Mrs. Zaheda Khanam', title: 'Assistant Professor', email: 'zahedaqsis@yahoo.com', shortForm: 'ZK', sortOrder: 10 },
-  { name: 'Dr. Md. Lutfur Rahman Al Azhari', title: 'Assistant Professor', email: 'md_lrahman786@yahoo.com', shortForm: 'LA', sortOrder: 11 },
-  { name: 'Dr. Aflatun Al-Kausar', title: 'Assistant Professor', email: 'aflatun.kausar@gmail.com', shortForm: 'AK', sortOrder: 12 },
-  { name: 'Md. Ershadur Rahman', title: 'Assistant Professor', email: 'alershad_71@yahoo.com', shortForm: 'ER', sortOrder: 13 },
-  { name: 'Fatematuj Juhura', title: 'Lecturer', email: 'fjuhura1@gmail.com', shortForm: 'FJ', sortOrder: 14 },
-  { name: 'Naziha Nowman Sanah', title: 'Lecturer', email: 'nazihamd.nowman@gmail.com', shortForm: 'NS', sortOrder: 15 },
-  { name: 'Mohammad Nazim Uddin', title: 'Lecturer', email: 'nu0110719@gmail.com', shortForm: 'NU', sortOrder: 16 },
-  { name: 'Mafujur Rahman', title: 'Lecturer', email: 'hafezmahfuz@gmail.com', shortForm: 'MR2', sortOrder: 17 },
-  { name: 'Md Forquanul Hakim', title: 'Lecturer', email: 'fokanulhakim@hotmail.com', shortForm: 'FH', sortOrder: 18 },
-  { name: 'Mohammad Jahedul Alam Chy', title: 'Lecturer', email: 'jahedul.csecu@gmail.com', shortForm: 'JC', sortOrder: 19 },
-  { name: 'Md. Nesar Uddin', title: 'Lecturer', email: 'nesarjnueco30@gmail.com', shortForm: 'NU2', sortOrder: 20 },
-];
+function getInitials(name) {
+  const clean = name.replace(/^(Prof\.?\s*(Dr\.?)?|Dr\.|Engr\.|Mr\.|Mrs\.|Ms\.|MD)\s*/i, '').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'XX';
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
-const QSIS_STAFF = [
-  { name: 'Mohammad Tofazzal Hossain Khan', title: 'Senior Assistant Director', phone: '01714288210', email: 'mdtofazzal@yahoo.com', shortForm: 'TK', sortOrder: 21 },
-  { name: 'Nizam Uddin', title: 'Senior Lab Technician', phone: '01811686831', email: 'niz79_binu@yahoo.com', shortForm: 'NI', sortOrder: 22 },
-  { name: 'Nosaifa Sama Tazkya Fatama', title: 'Administrative Officer', phone: '01843638369', email: 'tajkianusaifa@gmail.com', shortForm: 'NT', sortOrder: 23 },
-  { name: 'Kamal Hossain', title: 'Lab Attendant', phone: '01829803718', email: null, shortForm: 'KH', sortOrder: 24 },
+const FACULTY_DATA = [
+  // ─── Qur'anic Sciences and Islamic Studies ───
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Prof. Dr. Mohammad Shafi Uddin", title: "Professor", email: "shafimadani@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Prof. Dr. Muhammad Aminul Hoque", title: "Professor", email: "aminulhoque.iiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Dr. Shaker Alam Shaoque", title: "Associate Professor", email: "shakershaoq@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Md. Shahjalal", title: "Assistant Professor", email: "jalaldis@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "AFM Nuruzzaman", title: "Assistant Professor", email: "afmnur_dis@yahoo.co.uk", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Zakia Binte Alam Hanna", title: "Assistant Professor", email: "dis_fc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Dr. Saud Bin Mohammad", title: "Assistant Professor", email: "saudafif2014@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Dr. Mohammad Saiful Islam", title: "Assistant Professor", email: "saifulislambdiium@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Syed Mahmudul Hasan", title: "Lecturer", email: "syedhasan_iiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Mohammed Ammar", title: "Lecturer", email: "ammarzakaria300@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Md Asif Mahmud", title: "Lecturer", email: "asifmahmud.csecu@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Md Ridwan Ullah", title: "Lecturer", email: "ridwanullah88@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Salma Binte Mohammad Shafiqur Rahman", title: "Lecturer", email: "ummerawha83@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Mohammad", title: "Lecturer", email: "mohammadmakki121@gmail.com", phone: null, memberType: "faculty" },
+
+  // QSIS Staff
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Gias Uddin", title: "Assistant Director", email: null, phone: "01813167876", memberType: "staff" },
+  { department: "Qur'anic Sciences and Islamic Studies", name: "Eshrat Jahan Bristy", title: "Administrative Officer", email: "eshratbristy123@gmail.com", phone: "01862105058", memberType: "staff" },
+
+  // ─── Science of Hadith and Islamic Studies ───
+  { department: "Science of Hadith and Islamic Studies", name: "Prof. Dr. Md. Nazmul Hoque Nadwi", title: "Professor", email: "dmnhnadwi@yahoo.co.in", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Prof. Dr. Mohammad Shafiul Alam Bhuiyan", title: "Professor", email: "sabiiucdc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Dr. Mohammad Abul Kalam", title: "Associate Professor", email: "kalam1981@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Dr. Mohammed Solim Uddin", title: "Associate Professor", email: "salim_dis@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Dr. Muhammad Nazmul Huda", title: "Associate Professor", email: "nazmuliiucbd@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Syed Nour", title: "Assistant Professor", email: "syednour@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Mohammad Belal", title: "Lecturer", email: "mbelaldis_iiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Dr. Abu Talib Mohammad Monawer", title: "Lecturer", email: "monawer.azhar@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Shaikhul Azam Abrar", title: "Lecturer", email: "shaikhulabrar@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Somaiya Binte Lokman", title: "Lecturer", email: "somaiyalokman@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Mohammad Ridwan", title: "Lecturer", email: "m.ridwan.econ@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Science of Hadith and Islamic Studies", name: "Afif Hossain Irfan", title: "Lecturer", email: "afifhossain.cse.1012@gmail.com", phone: null, memberType: "faculty" },
+
+  // SHIS Staff
+  { department: "Science of Hadith and Islamic Studies", name: "Mr. Mohammad Nazrul Islam", title: "Assistant Director", email: "nazr76@yahoo.com", phone: "01811894959", memberType: "staff" },
+  { department: "Science of Hadith and Islamic Studies", name: "Miftahul Jannat", title: "Administrative Assistant", email: "miftah.jannat08@gmail.com", phone: "01835151208", memberType: "staff" },
+
+  // ─── Computer Science and Engineering ───
+  { department: "Computer Science and Engineering", name: "Prof. Dr. Md. Monirul Islam", title: "Professor", email: "monirliton@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Prof. Mohammed Shamsul Alam", title: "Professor", email: "alam_cse@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Prof. Dr. Abu Naser Md. Rezaul Karim", title: "Professor", email: "zakianaser@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Tanveer Ahsan", title: "Professor", email: "tanveer@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Prof. Dr. Mohammad Aman Ullah", title: "Professor", email: "ullah047@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Mahadi Hassan", title: "Associate Professor", email: "mahadi_cse@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Dr. Mohammad Manjur Alam", title: "Associate Professor", email: "manjuralam44@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md. Mahiuddin", title: "Associate Professor", email: "mmuict@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Zinia Sultana Mukti", title: "Associate Professor", email: "zinniaiiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md. Khaliluzzaman", title: "Associate Professor", email: "khalilcse021@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md. Rashedul Islam", title: "Associate Professor", email: "rashed_maths@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Mohammed Safiullah", title: "Assistant Professor", email: "safiullah@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Abdullahil Kafi", title: "Assistant Professor", email: "abkafi@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Dr. Siddique Ahmed", title: "Assistant Professor", email: "drsiddiqueahmed@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Subrina Akter", title: "Assistant Professor", email: "subrina.a30@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Saifur Rahman", title: "Assistant Professor", email: "saifurcubd@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Shayhan Ameen Chowdhury", title: "Assistant Professor", email: "shayhan.ameen@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "ABM Yasir Arafat", title: "Assistant Professor", email: "abmya89@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Mohammod Sazid Zaman Khan", title: "Assistant Professor", email: "szkhanctg@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Saiful Islam", title: "Assistant Professor", email: "engsaiful0@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Farzana Tasnim", title: "Assistant Professor", email: "farzanatasnim34@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Muhammad Mizanur Rahman Mizan", title: "Lecturer", email: "mizaanrahman32@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Sanjida Sharmin", title: "Lecturer", email: "ssharmin114@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Israt Binteh Habib", title: "Lecturer", email: "israthabib.cse@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Muhammed Nazmul Arefin", title: "Lecturer", email: "nazmul.muhammed.arefin@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Jamil As-ad", title: "Lecturer", email: "jamilasad1@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Nuren Nafisa", title: "Lecturer", email: "nurennafisa@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Sahariar Reza", title: "Lecturer", email: "Sahariarp@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md. Badiuzzaman Biplob", title: "Lecturer", email: "biplob.cse45@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md. Monir Hossain", title: "Lecturer", email: "monir.cu.math1@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md Aminul Islam", title: "Lecturer", email: "taminulislam@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Khandaker Tayef Shahriar", title: "Lecturer", email: "tayef@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Sabrina Jahan Maisha", title: "Lecturer", email: "sjbm1996@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Asmaul Hosna Sadika", title: "Lecturer", email: "asmaulhosnasadika@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Muhammad Mubinur Rahman", title: "Lecturer", email: "mubinlikhon@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Rayhanuzzaman", title: "Lecturer", email: "rayhanuzzamanr@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Ayesha Julekha", title: "Lecturer", email: "safinserain@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Mr. Muhammad Nazim Uddin", title: "Lecturer", email: "nazimhabib77@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Nowshin Tabassum", title: "Lecturer", email: "tabassum.nowshin1330@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Mujibur Rahman Maruf", title: "Lecturer", email: "Mujiburmaruf.cuet17@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Mahir Shadid", title: "Lecturer", email: "mahir.shadid@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Miskatul Jannat", title: "Lecturer", email: "miskat@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Abdul Aziz", title: "Lecturer", email: "aziz.abdul.cu@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Sauda Adiv Hanum", title: "Lecturer", email: "adivhanum@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Sultana Tasnim Jahan", title: "Lecturer", email: "tasnim047sultana@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Siam Sharif Ami", title: "Lecturer", email: "siamsharifami@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md Nazmul Hasan", title: "Lecturer", email: "nazmul122@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md Tanvir Murad", title: "Lecturer", email: "mdtanvirmurad1000@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Tanvir Mahtab Zihan", title: "Lecturer", email: "tzihan49@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md. Tanvir Ahammed Shawon", title: "Lecturer", email: "ahmmedtanvir146@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Ms. Khadiza Sultana Sayma", title: "Lecturer", email: "sayma.khadiza@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Nurul Absar", title: "Lecturer", email: "nurulabsar.cse.cu@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Monir Hossain", title: "Lecturer", email: "monirho.cse@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Ashfaq Mahmud Fahim", title: "Lecturer", email: "u1904072@student.cuet.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Monir Ahmad", title: "Lecturer", email: "ahmad.csecu@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md. Sadman Hafiz", title: "Lecturer", email: "hafiz.sust333@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Timam Bin Saif Tahmid", title: "Lecturer", email: "timambinsaif462@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Saif Sabbir", title: "Lecturer", email: "saifsabbir2k18@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Raisa Nuzhat", title: "Lecturer", email: "raisa.csecu@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md Mirajul Islam", title: "Lecturer", email: "mirajulphysics@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Mohammad Ariful Islam", title: "Lecturer", email: "arifislam928374@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Md Nazmus Sajid", title: "Lecturer", email: "md.nazmus.sajid94@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Fathema Tuj Johora", title: "Lecturer", email: "fathemsmrity123@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer Science and Engineering", name: "Mohammad Sakif Ibn Yousuf", title: "Lecturer", email: "mdsakif98@gmail.com", phone: null, memberType: "faculty" },
+
+  // CSE Staff
+  { department: "Computer Science and Engineering", name: "Md. Jamal Uddin", title: "Deputy Director", email: "jamaluddin@iiuc.ac.bd", phone: "01768674457", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Farhana Yasmin", title: "Assistant Technical Officer", email: "yeasmin_farhana@yahoo.com", phone: "01823888371", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Md. Sahidul Anwar", title: "Assistant Technical Officer", email: "mdsahidulanwar@gmail.com", phone: "01815525917", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Mohammed Nezam Uddin", title: "Senior Lab Technician", email: "mn.nezam@gmail.com", phone: "01817526961", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Selina Akter", title: "Senior Lab Technician", email: null, phone: "01811274820", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Rubayed Afroza", title: "Senior Lab Technician", email: "raafroza@gmail.com", phone: "01781073565", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Shakila Rahman", title: "Senior Lab Technician", email: null, phone: "01712768138", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Mohammad Shafique Uddin Haider", title: "Lab Technician", email: "haiddercse@yahoo.com", phone: "01814482017", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Mohammad Imam Uddin", title: "Lab Technician", email: "iqbalctgbd@yahoo.com", phone: "01556609288", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Mohammad Jahirul Islam", title: "Lab Technician", email: "jahirul_islam07@yahoo.com", phone: "01714501870", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Rozina begum", title: "Lab Technician", email: "rozizaman89@gmail.com", phone: "01836637104", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Mehzabin Banu", title: "Administrative Assistant", email: "mehzabinbanu143@gmail.com", phone: "01727537122", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Hasan Mahmud Towaha", title: "Administrative Assistant", email: "twahamonowar@gmail.com", phone: "01677389695", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Yeasmin Akhter", title: "Administrative Assistant", email: "mahadia002@gmail.com", phone: "01631982642", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Md Amjad Hossain", title: "Administrative Assistant", email: "amjadhossain376@gmail.com", phone: "01606749929", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Md Motaher Billah", title: "Lab Technician", email: "motahercseiiuc@gmail.com", phone: "01606200888", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Rownak Tasnia Jahan", title: "Lab Technician", email: "tasniatrimaa731@gmail.com", phone: "01868334888", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Rifat Zahan Al Nigar", title: "Lab Technician", email: "rifatnigar1993@gmail.com", phone: "01881618392", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Md Sakiful Islam", title: "Lab Technician", email: "sakifulislam797@gmail.com", phone: "01811815450", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Md Sourav", title: "Lab Technician", email: "varuss@gmail.com", phone: "01819048264", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Md Rabiul Islam", title: "Lab Technician", email: "rabiul@iiuc.ac.bd", phone: "01915424334", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Mohammad Faisal Ibne Hossain", title: "Lab Technician", email: "faisalibne14@gmail.com", phone: "01704753728", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Kamrozzaman", title: "Lab Technician", email: "kamrozzaman477@gmail.com", phone: "01830049102", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Afsana Mimi", title: "Lab Technician", email: "afsanamimi.cse@gmail.com", phone: "01760683081", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Asraf Hossan", title: "Lab Technician", email: "asrafhossan48@gmail.com", phone: "01833205841", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "S. M. Arifur Rahman", title: "Lab Technician", email: "smarifurrahman82@gmail.com", phone: "01855742908", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Harunur Roshid", title: "Lab Technician", email: "abdullahaltushar@gmail.com", phone: "01531584509", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Mumtaz Akter", title: "Lab Attendant", email: "mumtazakter1602@gmail.com", phone: "01739472749", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Burhanul Aziz", title: "Lab Attendant", email: "burhan@iiuc.ac.bd", phone: "01836108690", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Mohammad Ashrafuzzaman", title: "Lab Attendant", email: "mdashrafuzzaman1026@gmail.com", phone: "01818276914", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Md. Sahedul Alam", title: "Lab Attendant", email: "engsahedbd@gmail.com", phone: "01979762976", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Ayesha Jakaria Shimu", title: "Lab Attendant", email: "jannatnahar416@gmail.com", phone: "01886711572", memberType: "staff" },
+  { department: "Computer Science and Engineering", name: "Md Ibrahim Khalil", title: "Lab Attendant", email: "mdibrahimkhalil051@gmail.com", phone: "01858563214", memberType: "staff" },
+
+  // ─── Computer and Communication Engineering ───
+  { department: "Computer and Communication Engineering", name: "Prof. Md. Razu Ahmed", title: "Professor", email: "razu17@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Dr. Mohammed Saifuddin", title: "Assistant Professor", email: "saifuddin.cu.um@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Engr. Md Jiabul Hoque", title: "Assistant Professor", email: "jia99cse@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Tania Sultana", title: "Lecturer", email: "taniasultanaiiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Hassan Jaki", title: "Lecturer", email: "hassanjaki11@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Md Hasan Mia", title: "Lecturer", email: "mdhasan111.ru@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Amanul Hoque", title: "Lecturer", email: "amanul07maths@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Jannatul Naima", title: "Lecturer", email: "jannatulnaima@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Mirza Raquib", title: "Lecturer", email: "mirzaraquib@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Atia Jahan", title: "Lecturer", email: "atiahuny@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Md Abdullah Al Masud", title: "Lecturer", email: "aamasud2@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Md Nurnobi Chowdhury Saddam", title: "Lecturer", email: "mncsaddam@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Computer and Communication Engineering", name: "Md. Imam Uddin Forkan", title: "Lecturer", email: "md.uddinforkan172@gmail.com", phone: null, memberType: "faculty" },
+
+  // CCE Staff
+  { department: "Computer and Communication Engineering", name: "Abdullah Al Noman", title: "Administrative Officer", email: "abdullahalnoman99@yahoo.com", phone: "01711125270", memberType: "staff" },
+  { department: "Computer and Communication Engineering", name: "Saki Aktar", title: "Administrative Officer", email: "engrsakiaktarsaki@gmail.com", phone: "01814988537", memberType: "staff" },
+  { department: "Computer and Communication Engineering", name: "Mohammad Tadvin Hoque", title: "Lab Technician", email: "tadvin.nabil@gmail.com", phone: "01831611704", memberType: "staff" },
+  { department: "Computer and Communication Engineering", name: "Md. Jahid Hossain Efti", title: "Lab Technician", email: "jahidmjhe48@gmail.com", phone: "01881024323", memberType: "staff" },
+  { department: "Computer and Communication Engineering", name: "Md Hasan Mozumder", title: "Lab Technician", email: "md.mozumder.hasan@gmail.com", phone: "01989109616", memberType: "staff" },
+  { department: "Computer and Communication Engineering", name: "Saima Nusrat", title: "Lab Technician", email: "nusrat8825@gmail.com", phone: "01521370849", memberType: "staff" },
+  { department: "Computer and Communication Engineering", name: "Sourav Hossain", title: "Lab Technician", email: "sourav-tanjid@gmail.com", phone: "01690013259", memberType: "staff" },
+  { department: "Computer and Communication Engineering", name: "Towhidul Islam", title: "Lab Technician", email: "mdtowhidj2@gmail.com", phone: "01837926378", memberType: "staff" },
+
+  // ─── Electrical and Electronic Engineering ───
+  { department: "Electrical and Electronic Engineering", name: "Prof. Dr. Sikder Sunbeam Islam", title: "Professor", email: "sikder_islam@yahoo.co.uk", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Dr. Md. Shamimul Haque Choudhury", title: "Professor", email: "shamimul129@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Muhammad Athar Uddin", title: "Professor", email: "mau_iiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Dr. Yasir Arafat", title: "Associate Professor", email: "yaeeeiiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Engr. Sk. Md. Golam Mostafa", title: "Associate Professor", email: "mostafa93@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Sayed Allamah Iqbal", title: "Associate Professor", email: "sayed.allamah.iqbal@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Dr. Md. Ismail Haque", title: "Associate Professor", email: "ismail07rueteeee@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Mohammed Abdul Kader", title: "Associate Professor", email: "kader05cuet@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Mr. Md. Eftekhar Alam", title: "Associate Professor", email: "eftekhar78@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Md. Rasheduzzaman", title: "Associate Professor", email: "rashedbscm@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Dr. Md. Zahid Hasan", title: "Associate Professor", email: "zahidhasan.02@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Md. Jashim Uddin", title: "Assistant Professor", email: "jashim_u88@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Mohammad Faisal", title: "Assistant Professor", email: "fsl3319@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Khandakar Abdullah Al Mamun", title: "Assistant Professor", email: "k.a.a.mamun@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Shafait Ahmed", title: "Assistant Professor", email: "shafait007@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Md. Shahid Ullah", title: "Assistant Professor", email: "shahideee04@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Engr. Mohammad Jalal Uddin", title: "Assistant Professor", email: "jalaliiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Engr. Md. Nazmus Sakib", title: "Assistant Professor", email: "sakibme@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Dr. Abu Huraira Muhammad Idban Alamzadeh", title: "Assistant Professor", email: "alihareenmzadeh@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Engr. Md. Lokman Hossain", title: "Lecturer", email: "mlokman3e@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Tanzim Mushtary", title: "Lecturer", email: "tanzim.mushtary.eee@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Mohammad Raihan", title: "Lecturer", email: "raihan.physics.cou@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Riazul Islam", title: "Lecturer", email: "iriazul74@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Raihan Chowdhury", title: "Lecturer", email: "raihaneeeiiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Jubaida Nahar Tuli", title: "Lecturer", email: "jubaidanahar@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Md. Sazidul Haque", title: "Lecturer", email: "sazzad1621haque@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Kaniz Fatema", title: "Lecturer", email: "kanizfatematazin362@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Fazle Rabbi", title: "Lecturer", email: "fazlerabbi@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Jannatul Ferdous", title: "Lecturer", email: "eshajannat9600@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Asir Intisar", title: "Lecturer", email: "asirintisar38@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Nowshin Lubaba", title: "Lecturer", email: "nowshinlubaba@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electrical and Electronic Engineering", name: "Kazi Md Kamrul Hasan", title: "Lecturer", email: "kazikamrulhasan73@gmail.com", phone: null, memberType: "faculty" },
+
+  // EEE Staff
+  { department: "Electrical and Electronic Engineering", name: "Md. Mostafa Helal", title: "Senior Assistant Director", email: "mmhhelal@gmail.com", phone: "01680949299", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Md. Ali Murtuza", title: "Assistant Technical Officer", email: "alimurtuza@iiuc.ac.bd", phone: "01715851818", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Md. Shofiqul Islam", title: "Assistant Technical Officer", email: "shofiqctg@gmail.com", phone: "01814073925", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Md. Shafiul Alam", title: "Assistant Technical Officer", email: "safiulalameee@gmail.com", phone: "01913614041", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Sharif Mohammad Shafiul Azam", title: "Assistant Technical Officer", email: "zz2azam@gmail.com", phone: "01914257907", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Mohammed Kamal Uddin", title: "Senior Lab Technician", email: "kamaluddiniiuc@gmail.com", phone: "01675400830", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Ainun Nishat Md Sinan", title: "Administrative Assistant", email: null, phone: "01834874444", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Mohammad Azim", title: "Senior Lab Technician", email: "azimiiuc73@gmail.com", phone: "01812845655", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Md. Harunur Rashid", title: "Senior Lab Technician", email: "harunruman@gmail.com", phone: "01533505415", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Khadija Akter", title: "Lab Technician", email: null, phone: "01866211442", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Kazi Mahfuzur Rahman", title: "Lab Attendant", email: "mahfuzsuman0010@gmail.com", phone: "01828920010", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Md. Abdur Rahman", title: "Lab Attendant", email: "palasctg@gmail.com", phone: "01750538464", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Jasmin Akter Mitu", title: "Lab Attendant", email: null, phone: "01943980320", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Kaniz Fatema Chowdhury", title: "Lab Attendant", email: null, phone: "01859750470", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Mosammath Sabekun Nahar", title: "Lab Attendant", email: "rahmananannya6@gmail.com", phone: "01829955796", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Mohammad Kawsar Uddin", title: "Book Sorter", email: null, phone: "01812203613", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Sanjeda Akter", title: "Administrative Assistant", email: "sanje1999t@gmail.com", phone: "01878579741", memberType: "staff" },
+  { department: "Electrical and Electronic Engineering", name: "Afsana Binte Afaz", title: "Lab Attendant", email: null, phone: "01304809191", memberType: "staff" },
+
+  // ─── Electronic and Telecommunication Engineering ───
+  { department: "Electronic and Telecommunication Engineering", name: "Dr. Engr. Abdul Gafur", title: "Associate Professor", email: "engr.abdul.gafur@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electronic and Telecommunication Engineering", name: "Mr. Mohammed Jashim Uddin", title: "Associate Professor", email: "jashimcuet@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Electronic and Telecommunication Engineering", name: "Engr. Syed Zahidur Rashid", title: "Assistant Professor", email: "szrashidcce@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Electronic and Telecommunication Engineering", name: "Md. Ibrahim", title: "Assistant Professor", email: "ahm.ibrahim.r@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electronic and Telecommunication Engineering", name: "Mr. Md. Mostafa Amir Faisal", title: "Assistant Professor", email: "oranta68@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Electronic and Telecommunication Engineering", name: "Mr. Mohammad Woli Ullah", title: "Assistant Professor", email: "woli1@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Electronic and Telecommunication Engineering", name: "Abu Zafar Md. Imran", title: "Lecturer", email: "azmimran28@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electronic and Telecommunication Engineering", name: "Mr. Ahmad", title: "Lecturer", email: "ahmadcse0@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electronic and Telecommunication Engineering", name: "Mr. Tanzeem Tahmeed Reza", title: "Lecturer", email: "tanzeemcuet19@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Electronic and Telecommunication Engineering", name: "Dr. Md. Deloar Hossain", title: "Lecturer", email: "deloarku11@gmail.com", phone: null, memberType: "faculty" },
+
+  // ETE Staff
+  { department: "Electronic and Telecommunication Engineering", name: "Md.Shahab Uddin", title: "Senior Assistant Director", email: "shahab.ete@iiuc.ac.bd", phone: "01819647321", memberType: "staff" },
+  { department: "Electronic and Telecommunication Engineering", name: "Muhammed Zahid Hossain", title: "Assistant Technical Officer", email: "zahidsae@gmail.com", phone: "01558612556", memberType: "staff" },
+  { department: "Electronic and Telecommunication Engineering", name: "Md.Ebrahim Khalil", title: "Assistant Technical Officer", email: "ebrahim8125726@yahoo.com", phone: "01831163447", memberType: "staff" },
+  { department: "Electronic and Telecommunication Engineering", name: "Mr. Md. Abdul Alim", title: "Senior Lab Technician", email: "md_alim2009@yahoo.com", phone: "01790787408", memberType: "staff" },
+  { department: "Electronic and Telecommunication Engineering", name: "Mohammad Alauddin", title: "Lab Attendant", email: "aladinctg72@yahoo.com", phone: "01937908408", memberType: "staff" },
+  { department: "Electronic and Telecommunication Engineering", name: "A.K.M Abdullahil Mamun", title: "Lab Attendant", email: "abdullahil.mamun@yahoo.com", phone: "01742310564", memberType: "staff" },
+
+  // ─── Civil Engineering ───
+  { department: "Civil Engineering", name: "Engr. Md. Abul Hasan", title: "Assistant Professor", email: "hasancuet90@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Civil Engineering", name: "Md. Shamim Ahmed", title: "Lecturer", email: "msahmed.ce@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Civil Engineering", name: "Md. Wazkuruni", title: "Lecturer", email: "wazkurunimd@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Civil Engineering", name: "Sal Saad Al Deen Taher", title: "Lecturer", email: "salsaad1989@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Civil Engineering", name: "Engr. Md. Abdullah Al Mamun", title: "Lecturer", email: "almamun2556@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Civil Engineering", name: "Engr. Amir Fosial", title: "Lecturer", email: "amir.fosial@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Civil Engineering", name: "Mr. Md. Mamunur Rashid", title: "Lecturer", email: "mrashid85@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Civil Engineering", name: "Engr. Shoeb Ahmad Tanim", title: "Lecturer", email: "shoebtanim165@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Civil Engineering", name: "Engr. Ashrar Al Washi", title: "Lecturer", email: "ashrar.aaw@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Civil Engineering", name: "Engr. Mahadi Hasan", title: "Lecturer", email: "mhhasan.cuet.civil15@iiuc.ac.bd", phone: null, memberType: "faculty" },
+
+  // CE Staff
+  { department: "Civil Engineering", name: "Mohammed Zakaria", title: "Senior Assistant Director", email: "zakariastadiiuc@yahoo.com", phone: "01727658118", memberType: "staff" },
+  { department: "Civil Engineering", name: "Mr. Ashraf Uddin Siddique", title: "Lab Technician", email: "ashrafuddinsiddique26@gmail.com", phone: "01825798689", memberType: "staff" },
+  { department: "Civil Engineering", name: "Mr. Sayeed Ahmad Siddiquee Rafee", title: "Lab Technician", email: "rafeebuet07@gmail.com", phone: "01310970517", memberType: "staff" },
+  { department: "Civil Engineering", name: "Mr. Md Abul Khaer", title: "Lab Technician", email: "akjoy203@gmail.com", phone: "01601150646", memberType: "staff" },
+  { department: "Civil Engineering", name: "Mr. Mohammad Saiful Islam", title: "Lab Technician", email: "saifulsayeed91@gmail.com", phone: "01309932090", memberType: "staff" },
+  { department: "Civil Engineering", name: "Dil Mohammad", title: "Workshop Supervisor", email: null, phone: "01845235966", memberType: "staff" },
+
+  // ─── Pharmacy ───
+  { department: "Pharmacy", name: "Professor Dr. Mohammed Aktar Sayeed", title: "Professor", email: "sayeed_ustc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Mohammed Abu Sayeed", title: "Associate Professor", email: "sayeed@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Mr. Kazi Ashfak Ahmed Chowdhury", title: "Associate Professor", email: "ashfak4u_ctg@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "A. T. M. Mostafa Kamal", title: "Associate Professor", email: "mostafakamal285@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Mr. Md. Mominur Rahman", title: "Assistant Professor", email: "momin.rahman@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Mr. Md Sekendar Ali", title: "Assistant Professor", email: "sa_pharm2000@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Mr. Syed Mohammed Tareq", title: "Assistant Professor", email: "mail2babor@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Dr. Md. Areeful Haque", title: "Assistant Professor", email: "areeful@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Mohammad Nazmul Islam", title: "Assistant Professor", email: "nazmul@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Ms. Riniara Khatun", title: "Assistant Professor", email: "ishratrini.ph@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Dr. Sadab Sipar Ibban", title: "Assistant Professor", email: "sadab.ibban@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Md. Saiful Islam Arman", title: "Lecturer", email: "armansaiful89@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Md. Ashraf Uddin Chowdhury", title: "Lecturer", email: "ashraf@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Seema Binte Alam", title: "Lecturer", email: "pharmacist.seema14@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Md Ahsan Ullah", title: "Lecturer", email: "md.ahsan.ullah5469@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Md Abdus Samad", title: "Lecturer", email: "abdus.samad.pharmacy@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Sanjida Ilias Shemoon", title: "Lecturer", email: "sanjidailias08@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Momena Akter", title: "Lecturer", email: "momenasuha17@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Md. Sohanur Rahman", title: "Lecturer", email: "pharmacist.sohan.bd@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Osama Bin Abul Hossain", title: "Lecturer", email: "osama@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Tanvir Hasan", title: "Lecturer", email: "tanvirhasan054205@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Md Habibul Hasan Rahat", title: "Lecturer", email: "habibrahat.bpharmcu@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Taslima Anjum Naima", title: "Lecturer", email: "naimaanjum12@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Mohammad Abu Sayem", title: "Lecturer", email: "asayem481@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Enama Nabi Shetu", title: "Lecturer", email: "enama.pharma01@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "Kazi Sanjida Tahrim", title: "Lecturer", email: "sanjidatahrim53@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Pharmacy", name: "MD Mobarak Hossain", title: "Lecturer", email: "mobarok.ajim32@gmail.com", phone: null, memberType: "faculty" },
+
+  // PHM Staff
+  { department: "Pharmacy", name: "Abul Hasnat Kazi Mohammad Iliasur-Rashid", title: "Assistant Director", email: "kazimd.ilias@gmail.com", phone: "01819872198", memberType: "staff" },
+  { department: "Pharmacy", name: "Md. Zahir Uddin Babor", title: "Senior Lab Technician", email: "babormaeng@gmail.com", phone: "01814330837", memberType: "staff" },
+  { department: "Pharmacy", name: "Adil Mahmood Chowdhury", title: "Administrative Officer", email: "adil_iiuc@yahoo.com", phone: "01820031970", memberType: "staff" },
+  { department: "Pharmacy", name: "Rehnuma Jannat Jiha", title: "Lab Technician", email: null, phone: "01827626121", memberType: "staff" },
+  { department: "Pharmacy", name: "Nasrin Sultana", title: "Administrative Officer", email: "nasrinsultana011@gmail.com", phone: "01837383087", memberType: "staff" },
+  { department: "Pharmacy", name: "Md. Shariful Islam", title: "Senior Lab Technician", email: null, phone: "01869442144", memberType: "staff" },
+  { department: "Pharmacy", name: "Md Anisul Islam", title: "Senior Lab Technician", email: "rover_anis@hotmail.com", phone: "01853334001", memberType: "staff" },
+  { department: "Pharmacy", name: "Md. Effadul Islam Econ", title: "Lab Technician", email: "effadulislam@gmail.com", phone: "01845889988", memberType: "staff" },
+  { department: "Pharmacy", name: "Sanjida Jahan", title: "Lab Technician", email: "sanjidajahanpharma63@gmail.com", phone: "01815695092", memberType: "staff" },
+  { department: "Pharmacy", name: "Kusum Akther", title: "Lab Attendant", email: null, phone: "01862095263", memberType: "staff" },
+  { department: "Pharmacy", name: "Ms. Rahima Jannat", title: "Lab Attendant", email: null, phone: "01984798952", memberType: "staff" },
+  { department: "Pharmacy", name: "Md. Abdur Rahman", title: "Lab Attendant", email: null, phone: "01956857560", memberType: "staff" },
+  { department: "Pharmacy", name: "Mr. Mohammad Abdul Karim", title: "Lab Attendant", email: "karimraj481@gmail.com", phone: "01859375481", memberType: "staff" },
+  { department: "Pharmacy", name: "Ms. Manu Akter", title: "Lab Attendant", email: null, phone: "01821809395", memberType: "staff" },
+
+  // ─── Business Administration ───
+  { department: "Business Administration", name: "Prof. Dr. Abdul Hamid Chowdhury", title: "Professor", email: "ahamidc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Prof. Dr. Muhammad Mahbubur Rahman", title: "Professor", email: "mahbubctg69@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Prof. Dr. Mohammad Aktaruzzaman Khan", title: "Professor", email: "rajarkul2002@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Prof. Dr. Nazamul Hoque", title: "Professor", email: "nazam_iiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Prof. Dr. Abdullahil Mamun", title: "Professor", email: "ahm.economics@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Prof. Dr. Nazneen Jahan Chaudhury", title: "Professor", email: "nazneenchy@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Prof. Dr. Md. Shahnur Azad Chowdhury", title: "Professor", email: "tipu_iiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Prof. Dr. A.M. Shahabuddin Shohel", title: "Professor", email: "ams_iiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Mohammad Emdad Hossain", title: "Professor", email: "mehapstat@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Mustafa Manir Chowdhury", title: "Professor", email: "mmanir7@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Md. Rizwan Hassan", title: "Associate Professor", email: "mrhiiuc@hotmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Mohammad Zahid Hossain Bhuiyan", title: "Associate Professor", email: "zahidsita@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Mohammad Nazmul Hoq", title: "Associate Professor", email: "ronyfirst@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Dr. Mohammad Toufiqur Rahman", title: "Associate Professor", email: "mtr.iiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Basharat Hossain", title: "Associate Professor", email: "m_basarat06@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Sultana Akter", title: "Associate Professor", email: "sa_maya@rocketmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Md. Musharof Hossain", title: "Associate Professor", email: "musharof_cu@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Abdullah Md. Ahshanul Mamun", title: "Associate Professor", email: "ama_mamun@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Mohammad Shyfur Rahman Chowdhury", title: "Associate Professor", email: "shohel_math22774@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Syed Mohammad Hasib Ahsan", title: "Associate Professor", email: "hasib27.ahsan@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Habib Ullah", title: "Associate Professor", email: "habibmu26@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Dr. Md. Alauddin", title: "Associate Professor", email: "mdalauddin89@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Sayma Hoque", title: "Assistant Professor", email: "sayemaiiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Kazi Golam Azam", title: "Assistant Professor", email: "mdkgazam@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Syeda Tamanna Fahim", title: "Assistant Professor", email: "tamannaiiuc14@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Evana Nusrat Dooty", title: "Assistant Professor", email: "evananusrat@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Dr. Israth Sultana", title: "Assistant Professor", email: "israthhossain@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Nahid Sultana", title: "Assistant Professor", email: "nstuhin2011@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Kulsuma Akter Nahid", title: "Assistant Professor", email: "kakternahid@yahoo.co.in", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Md. Mahmudul Islam", title: "Assistant Professor", email: "islam_mahmudul@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Hasina Akter", title: "Assistant Professor", email: "hacu82@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Dr. Nazim Ullah", title: "Assistant Professor", email: "kmnazim_90@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Akrama Khanom", title: "Lecturer", email: "akramakhanam@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Mohammed Rakibul Hasan", title: "Lecturer", email: "rakibeco49cu@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Dr. A M M Masrur Hossain", title: "Lecturer", email: "masrur.iium@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Moinuddin Hasan", title: "Lecturer", email: "moinuddinhasan877@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Mijanur Rahman", title: "Lecturer", email: "rahmanmijanur8021@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Md Fahim Faisal", title: "Lecturer", email: "fahim.faisal29.ff@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Dr. Abul Kalam Azad", title: "Lecturer", email: "drakazad2020@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Dr. Moin Uddin", title: "Lecturer", email: "moiniium@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Business Administration", name: "Mohammod Hamidur Rahman", title: "Lecturer", email: "hamidur.moha@gmail.com", phone: null, memberType: "faculty" },
+
+  // BA Staff
+  { department: "Business Administration", name: "Mr. Md. Nurul Islam", title: "Senior Assistant Director", email: "nurulib.iiuc@gmail.com", phone: "01817356400", memberType: "staff" },
+  { department: "Business Administration", name: "Abdullah Al Arif", title: "Senior Assistant Director", email: "alarifabddullah@yahoo.com", phone: "01721580537", memberType: "staff" },
+  { department: "Business Administration", name: "Md. Mohsin Prodhania", title: "Senior Assistant Director", email: "mohsiniiuc@yahho.com", phone: "01712562149", memberType: "staff" },
+  { department: "Business Administration", name: "Md. Omar Faroque", title: "Assistant Technical Officer", email: "faroque_iiuc@yahoo.com", phone: "01812511776", memberType: "staff" },
+  { department: "Business Administration", name: "Farhana Afroze", title: "Assistant Director", email: "jume_iuc@yahoo.com", phone: "01814306970", memberType: "staff" },
+  { department: "Business Administration", name: "Ajaharul Hoque", title: "Senior Lab Technician", email: "ajahar_iiuc@yahoo.com", phone: "01823666240", memberType: "staff" },
+  { department: "Business Administration", name: "Ms. Nargis Jahan", title: "Administrative Assistant", email: "mehabuba13@gmail.com", phone: "01628574278", memberType: "staff" },
+  { department: "Business Administration", name: "Fahmida Rumman", title: "Administrative Assistant", email: "fahmida.nabila94@gmail.com", phone: "01812509992", memberType: "staff" },
+  { department: "Business Administration", name: "Salma Akter", title: "Lab Attendant", email: "s.akter1255@yahoo.com", phone: "01875225905", memberType: "staff" },
+
+  // ─── Department of Finance ───
+  { department: "Department of Finance", name: "Prof. Dr. Mohammad Nazim Uddin", title: "Professor", email: "nazim_bgc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Department of Finance", name: "Prof. Dr. Serajul Islam", title: "Professor", email: "serajulislamiiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Finance", name: "Md. Ariful Hoque", title: "Associate Professor", email: "hcuarif@gmail.com", phone: null, memberType: "faculty" },
+
+  // ─── English Language and Literature ───
+  { department: "English Language and Literature", name: "Prof. Dr. Mohammad Kaosar Ahmed", title: "Professor", email: "kaosarahmediiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Prof. Dr. Muhammad Azizul Hoque", title: "Professor", email: "azizul.hoque@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Ms. Salma Haque", title: "Professor", email: "salma@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Mohd. Yasin Sharif", title: "Associate Professor", email: "sharifmy@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Dr. Mohammad Riaz Mahmud", title: "Associate Professor", email: "riazm1972ell@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Md. Eftekhar Uddin", title: "Associate Professor", email: "eftuiiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Dr. Shah Mohammad Sanaul Karim", title: "Associate Professor", email: "smskelliiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Mohammed Sarwar Alam", title: "Associate Professor", email: "sarwarchk@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Dr. Md. Nazmul Huda", title: "Associate Professor", email: "nazmul.ru.94@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Mohammad Taj Uddin", title: "Associate Professor", email: "smtajuiiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Md. Iqbal Hosain", title: "Associate Professor", email: "iiucsaki@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Md. Abu Saleh Nizamuddin", title: "Associate Professor", email: "nizam.cu.thirteen@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Dr. Md. Mohib Ullah", title: "Associate Professor", email: "mohib@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Md. Morshedul Alam", title: "Associate Professor", email: "morshedeng82@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Dr. Sultana Jahan", title: "Associate Professor", email: "sultanajahaniiuc@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Mrs. Farhiba Ferdous", title: "Associate Professor", email: "farhibaf@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Md. Absar Uddin", title: "Associate Professor", email: "absaruddin09@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Sajjadul Karim", title: "Assistant Professor", email: "sajjadulk@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Mohammad Yousuf Uddin Khaled Chowdhury", title: "Assistant Professor", email: "mkhaled1974@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Ms. Tahmina Akhter", title: "Assistant Professor", email: "tarumkee@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Ms. Tahmina Mariyam", title: "Assistant Professor", email: "t.mariyam@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Ms. Fawzia Fathema", title: "Assistant Professor", email: "fawzia.fathema@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Dr. Sayeda Fatema", title: "Assistant Professor", email: "sayeda.fatema@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Hossain Ahmed", title: "Lecturer", email: "hossainahmed.iiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Ayesha Sumayah", title: "Lecturer", email: "ayshasumayyah@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Yeakub Ali", title: "Lecturer", email: "yeakubju@gmail.com", phone: null, memberType: "faculty" },
+  { department: "English Language and Literature", name: "Mosammat Henan", title: "Lecturer", email: "henanhoquectg1@yahoo.com", phone: null, memberType: "faculty" },
+
+  // ELL Staff
+  { department: "English Language and Literature", name: "Mohammed Mahfuzur Rahman", title: "Senior Assistant Director", email: "mahfuz09ctg@yahoo.com", phone: "01815084082", memberType: "staff" },
+  { department: "English Language and Literature", name: "Nymul Chaheli", title: "Administrative Officer", email: "nchaheli@gmail.com", phone: "01683147321", memberType: "staff" },
+  { department: "English Language and Literature", name: "Jannatun Nayeem", title: "Administrative Assistant", email: "jnayeem8420@gmail.com", phone: "01601353046", memberType: "staff" },
+  { department: "English Language and Literature", name: "Selina Akter", title: "Administrative Assistant", email: "selina.eee@iiuc.ac.bd", phone: "01819895565", memberType: "staff" },
+  { department: "English Language and Literature", name: "K.M Shahedul Alam", title: "Lab Attendant", email: "kmshahedulalam@gmail.com", phone: "01816110286", memberType: "staff" },
+  { department: "English Language and Literature", name: "Atkia Ahammad", title: "Administrative Assistant", email: null, phone: "01824965458", memberType: "staff" },
+  { department: "English Language and Literature", name: "Nadira Sultana", title: "Lab Attendant", email: null, phone: "01727304922", memberType: "staff" },
+
+  // ─── Arabic Language and Literature ───
+  { department: "Arabic Language and Literature", name: "Dr. Md. Moinuddin", title: "Professor", email: "mainu99@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Arabic Language and Literature", name: "Dr. Md. Mahmudul Hassan", title: "Associate Professor", email: "mahmudulhassan1184@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Arabic Language and Literature", name: "Muhammad Abu Twaha", title: "Lecturer", email: "abdullamahi2023@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Arabic Language and Literature", name: "Atharul Islam Shahed", title: "Lecturer", email: "atharulislamshaheddu@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Arabic Language and Literature", name: "Abu Bakkar Siddique Rahmani", title: "Lecturer", email: "abcm1060@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Arabic Language and Literature", name: "Omar Faruk", title: "Lecturer", email: "omarfaruk5572@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Arabic Language and Literature", name: "Mushfiqua Rahman", title: "Lecturer", email: "mushfiqua483508@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Arabic Language and Literature", name: "Mohammad Shihab Uddin", title: "Lecturer", email: "Shihab91.bd@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Arabic Language and Literature", name: "Abdur Rahman", title: "Lecturer", email: "abdurrhomain1996@gmail.com", phone: null, memberType: "faculty" },
+
+  // ALL Staff
+  { department: "Arabic Language and Literature", name: "Mohammad Abudus Samad", title: "Senior Assistant Director", email: "samadlid2012@gmail.com", phone: "01810288002", memberType: "staff" },
+  { department: "Arabic Language and Literature", name: "Murshida Khanam", title: "Administrative Assistant", email: null, phone: "01812364452", memberType: "staff" },
+
+  // ─── Department of Law ───
+  { department: "Department of Law", name: "Prof. Dr. Md. Maimul Ahsan Khan", title: "Professor", email: "khanmaimul@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Dr. Mohammad Saiful Islam", title: "Associate Professor", email: "lawsaiful@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Md. Manjur Hossain Patoari", title: "Associate Professor", email: "manjuiiuc3@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Taslima Khanam", title: "Associate Professor", email: "law4humanity@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Mohi Uddin", title: "Associate Professor", email: "adv.mohim@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Abdul Malek", title: "Associate Professor", email: "malek.advocate@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Kalim Ullah", title: "Associate Professor", email: "kalimullah.law@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Muhammad Farhad Hosen", title: "Associate Professor", email: "farhadlex@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Md. Ridwan Goni", title: "Assistant Professor", email: "ridwan_justice@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Anju Man Ara Begum", title: "Assistant Professor", email: "adv.anjum@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Faizunessa Taru", title: "Assistant Professor", email: "faizunnessa.law@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Sufia Khanam", title: "Assistant Professor", email: "sufialawcu@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Shirin Sabnam Tohin", title: "Assistant Professor", email: "2hinlaw2004@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Fatema-tuz-Zuhra", title: "Assistant Professor", email: "fatematujzuhra2005@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Mohammad Khabbab Taki", title: "Lecturer", email: "khabbabtaki94@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Md. Touhidul Islam", title: "Lecturer", email: "mdtouhidulislam.cu@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Department of Law", name: "Md Musa", title: "Lecturer", email: "mdmusa96@iiuc.ac.bd", phone: null, memberType: "faculty" },
+
+  // LAW Staff
+  { department: "Department of Law", name: "Shoeba Akter", title: "Administrative Officer", email: "aktershoeba@gmail.com", phone: "01818461276", memberType: "staff" },
+  { department: "Department of Law", name: "Arif Mahmood Chowdhury", title: "Administrative Officer", email: "arifmchy@gmail.com", phone: "01818749938", memberType: "staff" },
+  { department: "Department of Law", name: "Md. Faridul Alam", title: "Lab Attendant", email: "farid.iiuc@gmail.com", phone: "01815246871", memberType: "staff" },
+
+  // ─── Economics and Banking ───
+  { department: "Economics and Banking", name: "Prof. Dr. Md. Shariful Haque", title: "Professor", email: "sharif.debiiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Monir Ahmmed", title: "Professor", email: "monircu97@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Dr. Md. Arif Billah", title: "Associate Professor", email: "abillah55@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Md. Nezum Uddin", title: "Associate Professor", email: "ripon.ar@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Mohammed Jashim Uddin", title: "Associate Professor", email: "grejasim@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Nazneen Fatema", title: "Assistant Professor", email: "nazneen.fatema@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Md. Rafiqul Islam Rafiq", title: "Assistant Professor", email: "mrislam85@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Md Amzad Hossain", title: "Assistant Professor", email: "sazzad.amzad@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Shamima Nasrin", title: "Assistant Professor", email: "ebsneiiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Mahamuda Firoj", title: "Assistant Professor", email: "fmahmudacu@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Sharmina Khanom", title: "Assistant Professor", email: "sharminakhanom@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Shah Asadullah Mohd. Zobair", title: "Assistant Professor", email: "sam.zobair@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Md. Asad Iqbal Chowdhury", title: "Assistant Professor", email: "asad4924@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Joynal Uddin", title: "Assistant Professor", email: "joynal.econ@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Nair Sultana", title: "Lecturer", email: "sultana_nair@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Sultana Tanjima Khanam", title: "Lecturer", email: "tanjimhoque@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Mohammad Mamunur Rashid", title: "Lecturer", email: "mamunurrashid9864@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Md Amranul Hoque", title: "Lecturer", email: "mdamranulhoque.economics@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Economics and Banking", name: "Sanjida Jinnat", title: "Lecturer", email: "sanjidajinnat02@gmail.com", phone: null, memberType: "faculty" },
+
+  // EB Staff
+  { department: "Economics and Banking", name: "D. M. Maruf Hasan Rizvhi", title: "Administrative Officer", email: "rizvhi96@gmail.com", phone: "01851237777", memberType: "staff" },
+  { department: "Economics and Banking", name: "Md. Azizul Haque", title: "Administrative Assistant", email: "haqueazizul.eb@gmail.com", phone: "01623100573", memberType: "staff" },
+  { department: "Economics and Banking", name: "Naznin Sultana", title: "Administrative Assistant", email: "n.sdalia2015@gmail.com", phone: "01811956119", memberType: "staff" },
+  { department: "Economics and Banking", name: "Md Mizanur Rahman", title: "Lab Technician", email: "mc.mizan.7@gmail.com", phone: "01625098565", memberType: "staff" },
+  { department: "Economics and Banking", name: "Fatema Akter Ebadi", title: "Lab Attendant", email: "fatemaakterebadi@gmail.com", phone: "01533147123", memberType: "staff" },
+
+  // ─── Center for General Education ───
+  { department: "Center for General Education", name: "Prof. Dr. Abul Kalam Mohammed Shahed", title: "Professor", email: "drakmshahed@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Dr. Md. Thowhidul Islam", title: "Professor", email: "tauhidcox@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "H.M. Ataur Rahman Nadwi", title: "Associate Professor", email: "ataurrahmannadwi@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Abul Mobrur Md. Hamed Hassan", title: "Associate Professor", email: "hamediiuc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Dr. Md. Moazzam Hossain Khan", title: "Associate Professor", email: "hossain_khan077@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Dr. Md. Ilias Hossain", title: "Associate Professor", email: "hossain.ilias@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Dr. Md. Cholem Ullah", title: "Associate Professor", email: "forhad314@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Mahmoda Khaton Siddika", title: "Associate Professor", email: "nazu_eng@Yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Mohammad Amimul Ahsan", title: "Associate Professor", email: "amim.ahsan@iiuc.ac.bd", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Dr. Muhammad Rafiqul Hoque", title: "Assistant Professor", email: "rafique20012000@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Mohammad Kafil Uddin", title: "Assistant Professor", email: "kafil.uddin75@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Md. Amjad Hossain", title: "Assistant Professor", email: "ahshipon@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Dr. Md. Masudur Rahman", title: "Assistant Professor", email: "masuddu_08@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "ABM Nurul Absar", title: "Assistant Professor", email: "absar26.na@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Dr. Saber Ahmed", title: "Assistant Professor", email: "saberahmad1970@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Md. Jaweed Iqbal", title: "Assistant Professor", email: "jaweediqbal2006@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Dr. Md. Shayeed Hossain", title: "Assistant Professor", email: "shayeedihc@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Umme Hani", title: "Lecturer", email: "uhani0777@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Dr. Helal Uddin Md. Noman", title: "Lecturer", email: "helaluddinnoman@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Mohammad Nurunnabi", title: "Lecturer", email: "nnabi.2070@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Masnuna Akter", title: "Lecturer", email: "masnunaakterfaha@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Sharmin Sultana", title: "Lecturer", email: "sharminshemu009@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Nishat Tasnim", title: "Lecturer", email: "nishat111194@mail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Muhammad Monirul Alam", title: "Lecturer", email: "monirulalam637@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Farhana Afrin", title: "Lecturer", email: "farhanaafrin81@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Tauhidul Islam", title: "Lecturer", email: "tauhidul.islam.ra@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Shafkat Hannana Iffat", title: "Lecturer", email: "iffatansary21774@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "MD. Habibul Islam", title: "Lecturer", email: "habibcubangla77@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Abdur Rahim", title: "Lecturer", email: "abdurrahimcu2@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Ahmed Shah Masud", title: "Lecturer", email: "ahmedmasudev@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Mohammad Sharif Uddin", title: "Lecturer", email: "sarif.cu@yahoo.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Ariful Islam", title: "Lecturer", email: "arifulislamdu2017@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Mohammed Shahidul Islam Chowdhury", title: "Lecturer", email: "mshahidul485@gmail.com", phone: null, memberType: "faculty" },
+  { department: "Center for General Education", name: "Mohammad Omar Faruk", title: "Lecturer", email: "snsana1112@gmail.com", phone: null, memberType: "faculty" },
+
+  // CGED Staff
+  { department: "Center for General Education", name: "Muhammad Kutub Uddin", title: "Assistant Director", email: "kutubuddinkam@yahoo.com", phone: "01871124052", memberType: "staff" },
+  { department: "Center for General Education", name: "Khadija Akter", title: "Administrative Assistant", email: "akterbd15@gmail.com", phone: "01632624369", memberType: "staff" },
 ];
 
 async function main() {
-  const department = 'qsis';
+  console.log('Seeding faculty members...\n');
 
-  for (const f of QSIS_FACULTY) {
-    await prisma.facultyMember.upsert({
-      where: { id: `qsis-${f.shortForm}` },
-      update: {},
-      create: { id: `qsis-${f.shortForm}`, department, ...f, memberType: 'faculty' },
-    }).catch(async () => {
-      await prisma.facultyMember.create({ data: { id: `qsis-${f.shortForm}`, department, ...f, memberType: 'faculty' } });
-    });
+  const { count: deleted } = await prisma.facultyMember.deleteMany();
+  console.log(`Cleared ${deleted} existing FacultyMember records.`);
+
+  const records = FACULTY_DATA.map((m, i) => ({
+    ...m,
+    shortForm: getInitials(m.name),
+    sortOrder: i + 1,
+  }));
+
+  const BATCH_SIZE = 100;
+  let inserted = 0;
+
+  for (let i = 0; i < records.length; i += BATCH_SIZE) {
+    const batch = records.slice(i, i + BATCH_SIZE);
+    const result = await prisma.facultyMember.createMany({ data: batch, skipDuplicates: true });
+    inserted += result.count;
+    console.log(`  Inserted batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.count} records`);
   }
 
-  for (const s of QSIS_STAFF) {
-    await prisma.facultyMember.upsert({
-      where: { id: `qsis-${s.shortForm}` },
-      update: {},
-      create: { id: `qsis-${s.shortForm}`, department, ...s, memberType: 'staff' },
-    }).catch(async () => {
-      await prisma.facultyMember.create({ data: { id: `qsis-${s.shortForm}`, department, ...s, memberType: 'staff' } });
-    });
-  }
+  console.log(`\nDone! Inserted ${inserted} faculty/staff members across all departments.`);
 
-  console.log(`Seeded ${QSIS_FACULTY.length} faculty + ${QSIS_STAFF.length} staff for QSIS department`);
+  const departments = await prisma.facultyMember.groupBy({ by: ['department'], _count: { id: true } });
+  console.log('\nPer-department breakdown:');
+  for (const d of departments) {
+    console.log(`  ${d.department}: ${d._count.id}`);
+  }
 }
 
-main().catch(console.error).finally(() => prisma.$disconnect());
+main()
+  .catch((err) => {
+    console.error('Seed failed:', err);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());
