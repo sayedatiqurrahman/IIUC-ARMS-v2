@@ -31,6 +31,10 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const setGithubToken = useAppStore(s => s.setGithubToken);
   const onboardData = useAppStore(s => s.onboardingData);
 
+  const email = (session as any)?.user?.email || profile.email || '';
+  const effectiveRole = config.getEffectiveRole(email, profile.role);
+  const canUploadAnyDept = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
+
   // Resolve user's department ID from profile or onboarding
   const userDeptId = (() => {
     const deptName = profile.department || onboardData?.department || '';
@@ -629,13 +633,24 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                   {/* Department, Semester & Category */}
                   <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
                     <div className="grid grid-cols-3 gap-3">
-                      <div>
+                       <div>
                         <label className="text-[0.72rem] text-dark-text2 block mb-1">Department *</label>
-                        <div className="w-full px-2.5 py-2 rounded-lg border border-qsis/30 bg-qsis/5 text-dark-text text-[0.82rem] flex items-center gap-1.5">
-                          <i className="fas fa-lock text-qsis text-[0.65rem]"></i>
-                          <span className="font-semibold text-qsis">{userDeptName || department}</span>
-                        </div>
-                        <p className="text-[0.6rem] text-dark-text3 mt-0.5">Files upload to your department only</p>
+                        {canUploadAnyDept ? (
+                          <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={department} onChange={e => { setDepartment(e.target.value); setSemester(''); setCategory(''); }}>
+                            <option value="">Select...</option>
+                            {FACULTIES.map(f => (
+                              <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
+                                {f.departments.map(d => <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>)}
+                              </optgroup>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="w-full px-2.5 py-2 rounded-lg border border-qsis/30 bg-qsis/5 text-dark-text text-[0.82rem] flex items-center gap-1.5">
+                            <i className="fas fa-lock text-qsis text-[0.65rem]"></i>
+                            <span className="font-semibold text-qsis">{userDeptName || department}</span>
+                          </div>
+                        )}
+                        <p className="text-[0.6rem] text-dark-text3 mt-0.5">{canUploadAnyDept ? 'Admin — upload to any department' : 'Files upload to your department only'}</p>
                       </div>
                       <div>
                         <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester *</label>

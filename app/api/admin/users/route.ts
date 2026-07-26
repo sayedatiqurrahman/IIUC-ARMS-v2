@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
         githubAvatar: profile?.githubAvatar || null,
         image: profile?.image || fu.photoURL || null,
         semester: profile?.semester || null,
+        section: profile?.section || null,
         hasProfile: !!profile,
         lastSignIn: fu.lastSignInTime || null,
         createdAt: profile?.createdAt?.toISOString() || fu.metadata?.creationTime || null,
@@ -97,6 +98,7 @@ export async function GET(req: NextRequest) {
           githubAvatar: profile.githubAvatar || null,
           image: profile.image || null,
           semester: profile.semester || null,
+          section: profile.section || null,
           hasProfile: true,
           lastSignIn: null,
           createdAt: profile.createdAt?.toISOString() || null,
@@ -238,6 +240,29 @@ export async function POST(req: NextRequest) {
       if (effectiveRole === 'manager' && targetProfile?.department && callerProfile?.department && targetProfile.department !== callerProfile.department) {
         return NextResponse.json({ error: 'Managers can only make CR in their own department' }, { status: 403 });
       }
+      if (isCR) {
+        // Require department, semester, section to become CR
+        if (!targetProfile?.department || !targetProfile?.semester || !targetProfile?.section) {
+          return NextResponse.json({ error: 'User must have department, semester, and section set to become CR' }, { status: 400 });
+        }
+        // Manager: target must be in same department
+        if (effectiveRole === 'manager' && targetProfile.department !== callerProfile?.department) {
+          return NextResponse.json({ error: 'Managers can only make CR in their own department' }, { status: 403 });
+        }
+        // Max 2 CRs per section per semester per department
+        const crCount = await prisma.profile.count({
+          where: {
+            isCR: true,
+            department: targetProfile.department,
+            semester: targetProfile.semester,
+            section: targetProfile.section,
+            NOT: { userId: targetEmail },
+          },
+        });
+        if (crCount >= 2) {
+          return NextResponse.json({ error: `Maximum 2 CRs allowed per section (currently ${crCount}). Remove an existing CR first.` }, { status: 400 });
+        }
+      }
       await prisma.profile.update({ where: { userId: targetEmail }, data: { isCR: !!isCR, ...(isCR ? { isACR: false } : {}) } });
       return NextResponse.json({ success: true, message: isCR ? 'Made CR' : 'Removed CR' });
     }
@@ -250,6 +275,12 @@ export async function POST(req: NextRequest) {
       }
       if (effectiveRole === 'manager' && targetProfile?.department && callerProfile?.department && targetProfile.department !== callerProfile.department) {
         return NextResponse.json({ error: 'Managers can only manage ACR in their own department' }, { status: 403 });
+      }
+      if (isACR) {
+        // Require department, semester, section to become ACR
+        if (!targetProfile?.department || !targetProfile?.semester || !targetProfile?.section) {
+          return NextResponse.json({ error: 'User must have department, semester, and section set to become ACR' }, { status: 400 });
+        }
       }
       await prisma.profile.update({ where: { userId: targetEmail }, data: { isACR: !!isACR } });
       return NextResponse.json({ success: true, message: isACR ? 'Made ACR' : 'Removed ACR' });

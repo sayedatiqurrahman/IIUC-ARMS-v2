@@ -44,8 +44,9 @@ export function makeId(path: string) {
   return btoa(unescape(encodeURIComponent(path))).replace(/[=+/]/g, '');
 }
 
-export function getRawUrl(path: string) {
-  const encoded = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+export function getRawUrl(path: string, githubPath?: string) {
+  const fileRelPath = githubPath || path;
+  const encoded = fileRelPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
   return `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${config.uploadPath}/${encoded}`;
 }
 

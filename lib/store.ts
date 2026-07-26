@@ -71,6 +71,7 @@ export interface Profile {
   title: string;
   shortForm: string;
   department: string;
+  section: string;
   isCR: boolean;
   isACR: boolean;
   email: string;
@@ -97,7 +98,7 @@ export interface Profile {
 }
 
 const defaultProfile: Profile = {
-  universityId: '', name: '', title: '', shortForm: '', department: '', isCR: false, isACR: false, email: '', whatsapp: '', semester: '', image: '',
+  universityId: '', name: '', title: '', shortForm: '', department: '', section: '', isCR: false, isACR: false, email: '', whatsapp: '', semester: '', image: '',
   role: 'user',
   isBanned: false,
   githubLogin: '', githubToken: '', githubInstallationId: '', githubAvatar: '',
@@ -515,7 +516,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   openFile: (item) => {
     const ext = item.path.split('/').pop()?.split('.').pop()?.toLowerCase() || '';
     const mime = getMimeFromExt(ext);
-    const rawUrl = getRawUrl(item.path);
+    const rawUrl = getRawUrl(item.path, item.githubPath);
     const viewerItem: ViewerItem = {
       path: item.path,
       name: item.path.split('/').pop() || '',
@@ -625,28 +626,28 @@ export const useAppStore = create<AppState>((set, get) => ({
         // shariah/related-kitabs/* → department: 'shariah', isRelatedKitabs: true
         if (first === config.relatedKitabsParent && parts[1] === config.relatedKitabsFolder) {
           const inner = parts.slice(2).join('/');
-          return { ...item, path: config.relatedKitabsFolder + '/' + inner, department: 'shariah' };
+          return { ...item, path: config.relatedKitabsFolder + '/' + inner, department: 'shariah', githubPath: rel };
         }
 
         // Root related-kitabs/* (legacy) → treat as shariah
         if (first === config.relatedKitabsFolder) {
-          return { ...item, path: rel, department: 'shariah' };
+          return { ...item, path: rel, department: 'shariah', githubPath: rel };
         }
 
         // Faculty-level related-sources: {faculty-id}/related-sources/* → department: faculty-id
         if (facultyIds.includes(first) && parts[1] === config.relatedSourcesFolder) {
           const inner = parts.slice(2).join('/');
-          return { ...item, path: config.relatedSourcesFolder + '/' + inner, department: first };
+          return { ...item, path: config.relatedSourcesFolder + '/' + inner, department: first, githubPath: rel };
         }
 
         // {dept}/{sem}/{cat}/{course}/{file} or {dept}/related-sources/{file} (legacy per-dept)
         if (config.isDepartmentId(first)) {
           const inner = parts.slice(1).join('/');
-          return { ...item, path: inner || rel, department: first };
+          return { ...item, path: inner || rel, department: first, githubPath: rel };
         }
 
         // Legacy: {sem}/{cat}/{course}/{file} → 'qsis'
-        return { ...item, path: rel, department: 'qsis' };
+        return { ...item, path: rel, department: 'qsis', githubPath: rel };
       });
   },
 

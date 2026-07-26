@@ -14,6 +14,7 @@ model Profile {
   title           String?
   shortForm       String?
   department      String?
+  section         String?
   isCR            Boolean  @default(false)
   isACR           Boolean  @default(false)
   universityId    String?

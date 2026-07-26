@@ -32,11 +32,19 @@ export default function DashboardView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
-    universityId: '', name: '', whatsapp: '', semester: '',
+    universityId: '', name: '', whatsapp: '', semester: '', section: '',
     facebook: '', twitter: '', linkedin: '', website: '',
     company: '', companyUrl: '', publicEmail: '',
     hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false,
   });
+
+  // Switch CR state
+  const [switchCRMode, setSwitchCRMode] = useState(false);
+  const [switchCRLoading, setSwitchCRLoading] = useState(false);
+  const [switchCRMsg, setSwitchCRMsg] = useState('');
+  const [switchCRErr, setSwitchCRErr] = useState('');
+  const [sectionPeers, setSectionPeers] = useState<any[]>([]);
+  const [fetchingPeers, setFetchingPeers] = useState(false);
 
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!profile.githubToken;
   const email = (session as any)?.user?.email || profile.email || '';
@@ -398,6 +406,7 @@ export default function DashboardView() {
                 name: profile.name || '',
                 whatsapp: profile.whatsapp,
                 semester: profile.semester,
+                section: profile.section || '',
                 facebook: profile.facebook,
                 twitter: profile.twitter,
                 linkedin: profile.linkedin,
@@ -419,7 +428,7 @@ export default function DashboardView() {
 
         {/* Profile Completion */}
         {(() => {
-          const commonFields = [profile.name, profile.universityId, profile.whatsapp, profile.semester];
+          const commonFields = [profile.name, profile.universityId, profile.whatsapp, profile.semester, profile.section];
           const filled = commonFields.filter(Boolean).length;
           const pct = Math.round((filled / commonFields.length) * 100);
           return (
@@ -462,6 +471,13 @@ export default function DashboardView() {
                     <option value="">Select semester...</option>
                     {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </select>
+                </div>
+              )}
+              {/* Section — students only */}
+              {isStudent && (
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Section</label>
+                  <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. A, B, C" value={profileForm.section} onChange={e => setProfileForm(p => ({ ...p, section: e.target.value }))} />
                 </div>
               )}
             </div>
@@ -564,6 +580,12 @@ export default function DashboardView() {
                 <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                   <span className="text-[0.7rem] text-dark-text2 block mb-1">Semester</span>
                   <span className="text-[0.85rem] font-semibold">{config.semesters.find(s => s.id === profile.semester)?.label || profile.semester}</span>
+                </div>
+              )}
+              {profile.section && isStudent && (
+                <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                  <span className="text-[0.7rem] text-dark-text2 block mb-1">Section</span>
+                  <span className="text-[0.85rem] font-semibold">{profile.section}</span>
                 </div>
               )}
             </div>
@@ -884,6 +906,131 @@ export default function DashboardView() {
           </button>
         </div>
       </div>
+
+      {/* ═══════════════ SWITCH CR ═══════════════ */}
+      {profile.isCR && profile.department && profile.semester && profile.section && (
+        <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-[0.95rem] font-semibold flex items-center gap-2">
+              <i className="fas fa-exchange-alt text-qsis"></i> Switch CR Role
+            </h4>
+            {!switchCRMode && (
+              <button onClick={() => setSwitchCRMode(true)} className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] font-semibold cursor-pointer hover:border-qsis transition-all">
+                <i className="fas fa-exchange-alt mr-1"></i> Transfer CR
+              </button>
+            )}
+          </div>
+          <p className="text-[0.78rem] text-dark-text2 mb-3">
+            Transfer your CR role to another student in your section ({profile.section}). You will lose CR privileges.
+          </p>
+
+          {switchCRMsg && (
+            <div className="mb-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-[0.8rem]">
+              <i className="fas fa-check-circle mr-2"></i>{switchCRMsg}
+            </div>
+          )}
+          {switchCRErr && (
+            <div className="mb-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
+              <i className="fas fa-exclamation-circle mr-2"></i>{switchCRErr}
+            </div>
+          )}
+
+          {switchCRMode && (
+            <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
+              <p className="text-[0.78rem] text-dark-text2 mb-2">
+                <i className="fas fa-info-circle text-qsis mr-1"></i>
+                Select a student from <strong>{profile.semester} — Section {profile.section}</strong> to become the new CR.
+              </p>
+              {fetchingPeers ? (
+                <div className="text-center py-4"><i className="fas fa-spinner fa-spin text-xl text-qsis"></i></div>
+              ) : sectionPeers.length > 0 ? (
+                <div className="space-y-2 mb-3">
+                  {sectionPeers.map(p => (
+                    <div key={p.userId} className="flex items-center justify-between p-2.5 rounded-lg bg-dark-bg border border-dark-border hover:border-qsis/30 transition-all">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0">
+                          <span className="text-[0.65rem] font-bold text-qsis">{p.name ? p.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2) : '??'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[0.8rem] font-semibold">{p.name || p.userId}</span>
+                          <span className="text-[0.7rem] text-dark-text2 ml-1.5">{p.universityId || ''}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Transfer CR role to ${p.name || p.userId}? You will lose CR privileges.`)) return;
+                          setSwitchCRLoading(true);
+                          setSwitchCRMsg('');
+                          setSwitchCRErr('');
+                          try {
+                            const res = await fetch('/api/cr/switch', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ targetEmail: p.userId }),
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                              setSwitchCRMsg(data.message);
+                              setSwitchCRMode(false);
+                              setSectionPeers([]);
+                              // Update local profile
+                              useAppStore.setState(s => ({
+                                profile: { ...s.profile, isCR: false },
+                              }));
+                              fetch('/api/profile', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ isCR: false }),
+                              }).catch(() => {});
+                            } else {
+                              setSwitchCRErr(data.error || 'Failed');
+                            }
+                          } catch {
+                            setSwitchCRErr('Network error');
+                          } finally {
+                            setSwitchCRLoading(false);
+                          }
+                        }}
+                        disabled={switchCRLoading}
+                        className="px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50"
+                      >
+                        {switchCRLoading ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-exchange-alt mr-1"></i>Transfer</>}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[0.78rem] text-dark-text3 text-center py-3">No other students found in your section.</p>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => {
+                  setFetchingPeers(true);
+                  fetch(`/api/admin/users?search=${profile.section || ''}`)
+                    .then(r => r.json())
+                    .then(data => {
+                      const peers = (data.users || []).filter((u: any) =>
+                        u.department === profile.department &&
+                        u.semester === profile.semester &&
+                        u.section === profile.section &&
+                        u.email !== email &&
+                        !u.isCR &&
+                        u.role !== 'admin'
+                      );
+                      setSectionPeers(peers);
+                    })
+                    .catch(() => setSectionPeers([]))
+                    .finally(() => setFetchingPeers(false));
+                }} disabled={fetchingPeers} className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all disabled:opacity-50">
+                  <i className="fas fa-search mr-1"></i>Find Students
+                </button>
+                <button onClick={() => { setSwitchCRMode(false); setSectionPeers([]); setSwitchCRErr(''); setSwitchCRMsg(''); }} className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ═══════════════ ACTIVITY ═══════════════ */}
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
