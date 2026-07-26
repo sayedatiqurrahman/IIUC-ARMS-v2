@@ -33,13 +33,7 @@ export default function FacultyView() {
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState(() => {
     if (myDept) return myDept;
-    if (typeof window !== 'undefined') {
-      try {
-        const onboard = JSON.parse(localStorage.getItem('qsis-onboarding') || '{}');
-        return onboard.department || '';
-      } catch {}
-    }
-    return '';
+    return 'qsis';
   });
   const [titleFilter, setTitleFilter] = useState('');
   const [memberTypeFilter, setMemberTypeFilter] = useState<'all' | 'faculty' | 'staff'>('all');

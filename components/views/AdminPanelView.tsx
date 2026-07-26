@@ -72,7 +72,7 @@ export default function AdminPanelView() {
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ inserted: number; updated: number; skipped: number; errors?: string[] } | null>(null);
   const [facultyRequests, setFacultyRequests] = useState<any[]>([]);
-  const [facultyDeptFilter, setFacultyDeptFilter] = useState('');
+  const [facultyDeptFilter, setFacultyDeptFilter] = useState('qsis');
   const [facultyTitleFilter, setFacultyTitleFilter] = useState('');
   const [overviewFacultyCount, setOverviewFacultyCount] = useState(0);
   const [recentLogins, setRecentLogins] = useState<UserRecord[]>([]);
