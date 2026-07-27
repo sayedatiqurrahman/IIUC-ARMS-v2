@@ -74,6 +74,16 @@ export default function BrowsePage() {
     }
   }, [onboardData, mounted]);
 
+  // Auto-navigate returning users into their department on page load
+  useEffect(() => {
+    if (!mounted || loading) return;
+    const dept = onboardData?.department || profile.department || '';
+    if (!dept || view !== 'departments') return;
+    // Already inside a dept? skip
+    const target = FACULTIES.flatMap(f => f.departments).find(d => d.name === dept || d.id === dept);
+    if (target) navigateToDepartment(target.id);
+  }, [mounted, loading]);
+
   // Onboarding-based personalization
   const userSemesterId = onboardData
     ? config.semesters.find(s => s.label === onboardData.semester)?.id
@@ -86,7 +96,7 @@ export default function BrowsePage() {
     if (!deptName) return null;
     for (const f of FACULTIES) {
       for (const d of f.departments) {
-        if (d.name === deptName) return d.id;
+        if (d.name === deptName || d.id === deptName) return d.id;
       }
     }
     return null;
