@@ -7,6 +7,7 @@ import type { Profile } from '@/lib/store';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
 import { installGitHubApp } from '@/lib/github-install';
+import CustomSelect from '@/components/CustomSelect';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
@@ -463,14 +464,10 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                        <div>
                         <label className="text-[0.72rem] text-dark-text2 block mb-1">Department *</label>
                         {canUploadAnyDept ? (
-                          <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={department} onChange={e => { setDepartment(e.target.value); setSemester(''); setCategory(''); }}>
-                            <option value="">Select...</option>
-                            {FACULTIES.map(f => (
-                              <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
-                                {f.departments.map(d => <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>)}
-                              </optgroup>
-                            ))}
-                          </select>
+                          <CustomSelect value={department} onChange={v => { setDepartment(v); setSemester(''); setCategory(''); }} placeholder="Select..." options={[
+                            { value: '', label: 'Select...' },
+                            ...FACULTIES.flatMap(f => f.departments.map(d => ({ value: d.id, label: `${d.shortName} — ${d.name}`, icon: d.icon || 'fa-building', group: f.shortName })))
+                          ]} />
                         ) : (
                           <div className="w-full px-2.5 py-2 rounded-lg border border-qsis/30 bg-qsis/5 text-dark-text text-[0.82rem] flex items-center gap-1.5">
                             <i className="fas fa-lock text-qsis text-[0.65rem]"></i>
@@ -481,39 +478,29 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                       </div>
                       <div>
                         <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester *</label>
-                        <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={semester} onChange={e => { setSemester(e.target.value); setCategory(''); }} disabled={!department}>
-                          <option value="">Select...</option>
-                          {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                          <option value={config.relatedSourcesFolder}>Related Sources (Cross-Semester)</option>
-                          {['qsis', 'dawah', 'hadith'].includes(userDeptId) && (
-                            <option value={config.relatedKitabsFolder}>Related Kitabs (Shariah Faculty)</option>
-                          )}
-                        </select>
+                        <CustomSelect value={semester} onChange={v => { setSemester(v); setCategory(''); }} placeholder="Select..." className={!department ? 'opacity-50 pointer-events-none' : ''} options={[
+                          { value: '', label: 'Select...' },
+                          ...config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' })),
+                          { value: config.relatedSourcesFolder, label: 'Related Sources (Cross-Semester)', icon: 'fa-folder-open' },
+                          ...(['qsis', 'dawah', 'hadith'].includes(userDeptId) ? [{ value: config.relatedKitabsFolder, label: 'Related Kitabs (Shariah Faculty)', icon: 'fa-book' }] : []),
+                        ]} />
                       </div>
                       <div>
                         <label className="text-[0.72rem] text-dark-text2 block mb-1">Category *</label>
-                        <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={category} onChange={e => setCategory(e.target.value)} disabled={!semester}>
-                          <option value="">Select...</option>
-                          {semester === config.relatedKitabsFolder ? (
-                            Object.entries(config.relatedKitabsCategories).map(([key, cat]) => (
-                              <option key={key} value={key}>{cat.label}</option>
-                            ))
-                          ) : semester === config.relatedSourcesFolder ? (
-                            <option value={config.relatedSourcesFolder}>Related Sources</option>
-                          ) : (
-                            <>
-                              <optgroup label="Exam Sections (inside Mid/Final)">
-                                <option value={config.categories.notes.folder}>{config.categories.notes.label}</option>
-                                <option value={config.categories.questions.folder}>{config.categories.questions.label}</option>
-                              </optgroup>
-                              <optgroup label="Root Categories">
-                                <option value={config.categories.sheet.folder}>{config.categories.sheet.label}</option>
-                                <option value={config.categories.syllabus.folder}>{config.categories.syllabus.label}</option>
-                                <option value={config.categories.other.folder}>{config.categories.other.label}</option>
-                              </optgroup>
-                            </>
-                          )}
-                        </select>
+                        <CustomSelect value={category} onChange={setCategory} placeholder="Select..." className={!semester ? 'opacity-50 pointer-events-none' : ''} options={
+                          semester === config.relatedKitabsFolder
+                            ? Object.entries(config.relatedKitabsCategories).map(([key, cat]) => ({ value: key, label: cat.label, icon: 'fa-book' }))
+                            : semester === config.relatedSourcesFolder
+                              ? [{ value: config.relatedSourcesFolder, label: 'Related Sources', icon: 'fa-folder-open' }]
+                              : [
+                                  { value: '', label: 'Select...' },
+                                  { value: config.categories.notes.folder, label: config.categories.notes.label, icon: 'fa-sticky-note', group: 'Exam Sections (inside Mid/Final)' },
+                                  { value: config.categories.questions.folder, label: config.categories.questions.label, icon: 'fa-question-circle', group: 'Exam Sections (inside Mid/Final)' },
+                                  { value: config.categories.sheet.folder, label: config.categories.sheet.label, icon: 'fa-scroll', group: 'Root Categories' },
+                                  { value: config.categories.syllabus.folder, label: config.categories.syllabus.label, icon: 'fa-graduation-cap', group: 'Root Categories' },
+                                  { value: config.categories.other.folder, label: config.categories.other.label, icon: 'fa-folder', group: 'Root Categories' },
+                                ]
+                        } />
                       </div>
                     </div>
                   </div>
@@ -554,11 +541,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                       {(category === config.categories.questions.folder || category === config.categories.notes.folder) && (
                         <div className="mb-2">
                           <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Section *</label>
-                          <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={course.midFinal} onChange={e => updateCourse(course.id, { midFinal: e.target.value })}>
-                            <option value="">Select exam section...</option>
-                            <option value="Mid">Mid Term Exam</option>
-                            <option value="Final">Final Term Exam</option>
-                          </select>
+                          <CustomSelect value={course.midFinal} onChange={v => updateCourse(course.id, { midFinal: v })} placeholder="Select exam section..." options={[
+                            { value: '', label: 'Select exam section...' },
+                            { value: 'Mid', label: 'Mid', icon: 'fa-hourglass-half' },
+                            { value: 'Final', label: 'Final', icon: 'fa-check-double' },
+                          ]} />
                         </div>
                       )}
 
@@ -571,21 +558,21 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                       {category === config.categories.questions.folder && (
                         <div className="mb-2">
                           <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
-                          <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={course.examSession} onChange={e => updateCourse(course.id, { examSession: e.target.value })}>
-                            <option value="Both">Both (Autumn + Spring)</option>
-                            <option value="Autumn">Autumn</option>
-                            <option value="Spring">Spring</option>
-                          </select>
+                          <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} options={[
+                            { value: 'Both', label: 'Both (Autumn + Spring)', icon: 'fa-layer-group' },
+                            { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
+                            { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
+                          ]} />
                         </div>
                       )}
                       {category === config.categories.notes.folder && (
                         <div className="mb-2">
                           <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
-                          <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={course.examSession} onChange={e => updateCourse(course.id, { examSession: e.target.value })}>
-                            <option value="">Select session...</option>
-                            <option value="Autumn">Autumn</option>
-                            <option value="Spring">Spring</option>
-                          </select>
+                          <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} placeholder="Select session..." options={[
+                            { value: '', label: 'Select session...' },
+                            { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
+                            { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
+                          ]} />
                         </div>
                       )}
 

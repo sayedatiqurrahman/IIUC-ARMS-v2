@@ -12,6 +12,7 @@ import ReadmeEditor from '@/components/ReadmeEditor';
 import FileActionsMenu from '@/components/FileActionsMenu';
 import MoveModal from '@/components/MoveModal';
 import RenameModal from '@/components/RenameModal';
+import CustomSelect from '@/components/CustomSelect';
 
 export default function BrowsePage() {
   const { data: session } = useSession();
@@ -427,41 +428,42 @@ export default function BrowsePage() {
           )}
         </div>
         <div className="flex gap-2 p-2 flex-wrap">
-          <select
+          <CustomSelect
             value={searchSemester}
-            onChange={e => setSearchSemester(e.target.value)}
-            className="bg-dark-bg border border-dark-border text-dark-text py-1.5 px-2.5 rounded-md text-[0.78rem] outline-none cursor-pointer focus:border-qsis"
-          >
-            <option value="">All Semesters</option>
-            {config.semesters.map(s => (
-              <option key={s.id} value={s.id}>{s.label}</option>
-            ))}
-            <option value="related-kitabs">Related Kitabs</option>
-            <option value={config.relatedSourcesFolder}>Related Sources</option>
-          </select>
-          <select
+            onChange={setSearchSemester}
+            placeholder="All Semesters"
+            options={[
+              { value: '', label: 'All Semesters' },
+              ...config.semesters.map(s => ({ value: s.id, label: s.label })),
+              { value: 'related-kitabs', label: 'Related Kitabs' },
+              { value: config.relatedSourcesFolder, label: 'Related Sources' },
+            ]}
+          />
+          <CustomSelect
             value={fileTypeFilter}
-            onChange={e => setFileTypeFilter(e.target.value)}
-            className="bg-dark-bg border border-dark-border text-dark-text py-1.5 px-2.5 rounded-md text-[0.78rem] outline-none cursor-pointer focus:border-qsis"
-          >
-            <option value="">All Types</option>
-            <option value="pdf">PDF</option>
-            <option value="image">Image</option>
-            <option value="doc">Document</option>
-            <option value="sheet">Sheet (XLS)</option>
-            <option value="ppt">Presentation</option>
-          </select>
-          <select
+            onChange={setFileTypeFilter}
+            placeholder="All Types"
+            options={[
+              { value: '', label: 'All Types' },
+              { value: 'pdf', label: 'PDF', icon: 'fa-file-pdf' },
+              { value: 'image', label: 'Image', icon: 'fa-file-image' },
+              { value: 'doc', label: 'Document', icon: 'fa-file-word' },
+              { value: 'sheet', label: 'Sheet (XLS)', icon: 'fa-file-excel' },
+              { value: 'ppt', label: 'Presentation', icon: 'fa-file-powerpoint' },
+            ]}
+          />
+          <CustomSelect
             value={searchYear}
-            onChange={e => setSearchYear(e.target.value)}
-            className="bg-dark-bg border border-dark-border text-dark-text py-1.5 px-2.5 rounded-md text-[0.78rem] outline-none cursor-pointer focus:border-qsis"
-          >
-            <option value="">All Years</option>
-            <option value="2026">2026</option>
-            <option value="2025">2025</option>
-            <option value="2024">2024</option>
-            <option value="2023">2023</option>
-          </select>
+            onChange={setSearchYear}
+            placeholder="All Years"
+            options={[
+              { value: '', label: 'All Years' },
+              { value: '2026', label: '2026' },
+              { value: '2025', label: '2025' },
+              { value: '2024', label: '2024' },
+              { value: '2023', label: '2023' },
+            ]}
+          />
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { config } from '@/lib/config';
 import Image from 'next/image';
 import { FACULTIES, getAllDepartments } from '@/lib/departments';
+import CustomSelect from '@/components/CustomSelect';
 
 const ONBOARDING_KEY = 'qsis-onboarding';
 const CANCEL_COUNT_KEY = 'qsis-onboard-cancel-count';
@@ -132,9 +133,13 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
               </div>
               <div>
                 <label className="text-[0.78rem] font-semibold text-dark-text mb-2 block">Semester</label>
-                <select value={semester} onChange={e => setSemester(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis">
-                  {config.semesters.map(s => <option key={s.id} value={s.label}>{s.label}</option>)}
-                </select>
+                <CustomSelect
+                  value={semester}
+                  onChange={setSemester}
+                  placeholder="Select semester..."
+                  options={config.semesters.map(s => ({ value: s.label, label: s.label, icon: 'fa-graduation-cap' }))}
+                  size="md"
+                />
               </div>
               <div>
                 <label className="text-[0.78rem] font-semibold text-dark-text mb-2 block">Department</label>

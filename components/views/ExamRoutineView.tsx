@@ -7,6 +7,7 @@ import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
 import { ExamSlot, DEFAULT_EXAM_SLOTS, loadExamSlots, saveExamSlots, getEnabledSlots } from '@/lib/exam-routine-config';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
+import CustomSelect from '@/components/CustomSelect';
 import { FACULTIES, findDepartment } from '@/lib/departments';
 
 function getDefaultSession(): string {
@@ -313,10 +314,13 @@ export default function ExamRoutineView() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div>
               <label className="text-[0.7rem] text-dark-text2 block mb-1">Semester</label>
-              <select value={semester} onChange={e => setSemester(e.target.value)} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
-                <option value="">Select...</option>
-                {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
+              <CustomSelect
+                value={semester}
+                onChange={setSemester}
+                placeholder="Select..."
+                options={config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-graduation-cap' }))}
+                size="md"
+              />
             </div>
             <div>
               <label className="text-[0.7rem] text-dark-text2 block mb-1">Session</label>
@@ -324,17 +328,29 @@ export default function ExamRoutineView() {
             </div>
             <div>
               <label className="text-[0.7rem] text-dark-text2 block mb-1">Department</label>
-              <select value={department} onChange={e => setDepartment(e.target.value)} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
-                {FACULTIES.flatMap(f => f.departments.map(d => (
-                  <option key={d.id} value={d.id}>{d.shortName}</option>
-                )))}
-              </select>
+              <CustomSelect
+                value={department}
+                onChange={setDepartment}
+                placeholder="Select department..."
+                options={FACULTIES.flatMap(f => f.departments.map(d => ({
+                  value: d.id,
+                  label: `${d.shortName} — ${d.name}`,
+                  icon: d.icon || 'fa-building',
+                  group: f.shortName,
+                })))}
+                searchable
+                size="md"
+              />
             </div>
             <div>
               <label className="text-[0.7rem] text-dark-text2 block mb-1">Exam Type</label>
-              <select value={examType} onChange={e => setExamType(e.target.value)} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
-                {EXAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <CustomSelect
+                value={examType}
+                onChange={setExamType}
+                placeholder="Select type..."
+                options={EXAM_TYPES.map(t => ({ value: t, label: t, icon: t === 'Midterm' ? 'fa-file-alt' : t === 'Final' ? 'fa-graduation-cap' : t === 'Quiz' ? 'fa-question-circle' : t === 'Makeup' ? 'fa-redo' : 'fa-flask' }))}
+                size="md"
+              />
             </div>
           </div>
 
@@ -361,10 +377,12 @@ export default function ExamRoutineView() {
                       <input type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)} className="w-full px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
                     </td>
                     <td className="px-3 py-2">
-                      <select value={row.day} onChange={e => updateRow(idx, 'day', e.target.value)} className="w-full px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis">
-                        <option value="">Day</option>
-                        {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                      </select>
+                      <CustomSelect
+                        value={row.day}
+                        onChange={val => updateRow(idx, 'day', val)}
+                        placeholder="Day"
+                        options={DAYS.map(d => ({ value: d, label: d, icon: 'fa-calendar-day' }))}
+                      />
                     </td>
                     {enabledSlots.map(slot => (
                       <td key={slot.id} className="px-2 py-1">

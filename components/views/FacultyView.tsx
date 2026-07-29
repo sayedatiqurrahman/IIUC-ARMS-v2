@@ -6,6 +6,7 @@ import { FACULTIES, TEACHER_TITLES, STAFF_DESIGNATIONS, findDepartment } from '@
 import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
+import CustomSelect from '@/components/CustomSelect';
 
 interface FacultyMember {
   id: string;
@@ -217,50 +218,60 @@ export default function FacultyView() {
           </div>
           <div>
             <label className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-users mr-1"></i>Type</label>
-            <select
+            <CustomSelect
               value={memberTypeFilter}
-              onChange={e => setMemberTypeFilter(e.target.value as 'all' | 'faculty' | 'staff')}
-              className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
-            >
-              <option value="all">All ({members.length})</option>
-              <option value="faculty">Faculty ({facultyCount})</option>
-              <option value="staff">Staff ({staffCount})</option>
-            </select>
+              onChange={(val) => setMemberTypeFilter(val as 'all' | 'faculty' | 'staff')}
+              placeholder="All"
+              options={[
+                { value: 'all', label: `All (${members.length})`, icon: 'fa-users' },
+                { value: 'faculty', label: `Faculty (${facultyCount})`, icon: 'fa-chalkboard-teacher' },
+                { value: 'staff', label: `Staff (${staffCount})`, icon: 'fa-headset' },
+              ]}
+              size="md"
+            />
           </div>
           <div>
             <label className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-building mr-1"></i>Department</label>
-            <select
+            <CustomSelect
               value={deptFilter}
-              onChange={e => setDeptFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
-            >
-              <option value="" disabled hidden>Select a department...</option>
-              {FACULTIES.map(f => (
-                <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
-                  {f.departments.map(d => (
-                    <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+              onChange={setDeptFilter}
+              placeholder="Select a department..."
+              options={FACULTIES.flatMap(f => [
+                ...f.departments.map(d => ({
+                  value: d.id,
+                  label: `${d.shortName} — ${d.name}`,
+                  icon: d.icon || 'fa-building',
+                  group: `${f.shortName} — ${f.name}`,
+                })),
+              ])}
+              searchable
+              size="md"
+            />
           </div>
           <div>
             <label className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-user-tie mr-1"></i>Designation</label>
-            <select
+            <CustomSelect
               value={titleFilter}
-              onChange={e => setTitleFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
-            >
-              <option value="">All ({titleCounts.size})</option>
-              {TEACHER_TITLES.map(t => (
-                <option key={t} value={t}>{t} ({titleCounts.get(t) || 0})</option>
-              ))}
-              <optgroup label="Staff Designations">
-                {STAFF_DESIGNATIONS.map(s => (
-                  <option key={s} value={s}>{s} ({titleCounts.get(s) || 0})</option>
-                ))}
-              </optgroup>
-            </select>
+              onChange={setTitleFilter}
+              placeholder="All"
+              options={[
+                { value: '', label: `All (${titleCounts.size})`, icon: 'fa-user-tie' },
+                ...TEACHER_TITLES.map(t => ({
+                  value: t,
+                  label: `${t} (${titleCounts.get(t) || 0})`,
+                  icon: 'fa-chalkboard-teacher',
+                  group: 'Faculty Titles',
+                })),
+                ...STAFF_DESIGNATIONS.map(s => ({
+                  value: s,
+                  label: `${s} (${titleCounts.get(s) || 0})`,
+                  icon: 'fa-headset',
+                  group: 'Staff Designations',
+                })),
+              ]}
+              searchable
+              size="md"
+            />
           </div>
         </div>
         {(search || deptFilter || titleFilter || memberTypeFilter !== 'all') && (

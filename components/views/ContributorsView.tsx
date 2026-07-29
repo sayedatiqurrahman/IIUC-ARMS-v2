@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { FACULTIES } from '@/lib/departments';
+import CustomSelect from '@/components/CustomSelect';
 
 type ContributorTab = 'developers' | 'resources';
 
@@ -159,16 +160,20 @@ export default function ContributorsView() {
                   className="w-full sm:w-44 pl-8 pr-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis transition-colors"
                 />
               </div>
-              <select
+              <CustomSelect
                 value={deptFilter}
-                onChange={e => setDeptFilter(e.target.value)}
-                className="px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis transition-colors"
-              >
-                <option value="all">All Departments</option>
-                {departments.map(([id, label]) => (
-                  <option key={id} value={id}>{label}</option>
-                ))}
-              </select>
+                onChange={setDeptFilter}
+                placeholder="All Departments"
+                options={[
+                  { value: 'all', label: 'All Departments', icon: 'fa-building' },
+                  ...departments.map(([id, label]) => ({
+                    value: id,
+                    label,
+                    icon: 'fa-building',
+                  })),
+                ]}
+                searchable
+              />
             </div>
           </div>
 

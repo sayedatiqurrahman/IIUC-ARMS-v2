@@ -7,6 +7,7 @@ import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
 import { useAppStore } from '@/lib/store';
 import { FACULTIES, TEACHER_TITLES, STAFF_DESIGNATIONS } from '@/lib/departments';
+import CustomSelect from '@/components/CustomSelect';
 
 interface UserRecord {
   email: string;
@@ -225,9 +226,11 @@ function PermissionsTab() {
             placeholder="user@ugrad.iiuc.ac.bd"
             className="flex-1 min-w-[180px] px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-xs outline-none focus:border-qsis"
           />
-          <select value={grantAction} onChange={e => setGrantAction(e.target.value)} className="px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-xs">
-            {PERMISSION_ACTIONS.map(a => <option key={a.key} value={a.key}>{a.label}</option>)}
-          </select>
+          <CustomSelect
+            value={grantAction}
+            onChange={setGrantAction}
+            options={PERMISSION_ACTIONS.map(a => ({ value: a.key, label: a.label, icon: a.icon }))}
+          />
           <button onClick={grantUser} className="px-4 py-2 bg-qsis text-white rounded-lg text-xs font-semibold hover:bg-qsis/90">
             <i className="fas fa-plus mr-1"></i>Grant
           </button>
@@ -250,14 +253,23 @@ function CoursesTab({ effectiveRole, profile }: { effectiveRole: string; profile
       <p className="text-dark-text3 text-xs mb-3">Courses are read from the GitHub folder structure. Folder format: <code className="bg-dark-bg px-1 py-0.5 rounded text-qsis">Code - Title/Mid|Final/NOTES|sheet|Syllabus|Previous Questions</code></p>
 
       <div className="flex flex-wrap gap-2 mb-4">
-        <select value={selectedDept} onChange={e => setSelectedDept(e.target.value)} className="px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-xs">
-          {FACULTIES.flatMap(f => f.departments.map(d => (
-            <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>
-          )))}
-        </select>
-        <select value={selectedSem} onChange={e => setSelectedSem(e.target.value)} className="px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-xs">
-          {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-        </select>
+        <CustomSelect
+          value={selectedDept}
+          onChange={setSelectedDept}
+          placeholder="Select department..."
+          options={FACULTIES.flatMap(f => f.departments.map(d => ({
+            value: d.id,
+            label: `${d.shortName} — ${d.name}`,
+            icon: 'fa-building',
+            group: `${f.shortName} — ${f.name}`,
+          })))}
+        />
+        <CustomSelect
+          value={selectedSem}
+          onChange={setSelectedSem}
+          placeholder="Select semester..."
+          options={config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }))}
+        />
       </div>
 
       <div className="space-y-2">
@@ -787,14 +799,18 @@ export default function AdminPanelView() {
               </button>
             )}
             {canEditRole && (
-              <select value={uRole} onChange={e => handleSetRole(u.email, e.target.value)} disabled={actionLoading === u.email + 'role'}
-                className="px-2 py-1 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.68rem] cursor-pointer disabled:opacity-50">
-                <option value="user">User</option>
-                <option value="student">Student</option>
-                <option value="teacher">Teacher</option>
-                {isAdmin && <option value="manager">Manager</option>}
-                {isSuperAdmin && <option value="admin">Admin</option>}
-              </select>
+              <CustomSelect
+                value={uRole}
+                onChange={(val) => handleSetRole(u.email, val)}
+                options={[
+                  { value: 'user', label: 'User', icon: 'fa-user' },
+                  { value: 'student', label: 'Student', icon: 'fa-user-graduate' },
+                  { value: 'teacher', label: 'Teacher', icon: 'fa-chalkboard-teacher' },
+                  ...(isAdmin ? [{ value: 'manager', label: 'Manager', icon: 'fa-user-shield' }] : []),
+                  ...(isSuperAdmin ? [{ value: 'admin', label: 'Admin', icon: 'fa-crown' }] : []),
+                ]}
+                className="min-w-[120px]"
+              />
             )}
             {canPromoteManager && (
               <button onClick={() => handleToggleManager(u.email, uRole)} disabled={actionLoading === u.email + 'manager'}
@@ -1076,13 +1092,17 @@ export default function AdminPanelView() {
                 </div>
                 <div>
                   <label className="text-[0.72rem] text-dark-text2 block mb-1">Role *</label>
-                  <select value={createUserForm.role} onChange={e => setCreateUserForm(p => ({ ...p, role: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
-                    <option value="user">User</option>
-                    <option value="student">Student</option>
-                    <option value="teacher">Teacher</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
-                  </select>
+                  <CustomSelect
+                    value={createUserForm.role}
+                    onChange={(val) => setCreateUserForm(p => ({ ...p, role: val }))}
+                    options={[
+                      { value: 'user', label: 'User', icon: 'fa-user' },
+                      { value: 'student', label: 'Student', icon: 'fa-user-graduate' },
+                      { value: 'teacher', label: 'Teacher', icon: 'fa-chalkboard-teacher' },
+                      { value: 'manager', label: 'Manager', icon: 'fa-user-shield' },
+                      { value: 'admin', label: 'Admin', icon: 'fa-crown' },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="text-[0.72rem] text-dark-text2 block mb-1">Department</label>
@@ -1090,10 +1110,12 @@ export default function AdminPanelView() {
                 </div>
                 <div>
                   <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester</label>
-                  <select value={createUserForm.semester} onChange={e => setCreateUserForm(p => ({ ...p, semester: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
-                    <option value="">None</option>
-                    {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={createUserForm.semester}
+                    onChange={(val) => setCreateUserForm(p => ({ ...p, semester: val }))}
+                    placeholder="None"
+                    options={config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }))}
+                  />
                 </div>
                 <div>
                   <label className="text-[0.72rem] text-dark-text2 block mb-1">Section</label>
@@ -1186,31 +1208,30 @@ export default function AdminPanelView() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div>
                   <label className="text-[0.7rem] text-dark-text2 block mb-1">Department *</label>
-                  <select
+                  <CustomSelect
                     value={facultyForm.department}
-                    onChange={e => setFacultyForm(f => ({ ...f, department: e.target.value }))}
-                    className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
-                  >
-                    <option value="">Select department...</option>
-                    {FACULTIES.map(f => (
-                      <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
-                        {f.departments.map(d => (
-                          <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
+                    onChange={(val) => setFacultyForm(f => ({ ...f, department: val }))}
+                    placeholder="Select department..."
+                    options={[
+                      ...FACULTIES.flatMap(f => f.departments.map(d => ({
+                        value: d.id,
+                        label: `${d.shortName} — ${d.name}`,
+                        icon: 'fa-building',
+                        group: `${f.shortName} — ${f.name}`,
+                      }))),
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="text-[0.7rem] text-dark-text2 block mb-1">Type *</label>
-                  <select
+                  <CustomSelect
                     value={facultyForm.memberType || 'faculty'}
-                    onChange={e => setFacultyForm(f => ({ ...f, memberType: e.target.value, title: '' }))}
-                    className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
-                  >
-                    <option value="faculty">Faculty</option>
-                    <option value="staff">Staff</option>
-                  </select>
+                    onChange={(val) => setFacultyForm(f => ({ ...f, memberType: val, title: '' }))}
+                    options={[
+                      { value: 'faculty', label: 'Faculty', icon: 'fa-chalkboard-teacher' },
+                      { value: 'staff', label: 'Staff', icon: 'fa-user-tie' },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="text-[0.7rem] text-dark-text2 block mb-1">Full Name *</label>
@@ -1218,10 +1239,12 @@ export default function AdminPanelView() {
                 </div>
                 <div>
                   <label className="text-[0.7rem] text-dark-text2 block mb-1">Designation</label>
-                  <select value={facultyForm.title} onChange={e => setFacultyForm(f => ({ ...f, title: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
-                    <option value="">Select designation...</option>
-                    {(facultyForm.memberType === 'staff' ? STAFF_DESIGNATIONS : TEACHER_TITLES).map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={facultyForm.title}
+                    onChange={(val) => setFacultyForm(f => ({ ...f, title: val }))}
+                    placeholder="Select designation..."
+                    options={(facultyForm.memberType === 'staff' ? STAFF_DESIGNATIONS : TEACHER_TITLES).map(t => ({ value: t, label: t, icon: 'fa-chalkboard-teacher' }))}
+                  />
                 </div>
                 <div>
                   <label className="text-[0.7rem] text-dark-text2 block mb-1">Short Form</label>
@@ -1251,24 +1274,31 @@ export default function AdminPanelView() {
               </div>
               {/* Filters */}
               <div className="flex flex-wrap gap-2">
-                <select value={facultyDeptFilter} onChange={e => setFacultyDeptFilter(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis max-w-[220px]">
-                  <option value="">All Departments</option>
-                  {FACULTIES.map(f => (
-                    <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
-                      {f.departments.map(d => (
-                        <option key={d.id} value={d.id}>{d.shortName}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                <select value={facultyTitleFilter} onChange={e => setFacultyTitleFilter(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis max-w-[200px]">
-                  <option value="">All Designations</option>
-                  {availableTitles.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+                <CustomSelect
+                  value={facultyDeptFilter}
+                  onChange={setFacultyDeptFilter}
+                  placeholder="All Departments"
+                  className="max-w-[220px]"
+                  options={[
+                    { value: '', label: 'All Departments', icon: 'fa-building' },
+                    ...FACULTIES.flatMap(f => f.departments.map(d => ({
+                      value: d.id,
+                      label: d.shortName,
+                      icon: 'fa-building',
+                      group: `${f.shortName} — ${f.name}`,
+                    }))),
+                  ]}
+                />
+                <CustomSelect
+                  value={facultyTitleFilter}
+                  onChange={setFacultyTitleFilter}
+                  placeholder="All Designations"
+                  className="max-w-[200px]"
+                  options={[
+                    { value: '', label: 'All Designations', icon: 'fa-chalkboard-teacher' },
+                    ...availableTitles.map(t => ({ value: t, label: t, icon: 'fa-chalkboard-teacher' })),
+                  ]}
+                />
                 {(facultyDeptFilter || facultyTitleFilter) && (
                   <button onClick={() => { setFacultyDeptFilter(''); setFacultyTitleFilter(''); }}
                     className="text-[0.7rem] text-dark-text3 hover:text-red-400 bg-transparent border-none cursor-pointer">

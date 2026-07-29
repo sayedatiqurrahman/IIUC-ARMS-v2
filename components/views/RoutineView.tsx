@@ -7,6 +7,7 @@ import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
+import CustomSelect from '@/components/CustomSelect';
 
 interface RoutinePeriod {
   name: string;
@@ -1131,11 +1132,16 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
             </div>
             <div className="routine-form-group">
               <label>Gender</label>
-              <select value={draft.draftGender} onChange={e => updateDraft({ draftGender: e.target.value as 'male' | 'female' | 'both' })}>
-                <option value="male">Male Only</option>
-                <option value="female">Female Only</option>
-                <option value="both">Both (Male &amp; Female)</option>
-              </select>
+              <CustomSelect
+                value={draft.draftGender}
+                onChange={(val) => updateDraft({ draftGender: val as 'male' | 'female' | 'both' })}
+                placeholder="Select gender"
+                options={[
+                  { value: 'male', label: 'Male Only', icon: 'fas fa-mars' },
+                  { value: 'female', label: 'Female Only', icon: 'fas fa-venus' },
+                  { value: 'both', label: 'Both (Male & Female)', icon: 'fas fa-venus-mars' },
+                ]}
+              />
             </div>
             <div className="routine-form-group routine-form-full">
               <label>Class Days</label>
@@ -1371,19 +1377,20 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
                                           const currentVal = tempGenderSlots[sem.name]?.[gender]?.[`${d}:${cpIdx}`] || '';
                                           return (
                                             <td key={`${d}-${cpIdx}`}>
-                                              <select value={currentVal} onChange={e => {
-                                                const val = e.target.value;
-                                                setTempGenderSlots(prev => {
-                                                  const next = { ...prev };
-                                                  if (!next[sem.name]) next[sem.name] = {};
-                                                  if (!next[sem.name][gender]) next[sem.name][gender] = {};
-                                                  next[sem.name][gender] = { ...next[sem.name][gender], [`${d}:${cpIdx}`]: val };
-                                                  return next;
-                                                });
-                                              }}>
-                                                <option value="">-- Off Day --</option>
-                                                {sem.courses.map(c => <option key={c.code} value={c.code}>{c.code} - {c.title}{c.teacher ? ` (${c.teacher})` : ''}</option>)}
-                                              </select>
+                                              <CustomSelect
+                                                value={currentVal}
+                                                onChange={(val) => {
+                                                  setTempGenderSlots(prev => {
+                                                    const next = { ...prev };
+                                                    if (!next[sem.name]) next[sem.name] = {};
+                                                    if (!next[sem.name][gender]) next[sem.name][gender] = {};
+                                                    next[sem.name][gender] = { ...next[sem.name][gender], [`${d}:${cpIdx}`]: val };
+                                                    return next;
+                                                  });
+                                                }}
+                                                placeholder="-- Off Day --"
+                                                options={sem.courses.map(c => ({ value: c.code, label: `${c.code} - ${c.title}${c.teacher ? ` (${c.teacher})` : ''}` }))}
+                                              />
                                             </td>
                                           );
                                         })}
@@ -1451,11 +1458,13 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
                                               <td key={`${d}-${cpIdx}`} style={hasConflict ? { background: '#ef444420', position: 'relative' } : undefined}
                                                 onMouseEnter={hasConflict ? (e) => setTooltip({ x: e.clientX, y: e.clientY - 40, text: conflicts.join('\n') }) : undefined}
                                                 onMouseLeave={hasConflict ? () => setTooltip(null) : undefined}>
-                                                <select value={currentSlot?.course || ''} onChange={e => setSlotInSection(semIdx, secIdx, d, cpIdx, e.target.value)}
-                                                  style={hasConflict ? { borderColor: '#ef4444', background: '#ef444410' } : undefined}>
-                                                  <option value="">-- Off Day --</option>
-                                                  {sem.courses.map(c => <option key={c.code} value={c.code}>{c.code} - {c.title}{c.teacher ? ` (${c.teacher})` : ''}</option>)}
-                                                </select>
+                                                <CustomSelect
+                                                  value={currentSlot?.course || ''}
+                                                  onChange={(val) => setSlotInSection(semIdx, secIdx, d, cpIdx, val)}
+                                                  placeholder="-- Off Day --"
+                                                  options={sem.courses.map(c => ({ value: c.code, label: `${c.code} - ${c.title}${c.teacher ? ` (${c.teacher})` : ''}` }))}
+                                                  size="sm"
+                                                />
                                               </td>
                                             );
                                           })}
@@ -2016,7 +2025,12 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
           <div className="routine-form-grid">
             <div className="routine-form-group">
               <label>Semester</label>
-              <select value={semester} onChange={e => setSemester(e.target.value)}>{SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+              <CustomSelect
+                value={semester}
+                onChange={(val) => setSemester(val)}
+                placeholder="Select semester"
+                options={SEMESTERS.map(s => ({ value: s, label: s }))}
+              />
             </div>
             <div className="routine-form-group">
               <label>Section <span className="routine-label-optional">(optional)</span></label>
@@ -2024,12 +2038,16 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
             </div>
             <div className="routine-form-group">
               <label>Branch</label>
-              <select value={gender || ''} onChange={e => setGender((e.target.value || null) as 'male' | 'female' | 'both' | null)}>
-                <option value="">None</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="both">Both (Male &amp; Female)</option>
-              </select>
+              <CustomSelect
+                value={gender || ''}
+                onChange={(val) => setGender((val || null) as 'male' | 'female' | 'both' | null)}
+                placeholder="Select branch"
+                options={[
+                  { value: 'male', label: 'Male', icon: 'fas fa-mars' },
+                  { value: 'female', label: 'Female', icon: 'fas fa-venus' },
+                  { value: 'both', label: 'Both (Male & Female)', icon: 'fas fa-venus-mars' },
+                ]}
+              />
             </div>
             <div className="routine-form-group">
               <label>Session</label>
@@ -2178,10 +2196,13 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
                           const currentSlot = getSlot(d, cpIdx, activeSlots);
                           return (
                             <td key={d}>
-                              <select value={currentSlot?.course || ''} onChange={e => setSlotForActive(d, cpIdx, e.target.value)}>
-                                <option value="">-- Off Day --</option>
-                                {courses.map(c => <option key={c.code} value={c.code}>{c.code} - {c.title}</option>)}
-                              </select>
+                              <CustomSelect
+                                value={currentSlot?.course || ''}
+                                onChange={(val) => setSlotForActive(d, cpIdx, val)}
+                                placeholder="-- Off Day --"
+                                options={courses.map(c => ({ value: c.code, label: `${c.code} - ${c.title}` }))}
+                                size="sm"
+                              />
                             </td>
                           );
                         })}

@@ -10,6 +10,7 @@ import { getFileIconByType, showToast, timeAgo } from '@/lib/utils';
 import { updateUserProfile } from '@/lib/firebase';
 import { installGitHubApp } from '@/lib/github-install';
 import { FACULTIES, TEACHER_TITLES } from '@/lib/departments';
+import CustomSelect from '@/components/CustomSelect';
 
 function extractUniversityId(email: string): string {
   const match = email.match(/^(q\d+)/i);
@@ -453,14 +454,12 @@ export default function DashboardView() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
               <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">Department</label>
-                <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" value={profileForm.department} onChange={e => setProfileForm(p => ({ ...p, department: e.target.value }))}>
-                  <option value="">Select department...</option>
-                  {FACULTIES.map(f => (
-                    <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
-                      {f.departments.map(d => <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
+                <CustomSelect
+                  value={profileForm.department}
+                  onChange={value => setProfileForm(p => ({ ...p, department: value }))}
+                  placeholder="Select department..."
+                  options={FACULTIES.flatMap(f => f.departments.map(d => ({ value: d.id, label: `${d.shortName} — ${d.name}`, icon: 'fa-building', group: `${f.shortName} — ${f.name}` })))}
+                />
               </div>
               <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
@@ -481,10 +480,12 @@ export default function DashboardView() {
               {isStudent && (
                 <div>
                   <label className="text-[0.72rem] text-dark-text2 block mb-1">Current Semester</label>
-                  <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" value={profileForm.semester} onChange={e => setProfileForm(p => ({ ...p, semester: e.target.value }))}>
-                    <option value="">Select semester...</option>
-                    {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={profileForm.semester}
+                    onChange={value => setProfileForm(p => ({ ...p, semester: value }))}
+                    placeholder="Select semester..."
+                    options={config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }))}
+                  />
                 </div>
               )}
               {/* Section — students only */}
@@ -1251,14 +1252,12 @@ function TeacherInfoSection({ email, profile }: { email: string; profile: any })
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div>
               <label className="text-[0.7rem] text-dark-text2 block mb-1">Department *</label>
-              <select value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
-                <option value="">Select department...</option>
-                {FACULTIES.map(f => (
-                  <optgroup key={f.id} label={`${f.shortName} — ${f.name}`}>
-                    {f.departments.map(d => <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>)}
-                  </optgroup>
-                ))}
-              </select>
+              <CustomSelect
+                value={form.department}
+                onChange={value => setForm(f => ({ ...f, department: value }))}
+                placeholder="Select department..."
+                options={FACULTIES.flatMap(f => f.departments.map(d => ({ value: d.id, label: `${d.shortName} — ${d.name}`, icon: 'fa-building', group: `${f.shortName} — ${f.name}` })))}
+              />
             </div>
             <div>
               <label className="text-[0.7rem] text-dark-text2 block mb-1">Full Name *</label>
@@ -1266,11 +1265,12 @@ function TeacherInfoSection({ email, profile }: { email: string; profile: any })
             </div>
             <div>
               <label className="text-[0.7rem] text-dark-text2 block mb-1">Designation</label>
-              <select value={TEACHER_TITLES.includes(form.title) ? form.title : form.title ? '__custom' : ''} onChange={e => setForm(f => ({ ...f, title: e.target.value === '__custom' ? '' : e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
-                <option value="">Select designation...</option>
-                {TEACHER_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
-                <option value="__custom">Other (type below)</option>
-              </select>
+              <CustomSelect
+                value={TEACHER_TITLES.includes(form.title) ? form.title : form.title ? '__custom' : ''}
+                onChange={value => setForm(f => ({ ...f, title: value === '__custom' ? '' : value }))}
+                placeholder="Select designation..."
+                options={[...TEACHER_TITLES.map(t => ({ value: t, label: t, icon: 'fa-chalkboard-teacher' })), { value: '__custom', label: 'Other (type below)', icon: 'fa-chalkboard-teacher' }]}
+              />
               {!TEACHER_TITLES.includes(form.title) && form.title !== '' && (
                 <input type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Type designation" className="w-full mt-1 px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
               )}
