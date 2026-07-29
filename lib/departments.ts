@@ -2,12 +2,14 @@ export interface Department {
   id: string;
   name: string;
   shortName: string;
+  icon: string;
 }
 
 export interface Faculty {
   id: string;
   name: string;
   shortName: string;
+  icon: string;
   departments: Department[];
 }
 
@@ -16,66 +18,73 @@ export const FACULTIES: Faculty[] = [
     id: 'shariah',
     name: 'Faculty of Shariah and Islamic Studies',
     shortName: 'FSIS',
+    icon: 'fa-book-quran',
     departments: [
-      { id: 'qsis', name: "Qur'anic Sciences and Islamic Studies", shortName: 'QSIS' },
-      { id: 'dawah', name: "Da'wah and Islamic Studies", shortName: 'DIS' },
-      { id: 'hadith', name: 'Science of Hadith and Islamic Studies', shortName: 'SHIS' },
+      { id: 'qsis', name: "Qur'anic Sciences and Islamic Studies", shortName: 'QSIS', icon: 'fa-book-quran' },
+      { id: 'dawah', name: "Da'wah and Islamic Studies", shortName: 'DIS', icon: 'fa-mosque' },
+      { id: 'hadith', name: 'Science of Hadith and Islamic Studies', shortName: 'SHIS', icon: 'fa-book' },
     ],
   },
   {
     id: 'science',
     name: 'Faculty of Science and Engineering',
     shortName: 'FSE',
+    icon: 'fa-microchip',
     departments: [
-      { id: 'cse', name: 'Computer Science and Engineering', shortName: 'CSE' },
-      { id: 'cce', name: 'Computer and Communication Engineering', shortName: 'CCE' },
-      { id: 'eee', name: 'Electrical and Electronic Engineering', shortName: 'EEE' },
-      { id: 'ete', name: 'Electronic and Telecommunication Engineering', shortName: 'ETE' },
-      { id: 'civil', name: 'Civil Engineering', shortName: 'CE' },
-      { id: 'pharmacy', name: 'Pharmacy', shortName: 'PHM' },
+      { id: 'cse', name: 'Computer Science and Engineering', shortName: 'CSE', icon: 'fa-laptop-code' },
+      { id: 'cce', name: 'Computer and Communication Engineering', shortName: 'CCE', icon: 'fa-wifi' },
+      { id: 'eee', name: 'Electrical and Electronic Engineering', shortName: 'EEE', icon: 'fa-bolt' },
+      { id: 'ete', name: 'Electronic and Telecommunication Engineering', shortName: 'ETE', icon: 'fa-tower-broadcast' },
+      { id: 'civil', name: 'Civil Engineering', shortName: 'CE', icon: 'fa-building' },
+      { id: 'pharmacy', name: 'Pharmacy', shortName: 'PHM', icon: 'fa-pills' },
     ],
   },
   {
     id: 'business',
     name: 'Faculty of Business Studies',
     shortName: 'FBS',
+    icon: 'fa-chart-line',
     departments: [
-      { id: 'ba', name: 'Business Administration', shortName: 'BA' },
-      { id: 'finance', name: 'Department of Finance', shortName: 'FIN' },
+      { id: 'ba', name: 'Business Administration', shortName: 'BA', icon: 'fa-briefcase' },
+      { id: 'finance', name: 'Department of Finance', shortName: 'FIN', icon: 'fa-coins' },
     ],
   },
   {
     id: 'arts',
     name: 'Faculty of Arts and Humanities',
     shortName: 'FAH',
+    icon: 'fa-pen-fancy',
     departments: [
-      { id: 'ell', name: 'English Language and Literature', shortName: 'ELL' },
-      { id: 'all', name: 'Arabic Language and Literature', shortName: 'ALL' },
-      { id: 'lis', name: 'Library and Information Science', shortName: 'LIS' },
+      { id: 'ell', name: 'English Language and Literature', shortName: 'ELL', icon: 'fa-language' },
+      { id: 'all', name: 'Arabic Language and Literature', shortName: 'ALL', icon: 'fa-font' },
+      { id: 'lis', name: 'Library and Information Science', shortName: 'LIS', icon: 'fa-book-open' },
     ],
   },
   {
     id: 'law',
     name: 'Faculty of Law',
     shortName: 'FL',
+    icon: 'fa-gavel',
     departments: [
-      { id: 'law', name: 'Department of Law', shortName: 'LAW' },
+      { id: 'law', name: 'Department of Law', shortName: 'LAW', icon: 'fa-scale-balanced' },
     ],
   },
   {
     id: 'social',
     name: 'Faculty of Social Science',
     shortName: 'FSS',
+    icon: 'fa-users',
     departments: [
-      { id: 'eb', name: 'Economics & Banking', shortName: 'EB' },
+      { id: 'eb', name: 'Economics & Banking', shortName: 'EB', icon: 'fa-money-bill-trend-up' },
     ],
   },
   {
     id: 'cge',
     name: 'Center for General Education',
     shortName: 'CGED',
+    icon: 'fa-graduation-cap',
     departments: [
-      { id: 'cge', name: 'General Education', shortName: 'CGED' },
+      { id: 'cge', name: 'General Education', shortName: 'CGED', icon: 'fa-school' },
     ],
   },
 ];

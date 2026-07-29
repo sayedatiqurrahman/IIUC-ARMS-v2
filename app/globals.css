@@ -277,6 +277,15 @@ button { font-family: inherit; }
   50% { opacity: 0.6; }
 }
 
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.25s ease-out;
+}
+
 /* ═══════════════════════════════════════════════════════════
    ROUTINE SYSTEM — Manager + Builder + Print View
    ═══════════════════════════════════════════════════════════ */

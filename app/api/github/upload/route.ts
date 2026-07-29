@@ -3,9 +3,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
-import { getInstallationAccessToken } from '@/lib/github-app';
+import { getInstallationAccessToken, getAppInstallations } from '@/lib/github-app';
 import { decrypt, isEncrypted } from '@/lib/crypto';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { hasPermission } from '@/lib/permissions';
 
 export const maxDuration = 60;
 
@@ -27,12 +28,21 @@ async function ghPut(url: string, token: string, body: any) {
   return fetch(url, { method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body) });
 }
 
+async function getAppBotToken(): Promise<string | null> {
+  try {
+    const installations = await getAppInstallations();
+    if (!Array.isArray(installations) || installations.length === 0) return null;
+    return await getInstallationAccessToken(installations[0].id);
+  } catch { return null; }
+}
+
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.upload);
   if (!rl.success) return rl.response!;
   try {
     let token = '';
     let installationId: number | null = null;
+    let userEmail = '';
 
     const body = await req.json();
     const { files, message, githubToken: bodyToken } = body;
@@ -41,6 +51,7 @@ export async function POST(req: NextRequest) {
     let hasPAT = false;
     try {
       const email = await getUserEmail(req);
+      userEmail = email || '';
       if (email) {
         const { prisma } = await import('@/lib/prisma');
         const profile = await prisma.profile.findUnique({ where: { userId: email } });
@@ -49,12 +60,10 @@ export async function POST(req: NextRequest) {
         }
         if (profile?.githubToken) {
           const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
-          // PATs start with ghp_ or github_pat_, installation tokens start with ghs_
           if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) {
             token = decrypted;
             hasPAT = true;
           } else if (profile?.githubInstallationId) {
-            // Only use installation token if no PAT
             installationId = Number(profile.githubInstallationId);
           }
         }
@@ -81,16 +90,26 @@ export async function POST(req: NextRequest) {
       try {
         token = await getInstallationAccessToken(installationId);
       } catch {
-        return NextResponse.json(
-          { error: 'GitHub connection expired. Please reconnect from Dashboard.', code: 'TOKEN_EXPIRED' },
-          { status: 401 }
-        );
+        // Installation token failed — will try bot token below
+      }
+    }
+
+    // If still no token, check if user is allowed to upload without GitHub (bot token)
+    if (!token && userEmail) {
+      const role = config.getEffectiveRole(userEmail);
+      const isCR = false; // simplified — CR check happens elsewhere
+      if (await hasPermission('uploadFile', role, isCR)) {
+        const botToken = await getAppBotToken();
+        if (botToken) {
+          token = botToken;
+          // Bot upload — commit as bot, not as user
+        }
       }
     }
 
     if (!token) {
       return NextResponse.json(
-        { error: 'GitHub not connected. Go to Dashboard → Connect with GitHub to set up.', code: 'AUTH_REQUIRED' },
+        { error: 'GitHub not connected. Go to Dashboard → Connect with GitHub to set up, or ask admin for upload access.', code: 'AUTH_REQUIRED' },
         { status: 401 }
       );
     }
@@ -122,8 +141,11 @@ export async function POST(req: NextRequest) {
       token = process.env.GITHUB_TOKEN;
     }
 
-    // ── OWNER: Direct commit to main (fast, no branch/PR) ──
-    if (isOwner) {
+    // Detect if using app bot token (ghs_ prefix from installation)
+    const isBotUpload = token.startsWith('ghs_');
+
+    // ── OWNER or BOT: Direct commit to main (fast, no branch/PR) ──
+    if (isOwner || isBotUpload) {
       const repoRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}`, token);
       if (repoRes.status === 401 || repoRes.status === 403) {
         return NextResponse.json(

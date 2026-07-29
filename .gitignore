@@ -47,3 +47,4 @@ public/webviewer/
 .claude/
 .windsurf/
 skills-lock.json
+scripts/.cleanup-token

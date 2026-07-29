@@ -1,13 +1,17 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { config } from '@/lib/config';
 import { FACULTIES } from '@/lib/departments';
 import { useAppStore } from '@/lib/store';
-import { getMimeFromExt, getFileIconByType, esc, timeAgo, extractYear } from '@/lib/utils';
+import { getMimeFromExt, getFileIconByType, esc, timeAgo, extractYear, showToast } from '@/lib/utils';
+import ReadmeEditor from '@/components/ReadmeEditor';
+import FileActionsMenu from '@/components/FileActionsMenu';
+import MoveModal from '@/components/MoveModal';
+import RenameModal from '@/components/RenameModal';
 
 export default function BrowsePage() {
   const { data: session } = useSession();
@@ -19,6 +23,20 @@ export default function BrowsePage() {
   const userRole = email ? config.detectRole(email) : null;
   const userName = session?.user?.name || profile.name || '';
   const isPrivileged = userRole === 'admin' || userRole === 'teacher';
+  const isOwner = email ? config.ownerEmails.includes(email.toLowerCase()) : false;
+
+  const [filePerms, setFilePerms] = useState<Record<string, boolean>>({});
+  const [moveTarget, setMoveTarget] = useState<{ path: string; name: string; mode: 'move' | 'copy' } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ path: string; name: string } | null>(null);
+  const [actionLoading, setActionLoading] = useState('');
+  const [showAddCourse, setShowAddCourse] = useState(false);
+  const [addCourseCode, setAddCourseCode] = useState('');
+  const [addCourseTitle, setAddCourseTitle] = useState('');
+  const [addCourseLoading, setAddCourseLoading] = useState(false);
+  const [addCourseError, setAddCourseError] = useState('');
+  const [addCourseSuccess, setAddCourseSuccess] = useState('');
+  const [permissionDenied, setPermissionDenied] = useState<{ show: boolean; message: string; contact: string }>({ show: false, message: '', contact: '' });
 
   const loading = useAppStore(s => s.loading);
   const error = useAppStore(s => s.error);
@@ -28,7 +46,6 @@ export default function BrowsePage() {
   const view = useAppStore(s => s.view);
   const currentSem = useAppStore(s => s.currentSem);
   const currentCat = useAppStore(s => s.currentCat);
-  const breadcrumbs = useAppStore(s => s.breadcrumbs);
   const searchQuery = useAppStore(s => s.searchQuery);
   const fileTypeFilter = useAppStore(s => s.fileTypeFilter);
   const searchSemester = useAppStore(s => s.searchSemester);
@@ -36,6 +53,7 @@ export default function BrowsePage() {
   const recentReads = useAppStore(s => s.recentReads);
 
   const loadTree = useAppStore(s => s.loadTree);
+  const loadCourses = useAppStore(s => s.loadCourses);
   const setSearchQuery = useAppStore(s => s.setSearchQuery);
   const setFileTypeFilter = useAppStore(s => s.setFileTypeFilter);
   const setSearchSemester = useAppStore(s => s.setSearchSemester);
@@ -46,22 +64,119 @@ export default function BrowsePage() {
   const navigateToSemester = useAppStore(s => s.navigateToSemester);
   const navigateToCategory = useAppStore(s => s.navigateToCategory);
   const navigateToCourse = useAppStore(s => s.navigateToCourse);
+  const navigateToMidFinal = useAppStore(s => s.navigateToMidFinal);
   const goBack = useAppStore(s => s.goBack);
   const openFile = useAppStore(s => s.openFile);
   const openRecentFile = useAppStore(s => s.openRecentFile);
   const getSemesters = useAppStore(s => s.getSemesters);
-  const getCategories = useAppStore(s => s.getCategories);
-  const getCourses = useAppStore(s => s.getCourses);
+  const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
+  const getCourseCategories = useAppStore(s => s.getCourseCategories);
+  const getCourseMidFinal = useAppStore(s => s.getCourseMidFinal);
   const getUploadTree = useAppStore(s => s.getUploadTree);
   const getSearchResults = useAppStore(s => s.getSearchResults);
   const getUploadDepartments = useAppStore(s => s.getUploadDepartments);
   const currentDept = useAppStore(s => s.currentDept);
+  const currentCourseCode = useAppStore(s => s.currentCourseCode);
+  const currentCourseTitle = useAppStore(s => s.currentCourseTitle);
+  const currentMidFinal = useAppStore(s => s.currentMidFinal);
 
   useEffect(() => {
     loadTree(session?.accessToken || '');
+    loadCourses();
     setShowWelcome(localStorage.getItem('qs-welcome-dismissed') !== 'true');
     setMounted(true);
   }, []);
+
+  // Load file action permissions
+  useEffect(() => {
+    if (!email) return;
+    const role = config.getEffectiveRole(email);
+    const isCR = profile.isCR || false;
+    const loadPerms = async () => {
+      try {
+        const res = await fetch('/api/settings/permissions');
+        const data = await res.json();
+        if (!data.success) return;
+        const perms = data.permissions || {};
+        const check = (action: string) => {
+          const perUserKey = `${action}_users`;
+          const allowedUsers = perms[perUserKey] || [];
+          if (allowedUsers.includes(email.toLowerCase())) return true;
+          const allowedRoles = perms[action] || [];
+          return allowedRoles.includes(isCR ? 'cr' : role);
+        };
+        setFilePerms({
+          move: isOwner || check('moveFile'),
+          copy: isOwner || check('copyFile'),
+          rename: isOwner || check('renameFile'),
+          delete: isOwner || check('deleteFile'),
+        });
+      } catch {}
+    };
+    loadPerms();
+  }, [email, profile.isCR]);
+
+  const hasAnyFileAction = filePerms.move || filePerms.copy || filePerms.rename || filePerms.delete;
+
+  const handleFileAction = useCallback(async (action: string, from: string, to?: string, newName?: string) => {
+    setActionLoading(action + from);
+    try {
+      const res = await fetch('/api/github/file-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, from, to, newName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Action failed');
+      showToast(`${action.charAt(0).toUpperCase() + action.slice(1)} successful!`, 'success');
+      loadTree(session?.accessToken || '');
+      return data;
+    } catch (e: any) {
+      showToast(e.message || 'Action failed', 'error');
+      throw e;
+    } finally {
+      setActionLoading('');
+    }
+  }, [session?.accessToken, loadTree]);
+
+  // Deep-link: read URL params on load
+  useEffect(() => {
+    if (!mounted || loading) return;
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    const dept = params.get('dept');
+    const sem = params.get('sem');
+    const course = params.get('course');
+    const cat = params.get('cat');
+
+    if (q) {
+      setSearchQuery(q);
+      return;
+    }
+
+    if (dept && view === 'departments') {
+      navigateToDepartment(dept);
+      if (sem) {
+        setTimeout(() => {
+          navigateToSemester(sem);
+          if (course) {
+            setTimeout(() => {
+              const { getSemesterCourses } = useAppStore.getState();
+              const courses = getSemesterCourses(sem, dept);
+              const found = courses.find(c => c.code.toUpperCase() === course.toUpperCase());
+              if (found) navigateToCourse(found.code, found.title);
+              if (cat) {
+                setTimeout(() => {
+                  const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
+                  if (catKey) navigateToCategory(catKey);
+                }, 100);
+              }
+            }, 100);
+          }
+        }, 100);
+      }
+    }
+  }, [mounted, loading]);
 
   // Auto-navigate to user's department after onboarding completes
   useEffect(() => {
@@ -104,12 +219,44 @@ export default function BrowsePage() {
 
   const departments = getUploadDepartments();
   const semesters = getSemesters(currentDept || userDeptId);
-  const categories = currentSem ? getCategories(currentSem, currentDept || userDeptId) : [];
-  const courses = currentSem && currentCat ? getCourses(currentSem, currentCat, currentDept || userDeptId) : [];
+  const semesterCourses = currentSem ? getSemesterCourses(currentSem, currentDept || userDeptId) : [];
+  const courseMidFinal = currentSem && currentCourseCode ? getCourseMidFinal(currentSem, currentCourseCode, currentDept || userDeptId) : { mid: 0, final: 0, root: 0 };
+  const courseCategories = currentSem && currentCourseCode ? getCourseCategories(currentSem, currentCourseCode, currentDept || userDeptId, currentMidFinal || null) : [];
   const uploadTree = getUploadTree();
 
   const isSearching = !!(searchQuery || fileTypeFilter || searchYear || searchSemester);
   const searchResults = isSearching ? getSearchResults(searchQuery, fileTypeFilter, searchYear, searchSemester, currentDept || userDeptId) : { files: [], folders: [] };
+
+  // Sync URL params on navigation
+  useEffect(() => {
+    if (!mounted) return;
+    const params = new URLSearchParams();
+    if (view === 'departments') {
+      // root — no params
+    } else if (view === 'semesters' && currentDept) {
+      params.set('dept', currentDept);
+    } else if (view === 'courses' && currentDept && currentSem) {
+      params.set('dept', currentDept);
+      params.set('sem', currentSem);
+    } else if (view === 'categories' && currentDept && currentSem && currentCourseCode) {
+      params.set('dept', currentDept);
+      params.set('sem', currentSem);
+      params.set('course', currentCourseCode);
+      if (currentMidFinal) params.set('mf', currentMidFinal);
+    } else if (view === 'files' && currentDept && currentSem && currentCourseCode && currentCat) {
+      params.set('dept', currentDept);
+      params.set('sem', currentSem);
+      params.set('course', currentCourseCode);
+      if (currentMidFinal) params.set('mf', currentMidFinal);
+      const catMeta = config.categories[currentCat as keyof typeof config.categories];
+      params.set('cat', catMeta?.label || currentCat);
+    } else if (isSearching && searchQuery) {
+      params.set('q', searchQuery);
+    }
+    const qs = params.toString();
+    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState({}, '', url);
+  }, [mounted, view, currentDept, currentSem, currentCourseCode, currentCat, searchQuery, isSearching]);
 
   const filteredSemesters = semesters.filter(sem => {
     const matchLabel = !searchQuery || sem.label.toLowerCase().includes(searchQuery.toLowerCase());
@@ -158,64 +305,19 @@ export default function BrowsePage() {
     return [userSem, ...rest];
   })();
 
-  const filteredCategories = categories.filter(ce => {
-    const catConfig = config.categories[ce.cat as keyof typeof config.categories] || config.categories.other;
-    const matchLabel = !searchQuery || catConfig.label.toLowerCase().includes(searchQuery.toLowerCase()) || ce.folders.some(f => f.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchSearch = matchLabel || uploadTree.some((item: any) => {
-      if (item.type !== 'blob') return false;
-      const parts = item.path.split('/');
-      if (parts[0] !== currentSem) return false;
-      if (!ce.folders.includes(parts[1])) return false;
-      const fileName = parts[parts.length - 1] || '';
-      return fileName.toLowerCase().includes(searchQuery.toLowerCase());
-    });
-    if (!matchSearch) return false;
-    if (fileTypeFilter) {
-      const matchingFiles = uploadTree.filter((item: any) => {
-        if (item.type !== 'blob') return false;
-        const parts = item.path.split('/');
-        if (parts[0] !== currentSem) return false;
-        const ext = (parts[parts.length - 1] || '').split('.').pop()?.toLowerCase() || '';
-        return getMimeFromExt(ext) === fileTypeFilter && ce.folders.includes(parts[1]);
-      });
-      if (matchingFiles.length === 0) return false;
-    }
-    if (searchYear) {
-      const matchingFiles = uploadTree.filter((item: any) => {
-        if (item.type !== 'blob') return false;
-        const parts = item.path.split('/');
-        if (parts[0] !== currentSem) return false;
-        if (!ce.folders.includes(parts[1])) return false;
-        const fileName = parts[parts.length - 1] || '';
-        return extractYear(fileName) === searchYear;
-      });
-      if (matchingFiles.length === 0) return false;
-    }
-    return true;
+  const filteredCourses = semesterCourses.filter(c => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return c.code.toLowerCase().includes(q) || c.title.toLowerCase().includes(q);
   });
 
-  const filteredCourses = courses.filter(([name, files]) => {
-    const matchName = !searchQuery || name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchSearch = matchName || files.some((f: any) => {
-      const fileName = f.path.split('/').pop() || '';
-      return fileName.toLowerCase().includes(searchQuery.toLowerCase());
-    });
-    const matchType = !fileTypeFilter || files.some((f: any) => {
-      const ext = f.path.split('.').pop()?.toLowerCase() || '';
-      return getMimeFromExt(ext) === fileTypeFilter;
-    });
-    const matchYear = !searchYear || files.some((f: any) => {
-      const fileName = f.path.split('/').pop() || '';
-      return extractYear(fileName) === searchYear;
-    });
-    return matchSearch && matchType && matchYear;
-  });
+  const filteredCategories = courseCategories;
 
   const filteredFiles = (() => {
-    const currentCourseName = breadcrumbs[breadcrumbs.length - 1]?.label;
-    const courseEntry = courses.find(([name]) => name === currentCourseName);
-    if (!courseEntry) return [];
-    return courseEntry[1].filter((f: any) => {
+    if (!currentCat || !currentCourseCode || !currentSem) return [];
+    const cat = courseCategories.find(c => c.key === currentCat);
+    if (!cat) return [];
+    return cat.files.filter((f: any) => {
       const fileName = f.path.split('/').pop() || '';
       const ext = fileName.split('.').pop()?.toLowerCase() || '';
       const matchSearch = !searchQuery || fileName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -232,7 +334,7 @@ export default function BrowsePage() {
       {/* Hero Section — always visible */}
       <section className="text-center py-6 mb-4">
         <div className="mb-3">
-          <Image src="/arms-logo.png" alt="IIUC-ARMS" width={150} height={150} className="w-28 h-28 p-2 rounded-lg border-2 border-qsis mx-auto object-contain bg-white mb-3" />
+          <Image src="/arms-logo.jpg" alt="IIUC-ARMS" width={150} height={150} className="w-28 h-28 p-2 rounded-lg border-2 border-qsis mx-auto object-contain bg-white mb-3" />
         </div>
         <h2 className="text-[1.5rem] font-extrabold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent mb-1">IIUC-ARMS</h2>
         <p className="text-gray-500 text-[0.85rem]">IIUC Academic Resource Management System</p>
@@ -307,22 +409,6 @@ export default function BrowsePage() {
         </section>
       )}
 
-      {/* Breadcrumbs */}
-      {breadcrumbs.length > 0 && (
-        <div className="flex items-center gap-2 text-[0.8rem] mb-4 flex-wrap">
-          {breadcrumbs.map((b, i) => (
-            <span key={i} className="flex items-center gap-2">
-              {i > 0 && <span className="text-dark-text2 text-[0.6rem]"><i className="fas fa-chevron-right"></i></span>}
-              {b.onClick ? (
-                <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none" onClick={b.onClick}>{b.label}</button>
-              ) : (
-                <span className="text-dark-text cursor-default">{b.label}</span>
-              )}
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* Search & Filter Bar */}
       <div className="bg-dark-bg2 border border-dark-border rounded-xl p-1 mb-5">
         <div className="flex items-center gap-2.5 bg-dark-bg border border-dark-border rounded-lg px-3.5">
@@ -378,6 +464,57 @@ export default function BrowsePage() {
           </select>
         </div>
       </div>
+
+      {/* Directory Path */}
+      {!loading && !error && view !== 'departments' && (() => {
+        let deptLabel = currentDept;
+        for (const f of FACULTIES) {
+          const d = f.departments.find(dd => dd.id === currentDept);
+          if (d) { deptLabel = d.shortName; break; }
+        }
+        const semLabel = config.semesters.find(s => s.id === currentSem)?.label || currentSem;
+        return (
+        <div className="flex items-center gap-1.5 text-[0.75rem] mb-4 px-1 flex-wrap">
+          <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem] font-semibold" onClick={goHome}>
+            <i className="fas fa-home text-[0.65rem]"></i> Home
+          </button>
+          {currentDept && (
+            <>
+              <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
+              <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem]" onClick={() => navigateToDepartment(currentDept)}>
+                {deptLabel}
+              </button>
+            </>
+          )}
+          {currentSem && (
+            <>
+              <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
+              <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem]" onClick={() => navigateToSemester(currentSem)}>
+                {semLabel}
+              </button>
+            </>
+          )}
+          {currentCourseCode && (
+            <>
+              <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
+              <span className="text-dark-text font-semibold text-[0.75rem]">{currentCourseCode}</span>
+            </>
+          )}
+          {currentMidFinal && (
+            <>
+              <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
+              <span className="text-dark-text text-[0.75rem]">{currentMidFinal}</span>
+            </>
+          )}
+          {view === 'files' && currentCat && (
+            <>
+              <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
+              <span className="text-dark-text text-[0.75rem]">{config.categories[currentCat as keyof typeof config.categories]?.label || currentCat}</span>
+            </>
+          )}
+        </div>
+        );
+      })()}
 
       {/* Loading */}
       {loading && (
@@ -503,7 +640,7 @@ export default function BrowsePage() {
                       return (
                         <div key={dept.id} className={`flex items-center gap-4 p-[18px_20px] bg-dark-bg2 border rounded-xl cursor-pointer hover:border-qsis hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:translate-x-1 transition-all ${isUserDept ? 'border-qsis/40 ring-1 ring-qsis/20' : 'border-dark-border'}`} onClick={() => navigateToDepartment(dept.id)}>
                           <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-qsis to-accent flex items-center justify-center text-white text-[1rem] flex-shrink-0">
-                            <i className="fas fa-building"></i>
+                            <i className={`fas ${dept.icon || 'fa-building'}`}></i>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-[0.95rem] font-bold truncate flex items-center gap-2">
@@ -529,11 +666,11 @@ export default function BrowsePage() {
         <section className="mb-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-semibold flex items-center gap-2">
-              <i className="fas fa-book"></i> 
+              <i className="fas fa-calendar"></i> 
               {currentDept ? (() => {
                 for (const f of FACULTIES) {
                   const d = f.departments.find(dd => dd.id === currentDept);
-                  if (d) return d.name;
+                  if (d) return d.shortName;
                 }
                 return 'Semesters';
               })() : 'Select Semester'}
@@ -600,93 +737,143 @@ export default function BrowsePage() {
         </section>
       )}
 
-      {/* Category View */}
-      {!loading && !error && !isSearching && view === 'categories' && (
-        <section className="mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
-              <i className="fas fa-folder-open"></i>
-              {currentSem === config.relatedKitabsFolder ? 'Related Kitabs' : currentSem === config.relatedSourcesFolder ? 'Related Sources' : config.categories[currentCat as keyof typeof config.categories]?.label || 'Categories'}
-            </h3>
-            <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={goHome}>
-              <i className="fas fa-arrow-left"></i> Back to Semesters
-            </button>
-          </div>
-          {filteredCategories.length === 0 && (
-            <div className="text-center py-8 text-dark-text2">
-              <i className="fas fa-search text-3xl mb-3 block opacity-40"></i>
-              <p>No categories match your search.</p>
-            </div>
-          )}
-          <div className="flex flex-col gap-2">
-            {filteredCategories.map(ce => {
-              const isRelated = currentSem === config.relatedKitabsFolder;
-              const isSources = currentSem === config.relatedSourcesFolder;
-              const catConfig = isRelated
-                ? (config.relatedKitabsCategories[ce.cat as keyof typeof config.relatedKitabsCategories] || { label: ce.cat, icon: 'folder', color: '#94a3b8' })
-                : isSources
-                  ? { label: 'Related Sources', icon: 'link', color: '#0ea5e9' }
-                  : (config.categories[ce.cat as keyof typeof config.categories] || config.categories.other);
-              return (
-                <div key={ce.cat} className="flex items-center gap-3.5 p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-accent hover:shadow-[0_0_16px_rgba(16,185,129,.2)] hover:translate-x-1 transition-all" onClick={() => navigateToCategory(currentSem, ce.cat)}>
-                  <div className="text-[1.5rem]" style={{color: catConfig.color}}><i className={`fas ${catConfig.icon}`}></i></div>
-                  <div className="text-[0.95rem] font-semibold">{catConfig.label}</div>
-                  <div className="text-[0.75rem] text-dark-text2 ml-auto">{ce.count} files</div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Course View */}
+      {/* Course View — inside a semester */}
       {!loading && !error && !isSearching && view === 'courses' && (
         <section className="mb-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
-              <i className="fas fa-folder-open"></i> {(() => {
-                const isRelated = currentSem === config.relatedKitabsFolder;
-                const isSources = currentSem === config.relatedSourcesFolder;
-                if (isRelated) {
-                  const catCfg = config.relatedKitabsCategories[currentCat as keyof typeof config.relatedKitabsCategories];
-                  return catCfg?.label || currentCat;
-                }
-                if (isSources) return 'Related Sources';
-                return config.categories[currentCat as keyof typeof config.categories]?.label || currentCat;
-              })()}
+              <i className="fas fa-book"></i> Courses
             </h3>
             <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={goBack}>
               <i className="fas fa-arrow-left"></i> Back
             </button>
           </div>
-          {filteredCourses.length === 0 && (
+          {semesterCourses.length === 0 && (
+            <div className="text-center py-12">
+              <i className="fas fa-book-open text-4xl mb-4 block text-qsis opacity-40"></i>
+              <p className="text-dark-text font-semibold text-sm mb-1">No courses added yet for this semester.</p>
+              <p className="text-dark-text3 text-xs mb-4">Be the first to add a course code and title.</p>
+              {session && (
+                <button onClick={() => { window.location.href = '/admin'; }} className="px-5 py-2.5 bg-qsis text-white rounded-xl text-xs font-semibold hover:bg-qsis/90 transition-colors">
+                  <i className="fas fa-plus mr-1.5"></i>Add Course
+                </button>
+              )}
+            </div>
+          )}
+          {semesterCourses.length > 0 && filteredCourses.length === 0 && (
             <div className="text-center py-8 text-dark-text2">
               <i className="fas fa-search text-3xl mb-3 block opacity-40"></i>
               <p>No courses match your search.</p>
             </div>
           )}
-          <div className="flex flex-col gap-2">
-            {filteredCourses.map(([name, files]) => {
-              const pdfCount = files.filter((f: any) => f.path.toLowerCase().endsWith('.pdf')).length;
-              const docCount = files.filter((f: any) => /\.(doc|docx)$/i.test(f.path)).length;
-              const xlsCount = files.filter((f: any) => /\.(xls|xlsx)$/i.test(f.path)).length;
-              const pptCount = files.filter((f: any) => /\.(ppt|pptx)$/i.test(f.path)).length;
-              const imgCount = files.filter((f: any) => /\.(jpg|jpeg|png|gif|webp)$/i.test(f.path)).length;
-              return (
-                <div key={name} className="flex items-center gap-3.5 p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-qsis hover:shadow-[0_0_12px_rgba(34,197,94,0.3)] transition-all" onClick={() => navigateToCourse(name)}>
+          <div className="flex flex-col gap-2.5">
+            {filteredCourses.map(course => (
+              <div key={course.code} className="p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-qsis hover:shadow-[0_0_12px_rgba(34,197,94,0.3)] transition-all" onClick={() => navigateToCourse(course.code, course.title)}>
+                <div className="flex items-center gap-3.5">
                   <div className="text-[1.3rem] text-qsis flex-shrink-0"><i className="fas fa-book-open"></i></div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-[0.9rem]">{name}</div>
-                    <div className="flex gap-2.5 text-[0.72rem] text-dark-text2 mt-[3px]">
-                      {pdfCount > 0 && <span className="flex items-center gap-[3px]"><i className="fas fa-file-pdf" style={{color:'#ef4444'}}></i> {pdfCount}</span>}
-                      {docCount > 0 && <span className="flex items-center gap-[3px]"><i className="fas fa-file-word" style={{color:'#3b82f6'}}></i> {docCount}</span>}
-                      {xlsCount > 0 && <span className="flex items-center gap-[3px]"><i className="fas fa-file-excel" style={{color:'#22c55e'}}></i> {xlsCount}</span>}
-                      {pptCount > 0 && <span className="flex items-center gap-[3px]"><i className="fas fa-file-powerpoint" style={{color:'#f97316'}}></i> {pptCount}</span>}
-                      {imgCount > 0 && <span className="flex items-center gap-[3px]"><i className="fas fa-file-image" style={{color:'#34d399'}}></i> {imgCount}</span>}
-                      <span className="flex items-center gap-[3px]"><i className="fas fa-file"></i> {files.length} total</span>
+                    <div className="font-semibold text-[0.95rem]">{course.code} — {course.title}</div>
+                    <div className="flex gap-2 mt-[5px] flex-wrap">
+                      {course.categories.map(cat => (
+                        <span key={cat.key} className="text-[0.68rem] px-2 py-[2px] rounded-full bg-dark-bg3 text-dark-text2 border border-dark-border">
+                          {cat.label}: {cat.count}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                  <i className="fas fa-chevron-right text-dark-text2 text-[0.7rem] flex-shrink-0"></i>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-[0.75rem] text-dark-text2">{course.totalFiles} files</div>
+                    {course.hasMidFinal && (
+                      <div className="flex gap-1 mt-1 justify-end">
+                        <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-yellow-400/15 text-yellow-400">Mid Term</span>
+                        <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-green-400/15 text-green-400">Final Term</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Add Course Button — logged in only */}
+          {session && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => {
+                  setAddCourseCode('');
+                  setAddCourseTitle('');
+                  setAddCourseError('');
+                  setAddCourseSuccess('');
+                  setShowAddCourse(true);
+                }}
+                className="px-5 py-2.5 bg-qsis text-white rounded-xl text-xs font-semibold hover:bg-qsis/90 transition-colors"
+              >
+                <i className="fas fa-plus mr-1.5"></i>Add Course
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Category View — inside a course */}
+      {!loading && !error && !isSearching && view === 'categories' && (
+        <section className="mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
+              <i className="fas fa-folder-open"></i> {currentMidFinal || 'Folders'}
+            </h3>
+            <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={goBack}>
+              <i className="fas fa-arrow-left"></i> Back
+            </button>
+          </div>
+
+          {currentDept && currentSem && currentCourseCode && (
+            <ReadmeEditor
+              folder={`${currentDept}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}${currentMidFinal ? '/' + currentMidFinal : ''}`}
+              isOwner={isOwner}
+            />
+          )}
+
+          {filteredCategories.length === 0 && (
+            <div className="text-center py-8 text-dark-text2">
+              <i className="fas fa-folder-open text-3xl mb-3 block opacity-40"></i>
+              <p>No folders found.</p>
+            </div>
+          )}
+
+          {/* Virtual mid/final cards — side by side on large screens */}
+          {filteredCategories.some(c => c.key === '_mid' || c.key === '_final') && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+              {filteredCategories.filter(c => c.key === '_mid' || c.key === '_final').map(cat => {
+                if (cat.key === '_mid') {
+                  return (
+                    <div key={cat.key} className="flex items-center gap-3.5 p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-yellow-400/50 hover:bg-yellow-400/5 hover:shadow-[0_0_16px_rgba(250,204,21,.15)] hover:translate-x-1 transition-all" onClick={() => navigateToMidFinal('Mid')}>
+                      <div className="text-[1.5rem] text-yellow-400"><i className="fas fa-pen-fancy"></i></div>
+                      <div className="text-[0.95rem] font-semibold">Mid</div>
+                      <div className="text-[0.75rem] text-dark-text2 ml-auto">{cat.count} files</div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={cat.key} className="flex items-center gap-3.5 p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-green-400/50 hover:bg-green-400/5 hover:shadow-[0_0_16px_rgba(34,197,94,.15)] hover:translate-x-1 transition-all" onClick={() => navigateToMidFinal('Final')}>
+                    <div className="text-[1.5rem] text-green-400"><i className="fas fa-graduation-cap"></i></div>
+                    <div className="text-[0.95rem] font-semibold">Final</div>
+                    <div className="text-[0.75rem] text-dark-text2 ml-auto">{cat.count} files</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Real categories */}
+          <div className="flex flex-col gap-2">
+            {filteredCategories.filter(c => c.key !== '_mid' && c.key !== '_final').map(cat => {
+              const catConfig = config.categories[cat.key as keyof typeof config.categories] || config.categories.other;
+              return (
+                <div key={cat.key} className="flex items-center gap-3.5 p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-accent hover:shadow-[0_0_16px_rgba(16,185,129,.2)] hover:translate-x-1 transition-all" onClick={() => navigateToCategory(cat.key)}>
+                  <div className="text-[1.5rem]" style={{color: catConfig.color}}><i className={`fas ${catConfig.icon}`}></i></div>
+                  <div className="text-[0.95rem] font-semibold">{cat.label}</div>
+                  <div className="text-[0.75rem] text-dark-text2 ml-auto">{cat.count} files</div>
                 </div>
               );
             })}
@@ -703,13 +890,24 @@ export default function BrowsePage() {
               <i className="fas fa-arrow-left"></i> Back
             </button>
           </div>
+          {currentDept && currentSem && currentCourseCode && (
+            <ReadmeEditor
+              folder={`${currentDept}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}${currentMidFinal ? '/' + currentMidFinal : ''}/${config.categories[currentCat]?.folder || currentCat}`}
+              isOwner={isOwner}
+            />
+          )}
           {filteredFiles.length === 0 && (
             <div className="text-center py-8 text-dark-text2">
               <i className="fas fa-search text-3xl mb-3 block opacity-40"></i>
               <p>No files match your search.</p>
             </div>
           )}
-          <FileCards items={filteredFiles} onOpen={openFile} />
+           <FileCards items={filteredFiles} onOpen={openFile} filePerms={filePerms}
+              onMove={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
+              onCopy={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
+              onRename={(p, n) => setRenameTarget({ path: p, name: n })}
+              onDelete={(p, n) => setDeleteConfirm({ path: p, name: n })}
+              actionLoading={actionLoading} />
         </section>
       )}
 
@@ -739,15 +937,12 @@ export default function BrowsePage() {
                       if (folder.type === 'semester') {
                         navigateToSemester(folder.id);
                       } else if (folder.type === 'category') {
-                        const parts = folder.path.split('/');
-                        navigateToCategory(parts[0], folder.id);
+                        navigateToCategory(folder.id);
                       } else if (folder.type === 'course') {
                         const parts = folder.path.split('/');
-                        // Navigate: semester -> category -> course
                         navigateToSemester(parts[0]);
                         setTimeout(() => {
-                          navigateToCategory(parts[0], parts[1]);
-                          setTimeout(() => navigateToCourse(folder.id), 0);
+                          navigateToCourse(folder.id, folder.id);
                         }, 0);
                       }
                     }}
@@ -762,8 +957,8 @@ export default function BrowsePage() {
                     <span className="text-[0.7rem] text-dark-text2 flex-shrink-0">{folder.count} file{folder.count !== 1 ? 's' : ''}</span>
                     <i className="fas fa-chevron-right text-dark-text2 text-[0.65rem] flex-shrink-0"></i>
                   </div>
-                ))}
-              </div>
+            ))}
+          </div>
             </div>
           )}
 
@@ -771,7 +966,12 @@ export default function BrowsePage() {
           {searchResults.files.length > 0 && (
             <div>
               <h4 className="text-[0.82rem] font-semibold text-dark-text2 mb-2"><i className="fas fa-file mr-1.5"></i> Matching Files</h4>
-              <FileCards items={searchResults.files} onOpen={openFile} />
+              <FileCards items={searchResults.files} onOpen={openFile} filePerms={filePerms}
+                onMove={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
+                onCopy={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
+                onRename={(p, n) => setRenameTarget({ path: p, name: n })}
+                onDelete={(p, n) => setDeleteConfirm({ path: p, name: n })}
+                actionLoading={actionLoading} />
             </div>
           )}
 
@@ -802,12 +1002,213 @@ export default function BrowsePage() {
       )}
       </>
       )}
+
+      {/* ─── Move/Copy Modal ─── */}
+      {moveTarget && (
+        <MoveModal
+          isOpen={!!moveTarget}
+          onClose={() => setMoveTarget(null)}
+          sourcePath={moveTarget.path}
+          sourceName={moveTarget.name}
+          mode={moveTarget.mode}
+          onAction={async (from, to, newName) => {
+            await handleFileAction(moveTarget.mode, from, to, newName);
+          }}
+        />
+      )}
+
+      {/* ─── Rename Modal ─── */}
+      {renameTarget && (
+        <RenameModal
+          isOpen={!!renameTarget}
+          onClose={() => setRenameTarget(null)}
+          filePath={renameTarget.path}
+          currentName={renameTarget.name}
+          onRename={async (from, newName) => {
+            await handleFileAction('rename', from, undefined, newName);
+          }}
+        />
+      )}
+
+      {/* ─── Delete Confirmation ─── */}
+      {deleteConfirm && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-[200]" onClick={() => setDeleteConfirm(null)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-dark-bg2 border border-red-500/30 rounded-2xl shadow-2xl w-[380px] p-6">
+            <div className="text-center">
+              <div className="w-14 h-14 rounded-full bg-red-500/15 flex items-center justify-center mx-auto mb-4">
+                <i className="fas fa-trash text-red-400 text-xl"></i>
+              </div>
+              <h3 className="font-semibold text-[1rem] mb-2">Delete File?</h3>
+              <p className="text-[0.82rem] text-dark-text2 mb-1">This will permanently delete:</p>
+              <p className="text-[0.78rem] text-dark-text font-mono bg-dark-bg rounded-lg px-3 py-2 border border-dark-border truncate">{deleteConfirm.name}</p>
+              <p className="text-[0.72rem] text-red-400 mt-3"><i className="fas fa-exclamation-triangle mr-1"></i>This action cannot be undone.</p>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl bg-dark-bg border border-dark-border text-dark-text2 text-[0.82rem] hover:bg-dark-bg3 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await handleFileAction('delete', deleteConfirm.path);
+                    setDeleteConfirm(null);
+                  } catch {}
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[0.82rem] font-semibold hover:bg-red-500/90 transition-colors"
+              >
+                <i className="fas fa-trash mr-1.5"></i>Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ─── Add Course Modal ─── */}
+      {showAddCourse && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-[200]" onClick={() => setShowAddCourse(false)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-dark-bg2 border border-dark-border rounded-2xl shadow-2xl w-[400px] max-w-[95vw] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-[1rem] flex items-center gap-2">
+                <i className="fas fa-book-medical text-qsis"></i> Add Course
+              </h3>
+              <button onClick={() => setShowAddCourse(false)} className="text-dark-text3 hover:text-dark-text text-lg"><i className="fas fa-times"></i></button>
+            </div>
+            <p className="text-[0.78rem] text-dark-text3 mb-4">
+              Add a new course to <span className="text-qsis font-semibold">{currentSem}</span> in <span className="text-qsis font-semibold">{currentDept}</span>.
+              <br/>Subfolders (Mid/Final/NOTES/Previous Questions/sheet/Syllabus/Other) will be created automatically on GitHub.
+            </p>
+
+            {addCourseError && (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                <i className="fas fa-exclamation-triangle mr-1"></i>{addCourseError}
+              </div>
+            )}
+            {addCourseSuccess && (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-xs">
+                <i className="fas fa-check mr-1"></i>{addCourseSuccess}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[0.75rem] text-dark-text2 font-medium mb-1 block">Course Code *</label>
+                <input
+                  value={addCourseCode}
+                  onChange={e => setAddCourseCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. QSM-3602"
+                  className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-dark-text text-sm outline-none focus:border-qsis transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-[0.75rem] text-dark-text2 font-medium mb-1 block">Course Title *</label>
+                <input
+                  value={addCourseTitle}
+                  onChange={e => setAddCourseTitle(e.target.value)}
+                  placeholder="e.g. Tafsir Bir Rayi"
+                  className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-dark-text text-sm outline-none focus:border-qsis transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setShowAddCourse(false)}
+                className="flex-1 py-2.5 rounded-xl bg-dark-bg border border-dark-border text-dark-text2 text-[0.82rem] hover:bg-dark-bg3 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!addCourseCode.trim() || !addCourseTitle.trim()) {
+                    setAddCourseError('Both course code and title are required.');
+                    return;
+                  }
+                  setAddCourseLoading(true);
+                  setAddCourseError('');
+                  setAddCourseSuccess('');
+                  try {
+                    const res = await fetch('/api/courses', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ department: currentDept, semester: currentSem, code: addCourseCode.trim(), title: addCourseTitle.trim() }),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      setAddCourseSuccess(`Course ${addCourseCode.trim()} created! Folder structure created on GitHub.`);
+                      setAddCourseCode('');
+                      setAddCourseTitle('');
+                      loadTree();
+                      setTimeout(() => { setShowAddCourse(false); setAddCourseSuccess(''); }, 2000);
+                    } else {
+                      if (res.status === 403) {
+                        setPermissionDenied({ show: true, message: data.error || 'You do not have permission to add courses.', contact: 'Please contact your CR, ACR, teacher, manager, or admin for access.' });
+                        setShowAddCourse(false);
+                      } else {
+                        setAddCourseError(data.error || 'Failed to create course');
+                      }
+                    }
+                  } catch {
+                    setAddCourseError('Network error. Please try again.');
+                  }
+                  setAddCourseLoading(false);
+                }}
+                disabled={addCourseLoading}
+                className="flex-1 py-2.5 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold hover:bg-qsis/90 transition-colors disabled:opacity-50"
+              >
+                {addCourseLoading ? <><i className="fas fa-spinner fa-spin mr-1.5"></i>Creating...</> : <><i className="fas fa-plus mr-1.5"></i>Add Course</>}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ─── Permission Denied Popup ─── */}
+      {permissionDenied.show && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-[200]" onClick={() => setPermissionDenied({ show: false, message: '', contact: '' })} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-dark-bg2 border border-amber-500/30 rounded-2xl shadow-2xl w-[380px] max-w-[95vw] p-6">
+            <div className="text-center">
+              <div className="w-14 h-14 rounded-full bg-amber-500/15 flex items-center justify-center mx-auto mb-4">
+                <i className="fas fa-lock text-amber-400 text-xl"></i>
+              </div>
+              <h3 className="font-semibold text-[1rem] mb-2">Access Restricted</h3>
+              <p className="text-[0.82rem] text-dark-text2 mb-3">{permissionDenied.message}</p>
+              <div className="px-4 py-3 bg-dark-bg rounded-xl border border-dark-border mb-4">
+                <p className="text-[0.78rem] text-dark-text3">
+                  <i className="fas fa-info-circle text-blue-400 mr-1.5"></i>
+                  {permissionDenied.contact}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setPermissionDenied({ show: false, message: '', contact: '' })}
+              className="w-full py-2.5 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold hover:bg-qsis/90 transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        </>
+      )}
     </>
   );
 }
 
 /* ─── File Card Component ─── */
-function FileCards({ items, onOpen }: { items: any[]; onOpen: (item: any) => void }) {
+function FileCards({ items, onOpen, filePerms, onMove, onCopy, onRename, onDelete, actionLoading }: {
+  items: any[];
+  onOpen: (item: any) => void;
+  filePerms: Record<string, boolean>;
+  onMove: (path: string, name: string, mode: 'move' | 'copy') => void;
+  onCopy: (path: string, name: string, mode: 'move' | 'copy') => void;
+  onRename: (path: string, name: string) => void;
+  onDelete: (path: string, name: string) => void;
+  actionLoading: string;
+}) {
   if (!items || items.length === 0) {
     return <div className="text-center py-10 text-dark-text2"><i className="fas fa-folder-open"></i> No files here yet.</div>;
   }
@@ -817,6 +1218,8 @@ function FileCards({ items, onOpen }: { items: any[]; onOpen: (item: any) => voi
         const name = item.path.split('/').pop() || '';
         const ext = name.split('.').pop()?.toLowerCase() || '';
         const mime = getMimeFromExt(ext);
+        const isFolder = item.type === 'tree';
+        const hasActions = filePerms.move || filePerms.copy || filePerms.rename || filePerms.delete;
         return (
           <div key={item.path} className="bg-dark-bg2 border border-dark-border rounded-xl p-[12px_14px] transition-all hover:border-qsis hover:shadow-[0_0_12px_rgba(34,197,94,0.3)]">
             <div className="flex gap-2.5 items-center cursor-pointer" onClick={() => onOpen(item)}>
@@ -830,6 +1233,17 @@ function FileCards({ items, onOpen }: { items: any[]; onOpen: (item: any) => voi
               <button className="bg-transparent border border-dark-border text-dark-text2 cursor-pointer w-[30px] h-[30px] rounded-md inline-flex items-center justify-center text-[0.8rem] hover:bg-dark-bg3 hover:text-qsis hover:border-qsis transition-all" title="View" onClick={(e) => { e.stopPropagation(); onOpen(item); }}>
                 <i className="fas fa-eye"></i>
               </button>
+              {hasActions && (
+                <FileActionsMenu
+                  filePath={item.path}
+                  fileName={name}
+                  isFolder={isFolder}
+                  onMove={() => onMove(item.path, name, 'move')}
+                  onCopy={() => onCopy(item.path, name, 'copy')}
+                  onRename={() => onRename(item.path, name)}
+                  onDelete={() => onDelete(item.path, name)}
+                />
+              )}
             </div>
           </div>
         );

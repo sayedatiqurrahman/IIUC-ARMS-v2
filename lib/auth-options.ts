@@ -13,6 +13,18 @@ function isAllowedEmail(email: string): boolean {
   return IIUC_STUDENT_REGEX.test(email) || IIUC_TEACHER_REGEX.test(email) || OWNER_EMAILS.includes(email);
 }
 
+async function hasAdminCreatedProfile(email: string): Promise<boolean> {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findUnique({ where: { userId: email } });
+    // If profile exists and email is NOT standard IIUC, it was admin-created
+    if (!profile) return false;
+    return !isAllowedEmail(email);
+  } catch {
+    return false;
+  }
+}
+
 async function verifyFirebaseToken(idToken: string) {
   try {
     const { adminAuth } = await import('@/lib/firebase-admin');
@@ -57,7 +69,9 @@ export const authOptions: NextAuthOptions = {
         const decoded = await verifyFirebaseToken(credentials.idToken);
         if (decoded) {
           const email = decoded.email || credentials.email;
-          if (!email || !isAllowedEmail(email)) return null;
+          if (!email) return null;
+          const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
+          if (!allowed) return null;
           if (decoded.email_verified === false) return null;
           try {
             const { prisma } = await import('@/lib/prisma');
@@ -78,7 +92,9 @@ export const authOptions: NextAuthOptions = {
           if (parts.length !== 3) return null;
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
           const email = credentials.email || payload.email;
-          if (!email || !isAllowedEmail(email)) return null;
+          if (!email) return null;
+          const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
+          if (!allowed) return null;
           if (payload.email_verified === false) return null;
           try {
             const { prisma } = await import('@/lib/prisma');
@@ -100,7 +116,11 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }) {
       const email = user.email || (profile as any)?.email;
-      if (!email || !isAllowedEmail(email)) return '/auth/error?error=invalid-email';
+      if (!email) return '/auth/error?error=invalid-email';
+
+      // Allow if it's a standard IIUC email OR if user has an admin-created profile
+      const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
+      if (!allowed) return '/auth/error?error=invalid-email';
 
       // Check if user is banned
       try {
@@ -117,7 +137,17 @@ export const authOptions: NextAuthOptions = {
           });
           if (emailRes.ok) {
             const emails = await emailRes.json();
-            const allowedEmail = emails.find((e: any) => e.primary && isAllowedEmail(e.email));
+            // Allow if any email is IIUC or has admin-created profile
+            let allowedEmail = emails.find((e: any) => e.primary && isAllowedEmail(e.email));
+            if (!allowedEmail) {
+              // Check for admin-created profiles
+              for (const e of emails) {
+                if (e.primary && await hasAdminCreatedProfile(e.email)) {
+                  allowedEmail = e;
+                  break;
+                }
+              }
+            }
             if (allowedEmail) {
               user.email = allowedEmail.email;
             } else {

@@ -1290,8 +1290,8 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
             </p>
           )}
           <PeriodEditor
-            periods={periodTab === 'male' || draft.draftGender === 'male' ? draft.malePeriods : draft.femalePeriods}
-            onChange={(periods) => updatePeriods(periodTab === 'male' || draft.draftGender === 'male' ? 'male' : 'female', periods)}
+            periods={draft.draftGender === 'male' || (draft.draftGender === 'both' && periodTab === 'male') ? draft.malePeriods : draft.femalePeriods}
+            onChange={(periods) => updatePeriods(draft.draftGender === 'male' || (draft.draftGender === 'both' && periodTab === 'male') ? 'male' : 'female', periods)}
           />
         </div>
       )}
@@ -1846,7 +1846,7 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
   const [courses, setCourses] = useState<RoutineCourse[]>(existing?.courses || []);
   const [slots, setSlots] = useState<RoutineSlot[]>(existing?.slots || []);
   const [malePeriods, setMalePeriods] = useState<RoutinePeriod[]>(existing?.malePeriods || [...DEFAULT_PERIODS]);
-  const [femalePeriods, setFemalePeriods] = useState<RoutinePeriod[]>(existing?.femalePeriods || [...DEFAULT_PERIODS]);
+  const [femalePeriods, setFemalePeriods] = useState<RoutinePeriod[]>(existing?.femalePeriods || [...DEFAULT_FEMALE_PERIODS]);
   const [maleSlots, setMaleSlots] = useState<RoutineSlot[]>(existing?.maleSlots || []);
   const [femaleSlots, setFemaleSlots] = useState<RoutineSlot[]>(existing?.femaleSlots || []);
   const [periodTab, setPeriodTab] = useState<'male' | 'female'>('male');
@@ -1892,10 +1892,11 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
   };
 
   const isBoth = gender === 'both';
-  const activePeriods = isBoth ? (periodTab === 'male' ? malePeriods : femalePeriods) : periods;
-  const activeSlots = isBoth ? (periodTab === 'male' ? maleSlots : femaleSlots) : slots;
-  const setActivePeriods = isBoth ? (periodTab === 'male' ? setMalePeriods : setFemalePeriods) : setPeriods;
-  const setActiveSlots = isBoth ? (periodTab === 'male' ? setMaleSlots : setFemaleSlots) : setSlots;
+  const isFemale = gender === 'female';
+  const activePeriods = isBoth ? (periodTab === 'male' ? malePeriods : femalePeriods) : isFemale ? femalePeriods : periods;
+  const activeSlots = isBoth ? (periodTab === 'male' ? maleSlots : femaleSlots) : isFemale ? femaleSlots : slots;
+  const setActivePeriods = isBoth ? (periodTab === 'male' ? setMalePeriods : setFemalePeriods) : isFemale ? setFemalePeriods : setPeriods;
+  const setActiveSlots = isBoth ? (periodTab === 'male' ? setMaleSlots : setFemaleSlots) : isFemale ? setFemaleSlots : setSlots;
 
   const activeClassPeriods = activePeriods.filter(p => !p.isBreak);
 
@@ -2089,7 +2090,7 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
       {step === 'periods' && (
         <div className="routine-builder-section">
           <div className="routine-builder-section-header">
-            <h4><i className="fas fa-clock"></i> Time Periods{isBoth ? ` — ${periodTab === 'male' ? 'Male' : 'Female'}` : ''}</h4>
+            <h4><i className="fas fa-clock"></i> Time Periods{isBoth ? ` — ${periodTab === 'male' ? 'Male' : 'Female'}` : isFemale ? ' — Female' : ''}</h4>
             <button className="routine-add-btn" onClick={addPeriodForActive}><i className="fas fa-plus"></i> Add Period</button>
           </div>
           {isBoth && (
@@ -2130,7 +2131,7 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
 
       {step === 'assign' && (
         <div className="routine-builder-section">
-          <h4><i className="fas fa-table"></i> Assign Courses to Schedule{isBoth ? ` — ${periodTab === 'male' ? 'Male' : 'Female'}` : ''}</h4>
+          <h4><i className="fas fa-table"></i> Assign Courses to Schedule{isBoth ? ` — ${periodTab === 'male' ? 'Male' : 'Female'}` : isFemale ? ' — Female' : ''}</h4>
           {isBoth && (
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
               <button type="button" className={`routine-btn ${periodTab === 'male' ? 'routine-btn-primary' : 'routine-btn-outline'}`} onClick={() => setPeriodTab('male')} style={{ background: periodTab === 'male' ? '#3b82f6' : undefined, color: periodTab === 'male' ? '#fff' : undefined }}>

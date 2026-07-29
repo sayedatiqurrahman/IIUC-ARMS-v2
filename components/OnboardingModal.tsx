@@ -55,6 +55,7 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
   const [step, setStep] = useState(0);
   const [selectedDeptId, setSelectedDeptId] = useState(defaultDept?.department.id || 'qsis');
   const [showCancelForever, setShowCancelForever] = useState(false);
+  const [showDeptPicker, setShowDeptPicker] = useState(false);
 
   const handleClose = () => {
     const count = incrementCancelCount();
@@ -86,7 +87,7 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-dark-bg2 border border-dark-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative">
+      <div className="bg-dark-bg2 border border-dark-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative max-h-[90vh] flex flex-col">
         {/* Close button */}
         <button onClick={handleClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-dark-bg3/80 hover:bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-dark-text border-none cursor-pointer z-10 transition-colors" title="Close">
           <i className="fas fa-times text-sm"></i>
@@ -113,11 +114,11 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
         {!showCancelForever && step === 0 && (
           <>
             <div className="bg-gradient-to-br from-qsis/20 to-accent/10 px-6 py-8 text-center">
-              <Image src="/arms-logo.png" alt="IIUC-ARMS" width={64} height={64} className="w-16 h-16 p-1 rounded-xl border-2 border-qsis object-contain bg-white mx-auto mb-4" />
+              <Image src="/arms-logo.jpg" alt="IIUC-ARMS" width={64} height={64} className="w-16 h-16 p-1 rounded-xl border-2 border-qsis object-contain bg-white mx-auto mb-4" />
               <h2 className="text-xl font-bold text-dark-text mb-1">Welcome to IIUC-ARMS</h2>
               <p className="text-[0.8rem] text-dark-text2">Let&apos;s personalize your experience. This helps us show you the most relevant files.</p>
             </div>
-            <div className="px-6 py-6 space-y-5">
+            <div className="px-6 py-6 space-y-5 overflow-y-auto flex-1 min-h-0">
               <div>
                 <label className="text-[0.78rem] font-semibold text-dark-text mb-2 block">I am a</label>
                 <div className="grid grid-cols-2 gap-3">
@@ -137,15 +138,19 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
               </div>
               <div>
                 <label className="text-[0.78rem] font-semibold text-dark-text mb-2 block">Department</label>
-                <select value={selectedDeptId} onChange={e => setSelectedDeptId(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis">
-                  {FACULTIES.map(f => (
-                    <optgroup key={f.id} label={f.name}>
-                      {f.departments.map(d => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                <button type="button" onClick={() => setShowDeptPicker(true)} className="w-full px-3 py-2.5 rounded-xl border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] text-left flex items-center justify-between cursor-pointer hover:border-qsis transition-colors">
+                  <span className="flex items-center gap-2 truncate">
+                    {selectedDept && <i className={`fas ${selectedDept.department.icon || 'fa-building'} text-qsis text-[0.75rem]`}></i>}
+                    <span className="truncate">{selectedDept ? `${selectedDept.department.shortName} — ${selectedDept.department.name}` : 'Select department'}</span>
+                  </span>
+                  <i className="fas fa-chevron-down text-dark-text3 text-[0.65rem] flex-shrink-0 ml-2"></i>
+                </button>
+                {selectedDept && (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-bg3 border border-dark-border text-[0.75rem]">
+                    <i className="fas fa-building text-qsis"></i>
+                    <span className="text-dark-text2">{selectedDept.faculty.shortName} &rarr; <strong className="text-dark-text">{selectedDept.department.shortName}</strong></span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="px-6 pb-6">
@@ -195,6 +200,44 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
               </button>
             </div>
           </>
+        )}
+
+        {/* Custom Department Picker Modal */}
+        {showDeptPicker && (
+          <div className="absolute inset-0 z-20 bg-dark-bg2 flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-dark-border">
+              <button onClick={() => setShowDeptPicker(false)} className="text-dark-text2 hover:text-dark-text text-sm cursor-pointer bg-transparent border-none">
+                <i className="fas fa-arrow-left"></i>
+              </button>
+              <span className="text-sm font-semibold text-dark-text">Select Department</span>
+              <div className="w-6"></div>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {FACULTIES.map(f => (
+                <div key={f.id}>
+                  <div className="px-4 py-2 bg-dark-bg3/50 sticky top-0 z-10">
+                    <span className="text-[0.7rem] font-bold text-dark-text3 uppercase tracking-wider">{f.shortName}</span>
+                  </div>
+                  {f.departments.map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => { setSelectedDeptId(d.id); setShowDeptPicker(false); }}
+                      className={`w-full px-4 py-3 flex items-center gap-3 text-left cursor-pointer border-none transition-colors ${selectedDeptId === d.id ? 'bg-qsis/10' : 'bg-transparent hover:bg-dark-bg3'}`}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-qsis to-accent flex items-center justify-center text-white text-[0.65rem] flex-shrink-0">
+                        <i className={`fas ${d.icon || 'fa-building'}`}></i>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[0.82rem] font-semibold text-dark-text truncate">{d.shortName}</div>
+                        <div className="text-[0.65rem] text-dark-text3 truncate">{d.name}</div>
+                      </div>
+                      {selectedDeptId === d.id && <i className="fas fa-check text-qsis text-[0.7rem] flex-shrink-0"></i>}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>

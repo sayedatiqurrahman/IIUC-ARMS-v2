@@ -28,6 +28,7 @@ interface CourseGroup {
   title: string;
   files: FileWithMeta[];
   examSession: string;
+  midFinal: string;
 }
 
 interface UploadModalProps {
@@ -71,7 +72,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [department, setDepartment] = useState(userDeptId);
   const [semester, setSemester] = useState(profile.semester || '');
   const [category, setCategory] = useState('');
-  const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, code: '', title: '', files: [], examSession: '' }]);
+  const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, code: '', title: '', files: [], examSession: '', midFinal: '' }]);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -90,7 +91,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   function addCourse() {
     if (courses.length >= 5) return;
     const newId = Math.max(0, ...courses.map(c => c.id)) + 1;
-    setCourses(prev => [...prev, { id: newId, code: '', title: '', files: [], examSession: '' }]);
+    setCourses(prev => [...prev, { id: newId, code: '', title: '', files: [], examSession: '', midFinal: '' }]);
   }
 
   function removeCourse(id: number) {
@@ -188,10 +189,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   function canSubmit(): boolean {
     if (!department || !semester || !category) return false;
-    const isNotes = category === config.categories.notes.folder;
+    const isExamSpecific = category === config.categories.notes.folder || category === config.categories.questions.folder;
     return courses.some(c => {
       if (!c.code.trim() || c.files.length === 0) return false;
-      if (isNotes && !c.examSession) return false;
+      if (isExamSpecific && !c.midFinal) return false;
+      if (category === config.categories.notes.folder && !c.examSession) return false;
       return true;
     });
   }
@@ -237,18 +239,22 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           });
 
           let filePath: string;
+          const courseFolder = course.title.trim() ? `${course.code} - ${course.title}` : course.code;
+          // NOTES, Previous Questions → inside Mid/Final; sheet, Syllabus, Other → root of course
+          const isExamSpecific = category === config.categories.notes.folder || category === config.categories.questions.folder;
+          const midFinalPart = (isExamSpecific && course.midFinal) ? `/${course.midFinal}` : '';
           if (semester === config.relatedKitabsFolder) {
             filePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${folderName}/${fileMeta.file.name}`;
           } else if (semester === config.relatedSourcesFolder) {
             const facId = getFacultyIdForDepartment(department) || department;
             filePath = `${facId}/${config.relatedSourcesFolder}/${folderName}/${fileMeta.file.name}`;
-          } else if ((category === config.categories.questions.folder || category === config.categories.notes.folder) && course.examSession) {
+          } else if (isExamSpecific && course.examSession) {
             const yearPart = isPdf(fileMeta.file.name) ? (fileMeta.yearRange || '') : (fileMeta.year || '');
             filePath = yearPart
-              ? `${department}/${semester}/${category}/${folderName}/${course.examSession}/${yearPart}/${fileMeta.file.name}`
-              : `${department}/${semester}/${category}/${folderName}/${course.examSession}/${fileMeta.file.name}`;
+              ? `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${yearPart}/${fileMeta.file.name}`
+              : `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${fileMeta.file.name}`;
           } else {
-            filePath = `${department}/${semester}/${category}/${folderName}/${fileMeta.file.name}`;
+            filePath = `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${fileMeta.file.name}`;
           }
 
           allFiles.push({ path: filePath, content: base64 });
@@ -272,7 +278,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
       if (data.success) {
         setResult({ success: true, prUrl: data.pr?.url });
-        setCourses([{ id: 1, code: '', title: '', files: [], examSession: '' }]);
+        setCourses([{ id: 1, code: '', title: '', files: [], examSession: '', midFinal: '' }]);
         // Refresh tree cache so newly uploaded files appear immediately
         try { localStorage.removeItem('qs_tree_cache'); } catch {}
         useAppStore.getState().loadTree(session?.accessToken || '');
@@ -496,9 +502,15 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                             <option value={config.relatedSourcesFolder}>Related Sources</option>
                           ) : (
                             <>
-                              {Object.entries(config.categories).filter(([k]) => k !== 'other').map(([key, cat]) => (
-                                <option key={key} value={cat.folder}>{cat.label}</option>
-                              ))}
+                              <optgroup label="Exam Sections (inside Mid/Final)">
+                                <option value={config.categories.notes.folder}>{config.categories.notes.label}</option>
+                                <option value={config.categories.questions.folder}>{config.categories.questions.label}</option>
+                              </optgroup>
+                              <optgroup label="Root Categories">
+                                <option value={config.categories.sheet.folder}>{config.categories.sheet.label}</option>
+                                <option value={config.categories.syllabus.folder}>{config.categories.syllabus.label}</option>
+                                <option value={config.categories.other.folder}>{config.categories.other.label}</option>
+                              </optgroup>
                             </>
                           )}
                         </select>
@@ -539,6 +551,23 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                         </div>
                       </div>
 
+                      {(category === config.categories.questions.folder || category === config.categories.notes.folder) && (
+                        <div className="mb-2">
+                          <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Section *</label>
+                          <select className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" value={course.midFinal} onChange={e => updateCourse(course.id, { midFinal: e.target.value })}>
+                            <option value="">Select exam section...</option>
+                            <option value="Mid">Mid Term Exam</option>
+                            <option value="Final">Final Term Exam</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {(category === config.categories.questions.folder || category === config.categories.notes.folder) && !course.midFinal && (
+                        <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                          <p className="text-[0.68rem] text-orange-400"><i className="fas fa-exclamation-triangle mr-1"></i>Please select an exam section (Mid or Final) for {category === config.categories.notes.folder ? 'Notes' : 'Previous Questions'}.</p>
+                        </div>
+                      )}
+
                       {category === config.categories.questions.folder && (
                         <div className="mb-2">
                           <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
@@ -569,8 +598,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                                 : semester === config.relatedSourcesFolder
                                   ? `${getFacultyIdForDepartment(department) || department}/${config.relatedSourcesFolder}/${folderPreview}/`
                                 : (category === config.categories.questions.folder || category === config.categories.notes.folder) && course.examSession
-                                  ? `${department}/${semester}/${category}/${folderPreview}/${course.examSession}/...`
-                                  : `${department}/${semester}/${category}/${folderPreview}/`
+                                  ? `${department}/${semester}/${folderPreview}/${course.midFinal ? course.midFinal + '/' : ''}${category}/${course.examSession}/...`
+                                  : `${department}/${semester}/${folderPreview}/${course.midFinal ? course.midFinal + '/' : ''}${category}/`
                             }
                           </span>
                         </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { invalidatePermissionsCache } from '@/lib/permissions';
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.admin);
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { targetEmail, action } = body;
-    const validActions = ['ban', 'unban', 'setRole', 'toggleCR', 'toggleACR'];
+    const validActions = ['ban', 'unban', 'setRole', 'toggleCR', 'toggleACR', 'grantPermission', 'revokePermission'];
     if (!targetEmail || !validActions.includes(action)) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
@@ -284,6 +285,59 @@ export async function POST(req: NextRequest) {
       }
       await prisma.profile.update({ where: { userId: targetEmail }, data: { isACR: !!isACR } });
       return NextResponse.json({ success: true, message: isACR ? 'Made ACR' : 'Removed ACR' });
+    }
+
+    // ─── GRANT PERMISSION ───
+    if (action === 'grantPermission') {
+      if (effectiveRole !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can grant permissions' }, { status: 403 });
+      }
+      const { permission } = body;
+      const validPerms = ['addCourse', 'editCourse', 'deleteCourse', 'moveFile', 'copyFile', 'renameFile', 'deleteFile', 'uploadFile', 'manageFaculty', 'publishRoutine', 'manageUsers', 'manageSettings'];
+      if (!permission || !validPerms.includes(permission)) {
+        return NextResponse.json({ error: 'Invalid permission' }, { status: 400 });
+      }
+      const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
+      const perms = (settings?.permissions as Record<string, string[]>) || {};
+      const target = await prisma.profile.findUnique({ where: { userId: targetEmail } });
+      const targetRole = config.getEffectiveRole(targetEmail, target?.role || undefined);
+      const perUserKey = `${permission}_users`;
+      const allowedUsers = (perms[perUserKey] as string[]) || [];
+      if (allowedUsers.includes(targetEmail.toLowerCase())) {
+        return NextResponse.json({ success: true, message: 'Already granted' });
+      }
+      const updatedPerms = { ...perms, [perUserKey]: [...allowedUsers, targetEmail.toLowerCase()] };
+      await prisma.siteSettings.upsert({
+        where: { id: 'site-settings' },
+        create: { id: 'site-settings', permissions: updatedPerms },
+        update: { permissions: updatedPerms },
+      });
+      invalidatePermissionsCache();
+      return NextResponse.json({ success: true, message: `Granted "${permission}" to ${targetEmail}` });
+    }
+
+    // ─── REVOKE PERMISSION ───
+    if (action === 'revokePermission') {
+      if (effectiveRole !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can revoke permissions' }, { status: 403 });
+      }
+      const { permission } = body;
+      if (!permission) {
+        return NextResponse.json({ error: 'Invalid permission' }, { status: 400 });
+      }
+      const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
+      const perms = (settings?.permissions as Record<string, string[]>) || {};
+      const perUserKey = `${permission}_users`;
+      const allowedUsers = (perms[perUserKey] as string[]) || [];
+      const updatedUsers = allowedUsers.filter((e: string) => e !== targetEmail.toLowerCase());
+      const updatedPerms = { ...perms, [perUserKey]: updatedUsers };
+      await prisma.siteSettings.upsert({
+        where: { id: 'site-settings' },
+        create: { id: 'site-settings', permissions: updatedPerms },
+        update: { permissions: updatedPerms },
+      });
+      invalidatePermissionsCache();
+      return NextResponse.json({ success: true, message: `Revoked "${permission}" from ${targetEmail}` });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

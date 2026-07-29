@@ -33,10 +33,10 @@ export const metadata: Metadata = {
     description: 'Free open-source academic resource management system for IIUC departments. Browse, share, and manage notes, sheets, syllabi, and previous questions.',
     images: [
       {
-        url: '/arms-logo.png',
-        width: 512,
-        height: 512,
-        alt: 'IIUC-ARMS Logo',
+        url: 'https://i.imgur.com/r7LuDVs.png',
+        width: 1200,
+        height: 630,
+        alt: 'IIUC-ARMS',
         type: 'image/png',
       },
     ],
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'IIUC-ARMS | Academic Resource Management System',
     description: 'Free open-source academic resource management system for IIUC departments.',
-    images: ['/arms-logo.png'],
+    images: ['https://i.imgur.com/r7LuDVs.png'],
     creator: '@sayedatiqurrahman',
   },
   robots: {
@@ -60,9 +60,9 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: '/arms-logo.png',
-    apple: '/arms-logo.png',
-    shortcut: '/arms-logo.png',
+      icon: '/arms-logo-icon.png',
+    apple: '/arms-logo.jpg',
+    shortcut: '/arms-logo.jpg',
   },
   manifest: '/manifest.json',
   alternates: {
@@ -81,7 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <head>
-        <link rel="icon" href="/arms-logo.png" sizes="any" />
+        <link rel="icon" href="/arms-logo.jpg" sizes="any" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
       </head>
       <body className="min-h-screen">

@@ -21,6 +21,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(false);
+  const [showMoreSheet, setShowMoreSheet] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const goHome = useAppStore(s => s.goHome);
@@ -31,6 +32,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const closeViewer = useAppStore(s => s.closeViewer);
   const profile = useAppStore(s => s.profile);
   const loadTree = useAppStore(s => s.loadTree);
+  const loadCourses = useAppStore(s => s.loadCourses);
   const loadProfile = useAppStore(s => s.loadProfile);
   const loadRecentReads = useAppStore(s => s.loadRecentReads);
   const navigateToDashboard = useAppStore(s => s.navigateToDashboard);
@@ -39,6 +41,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     loadTree(session?.accessToken || '');
+    loadCourses();
     loadRecentReads();
     loadOnboarding();
     // Check onboarding
@@ -77,7 +80,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <nav className="sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border">
         <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3 no-underline" onClick={(e) => { e.preventDefault(); goHome(); router.push('/'); }}>
-            <Image src="/arms-logo.png" alt="IIUC-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white" priority />
+            <Image src="/arms-logo.jpg" alt="IIUC-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white" priority />
             <div>
               <h1 className="text-[1.1rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</h1>
               <span className="text-[0.7rem] text-dark-text2 hidden md:block">Academic Resource System</span>
@@ -178,20 +181,111 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <i className="fas fa-calendar-alt text-[1rem]"></i>
             <span className="text-[0.62rem] font-medium">Routine</span>
           </Link>
-          <Link href="/contributors" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/contributors') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
-            <i className="fas fa-users text-[1rem]"></i>
-            <span className="text-[0.62rem] font-medium">Team</span>
-          </Link>
+          <button className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all bg-transparent ${showMoreSheet ? 'text-qsis' : 'text-dark-text2'}`} onClick={() => setShowMoreSheet(!showMoreSheet)}>
+            <i className="fas fa-ellipsis-h text-[1rem]"></i>
+            <span className="text-[0.62rem] font-medium">More</span>
+          </button>
         </div>
       </div>
 
-      {/* FOOTER */}
-      <footer className="bg-dark-bg2 border-t border-dark-border mt-8">
+      {/* MOBILE MORE SHEET */}
+      {showMoreSheet && (
+        <div className="md:hidden fixed inset-0 z-[95]">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowMoreSheet(false)}></div>
+          <div className="absolute bottom-0 left-0 right-0 bg-dark-bg2 border-t border-dark-border rounded-t-2xl max-h-[80vh] overflow-y-auto animate-slide-up">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-dark-border sticky top-0 bg-dark-bg2 z-10">
+              <span className="text-sm font-bold text-dark-text">More</span>
+              <button onClick={() => setShowMoreSheet(false)} className="w-8 h-8 rounded-full bg-dark-bg3 flex items-center justify-center text-dark-text2 border-none cursor-pointer">
+                <i className="fas fa-times text-sm"></i>
+              </button>
+            </div>
+            <div className="p-4 space-y-5">
+              {/* Quick Links */}
+              <div>
+                <h4 className="text-[0.75rem] font-bold text-dark-text3 uppercase tracking-wider mb-2">Quick Links</h4>
+                <div className="grid grid-cols-3 gap-2">
+                  <Link href="/" onClick={() => setShowMoreSheet(false)} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors no-underline">
+                    <i className="fas fa-home text-qsis text-sm"></i>
+                    <span className="text-[0.68rem] text-dark-text font-medium">Browse</span>
+                  </Link>
+                  <button onClick={() => { setUploadOpen(true); setShowMoreSheet(false); }} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors">
+                    <i className="fas fa-upload text-green-400 text-sm"></i>
+                    <span className="text-[0.68rem] text-dark-text font-medium">Upload</span>
+                  </button>
+                  <Link href="/history" onClick={() => setShowMoreSheet(false)} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors no-underline">
+                    <i className="fas fa-history text-yellow-400 text-sm"></i>
+                    <span className="text-[0.68rem] text-dark-text font-medium">History</span>
+                  </Link>
+                  <Link href="/contributors" onClick={() => setShowMoreSheet(false)} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors no-underline">
+                    <i className="fas fa-users text-purple-400 text-sm"></i>
+                    <span className="text-[0.68rem] text-dark-text font-medium">Team</span>
+                  </Link>
+                  <Link href="/faculty" onClick={() => setShowMoreSheet(false)} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors no-underline">
+                    <i className="fas fa-chalkboard-teacher text-teal-400 text-sm"></i>
+                    <span className="text-[0.68rem] text-dark-text font-medium">Faculty</span>
+                  </Link>
+                  <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors">
+                    <i className="fab fa-github text-dark-text2 text-sm"></i>
+                    <span className="text-[0.68rem] text-dark-text font-medium">GitHub</span>
+                  </a>
+                </div>
+              </div>
+              {/* Organizations */}
+              <div>
+                <h4 className="text-[0.75rem] font-bold text-dark-text3 uppercase tracking-wider mb-2">Organizations</h4>
+                <div className="space-y-2">
+                  <a href="https://www.iiuc.ac.bd/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors">
+                    <Image src="/iiuc-logo.png" alt="IIUC" width={28} height={28} className="w-7 h-7 rounded-md object-contain bg-white" />
+                    <span className="text-[0.78rem] text-dark-text">International Islamic University Chittagong</span>
+                  </a>
+                  <a href="https://www.facebook.com/DQSIS" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors">
+                    <Image src="/qsis-logo.jpg" alt="QS Club" width={28} height={28} className="w-7 h-7 rounded-md object-contain bg-white" />
+                    <span className="text-[0.78rem] text-dark-text">Qur&apos;anic Sciences Club, IIUC</span>
+                  </a>
+                  <a href="https://programming-light.eu.cc" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors">
+                    <Image src="/pl-logo.png" alt="Programming Light" width={28} height={28} className="w-7 h-7 rounded-md object-contain bg-white" />
+                    <span className="text-[0.78rem] text-dark-text">Presented by <strong className="text-qsis">Programming Light</strong></span>
+                  </a>
+                </div>
+              </div>
+              {/* Community */}
+              <div>
+                <h4 className="text-[0.75rem] font-bold text-dark-text3 uppercase tracking-wider mb-2">Community</h4>
+                <div className="space-y-2">
+                  <a href="https://chat.whatsapp.com/BVsl3W6ep6D0JMyRzOIhUy" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 rounded-xl bg-dark-bg3 border border-dark-border hover:border-green-500/30 transition-colors">
+                    <div className="w-7 h-7 rounded-md bg-green-500/20 flex items-center justify-center"><i className="fab fa-whatsapp text-green-400 text-sm"></i></div>
+                    <div>
+                      <span className="text-[0.78rem] text-dark-text block">WhatsApp Community</span>
+                      <span className="text-[0.6rem] text-dark-text3">Your info stays hidden until you join</span>
+                    </div>
+                  </a>
+                  <a href="https://t.me/iiuc_arms" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 rounded-xl bg-dark-bg3 border border-dark-border hover:border-blue-500/30 transition-colors">
+                    <div className="w-7 h-7 rounded-md bg-blue-500/20 flex items-center justify-center"><i className="fab fa-telegram text-blue-400 text-sm"></i></div>
+                    <span className="text-[0.78rem] text-dark-text">Telegram Channel</span>
+                  </a>
+                </div>
+              </div>
+              {/* About */}
+              <div className="text-center pt-2 border-t border-dark-border">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Image src="/arms-logo.jpg" alt="IIUC-ARMS" width={24} height={24} className="w-6 h-6 rounded-full border border-qsis object-contain bg-white" />
+                  <span className="text-[0.82rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</span>
+                </div>
+                <p className="text-[0.65rem] text-dark-text3 leading-relaxed">A centralized platform for managing and sharing<br/>academic resources for QSIS, IIUC.</p>
+                <p className="text-[0.6rem] text-dark-text3 mt-2">&copy; {new Date().getFullYear()} IIUC-ARMS</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FOOTER — hidden on mobile (use More tab) */}
+      <footer className="hidden md:block bg-dark-bg2 border-t border-dark-border mt-8">
         <div className="max-w-[1200px] mx-auto px-5 py-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-3 mb-3">
-                <Image src="/arms-logo.png" alt="IIUC-ARMS" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-qsis object-contain bg-white" />
+                <Image src="/arms-logo.jpg" alt="IIUC-ARMS" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-qsis object-contain bg-white" />
                 <div>
                   <h3 className="text-[0.95rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</h3>
                   <span className="text-[0.68rem] text-dark-text2">Academic Resource System</span>

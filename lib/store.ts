@@ -9,6 +9,7 @@ export type View = 'departments' | 'semesters' | 'categories' | 'courses' | 'fil
 
 export interface Breadcrumb {
   label: string;
+  icon?: string;
   onClick?: () => void;
 }
 
@@ -44,6 +45,62 @@ function detectCategory(name: string) {
   if (l === 'syllabus') return 'syllabus';
   if (l === 'related sources' || l === 'related-sources') return 'related-sources';
   return 'other';
+}
+
+const COURSE_FOLDER_RE = /^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i;
+const LEGACY_CODE_RE = /^([A-Z]{2,5})-?(\d{3,4})$/i;
+const SHEET_CODE_RE = /^([A-Z]{2,5})-?(\d{3,4})/i;
+
+function matchCourseFolder(name: string): { code: string; title: string } | null {
+  const m = name.match(COURSE_FOLDER_RE);
+  return m ? { code: m[1].toUpperCase(), title: m[2].trim() } : null;
+}
+
+function detectMidFinalFromPath(path: string): string | null {
+  const l = path.toLowerCase();
+  if (l.includes('/mid/') || l.includes('mid ') || l.endsWith('/mid') || l.includes('mid-term') || l.includes('midterm') || l.includes('mid question') || l.includes('মিড')) return 'Mid';
+  if (l.includes('/final/') || l.includes('final ') || l.endsWith('/final') || l.includes('final-term') || l.includes('finalterm') || l.includes('final exam') || l.includes('final note') || l.includes('ফাইনাল')) return 'Final';
+  return null;
+}
+
+interface ParsedFile {
+  code: string;
+  title: string;
+  category: string;
+  midFinal: string | null;
+  subPath: string[];
+}
+
+function parseCourseFilePath(rel: string): ParsedFile | null {
+  const parts = rel.split('/');
+  const last = parts[parts.length - 1];
+  if (last === '.gitkeep' || last.toLowerCase() === 'readme.md') return null;
+
+  const first = parts[0];
+
+  // ONLY handle proper course folder structure: CODE - Title/...
+  const courseMatch = matchCourseFolder(first);
+  if (!courseMatch) return null;
+
+  let midFinal = null;
+  let catIdx = 1;
+
+  // Check if parts[1] is Mid/Final
+  if (parts.length > 2) {
+    const mf1 = detectMidFinalFromPath('/' + parts[1] + '/');
+    if (mf1) { midFinal = mf1; catIdx = 2; }
+  }
+
+  const catFolder = parts[catIdx];
+  if (!catFolder) return null;
+
+  return {
+    code: courseMatch.code,
+    title: courseMatch.title,
+    category: detectCategory(catFolder),
+    midFinal,
+    subPath: parts.slice(catIdx + 1),
+  };
 }
 
 function getPdfPageKey(filePath: string) {
@@ -117,6 +174,9 @@ interface AppState {
   currentDept: string;
   currentSem: string;
   currentCat: string;
+  currentCourseCode: string;
+  currentCourseTitle: string;
+  currentMidFinal: string;
   breadcrumbs: Breadcrumb[];
 
   searchQuery: string;
@@ -136,6 +196,12 @@ interface AppState {
   contributors: any[];
   contributorsLoading: boolean;
 
+  dbCourses: { id: string; department: string; semester: string; code: string; title: string; addedBy: string | null }[];
+  loadCourses: () => Promise<void>;
+  addCourse: (dept: string, sem: string, code: string, title: string) => Promise<{ success: boolean; error?: string }>;
+  editCourse: (id: string, title: string) => Promise<{ success: boolean; error?: string }>;
+  deleteCourse: (id: string) => Promise<{ success: boolean; error?: string }>;
+
   routineData: any[];
   routineLoading: boolean;
 
@@ -149,8 +215,9 @@ interface AppState {
 
   navigateToDepartment: (deptId: string) => void;
   navigateToSemester: (semId: string) => void;
-  navigateToCategory: (semId: string, catKey: string) => void;
-  navigateToCourse: (courseName: string) => void;
+  navigateToCourse: (courseCode: string, courseTitle: string) => void;
+  navigateToMidFinal: (midFinal: string) => void;
+  navigateToCategory: (catKey: string) => void;
   navigateToHistory: () => void;
   navigateToContributors: () => void;
   navigateToRoutine: () => void;
@@ -185,8 +252,11 @@ interface AppState {
   clearOnboarding: () => void;
 
   getUploadTree: () => any[];
-  getUploadDepartments: () => { id: string; name: string; shortName: string; facultyName: string; facultyShortName: string; files: number; semesters: number }[];
+  getUploadDepartments: () => { id: string; name: string; shortName: string; icon: string; facultyName: string; facultyShortName: string; facultyIcon: string; files: number; semesters: number }[];
   getSemesters: (departmentId?: string | null) => Semester[];
+  getSemesterCourses: (semId: string, departmentId?: string | null) => { code: string; title: string; categories: { key: string; label: string; icon: string; count: number }[]; totalFiles: number; hasMidFinal: boolean }[];
+  getCourseCategories: (semId: string, courseCode: string, departmentId?: string | null, midFinal?: string | null) => { key: string; label: string; icon: string; count: number; files: any[] }[];
+  getCourseMidFinal: (semId: string, courseCode: string, departmentId?: string | null) => { mid: number; final: number; root: number };
   getCategories: (semId: string, departmentId?: string | null) => Category[];
   getCourses: (semId: string, catKey: string, departmentId?: string | null) => [string, any[]][];
   getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string, departmentId?: string | null) => { files: any[]; folders: any[] };
@@ -201,6 +271,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentDept: '',
   currentSem: '',
   currentCat: '',
+  currentCourseCode: '',
+  currentCourseTitle: '',
+  currentMidFinal: '',
   breadcrumbs: [],
 
   searchQuery: '',
@@ -232,6 +305,56 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   contributors: [],
   contributorsLoading: false,
+
+  dbCourses: [],
+  loadCourses: async () => {
+    try {
+      const res = await fetch('/api/courses');
+      const data = await res.json();
+      if (data.success) set({ dbCourses: data.courses });
+    } catch {}
+  },
+  addCourse: async (dept, sem, code, title) => {
+    try {
+      const res = await fetch('/api/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ department: dept, semester: sem, code, title }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        set(s => ({ dbCourses: [...s.dbCourses, data.course] }));
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed' };
+    } catch { return { success: false, error: 'Network error' }; }
+  },
+  editCourse: async (id, title) => {
+    try {
+      const res = await fetch('/api/courses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, title }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        set(s => ({ dbCourses: s.dbCourses.map(c => c.id === id ? { ...c, title } : c) }));
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed' };
+    } catch { return { success: false, error: 'Network error' }; }
+  },
+  deleteCourse: async (id) => {
+    try {
+      const res = await fetch(`/api/courses?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        set(s => ({ dbCourses: s.dbCourses.filter(c => c.id !== id) }));
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed' };
+    } catch { return { success: false, error: 'Network error' }; }
+  },
 
   routineData: [],
   routineLoading: false,
@@ -302,9 +425,9 @@ export const useAppStore = create<AppState>((set, get) => ({
             const fileName = parts[parts.length - 1];
             const ext = fileName.split('.').pop()?.toLowerCase() || '';
             if (item.type === 'blob') {
-              if (['.gitkeep', 'README.md', 'LICENSE'].includes(fileName)) return false;
+              if (['README.md', 'LICENSE'].includes(fileName)) return false;
               if (['js', 'json', 'yml', 'yaml', 'css', 'html', 'md', 'lock'].includes(ext)) return false;
-              if (!config.academicExtensions.includes(ext)) return false;
+              if (!config.academicExtensions.includes(ext) && fileName !== '.gitkeep') return false;
             }
             return true;
           });
@@ -328,9 +451,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         const fileName = parts[parts.length - 1];
         const ext = fileName.split('.').pop()?.toLowerCase() || '';
         if (item.type === 'blob') {
-          if (['.gitkeep', 'README.md', 'LICENSE'].includes(fileName)) return false;
+          if (['README.md', 'LICENSE'].includes(fileName)) return false;
           if (['js', 'json', 'yml', 'yaml', 'css', 'html', 'md', 'lock'].includes(ext)) return false;
-          if (!config.academicExtensions.includes(ext)) return false;
+          if (!config.academicExtensions.includes(ext) && fileName !== '.gitkeep') return false;
         }
         return true;
       });
@@ -342,21 +465,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   navigateToDepartment: (deptId) => {
-    const deptName = (() => {
+    const dept = (() => {
       for (const f of FACULTIES) {
         const d = f.departments.find(dd => dd.id === deptId);
-        if (d) return d.name;
+        if (d) return d;
       }
-      return deptId;
+      return null;
     })();
     set({
       currentDept: deptId,
       currentSem: '',
       currentCat: '',
+      currentCourseCode: '',
+      currentCourseTitle: '',
       view: 'semesters',
       breadcrumbs: [
-        { label: 'Departments', onClick: () => get().goHome() },
-        { label: deptName },
+        { label: 'Departments', icon: 'fa-building', onClick: () => get().goHome() },
+        { label: dept?.shortName || deptId, icon: dept?.icon },
       ],
     });
   },
@@ -370,63 +495,67 @@ export const useAppStore = create<AppState>((set, get) => ({
     else if (isSources) label = 'Related Sources';
     else label = semId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-    const deptName = (() => {
-      if (!currentDept) return '';
+    const dept = (() => {
+      if (!currentDept) return null;
       for (const f of FACULTIES) {
         const d = f.departments.find(dd => dd.id === currentDept);
-        if (d) return d.name;
+        if (d) return d;
       }
-      return currentDept;
+      return null;
     })();
 
     set({
       currentSem: semId,
       currentCat: '',
-      view: 'categories',
+      currentCourseCode: '',
+      currentCourseTitle: '',
+      view: 'courses',
       breadcrumbs: [
-        { label: 'Departments', onClick: () => get().goHome() },
-        ...(currentDept ? [{ label: deptName, onClick: () => get().navigateToDepartment(currentDept) }] : []),
-        { label },
+        { label: 'Departments', icon: 'fa-building', onClick: () => get().goHome() },
+        ...(dept ? [{ label: dept.shortName, icon: dept.icon, onClick: () => get().navigateToDepartment(currentDept) }] : []),
+        { label, icon: 'fa-calendar' },
       ],
     });
   },
 
-  navigateToCategory: (semId, catKey) => {
-    const { currentDept } = get();
+  navigateToCategory: (catKey) => {
+    const { breadcrumbs } = get();
     const catConfig = config.categories[catKey as keyof typeof config.categories];
-    const isRelated = semId === config.relatedKitabsFolder;
-    const isSources = semId === config.relatedSourcesFolder;
-    let semLabel: string;
-    if (isRelated) semLabel = 'Related Kitabs';
-    else if (isSources) semLabel = 'Related Sources';
-    else semLabel = semId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
-    const deptName = (() => {
-      if (!currentDept) return '';
-      for (const f of FACULTIES) {
-        const d = f.departments.find(dd => dd.id === currentDept);
-        if (d) return d.name;
-      }
-      return currentDept;
-    })();
 
     set({
       currentCat: catKey,
-      view: 'courses',
+      view: 'files',
       breadcrumbs: [
-        { label: 'Departments', onClick: () => get().goHome() },
-        ...(currentDept ? [{ label: deptName, onClick: () => get().navigateToDepartment(currentDept) }] : []),
-        { label: semLabel, onClick: () => get().navigateToSemester(semId) },
-        { label: catConfig?.label || catKey },
+        ...breadcrumbs,
+        { label: catConfig?.label || catKey, icon: 'fa-folder' },
       ],
     });
   },
 
-  navigateToCourse: (courseName) => {
+  navigateToCourse: (courseCode, courseTitle) => {
+    const { breadcrumbs } = get();
+    const label = courseTitle ? `${courseCode} - ${courseTitle}` : courseCode;
+    set({
+      currentCourseCode: courseCode,
+      currentCourseTitle: courseTitle,
+      currentMidFinal: '',
+      view: 'categories',
+      breadcrumbs: [
+        ...breadcrumbs,
+        { label, icon: 'fa-book' },
+      ],
+    });
+  },
+
+  navigateToMidFinal: (midFinal) => {
     const { breadcrumbs } = get();
     set({
-      view: 'files',
-      breadcrumbs: [...breadcrumbs, { label: courseName }],
+      currentMidFinal: midFinal,
+      view: 'categories',
+      breadcrumbs: [
+        ...breadcrumbs,
+        { label: midFinal, icon: 'fa-folder' },
+      ],
     });
   },
 
@@ -474,12 +603,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   goBack: () => {
-    const { view, currentDept, currentSem, currentCat } = get();
+    const { view, currentDept, currentSem, currentCourseCode, currentCourseTitle, currentMidFinal, breadcrumbs } = get();
     if (view === 'files') {
-      get().navigateToCategory(currentSem, currentCat);
-    } else if (view === 'courses') {
-      get().navigateToSemester(currentSem);
+      get().navigateToCourse(currentCourseCode, currentCourseTitle);
+    } else if (view === 'categories' && currentMidFinal) {
+      set({
+        currentMidFinal: '',
+        breadcrumbs: breadcrumbs.slice(0, -1),
+      });
     } else if (view === 'categories') {
+      get().navigateToSemester(currentSem);
+    } else if (view === 'courses') {
       if (currentDept) {
         get().navigateToDepartment(currentDept);
       } else {
@@ -498,6 +632,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentDept: '',
       currentSem: '',
       currentCat: '',
+      currentCourseCode: '',
+      currentCourseTitle: '',
+      currentMidFinal: '',
       breadcrumbs: [],
       searchQuery: '',
       fileTypeFilter: '',
@@ -665,14 +802,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     uploadTree.forEach((item: any) => {
-      if (item.type !== 'blob' || !item.department) return;
+      if (!item.department) return;
       const dept = item.department;
-      if (!depts.has(dept)) depts.set(dept, { files: 0, semesters: new Set() });
+      // Only count known department IDs
+      if (!depts.has(dept)) return;
       const d = depts.get(dept)!;
-      d.files++;
+
+      // Count real files (skip .gitkeep)
+      if (item.type === 'blob') {
+        const fileName = item.path.split('/').pop();
+        if (fileName !== '.gitkeep') d.files++;
+      }
+
       const parts = item.path.split('/');
       const sem = parts[0];
-      if (sem) d.semesters.add(sem);
+      if (sem && config.semesters.some(s => s.id === sem)) d.semesters.add(sem);
     });
 
     return Array.from(depts.entries()).map(([id, data]) => {
@@ -687,8 +831,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         id,
         name: found?.department.name || id,
         shortName: found?.department.shortName || id.toUpperCase(),
+        icon: found?.department.icon || 'fa-building',
         facultyName: found?.faculty.name || '',
         facultyShortName: found?.faculty.shortName || '',
+        facultyIcon: found?.faculty.icon || 'fa-graduation-cap',
         files: data.files,
         semesters: data.semesters.size,
       };
@@ -716,8 +862,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
 
     uploadTree.forEach((item: any) => {
-      if (item.type !== 'blob') return;
-
       // Filter: match dept directly, or match faculty (for faculty-level related-sources)
       if (departmentId) {
         const matchesDept = item.department === departmentId;
@@ -733,7 +877,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (sem === config.relatedKitabsFolder) {
         if (!sems.has(config.relatedKitabsFolder)) sems.set(config.relatedKitabsFolder, { files: 0, courses: new Set() });
         const s = sems.get(config.relatedKitabsFolder)!;
-        s.files++;
+        if (item.type === 'blob') {
+          const fileName = parts[parts.length - 1];
+          if (fileName !== '.gitkeep') s.files++;
+        }
         if (parts.length >= 3 && parts[1]) s.courses.add(parts[1]);
         return;
       }
@@ -742,21 +889,31 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (sem === config.relatedSourcesFolder) {
         if (!sems.has(config.relatedSourcesFolder)) sems.set(config.relatedSourcesFolder, { files: 0, courses: new Set() });
         const s = sems.get(config.relatedSourcesFolder)!;
-        s.files++;
+        if (item.type === 'blob') {
+          const fileName = parts[parts.length - 1];
+          if (fileName !== '.gitkeep') s.files++;
+        }
         if (parts.length >= 3 && parts[1]) s.courses.add(parts[1]);
         return;
       }
 
+      // Skip invalid semester IDs — only accept config semesters, related kitabs, or related sources
+      if (!config.semesters.some(ss => ss.id === sem) && sem !== config.relatedKitabsFolder && sem !== config.relatedSourcesFolder) return;
+
       if (!sems.has(sem)) sems.set(sem, { files: 0, courses: new Set() });
       const s = sems.get(sem)!;
-      s.files++;
 
-      if (parts.length === 3) {
-        s.courses.add(parts[1]);
-      } else if (parts.length === 2) {
-        s.courses.add('General');
-      } else if (parts.length >= 4 && parts[2]) {
-        s.courses.add(parts[2]);
+      // Count real files (skip .gitkeep)
+      if (item.type === 'blob') {
+        const fileName = parts[parts.length - 1];
+        if (fileName !== '.gitkeep') s.files++;
+      }
+
+      // Detect course from new structure: {sem}/{CODE} - {Title}/... (works for both blobs and trees)
+      const second = parts[1] || '';
+      const dashMatch = second.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      if (dashMatch) {
+        s.courses.add(dashMatch[1].toUpperCase());
       }
     });
 
@@ -803,8 +960,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const knownFolders = new Set<string>();
     const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
 
+    // Check if this semester uses new course-based structure
+    let hasCourseFolders = false;
+
     uploadTree.forEach((item: any) => {
-      // Filter: match dept directly, or match faculty (for faculty-level related-sources)
       if (departmentId) {
         const matchesDept = item.department === departmentId;
         const matchesFaculty = facultyId && item.department === facultyId;
@@ -814,13 +973,36 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!item.path.startsWith(prefix)) return;
       const rel = item.path.substring(prefix.length);
       const parts = rel.split('/');
-      const catFolder = parts[0];
-      if (!catFolder) return;
+      if (parts.length < 2) return;
 
-      knownFolders.add(catFolder);
+      const firstFolder = parts[1];
+      const dashMatch = firstFolder.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
 
-      if (item.type === 'blob') {
-        folderCounts[catFolder] = (folderCounts[catFolder] || 0) + 1;
+      if (dashMatch) {
+        hasCourseFolders = true;
+      const third = parts[2];
+      const isMidFinal = third === 'Mid' || third === 'Final';
+      const catFolder = isMidFinal ? parts[3] : third;
+        if (catFolder && catFolder !== '.gitkeep') {
+          knownFolders.add(catFolder);
+          if (item.type === 'blob') {
+            const fileName = item.path.split('/').pop();
+            if (fileName !== '.gitkeep') {
+              folderCounts[catFolder] = (folderCounts[catFolder] || 0) + 1;
+            }
+          }
+        }
+      } else {
+        const catFolder = firstFolder;
+        if (catFolder) {
+          knownFolders.add(catFolder);
+          if (item.type === 'blob') {
+            const fileName = item.path.split('/').pop();
+            if (fileName !== '.gitkeep') {
+              folderCounts[catFolder] = (folderCounts[catFolder] || 0) + 1;
+            }
+          }
+        }
       }
     });
 
@@ -837,7 +1019,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     });
 
-    // For related-kitabs, merge entries with same category key and apply labels
     if (isRelated) {
       return catEntries.map(entry => {
         const catCfg = config.relatedKitabsCategories[entry.cat];
@@ -850,7 +1031,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     }
 
-    // For related-sources, show as a single category
     if (isSources) {
       return catEntries.map(entry => ({
         ...entry,
@@ -876,7 +1056,45 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     uploadTree.forEach((item: any) => {
       if (item.type !== 'blob') return;
-      // Filter: match dept directly, or match faculty (for faculty-level related-sources)
+      const fileName = item.path.split('/').pop();
+      if (fileName === '.gitkeep') return;
+      if (departmentId) {
+        const matchesDept = item.department === departmentId;
+        const matchesFaculty = facultyId && item.department === facultyId;
+        if (!matchesDept && !matchesFaculty) return;
+      }
+      if (!item.path.startsWith(prefix)) return;
+      const rel = item.path.substring(prefix.length);
+      const parts = rel.split('/');
+      if (parts.length < 3) return;
+
+      const firstFolder = parts[1];
+      const dashMatch = firstFolder.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      if (!dashMatch) return;
+
+      const courseName = dashMatch[1].toUpperCase();
+      const third = parts[2];
+      const isMidFinal = third === 'Mid' || third === 'Final';
+      const catFolder = isMidFinal ? parts[3] : third;
+
+      if (!catFolders.has(catFolder)) return;
+      if (!courseName) return;
+
+      if (!courses.has(courseName)) courses.set(courseName, []);
+      courses.get(courseName)!.push(item);
+    });
+
+    return Array.from(courses.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  },
+
+  getSemesterCourses: (semId, departmentId?) => {
+    const uploadTree = get().getUploadTree();
+    const prefix = semId + '/';
+    const courseMap = new Map<string, { title: string; categories: Map<string, number>; totalFiles: number; midCount: number; finalCount: number; rootCount: number }>();
+    const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
+
+    // First pass: detect courses from folder structure (tree items)
+    uploadTree.forEach((item: any) => {
       if (departmentId) {
         const matchesDept = item.department === departmentId;
         const matchesFaculty = facultyId && item.department === facultyId;
@@ -886,24 +1104,259 @@ export const useAppStore = create<AppState>((set, get) => ({
       const rel = item.path.substring(prefix.length);
       const parts = rel.split('/');
 
-      if (parts.length < 2) return;
-
-      const catFolder = parts[0];
-      if (!catFolders.has(catFolder)) return;
-
-      let courseName: string;
-      if (parts.length === 2) {
-        courseName = 'General';
-      } else {
-        courseName = parts[1];
+      // Detect course folder: CODE - Title
+      const first = parts[0] || '';
+      const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      if (dashMatch) {
+        const code = dashMatch[1].toUpperCase();
+        const title = dashMatch[2].trim();
+        if (!courseMap.has(code)) {
+          courseMap.set(code, { title, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0 });
+        } else {
+          const c = courseMap.get(code)!;
+          if (title !== code && c.title === code) c.title = title;
+        }
       }
-      if (!courseName) return;
-
-      if (!courses.has(courseName)) courses.set(courseName, []);
-      courses.get(courseName)!.push(item);
     });
 
-    return Array.from(courses.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    // Second pass: count files and categories (blobs only)
+    uploadTree.forEach((item: any) => {
+      if (item.type !== 'blob') return;
+      const fileName = item.path.split('/').pop();
+      if (fileName === '.gitkeep') return;
+      if (departmentId) {
+        const matchesDept = item.department === departmentId;
+        const matchesFaculty = facultyId && item.department === facultyId;
+        if (!matchesDept && !matchesFaculty) return;
+      }
+      if (!item.path.startsWith(prefix)) return;
+      const rel = item.path.substring(prefix.length);
+
+      const parsed = parseCourseFilePath(rel);
+      if (!parsed) return;
+
+      const { code, title, category, midFinal } = parsed;
+
+      if (!courseMap.has(code)) {
+        courseMap.set(code, { title: code, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0 });
+      }
+      const c = courseMap.get(code)!;
+      if (title !== code && c.title === code) c.title = title;
+      c.totalFiles++;
+      if (midFinal === 'Mid') c.midCount++;
+      else if (midFinal === 'Final') c.finalCount++;
+      else c.rootCount++;
+
+      c.categories.set(category, (c.categories.get(category) || 0) + 1);
+    });
+
+    return Array.from(courseMap.entries())
+      .map(([code, data]) => ({
+        code,
+        title: data.title,
+        categories: Array.from(data.categories.entries()).map(([key, count]) => ({
+          key,
+          label: config.categories[key as keyof typeof config.categories]?.label || key,
+          icon: config.categories[key as keyof typeof config.categories]?.icon || 'folder',
+          count,
+        })),
+        totalFiles: data.totalFiles,
+        hasMidFinal: data.midCount > 0 || data.finalCount > 0,
+      }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+  },
+
+  getCourseCategories: (semId, courseCode, departmentId?, midFinal?: string | null) => {
+    const uploadTree = get().getUploadTree();
+    const prefix = semId + '/';
+    const code = courseCode.toUpperCase();
+    const catMap = new Map<string, { files: any[] }>();
+    const folderSet = new Set<string>(); // track which category folders exist
+    const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
+
+    // First pass: detect categories from folder structure (tree items)
+    uploadTree.forEach((item: any) => {
+      if (departmentId) {
+        const matchesDept = item.department === departmentId;
+        const matchesFaculty = facultyId && item.department === facultyId;
+        if (!matchesDept && !matchesFaculty) return;
+      }
+      if (!item.path.startsWith(prefix)) return;
+      const rel = item.path.substring(prefix.length);
+      const parts = rel.split('/');
+      const first = parts[0] || '';
+      const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      if (!dashMatch || dashMatch[1].toUpperCase() !== code) return;
+
+      // parts[1] = Mid/Final or category folder
+      // parts[2] = category folder (if under Mid/Final)
+      let mf: string | null = null;
+      let catFolder: string | null = null;
+
+      if (parts.length >= 2) {
+        const mfCheck = parts[1];
+        if (mfCheck === 'Mid' || mfCheck === 'Final') {
+          mf = mfCheck;
+          catFolder = parts[2] || null;
+        } else {
+          catFolder = mfCheck;
+        }
+      }
+
+      if (catFolder && catFolder !== '.gitkeep') {
+        const catKey = detectCategory(catFolder);
+        const folderKey = `${mf || ''}/${catKey}`;
+        folderSet.add(folderKey);
+      }
+    });
+
+    // Second pass: count files (blobs only, skip .gitkeep)
+    uploadTree.forEach((item: any) => {
+      if (item.type !== 'blob') return;
+      const fileName = item.path.split('/').pop();
+      if (fileName === '.gitkeep') return;
+      if (departmentId) {
+        const matchesDept = item.department === departmentId;
+        const matchesFaculty = facultyId && item.department === facultyId;
+        if (!matchesDept && !matchesFaculty) return;
+      }
+      if (!item.path.startsWith(prefix)) return;
+      const rel = item.path.substring(prefix.length);
+
+      const parsed = parseCourseFilePath(rel);
+      if (!parsed || parsed.code !== code) return;
+
+      if (midFinal) {
+        if (parsed.midFinal !== midFinal) return;
+        if (!parsed.midFinal) return;
+      } else {
+        if (parsed.midFinal) return;
+      }
+
+      if (!catMap.has(parsed.category)) catMap.set(parsed.category, { files: [] });
+      catMap.get(parsed.category)!.files.push(item);
+    });
+
+    // When no midFinal, add Mid and Final as virtual categories
+    if (!midFinal) {
+      let midCount = 0;
+      let finalCount = 0;
+      uploadTree.forEach((item: any) => {
+        if (item.type !== 'blob') return;
+        const fileName = item.path.split('/').pop();
+        if (fileName === '.gitkeep') return;
+        if (departmentId) {
+          const matchesDept = item.department === departmentId;
+          const matchesFaculty = facultyId && item.department === facultyId;
+          if (!matchesDept && !matchesFaculty) return;
+        }
+        if (!item.path.startsWith(prefix)) return;
+        const rel = item.path.substring(prefix.length);
+        const parsed = parseCourseFilePath(rel);
+        if (!parsed || parsed.code !== code) return;
+        if (parsed.midFinal === 'Mid') midCount++;
+        else if (parsed.midFinal === 'Final') finalCount++;
+      });
+
+      // Also detect Mid/Final from folder structure
+      const hasMidFolder = folderSet.has('Mid/notes') || folderSet.has('Mid/questions') || folderSet.has('Mid/sheet') || folderSet.has('Mid/syllabus') || folderSet.has('Mid/other');
+      const hasFinalFolder = folderSet.has('Final/notes') || folderSet.has('Final/questions') || folderSet.has('Final/sheet') || folderSet.has('Final/syllabus') || folderSet.has('Final/other');
+
+      const virtualCats: { key: string; label: string; icon: string; count: number; files: any[] }[] = [];
+      if (midCount > 0 || hasMidFolder) virtualCats.push({ key: '_mid', label: 'Mid', icon: 'fa-pen-fancy', count: midCount, files: [] });
+      if (finalCount > 0 || hasFinalFolder) virtualCats.push({ key: '_final', label: 'Final', icon: 'fa-graduation-cap', count: finalCount, files: [] });
+
+      // Root categories: include from files AND from folder structure
+      const rootCatKeys = new Set<string>(Array.from(catMap.keys()));
+      Array.from(folderSet).forEach(fk => {
+        if (fk.startsWith('Mid/') || fk.startsWith('Final/')) return;
+        rootCatKeys.add(fk.replace(/^\//, ''));
+      });
+
+      const rootCats = Array.from(rootCatKeys).map(key => ({
+        key,
+        label: config.categories[key as keyof typeof config.categories]?.label || key,
+        icon: config.categories[key as keyof typeof config.categories]?.icon || 'folder',
+        count: catMap.get(key)?.files.length || 0,
+        files: catMap.get(key)?.files || [],
+      }));
+      return [...virtualCats, ...rootCats];
+    }
+
+    // When midFinal is set, also include categories from folder structure
+    const resultCats = Array.from(catMap.entries()).map(([key, data]) => ({
+      key,
+      label: config.categories[key as keyof typeof config.categories]?.label || key,
+      icon: config.categories[key as keyof typeof config.categories]?.icon || 'folder',
+      count: data.files.length,
+      files: data.files,
+    }));
+
+    // Add folders that exist but have no files yet
+    const resultKeys = new Set(resultCats.map(c => c.key));
+    Array.from(folderSet).forEach(fk => {
+      if (!fk.startsWith(midFinal + '/')) return;
+      const catKey = fk.split('/')[1];
+      if (catKey && !resultKeys.has(catKey)) {
+        resultCats.push({
+          key: catKey,
+          label: config.categories[catKey as keyof typeof config.categories]?.label || catKey,
+          icon: config.categories[catKey as keyof typeof config.categories]?.icon || 'folder',
+          count: 0,
+          files: [],
+        });
+      }
+    });
+
+    return resultCats;
+  },
+
+  getCourseMidFinal: (semId, courseCode, departmentId?) => {
+    const uploadTree = get().getUploadTree();
+    const prefix = semId + '/';
+    const code = courseCode.toUpperCase();
+    const result = { mid: 0, final: 0, root: 0 };
+    const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
+
+    uploadTree.forEach((item: any) => {
+      if (item.type !== 'blob') return;
+      const fileName = item.path.split('/').pop();
+      if (fileName === '.gitkeep') return;
+      if (departmentId) {
+        const matchesDept = item.department === departmentId;
+        const matchesFaculty = facultyId && item.department === facultyId;
+        if (!matchesDept && !matchesFaculty) return;
+      }
+      if (!item.path.startsWith(prefix)) return;
+      const rel = item.path.substring(prefix.length);
+
+      const parsed = parseCourseFilePath(rel);
+      if (!parsed || parsed.code !== code) return;
+
+      if (parsed.midFinal === 'Mid') result.mid++;
+      else if (parsed.midFinal === 'Final') result.final++;
+      else result.root++;
+    });
+
+    // Also detect Mid/Final from folder structure (tree items)
+    uploadTree.forEach((item: any) => {
+      if (item.type === 'blob') return; // only tree items
+      if (departmentId) {
+        const matchesDept = item.department === departmentId;
+        const matchesFaculty = facultyId && item.department === facultyId;
+        if (!matchesDept && !matchesFaculty) return;
+      }
+      if (!item.path.startsWith(prefix)) return;
+      const rel = item.path.substring(prefix.length);
+      const parts = rel.split('/');
+      const first = parts[0] || '';
+      const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      if (!dashMatch || dashMatch[1].toUpperCase() !== code) return;
+      if (parts[1] === 'Mid' && result.mid === 0) result.mid = 0; // folder exists but no files yet
+      if (parts[1] === 'Final' && result.final === 0) result.final = 0;
+    });
+
+    return result;
   },
 
   getSearchResults: (query, typeFilter, yearFilter, semFilter, departmentId?) => {
@@ -922,6 +1375,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const catFolder = parts[1] || '';
       const courseName = parts[2] || '';
       const fileName = parts[parts.length - 1] || '';
+      if (fileName === '.gitkeep') return;
       const ext = fileName.split('.').pop()?.toLowerCase() || '';
 
       // Semester filter

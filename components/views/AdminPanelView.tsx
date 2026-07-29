@@ -46,7 +46,240 @@ interface AdminStats {
   banned: number;
 }
 
-type Tab = 'overview' | 'admins' | 'managers' | 'teachers' | 'students' | 'users' | 'activity' | 'faculty';
+type Tab = 'overview' | 'admins' | 'managers' | 'teachers' | 'students' | 'users' | 'activity' | 'faculty' | 'courses' | 'permissions';
+
+const ALL_ROLES = [
+  { key: 'admin', label: 'Admin', icon: 'fa-crown', color: 'text-red-400' },
+  { key: 'manager', label: 'Manager', icon: 'fa-user-shield', color: 'text-orange-400' },
+  { key: 'teacher', label: 'Teacher', icon: 'fa-chalkboard-teacher', color: 'text-green-400' },
+  { key: 'cr', label: 'CR', icon: 'fa-user-check', color: 'text-blue-400' },
+  { key: 'student', label: 'Student', icon: 'fa-user-graduate', color: 'text-cyan-400' },
+  { key: 'user', label: 'User', icon: 'fa-user', color: 'text-dark-text2' },
+];
+
+const PERMISSION_ACTIONS = [
+  { key: 'addCourse', label: 'Add Course', desc: 'Create new course codes in semesters', icon: 'fa-book-medical', color: 'text-indigo-400' },
+  { key: 'editCourse', label: 'Edit Course', desc: 'Edit course titles', icon: 'fa-edit', color: 'text-blue-400' },
+  { key: 'deleteCourse', label: 'Delete Course', desc: 'Remove courses from semesters', icon: 'fa-trash', color: 'text-red-400' },
+  { key: 'uploadFile', label: 'Upload Files', desc: 'Upload notes, sheets, questions to courses', icon: 'fa-cloud-upload-alt', color: 'text-green-400' },
+  { key: 'moveFile', label: 'Move Files', desc: 'Move files and folders to other locations', icon: 'fa-arrows-alt', color: 'text-cyan-400' },
+  { key: 'copyFile', label: 'Copy Files', desc: 'Copy files to other locations', icon: 'fa-copy', color: 'text-teal-400' },
+  { key: 'renameFile', label: 'Rename Files', desc: 'Rename files and folders', icon: 'fa-i-cursor', color: 'text-amber-400' },
+  { key: 'deleteFile', label: 'Delete Files', desc: 'Delete files and folders permanently', icon: 'fa-times-circle', color: 'text-red-500' },
+  { key: 'manageFaculty', label: 'Manage Faculty', desc: 'Add/edit/delete faculty & staff members', icon: 'fa-building', color: 'text-teal-400' },
+  { key: 'publishRoutine', label: 'Publish Routine', desc: 'Publish class routines for departments', icon: 'fa-calendar-check', color: 'text-purple-400' },
+  { key: 'manageUsers', label: 'Manage Users', desc: 'Ban, promote, or change user roles', icon: 'fa-users-cog', color: 'text-orange-400' },
+  { key: 'manageSettings', label: 'Manage Settings', desc: 'Change site settings and permissions', icon: 'fa-cog', color: 'text-yellow-400' },
+];
+
+function PermissionsTab() {
+  const [permissions, setPermissions] = useState<Record<string, string[] | boolean>>({});
+  const [userGrants, setUserGrants] = useState<{ email: string; name: string; action: string; grantedBy: string; grantedAt: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [grantEmail, setGrantEmail] = useState('');
+  const [grantAction, setGrantAction] = useState('uploadFile');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const loadPermissions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/settings/permissions');
+      const data = await res.json();
+      if (data.success) setPermissions(data.permissions);
+    } catch {}
+    try {
+      const res = await fetch('/api/admin/users?all=true');
+      const data = await res.json();
+      if (data.users) {
+        const grants: typeof userGrants = [];
+        data.users.forEach((u: any) => {
+          if (u.permissions && typeof u.permissions === 'object') {
+            Object.entries(u.permissions).forEach(([action, granted]) => {
+              if (granted) grants.push({ email: u.email, name: u.name || u.email, action, grantedBy: 'admin', grantedAt: '' });
+            });
+          }
+        });
+        setUserGrants(grants);
+      }
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadPermissions(); }, [loadPermissions]);
+
+  const toggleRole = async (action: string, role: string) => {
+    const current = Array.isArray(permissions[action]) ? permissions[action] as string[] : [];
+    const updated = current.includes(role) ? current.filter(r => r !== role) : [...current, role];
+    const newPerms = { ...permissions, [action]: updated };
+    setPermissions(newPerms);
+    setSaving(true);
+    try {
+      const res = await fetch('/api/settings/permissions', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ permissions: newPerms }) });
+      if (res.ok) { setSuccess('Permissions updated'); setTimeout(() => setSuccess(''), 2000); }
+      else setError('Failed to save');
+    } catch { setError('Network error'); }
+    setSaving(false);
+  };
+
+  const grantUser = async () => {
+    if (!grantEmail.trim()) { setError('Enter an email'); return; }
+    setError(''); setSuccess('');
+    try {
+      const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'grantPermission', targetEmail: grantEmail, permission: grantAction }) });
+      const data = await res.json();
+      if (data.success) {
+        setSuccess(`Granted "${grantAction}" to ${grantEmail}`);
+        setGrantEmail('');
+        loadPermissions();
+      } else setError(data.error || 'Failed');
+    } catch { setError('Network error'); }
+  };
+
+  if (loading) return <div className="text-center py-10"><i className="fas fa-spinner fa-spin text-2xl text-qsis"></i></div>;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-semibold text-dark-text mb-1"><i className="fas fa-key text-amber-400 mr-2"></i>Role Permissions</h3>
+        <p className="text-[0.72rem] text-dark-text3 mb-4">Toggle which roles can perform each action. Changes take effect immediately.</p>
+        {success && <div className="mb-3 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-xs"><i className="fas fa-check mr-1"></i>{success}</div>}
+        {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs"><i className="fas fa-exclamation-triangle mr-1"></i>{error}</div>}
+
+        <div className="space-y-3">
+          {PERMISSION_ACTIONS.map(action => (
+            <div key={action.key} className="p-3 bg-dark-bg2 border border-dark-border rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <i className={`fas ${action.icon} ${action.color} text-xs`}></i>
+                <span className="text-[0.82rem] font-semibold text-dark-text">{action.label}</span>
+                <span className="text-[0.65rem] text-dark-text3 ml-auto">{action.desc}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {ALL_ROLES.map(role => {
+                  const allowed = Array.isArray(permissions[action.key]) && (permissions[action.key] as string[]).includes(role.key);
+                  return (
+                    <button
+                      key={role.key}
+                      onClick={() => toggleRole(action.key, role.key)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[0.7rem] font-medium border cursor-pointer transition-all ${
+                        allowed
+                          ? 'bg-qsis/15 border-qsis/40 text-qsis'
+                          : 'bg-dark-bg border-dark-border text-dark-text3 hover:border-dark-text3'
+                      }`}
+                    >
+                      <i className={`fas ${role.icon} text-[0.6rem]`}></i>
+                      {role.label}
+                      {allowed && <i className="fas fa-check text-[0.55rem] ml-0.5"></i>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CR Semester Restriction */}
+      <div className="border-t border-dark-border pt-5">
+        <h3 className="text-sm font-semibold text-dark-text mb-1"><i className="fas fa-user-lock text-purple-400 mr-2"></i>Course Addition Restrictions</h3>
+        <p className="text-[0.72rem] text-dark-text3 mb-3">Control which semesters CRs and students can add courses to.</p>
+        <div className="p-3 bg-dark-bg2 border border-dark-border rounded-xl">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              className={`w-10 h-5 rounded-full transition-colors relative ${permissions.restrictCRToOwnSemester ? 'bg-qsis' : 'bg-dark-bg border border-dark-border'}`}
+              onClick={async () => {
+                const newVal = !permissions.restrictCRToOwnSemester;
+                const newPerms = { ...permissions, restrictCRToOwnSemester: newVal };
+                setPermissions(newPerms);
+                setSaving(true);
+                try {
+                  const res = await fetch('/api/settings/permissions', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ permissions: newPerms }) });
+                  if (res.ok) { setSuccess('Setting updated'); setTimeout(() => setSuccess(''), 2000); }
+                  else setError('Failed to save');
+                } catch { setError('Network error'); }
+                setSaving(false);
+              }}
+            >
+              <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${permissions.restrictCRToOwnSemester ? 'translate-x-5' : 'translate-x-0.5'}`}></div>
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-dark-text">Restrict CR/ACR to own semester only</div>
+              <div className="text-[0.68rem] text-dark-text3">
+                {permissions.restrictCRToOwnSemester
+                  ? 'CR/ACR can only add courses to their current semester + 1 previous'
+                  : 'CR/ACR can add courses to any semester (default)'}
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      {/* Per-user permission grants */}
+      <div className="border-t border-dark-border pt-5">
+        <h3 className="text-sm font-semibold text-dark-text mb-1"><i className="fas fa-user-plus text-blue-400 mr-2"></i>Grant Individual Permission</h3>
+        <p className="text-[0.72rem] text-dark-text3 mb-3">Give a specific user permission for one action (e.g. grant upload access to someone without GitHub).</p>
+        <div className="flex flex-wrap gap-2 p-3 bg-dark-bg2 border border-dark-border rounded-xl">
+          <input
+            value={grantEmail}
+            onChange={e => setGrantEmail(e.target.value)}
+            placeholder="user@ugrad.iiuc.ac.bd"
+            className="flex-1 min-w-[180px] px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-xs outline-none focus:border-qsis"
+          />
+          <select value={grantAction} onChange={e => setGrantAction(e.target.value)} className="px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-xs">
+            {PERMISSION_ACTIONS.map(a => <option key={a.key} value={a.key}>{a.label}</option>)}
+          </select>
+          <button onClick={grantUser} className="px-4 py-2 bg-qsis text-white rounded-lg text-xs font-semibold hover:bg-qsis/90">
+            <i className="fas fa-plus mr-1"></i>Grant
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CoursesTab({ effectiveRole, profile }: { effectiveRole: string; profile: any }) {
+  const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
+  const [selectedDept, setSelectedDept] = useState(profile?.department || 'qsis');
+  const [selectedSem, setSelectedSem] = useState('1st-semister');
+
+  const courses = getSemesterCourses(selectedSem, selectedDept);
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-dark-text mb-1"><i className="fas fa-book text-indigo-400 mr-2"></i>Courses (from GitHub)</h3>
+      <p className="text-dark-text3 text-xs mb-3">Courses are read from the GitHub folder structure. Folder format: <code className="bg-dark-bg px-1 py-0.5 rounded text-qsis">Code - Title/Mid|Final/NOTES|sheet|Syllabus|Previous Questions</code></p>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <select value={selectedDept} onChange={e => setSelectedDept(e.target.value)} className="px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-xs">
+          {FACULTIES.flatMap(f => f.departments.map(d => (
+            <option key={d.id} value={d.id}>{d.shortName} — {d.name}</option>
+          )))}
+        </select>
+        <select value={selectedSem} onChange={e => setSelectedSem(e.target.value)} className="px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-xs">
+          {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        {courses.length === 0 && <p className="text-dark-text3 text-sm text-center py-6">No courses found in this semester. Add course folders to GitHub: <code className="bg-dark-bg px-1 rounded">upload_academic_files/{selectedDept}/{selectedSem}/Code - Title/Mid/NOTES/</code></p>}
+        {courses.map(c => (
+          <div key={c.code} className="flex items-center gap-3 px-4 py-3 bg-dark-bg2 border border-dark-border rounded-xl hover:border-qsis/30 transition-colors">
+            <span className="text-qsis font-mono text-xs font-bold min-w-[80px]">{c.code}</span>
+            <span className="flex-1 text-dark-text text-xs">{c.title}</span>
+            <span className="text-dark-text3 text-xs">{c.totalFiles} files</span>
+            <div className="flex gap-1">
+              {c.categories.map(cat => (
+                <span key={cat.key} className="text-[0.6rem] px-1.5 py-0.5 rounded-full bg-dark-bg3 text-dark-text3" title={`${cat.label}: ${cat.count}`}>
+                  <i className={`fas fa-${cat.icon} mr-0.5`}></i>{cat.count}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminPanelView() {
   const { data: session } = useSession();
@@ -76,6 +309,11 @@ export default function AdminPanelView() {
   const [facultyTitleFilter, setFacultyTitleFilter] = useState('');
   const [overviewFacultyCount, setOverviewFacultyCount] = useState(0);
   const [recentLogins, setRecentLogins] = useState<UserRecord[]>([]);
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [createUserForm, setCreateUserForm] = useState({ email: '', name: '', role: 'user', department: '', semester: '', section: '' });
+  const [createUserLoading, setCreateUserLoading] = useState(false);
+  const [createUserError, setCreateUserError] = useState('');
+  const [createUserSuccess, setCreateUserSuccess] = useState('');
 
   const email = session?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
@@ -252,6 +490,35 @@ export default function AdminPanelView() {
     } finally {
       setActionLoading('');
     }
+  };
+
+  const handleCreateUser = async () => {
+    setCreateUserError('');
+    setCreateUserSuccess('');
+    if (!createUserForm.email.trim() || !createUserForm.email.includes('@')) {
+      setCreateUserError('Valid email required');
+      return;
+    }
+    setCreateUserLoading(true);
+    try {
+      const res = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(createUserForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCreateUserSuccess(data.message);
+        setCreateUserForm({ email: '', name: '', role: 'user', department: '', semester: '', section: '' });
+        setShowCreateUser(false);
+        loadUsers();
+      } else {
+        setCreateUserError(data.error || 'Failed');
+      }
+    } catch {
+      setCreateUserError('Network error');
+    }
+    setCreateUserLoading(false);
   };
 
   const loadFaculty = (dept?: string) => {
@@ -564,6 +831,8 @@ export default function AdminPanelView() {
     { key: 'students', label: 'Students', icon: 'fa-user-graduate', color: 'text-blue-400', show: isAdmin || isManager },
     { key: 'users', label: 'All Users', icon: 'fa-users', color: 'text-dark-text2', show: isAdmin || isManager },
     { key: 'faculty', label: 'Faculty', icon: 'fa-building', color: 'text-teal-400', show: isAdmin || isManager || effectiveRole === 'teacher' },
+    { key: 'courses', label: 'Courses', icon: 'fa-book', color: 'text-indigo-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR },
+    { key: 'permissions', label: 'Permissions', icon: 'fa-key', color: 'text-amber-400', show: isAdmin },
     { key: 'activity', label: 'Activity Log', icon: 'fa-history', color: 'text-yellow-400', show: isAdmin || isManager },
   ];
 
@@ -775,14 +1044,73 @@ export default function AdminPanelView() {
               {activeTab === 'students' && <><i className="fas fa-user-graduate text-blue-400 mr-1"></i>Students ({users.length})</>}
               {activeTab === 'users' && <><i className="fas fa-users text-dark-text2 mr-1"></i>All Users ({users.length})</>}
             </h3>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search by name or email..."
-              className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-[0.78rem] w-60"
-            />
+            <div className="flex gap-2 items-center">
+              {isAdmin && (
+                <button onClick={() => setShowCreateUser(!showCreateUser)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-qsis/15 text-qsis text-[0.78rem] font-semibold hover:bg-qsis/25 transition-colors">
+                  <i className="fas fa-user-plus"></i> Create User
+                </button>
+              )}
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search by name or email..."
+                className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-[0.78rem] w-60"
+              />
+            </div>
           </div>
+
+          {/* Create User Form */}
+          {showCreateUser && (
+            <div className="bg-dark-bg2 border border-qsis/20 rounded-xl p-4 mb-4">
+              <h4 className="text-[0.85rem] font-semibold text-dark-text mb-3"><i className="fas fa-user-plus text-qsis mr-1.5"></i>Create New User</h4>
+              <p className="text-[0.72rem] text-dark-text3 mb-3">Create an account for any email address (including non-university emails). They can set their password via email.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Email *</label>
+                  <input type="email" value={createUserForm.email} onChange={e => setCreateUserForm(p => ({ ...p, email: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="user@example.com" />
+                </div>
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
+                  <input type="text" value={createUserForm.name} onChange={e => setCreateUserForm(p => ({ ...p, name: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="John Doe" />
+                </div>
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Role *</label>
+                  <select value={createUserForm.role} onChange={e => setCreateUserForm(p => ({ ...p, role: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
+                    <option value="user">User</option>
+                    <option value="student">Student</option>
+                    <option value="teacher">Teacher</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Department</label>
+                  <input type="text" value={createUserForm.department} onChange={e => setCreateUserForm(p => ({ ...p, department: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="e.g. qsis" />
+                </div>
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester</label>
+                  <select value={createUserForm.semester} onChange={e => setCreateUserForm(p => ({ ...p, semester: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis">
+                    <option value="">None</option>
+                    {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Section</label>
+                  <input type="text" value={createUserForm.section} onChange={e => setCreateUserForm(p => ({ ...p, section: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="e.g. A" />
+                </div>
+              </div>
+              {createUserError && <p className="text-[0.75rem] text-red-400 mb-2"><i className="fas fa-exclamation-circle mr-1"></i>{createUserError}</p>}
+              {createUserSuccess && <p className="text-[0.75rem] text-green-400 mb-2"><i className="fas fa-check-circle mr-1"></i>{createUserSuccess}</p>}
+              <div className="flex gap-2">
+                <button onClick={() => { setShowCreateUser(false); setCreateUserError(''); setCreateUserSuccess(''); }} className="px-4 py-2 rounded-lg bg-dark-bg border border-dark-border text-dark-text2 text-[0.82rem] hover:bg-dark-bg3 transition-colors">Cancel</button>
+                <button onClick={handleCreateUser} disabled={createUserLoading} className="px-4 py-2 rounded-lg bg-qsis text-white text-[0.82rem] font-semibold hover:bg-qsis/90 transition-colors disabled:opacity-50">
+                  {createUserLoading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Creating...</> : <><i className="fas fa-user-plus mr-1"></i>Create User</>}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2">
             {users.map(u => <UserRow key={u.email} u={u} />)}
           </div>
@@ -1014,6 +1342,12 @@ export default function AdminPanelView() {
           </div>
         </div>
       )}
+
+      {/* Courses Tab */}
+      {activeTab === 'courses' && <CoursesTab effectiveRole={effectiveRole} profile={profile} />}
+
+      {/* Permissions Tab */}
+      {activeTab === 'permissions' && <PermissionsTab />}
 
       {/* Activity Log Tab */}
       {activeTab === 'activity' && (
