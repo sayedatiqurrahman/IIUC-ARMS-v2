@@ -808,10 +808,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!depts.has(dept)) return;
       const d = depts.get(dept)!;
 
-      // Count real files (skip .gitkeep)
+      // Only count files inside course folders (not legacy semester-level files)
       if (item.type === 'blob') {
-        const fileName = item.path.split('/').pop();
-        if (fileName !== '.gitkeep') d.files++;
+        const parts = item.path.split('/');
+        const sem = parts[0];
+        const courseFolder = parts[1] || '';
+        const isCourseFolder = config.semesters.some(s => s.id === sem) && /^[A-Z]{2,5}-\d{3,4}\s*-\s*.+$/i.test(courseFolder);
+        if (isCourseFolder) {
+          const fileName = parts[parts.length - 1];
+          if (fileName !== '.gitkeep') d.files++;
+        }
       }
 
       const parts = item.path.split('/');
@@ -903,17 +909,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!sems.has(sem)) sems.set(sem, { files: 0, courses: new Set() });
       const s = sems.get(sem)!;
 
-      // Count real files (skip .gitkeep)
-      if (item.type === 'blob') {
-        const fileName = parts[parts.length - 1];
-        if (fileName !== '.gitkeep') s.files++;
-      }
-
       // Detect course from new structure: {sem}/{CODE} - {Title}/... (works for both blobs and trees)
       const second = parts[1] || '';
       const dashMatch = second.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
       if (dashMatch) {
         s.courses.add(dashMatch[1].toUpperCase());
+        // Only count files inside course folders (not legacy semester-level files)
+        if (item.type === 'blob') {
+          const fileName = parts[parts.length - 1];
+          if (fileName !== '.gitkeep') s.files++;
+        }
       }
     });
 
@@ -934,12 +939,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         // When viewing a department, always show all 8 semesters (even 0 files)
         if (departmentId) {
           if (s.isRelated && !isShariahDept) return false;
-          if (s.isSources) return true;
+          if (s.isSources && isShariahDept) return false;
           return true;
         }
         // No department selected: only show semesters with files
         if (s.files === 0) return false;
         if (s.isRelated && !isShariahDept) return false;
+        if (s.isSources && isShariahDept) return false;
         return true;
       })
       .sort((a, b) => {
