@@ -413,7 +413,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   loadTree: async (token?: string) => {
     // Try cached tree first (valid for 10 minutes)
-    const CACHE_KEY = 'qs_tree_cache';
+    const CACHE_KEY = 'qs_tree_cache_v2';
     const CACHE_TTL = 10 * 60 * 1000;
     try {
       const cached = localStorage.getItem(CACHE_KEY);
