@@ -19,7 +19,7 @@ function AuthErrorContent() {
   return (
     <div className="min-h-screen bg-dark-bg flex items-center justify-center px-4">
       <div className="max-w-md w-full bg-dark-bg2 border border-dark-border rounded-2xl p-8 text-center">
-        <Image src="/arms-logo.jpg" alt="IIUC-ARMS" width={60} height={60} className="w-15 h-15 mx-auto mb-4 rounded-full border-2 border-red-500 object-contain bg-white" />
+        <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={60} height={60} className="w-15 h-15 mx-auto mb-4 rounded-full border-2 border-red-500 object-contain bg-white" />
         <h1 className="text-xl font-bold text-red-400 mb-2">Authentication Error</h1>
         <p className="text-sm text-dark-text2 mb-6">{messages[error || ''] || messages.default}</p>
         <Link href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-sm no-underline">

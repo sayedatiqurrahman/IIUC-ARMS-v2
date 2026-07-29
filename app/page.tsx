@@ -334,7 +334,7 @@ export default function BrowsePage() {
       {/* Hero Section — always visible */}
       <section className="text-center py-6 mb-4">
         <div className="mb-3">
-          <Image src="/arms-logo.jpg" alt="IIUC-ARMS" width={150} height={150} className="w-28 h-28 p-2 rounded-lg border-2 border-qsis mx-auto object-contain bg-white mb-3" />
+          <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={150} height={150} className="w-28 h-28 p-2 rounded-lg border-2 border-qsis mx-auto object-contain bg-white mb-3" />
         </div>
         <h2 className="text-[1.5rem] font-extrabold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent mb-1">IIUC-ARMS</h2>
         <p className="text-gray-500 text-[0.85rem]">IIUC Academic Resource Management System</p>

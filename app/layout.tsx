@@ -61,8 +61,8 @@ export const metadata: Metadata = {
   },
   icons: {
       icon: '/arms-logo-icon.png',
-    apple: '/arms-logo.jpg',
-    shortcut: '/arms-logo.jpg',
+    apple: '/arms-logo-icon.png',
+    shortcut: '/arms-logo-icon.png',
   },
   manifest: '/manifest.json',
   alternates: {
@@ -81,7 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <head>
-        <link rel="icon" href="/arms-logo.jpg" sizes="any" />
+        <link rel="icon" href="/arms-logo-icon.png" sizes="any" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
       </head>
       <body className="min-h-screen">

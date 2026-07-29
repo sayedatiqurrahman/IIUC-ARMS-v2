@@ -80,7 +80,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <nav className="sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border">
         <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3 no-underline" onClick={(e) => { e.preventDefault(); goHome(); router.push('/'); }}>
-            <Image src="/arms-logo.jpg" alt="IIUC-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white" priority />
+            <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white" priority />
             <div>
               <h1 className="text-[1.1rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</h1>
               <span className="text-[0.7rem] text-dark-text2 hidden md:block">Academic Resource System</span>
@@ -268,7 +268,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {/* About */}
               <div className="text-center pt-2 border-t border-dark-border">
                 <div className="flex items-center justify-center gap-2 mb-2">
-                  <Image src="/arms-logo.jpg" alt="IIUC-ARMS" width={24} height={24} className="w-6 h-6 rounded-full border border-qsis object-contain bg-white" />
+                  <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={24} height={24} className="w-6 h-6 rounded-full border border-qsis object-contain bg-white" />
                   <span className="text-[0.82rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</span>
                 </div>
                 <p className="text-[0.65rem] text-dark-text3 leading-relaxed">A centralized platform for managing and sharing<br/>academic resources for QSIS, IIUC.</p>
@@ -285,7 +285,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-3 mb-3">
-                <Image src="/arms-logo.jpg" alt="IIUC-ARMS" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-qsis object-contain bg-white" />
+                <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-qsis object-contain bg-white" />
                 <div>
                   <h3 className="text-[0.95rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</h3>
                   <span className="text-[0.68rem] text-dark-text2">Academic Resource System</span>
