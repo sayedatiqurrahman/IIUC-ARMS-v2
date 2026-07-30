@@ -47,9 +47,9 @@ function detectCategory(name: string) {
   return 'other';
 }
 
-const COURSE_FOLDER_RE = /^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i;
-const LEGACY_CODE_RE = /^([A-Z]{2,5})-?(\d{3,4})$/i;
-const SHEET_CODE_RE = /^([A-Z]{2,5})-?(\d{3,4})/i;
+const COURSE_FOLDER_RE = /^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i;
+const LEGACY_CODE_RE = /^([A-Z]{2,5})-?(\d{3,5})$/i;
+const SHEET_CODE_RE = /^([A-Z]{2,5})-?(\d{3,5})/i;
 
 function matchCourseFolder(name: string): { code: string; title: string } | null {
   const m = name.match(COURSE_FOLDER_RE);
@@ -786,7 +786,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const parts = item.path.split('/');
         const sem = parts[0];
         const courseFolder = parts[1] || '';
-        const isCourseFolder = config.semesters.some(s => s.id === sem) && /^[A-Z]{2,5}-\d{3,4}\s*-\s*.+$/i.test(courseFolder);
+        const isCourseFolder = config.semesters.some(s => s.id === sem) && /^[A-Z]{2,5}-\d{3,5}\s*-\s*.+$/i.test(courseFolder);
         if (isCourseFolder) {
           const fileName = parts[parts.length - 1];
           if (fileName !== '.gitkeep') d.files++;
@@ -884,7 +884,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       // Detect course from new structure: {sem}/{CODE} - {Title}/... (works for both blobs and trees)
       const second = parts[1] || '';
-      const dashMatch = second.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      const dashMatch = second.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
       if (dashMatch) {
         s.courses.add(dashMatch[1].toUpperCase());
         // Only count files inside course folders (not legacy semester-level files)
@@ -955,7 +955,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (parts.length < 2) return;
 
       const firstFolder = parts[1];
-      const dashMatch = firstFolder.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      const dashMatch = firstFolder.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
 
       if (dashMatch) {
         hasCourseFolders = true;
@@ -1048,7 +1048,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (parts.length < 3) return;
 
       const firstFolder = parts[1];
-      const dashMatch = firstFolder.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      const dashMatch = firstFolder.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
       if (!dashMatch) return;
 
       const courseName = dashMatch[1].toUpperCase();
@@ -1085,7 +1085,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       // Detect course folder: CODE - Title
       const first = parts[0] || '';
-      const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
       if (dashMatch) {
         const code = dashMatch[1].toUpperCase();
         const title = dashMatch[2].trim();
@@ -1164,7 +1164,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const rel = item.path.substring(prefix.length);
       const parts = rel.split('/');
       const first = parts[0] || '';
-      const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
       if (!dashMatch || dashMatch[1].toUpperCase() !== code) return;
 
       // parts[1] = Mid/Final or category folder
@@ -1329,7 +1329,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const rel = item.path.substring(prefix.length);
       const parts = rel.split('/');
       const first = parts[0] || '';
-      const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
+      const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
       if (!dashMatch || dashMatch[1].toUpperCase() !== code) return;
     });
 
@@ -1344,7 +1344,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const matchedFiles: any[] = [];
     const matchedFolders = new Map<string, { id: string; label: string; type: string; path: string; count: number }>();
 
-    const COURSE_RE = /^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i;
+    const COURSE_RE = /^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i;
 
     uploadTree.forEach((item: any) => {
       if (item.type !== 'blob') return;

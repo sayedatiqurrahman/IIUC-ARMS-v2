@@ -391,7 +391,7 @@ export async function GET(req: NextRequest) {
         const parts = f.path.split('/');
         // At semester level (parts has dept/sem), only show course folders
         if (parts.length === 2) {
-          return /^[A-Z]{2,5}-\d{3,4}\s*-\s*.+$/i.test(f.name) || /^[A-Z]{2,5}\s*-\s*.+$/i.test(f.name);
+          return /^[A-Z]{2,5}-\d{3,5}\s*-\s*.+$/i.test(f.name) || /^[A-Z]{2,5}\s*-\s*.+$/i.test(f.name);
         }
         // Inside a course folder, show all subfolders
         return true;
