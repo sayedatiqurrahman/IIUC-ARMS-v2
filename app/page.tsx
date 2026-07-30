@@ -128,9 +128,13 @@ export default function BrowsePage() {
         body: JSON.stringify({ action, from, to, newName }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Action failed');
-      showToast(`${action.charAt(0).toUpperCase() + action.slice(1)} successful!`, 'success');
-      loadTree(session?.accessToken || '');
+      if (!res.ok && !data.pendingApproval) throw new Error(data.error || 'Action failed');
+      if (data.pendingApproval) {
+        showToast(data.message || 'Delete request sent to owner for approval', 'info');
+      } else {
+        showToast(`${action.charAt(0).toUpperCase() + action.slice(1)} successful!`, 'success');
+        loadTree(session?.accessToken || '');
+      }
       return data;
     } catch (e: any) {
       showToast(e.message || 'Action failed', 'error');

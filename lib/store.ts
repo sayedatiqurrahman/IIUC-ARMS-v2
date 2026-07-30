@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { config, UserRole } from './config';
 import { FACULTIES, getFacultyIdForDepartment, getAllFacultyIds } from './departments';
-import { extractYear } from './utils';
+import { extractYear, safeJson } from './utils';
 import { getOnboardingData, setOnboardingData as saveOnboarding, clearOnboardingData as clearOnboardingStorage, type OnboardingData } from '@/components/OnboardingModal';
 
 /* ─── types ─── */
@@ -417,7 +417,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const headers: Record<string, string> = {};
       if (token) headers['x-auth-token'] = token;
       const res = await fetch(`/api/github?_t=${Date.now()}`, { headers });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (data.error) throw new Error(data.error);
       const filtered = (data.tree || []).filter((item: any) => {
         const parts = item.path.split('/');

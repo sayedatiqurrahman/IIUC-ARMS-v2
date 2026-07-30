@@ -9,6 +9,10 @@ import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { decrypt, isEncrypted } from '@/lib/crypto';
 
 const GITHUB_API = 'https://api.github.com';
+const OWNER_CHAT_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID || '0');
+const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TG_API = `https://api.telegram.org/bot${TG_TOKEN}`;
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://qsis-arms.eu.cc';
 
 function ghHeaders(token: string) {
   return {
@@ -171,42 +175,95 @@ export async function POST(req: NextRequest) {
       const sha = await getFileSha(token, fromFull, branch);
       if (!sha) return NextResponse.json({ error: 'File not found' }, { status: 404 });
 
-      // Check if it's a folder
-      const folderFiles = await getAllFilesInFolder(token, fromFull, branch);
-      if (folderFiles.length > 0) {
-        // Delete all files in folder (reverse order for safety)
-        let deleted = 0;
-        for (const f of [...folderFiles].reverse()) {
-          const ok = await deleteFile(token, f.path, `Delete ${f.path.split('/').pop()}`, branch, f.sha);
-          if (ok) deleted++;
+      // OWNER: allow direct delete
+      if (isOwner) {
+        const folderFiles = await getAllFilesInFolder(token, fromFull, branch);
+        if (folderFiles.length > 0) {
+          let deleted = 0;
+          for (const f of [...folderFiles].reverse()) {
+            const ok = await deleteFile(token, f.path, `Delete ${f.path.split('/').pop()}`, branch, f.sha);
+            if (ok) deleted++;
+          }
+          try { await prisma.activityLog.create({ data: { action: 'file_delete', userId: email, userName: profile?.name || email.split('@')[0], details: JSON.stringify({ path: from, filesDeleted: deleted, isFolder: true }) } }); } catch {}
+          return NextResponse.json({ success: true, deleted, isFolder: true });
         }
-        try {
-          await prisma.activityLog.create({
-            data: {
-              action: 'file_delete',
-              userId: email,
-              userName: profile?.name || email.split('@')[0],
-              details: JSON.stringify({ path: from, filesDeleted: deleted, isFolder: true }),
-            },
-          });
-        } catch {}
-        return NextResponse.json({ success: true, deleted: deleted, isFolder: true });
+        const ok = await deleteFile(token, fromFull, `Delete ${from.split('/').pop()}`, branch, sha);
+        if (!ok) return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
+        try { await prisma.activityLog.create({ data: { action: 'file_delete', userId: email, userName: profile?.name || email.split('@')[0], details: JSON.stringify({ path: from }) } }); } catch {}
+        return NextResponse.json({ success: true });
       }
 
-      const ok = await deleteFile(token, fromFull, `Delete ${from.split('/').pop()}`, branch, sha);
-      if (!ok) return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
+      // NON-OWNER: notify owner via GitHub issue + Telegram, do NOT delete
+      const requesterName = profile?.name || email.split('@')[0];
+      const filePathDisplay = from;
+      const fileCount = (await getAllFilesInFolder(token, fromFull, branch)).length || 1;
+      const isFolder = fileCount > 1;
 
+      // 1. Create GitHub issue for owner approval
+      try {
+        const issueBody = [
+          `## Delete Request`,
+          ``,
+          `**Requested by:** ${requesterName} (\`${email}\`)`,
+          `**Path:** \`${config.uploadPath}/${filePathDisplay}\``,
+          `**Type:** ${isFolder ? `Folder (${fileCount} files)` : 'Single file'}`,
+          `**Date:** ${new Date().toISOString()}`,
+          ``,
+          `---`,
+          `*Approve by merging this issue. The file will NOT be deleted until the owner approves.*`,
+        ].join('\n');
+
+        const appToken = await getAppBotToken();
+        if (appToken) {
+          await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/issues`, {
+            method: 'POST',
+            headers: { Authorization: `token ${appToken}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: `[DELETE REQUEST] ${filePathDisplay}`,
+              body: issueBody,
+              labels: ['delete-request', 'needs-approval'],
+            }),
+          });
+        }
+      } catch {}
+
+      // 2. Notify owner via Telegram
+      try {
+        if (OWNER_CHAT_ID && TG_TOKEN) {
+          const tgMsg = [
+            `🗑 <b>Delete Request</b>`,
+            ``,
+            `<b>By:</b> ${requesterName} (${email})`,
+            `<b>File:</b> <code>${filePathDisplay}</code>`,
+            `<b>Type:</b> ${isFolder ? `Folder (${fileCount} files)` : 'Single file'}`,
+            ``,
+            `⚡ <a href="${SITE_URL}">Review on IIUC-ARMS</a>`,
+          ].join('\n');
+          await fetch(`${TG_API}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: OWNER_CHAT_ID, text: tgMsg, parse_mode: 'HTML', disable_web_page_preview: true }),
+          });
+        }
+      } catch {}
+
+      // 3. Log the request
       try {
         await prisma.activityLog.create({
           data: {
-            action: 'file_delete',
+            action: 'delete_request',
             userId: email,
-            userName: profile?.name || email.split('@')[0],
-            details: JSON.stringify({ path: from }),
+            userName: requesterName,
+            details: JSON.stringify({ path: from, fileCount, isFolder, status: 'pending_approval' }),
           },
         });
       } catch {}
-      return NextResponse.json({ success: true });
+
+      return NextResponse.json({
+        success: false,
+        message: `Delete request sent to owner for approval. The file will NOT be deleted until approved.`,
+        pendingApproval: true,
+      });
     }
 
     // ─── RENAME ───

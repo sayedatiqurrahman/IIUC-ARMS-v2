@@ -1,5 +1,14 @@
 import { config } from './config';
 
+export async function safeJson(res: Response): Promise<any> {
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text.includes('<!DOCTYPE') ? `Server returned HTML instead of JSON (${res.status})` : `Expected JSON, got: ${ct}`);
+  }
+  return res.json();
+}
+
 export function getFileIcon(ext: string) {
   if (['jpg','jpeg','png','gif','webp'].includes(ext)) return 'fa-file-image';
   if (ext === 'pdf') return 'fa-file-pdf';
