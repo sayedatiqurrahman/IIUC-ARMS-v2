@@ -441,7 +441,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const headers: Record<string, string> = {};
       if (token) headers['x-auth-token'] = token;
-      const res = await fetch('/api/github', { headers });
+      const res = await fetch(`/api/github?_t=${Date.now()}`, { headers });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       // Cache the response
