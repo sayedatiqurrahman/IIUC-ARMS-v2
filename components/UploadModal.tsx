@@ -23,6 +23,11 @@ interface FileWithMeta {
   yearRange: string;
 }
 
+interface Link {
+  title: string;
+  url: string;
+}
+
 interface CourseGroup {
   id: number;
   selectedCourseCode: string;
@@ -30,6 +35,7 @@ interface CourseGroup {
   files: FileWithMeta[];
   examSession: string;
   midFinal: string;
+  links: Link[];
 }
 
 interface UploadModalProps {
@@ -38,6 +44,78 @@ interface UploadModalProps {
   profile: Profile;
   onLogin: () => void;
   onClose: () => void;
+}
+
+function LinksEditor({ links, onAdd, onRemove }: { links: Link[]; onAdd: (title: string, url: string) => void; onRemove: (idx: number) => void }) {
+  const [title, setTitle] = useState('');
+  const [url, setUrl] = useState('');
+  const [expanded, setExpanded] = useState(false);
+
+  function handleAdd() {
+    if (!title.trim() || !url.trim()) return;
+    onAdd(title, url);
+    setTitle('');
+    setUrl('');
+  }
+
+  return (
+    <div className="mb-3 bg-dark-bg3 border border-dark-border rounded-xl overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-3 py-2 bg-transparent border-none cursor-pointer hover:bg-dark-bg2 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span className="text-[0.75rem] font-semibold text-dark-text2 flex items-center gap-1.5">
+          <i className="fas fa-link text-qsis"></i> Shared Links
+          {links.length > 0 && <span className="text-[0.65rem] text-dark-text3">({links.length})</span>}
+        </span>
+        <i className={`fas fa-chevron-${expanded ? 'up' : 'down'} text-[0.6rem] text-dark-text3`}></i>
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 border-t border-dark-border">
+          {links.length > 0 && (
+            <div className="flex flex-col gap-1.5 mt-2 mb-2">
+              {links.map((link, i) => (
+                <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border group">
+                  <i className="fas fa-external-link-alt text-[0.6rem] text-dark-text3"></i>
+                  <span className="text-[0.75rem] text-dark-text font-semibold truncate flex-1">{link.title}</span>
+                  <span className="text-[0.6rem] text-dark-text3 truncate max-w-[150px]">{link.url.replace(/^https?:\/\//, '').slice(0, 40)}</span>
+                  <button className="w-4 h-4 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.55rem] hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => onRemove(i)}>
+                    <i className="fas fa-times"></i>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 mt-1">
+            <input
+              type="text"
+              placeholder="Link title"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+              className="flex-1 px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis"
+            />
+            <input
+              type="url"
+              placeholder="https://..."
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+              className="flex-1 px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis"
+            />
+            <button
+              className="px-2.5 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
+              onClick={handleAdd}
+              disabled={!title.trim() || !url.trim()}
+            >
+              <i className="fas fa-plus"></i>
+            </button>
+          </div>
+          <p className="text-[0.6rem] text-dark-text3 mt-1.5">Links will be saved as README.md in the course folder.</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function UploadModal({ session, status, profile, onLogin, onClose }: UploadModalProps) {
@@ -73,7 +151,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [department, setDepartment] = useState(userDeptId);
   const [semester, setSemester] = useState(profile.semester || '');
   const [category, setCategory] = useState('');
-  const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '' }]);
+  const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
   const [uploading, setUploading] = useState(false);
   const [creatingCourse, setCreatingCourse] = useState(false);
   const [showNewCourse, setShowNewCourse] = useState<Record<number, boolean>>({});
@@ -110,10 +188,48 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     setCourses(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
   }
 
+  function addLink(courseId: number, title: string, url: string) {
+    const course = courses.find(c => c.id === courseId);
+    if (!course) return;
+    const finalUrl = url.startsWith('http') ? url : `https://${url}`;
+    updateCourse(courseId, { links: [...course.links, { title: title.trim(), url: finalUrl }] });
+  }
+
+  function removeLink(courseId: number, linkIndex: number) {
+    const course = courses.find(c => c.id === courseId);
+    if (!course) return;
+    updateCourse(courseId, { links: course.links.filter((_, i) => i !== linkIndex) });
+  }
+
+  async function loadExistingLinks(courseId: number, courseCode: string, courseTitle: string) {
+    if (!courseCode || !department || !semester) return;
+    const folder = `${department}/${semester}/${courseCode} - ${courseTitle}`;
+    try {
+      const res = await fetch(`/api/github/readme?folder=${encodeURIComponent(folder)}`);
+      const data = await res.json();
+      if (data.content) {
+        const links: Link[] = [];
+        const lines = data.content.split('\n');
+        for (const line of lines) {
+          const match = line.match(/^\s*[-*]\s*\[(.+?)\]\((.+?)\)/);
+          if (match) links.push({ title: match[1], url: match[2] });
+        }
+        if (links.length > 0) {
+          updateCourse(courseId, { links });
+        }
+      }
+    } catch {}
+  }
+
+  function linksToReadmeContent(links: Link[]): string {
+    if (links.length === 0) return '';
+    return links.map(l => `- [${l.title}](${l.url})`).join('\n') + '\n';
+  }
+
   function addCourse() {
     if (courses.length >= 5) return;
     const newId = Math.max(0, ...courses.map(c => c.id)) + 1;
-    setCourses(prev => [...prev, { id: newId, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '' }]);
+    setCourses(prev => [...prev, { id: newId, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
   }
 
   function removeCourse(id: number) {
@@ -213,7 +329,9 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const isExamSpecific = category === config.categories.notes.folder || category === config.categories.questions.folder;
     return courses.some(c => {
       const hasCourse = c.selectedCourseCode || (showNewCourse[c.id] && newCourseCode[c.id]?.trim());
-      if (!hasCourse || c.files.length === 0) return false;
+      if (!hasCourse) return false;
+      const hasContent = c.files.length > 0 || c.links.length > 0;
+      if (!hasContent) return false;
       if (isExamSpecific && !c.midFinal) return false;
       if (category === config.categories.notes.folder && !c.examSession) return false;
       return true;
@@ -264,7 +382,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
     const validCourses = courses.filter(c => {
       const hasCourse = c.selectedCourseCode || (showNewCourse[c.id] && newCourseCode[c.id]?.trim());
-      return hasCourse && c.files.length > 0;
+      return hasCourse && (c.files.length > 0 || c.links.length > 0);
     });
     if (validCourses.length === 0) {
       alert('At least one course must be selected with files.');
@@ -317,6 +435,24 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
           allFiles.push({ path: filePath, content: base64 });
         }
+
+        // Include README.md if links exist
+        if (course.links.length > 0) {
+          const readmeContent = linksToReadmeContent(course.links);
+          const readmeBase64 = btoa(unescape(encodeURIComponent(readmeContent)));
+          let readmePath: string;
+          if (semester === config.relatedKitabsFolder) {
+            const folderName = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
+            readmePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${folderName}/README.md`;
+          } else if (semester === config.relatedSourcesFolder) {
+            const facId = getFacultyIdForDepartment(department) || department;
+            const folderName = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
+            readmePath = `${facId}/${config.relatedSourcesFolder}/${folderName}/README.md`;
+          } else {
+            readmePath = `${department}/${semester}/${courseFolder}/README.md`;
+          }
+          allFiles.push({ path: readmePath, content: readmeBase64 });
+        }
       }
 
       const courseList = validCourses.map(c => `${c.selectedCourseCode} - ${c.selectedCourseTitle || c.selectedCourseCode}`).join(', ');
@@ -335,7 +471,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
       if (data.success) {
         setResult({ success: true, prUrl: data.pr?.url });
-        setCourses([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '' }]);
+        setCourses([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
         try { localStorage.removeItem('qs_tree_cache_v2'); } catch {}
         useAppStore.getState().loadTree(session?.accessToken || '');
       } else {
@@ -476,7 +612,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                             value={course.selectedCourseCode}
                             onChange={v => {
                               const found = existingCourses.find(c => c.code === v);
-                              updateCourse(course.id, { selectedCourseCode: v, selectedCourseTitle: found?.title || '' });
+                              updateCourse(course.id, { selectedCourseCode: v, selectedCourseTitle: found?.title || '', links: [] });
+                              if (found) loadExistingLinks(course.id, v, found.title);
                             }}
                             placeholder={department && semester ? "Choose a course..." : "Select dept & semester first"}
                             searchable
@@ -599,6 +736,15 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                     </div>
                   )}
 
+                  {/* Shared Links */}
+                  {course.selectedCourseCode && (
+                    <LinksEditor
+                      links={course.links}
+                      onAdd={(title, url) => addLink(course.id, title, url)}
+                      onRemove={(idx) => removeLink(course.id, idx)}
+                    />
+                  )}
+
                   {/* File Upload Area */}
                   <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept={category === config.categories.notes.folder ? '.pdf,.doc,.docx,.ppt,.pptx' : category === config.categories.questions.folder ? '.pdf,.jpg,.jpeg,.png,.gif,.webp' : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv'} onChange={e => handleFilesForCourse(course.id, e)} />
                   <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => fileInputRefs.current[course.id]?.click()}>
@@ -701,7 +847,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
               <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-4">
                 <div className="flex items-center justify-between text-[0.78rem]">
                   <span className="text-dark-text2">
-                    <i className="fas fa-file mr-1"></i>{totalFiles} file{totalFiles !== 1 ? 's' : ''} across {courses.filter(c => c.files.length > 0).length} course{courses.filter(c => c.files.length > 0).length !== 1 ? 's' : ''}
+                    <i className="fas fa-file mr-1"></i>{totalFiles} file{totalFiles !== 1 ? 's' : ''}
+                    {courses.reduce((sum, c) => sum + c.links.length, 0) > 0 && (
+                      <>, <i className="fas fa-link mr-1"></i>{courses.reduce((sum, c) => sum + c.links.length, 0)} link{courses.reduce((sum, c) => sum + c.links.length, 0) !== 1 ? 's' : ''}</>
+                    )}
+                    {' '}across {courses.filter(c => c.files.length > 0 || c.links.length > 0).length} course{courses.filter(c => c.files.length > 0 || c.links.length > 0).length !== 1 ? 's' : ''}
                   </span>
                   <span className={`font-semibold ${totalSizeMB > 40 ? 'text-red-400' : 'text-qsis'}`}>
                     {totalSizeMB.toFixed(1)} / 50 MB

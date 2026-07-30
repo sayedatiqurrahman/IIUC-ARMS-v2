@@ -108,6 +108,6 @@ export const config = {
   },
 
   isSemesterId: (id: string): boolean => {
-    return config.semesters.some(s => s.id === id) || id === config.relatedKitabsFolder;
+    return config.semesters.some(s => s.id === id) || id === config.relatedKitabsFolder || id === config.relatedSourcesFolder;
   },
 };

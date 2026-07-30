@@ -1358,8 +1358,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       const first = parts[0] || '';
       const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i);
       if (!dashMatch || dashMatch[1].toUpperCase() !== code) return;
-      if (parts[1] === 'Mid' && result.mid === 0) result.mid = 0; // folder exists but no files yet
-      if (parts[1] === 'Final' && result.final === 0) result.final = 0;
     });
 
     return result;
@@ -1373,16 +1371,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     const matchedFiles: any[] = [];
     const matchedFolders = new Map<string, { id: string; label: string; type: string; path: string; count: number }>();
 
+    const COURSE_RE = /^([A-Z]{2,5}-\d{3,4})\s*-\s*(.+)$/i;
+
     uploadTree.forEach((item: any) => {
       if (item.type !== 'blob') return;
       if (departmentId && item.department !== departmentId && item.department !== null) return;
       const parts = item.path.split('/');
       const sem = parts[0];
-      const catFolder = parts[1] || '';
-      const courseName = parts[2] || '';
       const fileName = parts[parts.length - 1] || '';
       if (fileName === '.gitkeep') return;
       const ext = fileName.split('.').pop()?.toLowerCase() || '';
+
+      // Detect folder structure: new (CODE - Title) vs legacy
+      let catFolder = '';
+      let courseName = '';
+      const second = parts[1] || '';
+      const courseMatch = second.match(COURSE_RE);
+      if (courseMatch) {
+        // New format: {sem}/{CODE - Title}/{category}/{...}
+        courseName = second;
+        catFolder = parts[2] || '';
+      } else {
+        // Legacy format: {sem}/{category}/{course}/{...}
+        catFolder = second;
+        courseName = parts[2] || '';
+      }
 
       // Semester filter
       if (semFilter && sem !== semFilter) return;

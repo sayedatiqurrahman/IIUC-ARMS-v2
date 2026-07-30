@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { config } from '@/lib/config';
 
 export async function POST(req: NextRequest) {
   try {
@@ -6,6 +7,7 @@ export async function POST(req: NextRequest) {
     if (!token) return NextResponse.json({ ok: false, error: 'No token provided' });
 
     const results: any = {};
+    const repoFullName = `${config.owner}/${config.repo}`;
 
     // Test 1: Read user
     const userRes = await fetch('https://api.github.com/user', {
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Test 2: Read repo
-    const repoRes = await fetch('https://api.github.com/repos/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER', {
+    const repoRes = await fetch(`https://api.github.com/repos/${repoFullName}`, {
       headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
     });
     results.repo = { status: repoRes.status };
@@ -29,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Test 3: Read refs
-    const refRes = await fetch('https://api.github.com/repos/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/git/refs/heads/main', {
+    const refRes = await fetch(`https://api.github.com/repos/${repoFullName}/git/refs/heads/main`, {
       headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
     });
     results.refs = { status: refRes.status };
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
     if (refRes.ok) {
       const refData = await refRes.json();
       const testBranch = `test-perms-${Date.now()}`;
-      const createRes = await fetch('https://api.github.com/repos/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/git/refs', {
+      const createRes = await fetch(`https://api.github.com/repos/${repoFullName}/git/refs`, {
         method: 'POST',
         headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
         body: JSON.stringify({ ref: `refs/heads/${testBranch}`, sha: refData.object.sha }),
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
 
       // Clean up: delete the test branch
       if (createRes.ok) {
-        await fetch(`https://api.github.com/repos/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/git/refs/heads/${testBranch}`, {
+        await fetch(`https://api.github.com/repos/${repoFullName}/git/refs/heads/${testBranch}`, {
           method: 'DELETE',
           headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
         });

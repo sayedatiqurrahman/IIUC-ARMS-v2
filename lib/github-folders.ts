@@ -2,7 +2,6 @@ import crypto from 'crypto';
 import { config } from './config';
 
 const SEMS = ['1st-semister','2nd-semister','3rd-semister','4th-semister','5th-semister','6th-semister','7th-semister','8th-semister'];
-const CATS = ['sheet','NOTES','Previous Questions','Syllabus','Other'];
 const BATCH = 25;
 
 function makeJwt(appId: string, privateKey: string) {
@@ -52,13 +51,11 @@ export async function createDepartmentFolders(deptId: string): Promise<{ success
     const treeRes = await api('GET', `/repos/${config.owner}/${config.repo}/git/trees/${currentSha}?recursive=1`, null, tok);
     const existing = new Set(treeRes.d.tree.map((f: any) => f.path));
 
-    // Build paths
+    // Build paths — only semester folders and related-sources (course subfolders are created on demand)
     const paths: string[] = [];
     for (const sem of SEMS) {
-      for (const cat of CATS) {
-        const p = `${config.uploadPath}/${deptId}/${sem}/${cat}/.gitkeep`;
-        if (!existing.has(p)) paths.push(p);
-      }
+      const p = `${config.uploadPath}/${deptId}/${sem}/.gitkeep`;
+      if (!existing.has(p)) paths.push(p);
     }
     const rp = `${config.uploadPath}/${deptId}/${config.relatedSourcesFolder}/.gitkeep`;
     if (!existing.has(rp)) paths.push(rp);

@@ -3,7 +3,7 @@ import { FACULTIES } from '@/lib/departments';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const API = `https://api.telegram.org/bot${TOKEN}`;
-const SITE_URL = 'https://qsis-arms.eu.cc';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://qsis-arms.eu.cc';
 
 // ─── Telegram API helpers ─────────────────────────────────────────
 
