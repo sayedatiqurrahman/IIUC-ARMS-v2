@@ -412,31 +412,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setGithubToken: (token: string) => set({ githubToken: token }),
 
   loadTree: async (token?: string) => {
-    // Try cached tree first (valid for 10 minutes)
-    const CACHE_KEY = 'qs_tree_cache_v2';
-    const CACHE_TTL = 10 * 60 * 1000;
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_TTL && data?.tree?.length > 0) {
-          const filtered = data.tree.filter((item: any) => {
-            const parts = item.path.split('/');
-            const fileName = parts[parts.length - 1];
-            const ext = fileName.split('.').pop()?.toLowerCase() || '';
-            if (item.type === 'blob') {
-              if (['README.md', 'LICENSE'].includes(fileName)) return false;
-              if (['js', 'json', 'yml', 'yaml', 'css', 'html', 'md', 'lock'].includes(ext)) return false;
-              if (!config.academicExtensions.includes(ext) && fileName !== '.gitkeep') return false;
-            }
-            return true;
-          });
-          set({ tree: filtered, loading: false });
-          return; // use cache, skip API call
-        }
-      }
-    } catch {}
-
     set({ loading: true, error: '' });
     try {
       const headers: Record<string, string> = {};
@@ -444,8 +419,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await fetch(`/api/github?_t=${Date.now()}`, { headers });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      // Cache the response
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() })); } catch {}
       const filtered = (data.tree || []).filter((item: any) => {
         const parts = item.path.split('/');
         const fileName = parts[parts.length - 1];

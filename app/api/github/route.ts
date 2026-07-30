@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const url = `https://api.github.com/repos/${config.owner}/${config.repo}/git/trees/${config.branch}?recursive=1`;
     const res = await fetch(url, {
       headers,
-      next: { revalidate: 300 }, // cache for 5 minutes
+      cache: 'no-store',
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
