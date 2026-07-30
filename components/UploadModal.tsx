@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { config } from '@/lib/config';
 import { FACULTIES, getFacultyIdForDepartment } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
@@ -25,8 +25,8 @@ interface FileWithMeta {
 
 interface CourseGroup {
   id: number;
-  code: string;
-  title: string;
+  selectedCourseCode: string;
+  selectedCourseTitle: string;
   files: FileWithMeta[];
   examSession: string;
   midFinal: string;
@@ -44,12 +44,12 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const githubToken = useAppStore(s => s.githubToken);
   const setGithubToken = useAppStore(s => s.setGithubToken);
   const onboardData = useAppStore(s => s.onboardingData);
+  const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
 
   const email = (session as any)?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
   const canUploadAnyDept = effectiveRole === 'admin';
 
-  // Resolve user's department ID from profile or onboarding
   const userDeptId = (() => {
     const deptVal = profile.department || onboardData?.department || '';
     if (!deptVal) return '';
@@ -73,14 +73,35 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [department, setDepartment] = useState(userDeptId);
   const [semester, setSemester] = useState(profile.semester || '');
   const [category, setCategory] = useState('');
-  const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, code: '', title: '', files: [], examSession: '', midFinal: '' }]);
+  const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '' }]);
   const [uploading, setUploading] = useState(false);
+  const [creatingCourse, setCreatingCourse] = useState(false);
+  const [showNewCourse, setShowNewCourse] = useState<Record<number, boolean>>({});
+  const [newCourseCode, setNewCourseCode] = useState<Record<number, string>>({});
+  const [newCourseTitle, setNewCourseTitle] = useState<Record<number, string>>({});
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
-  const [activeTab, setActiveTab] = useState<'repo' | 'direct'>('direct');
 
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!githubToken || !!profile.githubToken;
-  const needsDepartment = !userDeptId;
+
+  // Get existing courses from GitHub tree
+  const existingCourses = useMemo(() => {
+    if (!department || !semester || semester === config.relatedKitabsFolder || semester === config.relatedSourcesFolder) return [];
+    return getSemesterCourses(semester, department);
+  }, [department, semester, getSemesterCourses]);
+
+  // All known courses from all semesters for title auto-fill
+  const allKnownCourses = useMemo(() => {
+    if (!department) return [];
+    const map = new Map<string, string>();
+    for (const s of config.semesters) {
+      const courses = getSemesterCourses(s.id, department);
+      for (const c of courses) {
+        if (!map.has(c.code)) map.set(c.code, c.title);
+      }
+    }
+    return Array.from(map.entries()).map(([code, title]) => ({ code, title }));
+  }, [department, getSemesterCourses]);
 
   const totalFiles = courses.reduce((sum, c) => sum + c.files.length, 0);
   const totalSizeMB = courses.reduce((sum, c) => sum + c.files.reduce((s, f) => s + f.file.size, 0), 0) / (1024 * 1024);
@@ -92,7 +113,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   function addCourse() {
     if (courses.length >= 5) return;
     const newId = Math.max(0, ...courses.map(c => c.id)) + 1;
-    setCourses(prev => [...prev, { id: newId, code: '', title: '', files: [], examSession: '', midFinal: '' }]);
+    setCourses(prev => [...prev, { id: newId, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '' }]);
   }
 
   function removeCourse(id: number) {
@@ -140,7 +161,6 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       return;
     }
 
-    const defaultSession = CURRENT_SEASON;
     const newFiles: FileWithMeta[] = valid.map(f => {
       if (isNotes) {
         return { file: f, year: String(CURRENT_YEAR), yearRange: '' };
@@ -192,11 +212,46 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     if (!department || !semester || !category) return false;
     const isExamSpecific = category === config.categories.notes.folder || category === config.categories.questions.folder;
     return courses.some(c => {
-      if (!c.code.trim() || c.files.length === 0) return false;
+      const hasCourse = c.selectedCourseCode || (showNewCourse[c.id] && newCourseCode[c.id]?.trim());
+      if (!hasCourse || c.files.length === 0) return false;
       if (isExamSpecific && !c.midFinal) return false;
       if (category === config.categories.notes.folder && !c.examSession) return false;
       return true;
     });
+  }
+
+  async function handleCreateCourse(courseId: number) {
+    const code = newCourseCode[courseId]?.trim();
+    const title = newCourseTitle[courseId]?.trim();
+    if (!code) {
+      showToast('Course code is required', 'error');
+      return;
+    }
+    setCreatingCourse(true);
+    try {
+      const res = await fetch('/api/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ department, semester, code, title }),
+      });
+      const data = await res.json();
+      if (data.success || res.status === 209) {
+        updateCourse(courseId, { selectedCourseCode: code, selectedCourseTitle: title || code });
+        setShowNewCourse(prev => ({ ...prev, [courseId]: false }));
+        setNewCourseCode(prev => ({ ...prev, [courseId]: '' }));
+        setNewCourseTitle(prev => ({ ...prev, [courseId]: '' }));
+        showToast(`Course ${code} created!`, 'success');
+        // Refresh tree
+        try { localStorage.removeItem('qs_tree_cache_v2'); } catch {}
+        useAppStore.getState().loadTree(session?.accessToken || '');
+      } else {
+        showToast(data.error || 'Failed to create course', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setCreatingCourse(false);
+    }
   }
 
   async function handleSubmit() {
@@ -205,12 +260,14 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       return;
     }
 
-    // For related-sources, category is auto-set
     const effectiveCategory = semester === config.relatedSourcesFolder ? config.relatedSourcesFolder : category;
 
-    const validCourses = courses.filter(c => c.code.trim() && c.files.length > 0);
+    const validCourses = courses.filter(c => {
+      const hasCourse = c.selectedCourseCode || (showNewCourse[c.id] && newCourseCode[c.id]?.trim());
+      return hasCourse && c.files.length > 0;
+    });
     if (validCourses.length === 0) {
-      alert('At least one course must have a code and files.');
+      alert('At least one course must be selected with files.');
       return;
     }
 
@@ -227,9 +284,9 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       const allFiles: { path: string; content: string }[] = [];
 
       for (const course of validCourses) {
-        const folderName = course.title.trim()
-          ? `${course.code.trim()}-${course.title.trim()}`
-          : course.code.trim();
+        const courseCode = course.selectedCourseCode;
+        const courseTitle = course.selectedCourseTitle || courseCode;
+        const courseFolder = `${courseCode} - ${courseTitle}`;
 
         for (const fileMeta of course.files) {
           const base64 = await fileMeta.file.arrayBuffer().then(buf => {
@@ -240,14 +297,14 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           });
 
           let filePath: string;
-          const courseFolder = course.title.trim() ? `${course.code} - ${course.title}` : course.code;
-          // NOTES, Previous Questions → inside Mid/Final; sheet, Syllabus, Other → root of course
           const isExamSpecific = category === config.categories.notes.folder || category === config.categories.questions.folder;
           const midFinalPart = (isExamSpecific && course.midFinal) ? `/${course.midFinal}` : '';
           if (semester === config.relatedKitabsFolder) {
+            const folderName = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
             filePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${folderName}/${fileMeta.file.name}`;
           } else if (semester === config.relatedSourcesFolder) {
             const facId = getFacultyIdForDepartment(department) || department;
+            const folderName = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
             filePath = `${facId}/${config.relatedSourcesFolder}/${folderName}/${fileMeta.file.name}`;
           } else if (isExamSpecific && course.examSession) {
             const yearPart = isPdf(fileMeta.file.name) ? (fileMeta.yearRange || '') : (fileMeta.year || '');
@@ -262,10 +319,9 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         }
       }
 
-      const courseList = validCourses.map(c => c.title.trim() ? `${c.code} - ${c.title}` : c.code).join(', ');
+      const courseList = validCourses.map(c => `${c.selectedCourseCode} - ${c.selectedCourseTitle || c.selectedCourseCode}`).join(', ');
       const message = `Add ${courseList} (${category}) — ${semester}`;
 
-      // Use server-side API route (uses GITHUB_TOKEN env for write access)
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 55000);
       const res = await fetch('/api/github/upload', {
@@ -279,9 +335,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
       if (data.success) {
         setResult({ success: true, prUrl: data.pr?.url });
-        setCourses([{ id: 1, code: '', title: '', files: [], examSession: '', midFinal: '' }]);
-        // Refresh tree cache so newly uploaded files appear immediately
-        try { localStorage.removeItem('qs_tree_cache'); } catch {}
+        setCourses([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '' }]);
+        try { localStorage.removeItem('qs_tree_cache_v2'); } catch {}
         useAppStore.getState().loadTree(session?.accessToken || '');
       } else {
         if (data.code === 'TOKEN_EXPIRED' || data.code === 'AUTH_REQUIRED') {
@@ -303,466 +358,419 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     }
   }
 
-  // Not logged in
-  if (status !== 'authenticated') {
-    return (
-      <div className="modal active" onClick={onClose}>
-        <div className="modal-content" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
-            <h2 className="text-base font-semibold"><i className="fas fa-upload"></i> Contribute Files</h2>
-            <button className="text-dark-text2 cursor-pointer bg-transparent border-none" onClick={onClose}><i className="fas fa-times"></i></button>
-          </div>
-          <div className="p-5">
-            <div className="text-center mb-4">
-              <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-qsis/10 flex items-center justify-center">
-                <i className="fas fa-cloud-upload-alt text-2xl text-qsis"></i>
-              </div>
-              <h3 className="text-[1rem] font-bold mb-1">Share Academic Files</h3>
-              <p className="text-[0.82rem] text-dark-text2">Sign in with your IIUC email to upload notes, sheets, and previous questions.</p>
-            </div>
-            <button className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer" onClick={onLogin}>
-              <i className="fas fa-sign-in-alt mr-2"></i> Sign In to Upload
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const courseOptions = useMemo(() => {
+    return existingCourses.map(c => ({
+      value: c.code,
+      label: `${c.code} — ${c.title}`,
+      icon: 'fa-book',
+    }));
+  }, [existingCourses]);
 
-  // Logged in but no GitHub
-  if (!hasGitHub) {
-    return (
-      <div className="modal active" onClick={onClose}>
-        <div className="modal-content" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
-            <h2 className="text-base font-semibold"><i className="fas fa-upload"></i> Connect GitHub</h2>
-            <button className="text-dark-text2 cursor-pointer bg-transparent border-none" onClick={onClose}><i className="fas fa-times"></i></button>
-          </div>
-          <div className="p-5">
-            <div className="text-center mb-5">
-              <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-dark-bg3 flex items-center justify-center">
-                <i className="fab fa-github text-2xl text-dark-text"></i>
-              </div>
-              <h3 className="text-[1rem] font-bold mb-1">Connect Your GitHub</h3>
-              <p className="text-[0.82rem] text-dark-text2">We need GitHub to create a Pull Request with your files.</p>
-            </div>
-            <div className="mb-5">
-              <div className="flex flex-col gap-3">
-                {[
-                  { n: '1', t: 'Sign in with Google', d: `Use your IIUC email (${profile.email || session?.user?.email || 'your email'})` },
-                  { n: '2', t: 'Connect GitHub Account', d: 'One click to link your GitHub for PR submissions' },
-                  { n: '3', t: 'Upload & Submit', d: 'Files are submitted as a Pull Request for review' },
-                ].map(s => (
-                  <div key={s.n} className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-full bg-qsis/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-[0.72rem] font-bold text-qsis">{s.n}</span>
-                    </div>
-                    <div>
-                      <span className="text-[0.82rem] font-semibold block">{s.t}</span>
-                      <span className="text-[0.72rem] text-dark-text2">{s.d}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
-              <p className="text-[0.78rem] text-dark-text2 mb-2"><i className="fas fa-question-circle text-qsis mr-1.5"></i>Don&apos;t have a GitHub account?</p>
-              <a href="https://github.com/signup" target="_blank" rel="noopener noreferrer" className="text-[0.82rem] text-qsis font-semibold hover:underline">
-                Create one free at github.com/signup <i className="fas fa-external-link-alt text-[0.65rem] ml-1"></i>
-              </a>
-            </div>
-            <button className="w-full py-3 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity" onClick={async () => {
-              showToast('Opening GitHub...', 'info');
-              const result = await installGitHubApp();
-              if (result.token && result.login) {
-                setGithubToken(result.token);
-                fetch('/api/profile', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    githubLogin: result.login,
-                    githubToken: result.token,
-                    githubInstallationId: result.installationId,
-                    githubAvatar: result.avatarUrl,
-                  }),
-                }).catch(() => {});
-                window.location.reload();
-              } else {
-                showToast(result.error || 'Connection cancelled', 'error');
-              }
-            }}>
-              <i className="fab fa-github mr-2"></i> Connect GitHub Account
-            </button>
-            <div className="mt-4 p-3 rounded-lg bg-qsis/5 border border-qsis/10">
-              <p className="text-[0.72rem] text-dark-text2 text-center">
-                <i className="fas fa-info-circle text-qsis mr-1"></i>
-                Files are stored in <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="text-qsis font-semibold hover:underline">QSIS-ACADEMIC-FILES-MANAFGER</a>
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const isExamCategory = category === config.categories.notes.folder || category === config.categories.questions.folder;
 
-  // Upload form with tabs
   return (
-    <div className="modal active" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-dark-bg2 w-full max-w-[540px] max-h-[90vh] rounded-2xl border border-dark-border overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
-          <h2 className="text-base font-semibold"><i className="fas fa-upload"></i> Contribute Files</h2>
-          <button className="text-dark-text2 cursor-pointer bg-transparent border-none" onClick={onClose}><i className="fas fa-times"></i></button>
+          <div>
+            <h2 className="text-[1.05rem] font-bold text-dark-text flex items-center gap-2">
+              <i className="fas fa-cloud-upload-alt text-qsis"></i> Upload Files
+            </h2>
+            <p className="text-[0.72rem] text-dark-text3 mt-0.5">Select a course and upload files</p>
+          </div>
+          <button className="w-8 h-8 rounded-lg bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 cursor-pointer hover:text-dark-text" onClick={onClose}>
+            <i className="fas fa-times text-sm"></i>
+          </button>
         </div>
 
-        {/* Tabs - only show if repo tab has content */}
-
-        <div className="p-5 max-h-[80vh] overflow-y-auto">
-
-          {/* Block upload if department not set */}
-          {needsDepartment && (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-500/10 flex items-center justify-center">
-                <i className="fas fa-exclamation-triangle text-2xl text-orange-400"></i>
-              </div>
-              <h3 className="text-[1rem] font-bold text-dark-text mb-2">Complete Your Profile First</h3>
-              <p className="text-[0.82rem] text-dark-text2 mb-4 max-w-sm mx-auto">
-                You need to set your <strong>department</strong> before uploading files. This ensures your files go to the right department folder.
-              </p>
-              <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 max-w-sm mx-auto mb-4">
-                <p className="text-[0.75rem] text-dark-text2 mb-2">Go to your profile or run onboarding to set your department:</p>
-                <ol className="list-decimal ml-4 space-y-1 text-[0.72rem] text-dark-text2 text-left">
-                  <li>Click your avatar &rarr; <strong>Dashboard</strong></li>
-                  <li>Update your <strong>Department</strong> field</li>
-                  <li>Save and come back here</li>
-                </ol>
-              </div>
-              <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold cursor-pointer border-none hover:opacity-90">
-                <i className="fas fa-arrow-left mr-1.5"></i>Go Back &amp; Complete Profile
-              </button>
-            </div>
-          )}
-
-
-          {/* ═══════════ Direct Upload ═══════════ */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
           {result?.success ? (
-                <div className="text-center py-6">
-                  <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-green-500/10 flex items-center justify-center">
-                    <i className="fas fa-check-circle text-2xl text-green-500"></i>
-                  </div>
-                  <h3 className="text-[1rem] font-bold mb-2">PR Created Successfully!</h3>
-                  <p className="text-[0.82rem] text-dark-text2 mb-4">Your files are pending review.</p>
-                  <a href={result.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-qsis text-white font-semibold text-[0.85rem] hover:opacity-90 transition-opacity">
-                    <i className="fab fa-github"></i> View Pull Request
-                  </a>
-                  <button className="block mx-auto mt-3 px-4 py-2 text-qsis text-[0.82rem] font-semibold bg-transparent border-none cursor-pointer hover:underline" onClick={onClose}>Close</button>
-                </div>
-              ) : (
-                <>
-                  {/* Department, Semester & Category */}
-                  <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
-                    <div className="grid grid-cols-3 gap-3">
-                       <div>
-                        <label className="text-[0.72rem] text-dark-text2 block mb-1">Department *</label>
-                        {canUploadAnyDept ? (
-                          <CustomSelect value={department} onChange={v => { setDepartment(v); setSemester(''); setCategory(''); }} placeholder="Select..." options={[
-                            { value: '', label: 'Select...' },
-                            ...FACULTIES.flatMap(f => f.departments.map(d => ({ value: d.id, label: `${d.shortName} — ${d.name}`, icon: d.icon || 'fa-building', group: f.shortName })))
-                          ]} />
-                        ) : (
-                          <div className="w-full px-2.5 py-2 rounded-lg border border-qsis/30 bg-qsis/5 text-dark-text text-[0.82rem] flex items-center gap-1.5">
-                            <i className="fas fa-lock text-qsis text-[0.65rem]"></i>
-                            <span className="font-semibold text-qsis">{userDeptName || department}</span>
-                          </div>
-                        )}
-                        <p className="text-[0.6rem] text-dark-text3 mt-0.5">{canUploadAnyDept ? 'Admin — upload to any department' : 'Files upload to your department only'}</p>
+            <div className="text-center py-8">
+              <div className="mb-4">
+                <i className="fas fa-check-circle text-2xl text-green-500"></i>
+              </div>
+              <h3 className="text-[1rem] font-bold mb-2">PR Created Successfully!</h3>
+              <p className="text-[0.82rem] text-dark-text2 mb-4">Your files are pending review.</p>
+              <a href={result.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-qsis text-white font-semibold text-[0.85rem] hover:opacity-90 transition-opacity">
+                <i className="fab fa-github"></i> View Pull Request
+              </a>
+              <button className="block mx-auto mt-3 px-4 py-2 text-qsis text-[0.82rem] font-semibold bg-transparent border-none cursor-pointer hover:underline" onClick={onClose}>Close</button>
+            </div>
+          ) : (
+            <>
+              {/* Department, Semester & Category */}
+              <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
+                <div className="grid grid-cols-3 gap-3">
+                   <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1">Department *</label>
+                    {canUploadAnyDept ? (
+                      <CustomSelect value={department} onChange={v => { setDepartment(v); setSemester(''); setCategory(''); }} placeholder="Select..." options={[
+                        { value: '', label: 'Select...' },
+                        ...FACULTIES.flatMap(f => f.departments.map(d => ({ value: d.id, label: `${d.shortName} — ${d.name}`, icon: d.icon || 'fa-building', group: f.shortName })))
+                      ]} />
+                    ) : (
+                      <div className="w-full px-2.5 py-2 rounded-lg border border-qsis/30 bg-qsis/5 text-dark-text text-[0.82rem] flex items-center gap-1.5">
+                        <i className="fas fa-lock text-qsis text-[0.65rem]"></i>
+                        <span className="font-semibold text-qsis">{userDeptName || department}</span>
                       </div>
+                    )}
+                    <p className="text-[0.6rem] text-dark-text3 mt-0.5">{canUploadAnyDept ? 'Admin — upload to any department' : 'Files upload to your department only'}</p>
+                  </div>
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester *</label>
+                    <CustomSelect value={semester} onChange={v => { setSemester(v); setCategory(''); }} placeholder="Select..." className={!department ? 'opacity-50 pointer-events-none' : ''} options={[
+                      { value: '', label: 'Select...' },
+                      ...config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' })),
+                      { value: config.relatedSourcesFolder, label: 'Related Sources (Cross-Semester)', icon: 'fa-folder-open' },
+                      ...(['qsis', 'dawah', 'hadith'].includes(userDeptId) ? [{ value: config.relatedKitabsFolder, label: 'Related Kitabs (Shariah Faculty)', icon: 'fa-book' }] : []),
+                    ]} />
+                  </div>
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1">Category *</label>
+                    <CustomSelect value={category} onChange={setCategory} placeholder="Select..." className={!semester ? 'opacity-50 pointer-events-none' : ''} options={
+                      semester === config.relatedKitabsFolder
+                        ? Object.entries(config.relatedKitabsCategories).map(([key, cat]) => ({ value: key, label: cat.label, icon: 'fa-book' }))
+                        : semester === config.relatedSourcesFolder
+                          ? [{ value: config.relatedSourcesFolder, label: 'Related Sources', icon: 'fa-folder-open' }]
+                          : [
+                              { value: '', label: 'Select...' },
+                              { value: config.categories.notes.folder, label: config.categories.notes.label, icon: 'fa-sticky-note', group: 'Exam Sections (inside Mid/Final)' },
+                              { value: config.categories.questions.folder, label: config.categories.questions.label, icon: 'fa-question-circle', group: 'Exam Sections (inside Mid/Final)' },
+                              { value: config.categories.sheet.folder, label: config.categories.sheet.label, icon: 'fa-scroll', group: 'Root Categories' },
+                              { value: config.categories.syllabus.folder, label: config.categories.syllabus.label, icon: 'fa-graduation-cap', group: 'Root Categories' },
+                              { value: config.categories.other.folder, label: config.categories.other.label, icon: 'fa-folder', group: 'Root Categories' },
+                            ]
+                    } />
+                  </div>
+                </div>
+              </div>
+
+              {/* Course Groups */}
+              {courses.map((course, idx) => {
+                const selectedCourse = existingCourses.find(c => c.code === course.selectedCourseCode);
+                const isCreatingNew = !!showNewCourse[course.id];
+                const courseFolder = course.selectedCourseCode
+                  ? (course.selectedCourseTitle ? `${course.selectedCourseCode} - ${course.selectedCourseTitle}` : course.selectedCourseCode)
+                  : '';
+
+                return (
+                <div key={course.id} className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[0.78rem] font-semibold text-qsis">
+                      <i className="fas fa-book mr-1.5"></i>Course {courses.length > 1 ? idx + 1 : ''}
+                    </span>
+                    {courses.length > 1 && (
+                      <button className="w-6 h-6 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.7rem] hover:bg-red-500/20" onClick={() => removeCourse(course.id)} title="Remove course">
+                        <i className="fas fa-times"></i>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Course Selector */}
+                  {!isCreatingNew ? (
+                    <div className="mb-2">
+                      <label className="text-[0.72rem] text-dark-text2 block mb-1">Select Course *</label>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <CustomSelect
+                            value={course.selectedCourseCode}
+                            onChange={v => {
+                              const found = existingCourses.find(c => c.code === v);
+                              updateCourse(course.id, { selectedCourseCode: v, selectedCourseTitle: found?.title || '' });
+                            }}
+                            placeholder={department && semester ? "Choose a course..." : "Select dept & semester first"}
+                            searchable
+                            className={!department || !semester ? 'opacity-50 pointer-events-none' : ''}
+                            options={courseOptions}
+                          />
+                        </div>
+                        <button
+                          className="px-3 py-1.5 rounded-lg border border-qsis/40 bg-qsis/5 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors flex items-center gap-1 whitespace-nowrap"
+                          onClick={() => setShowNewCourse(prev => ({ ...prev, [course.id]: true }))}
+                          disabled={!department || !semester}
+                          title="Create new course"
+                        >
+                          <i className="fas fa-plus"></i> New
+                        </button>
+                      </div>
+                      {selectedCourse && (
+                        <div className="mt-1.5 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-qsis/5 border border-qsis/10">
+                          <i className="fas fa-check-circle text-qsis text-[0.65rem]"></i>
+                          <span className="text-[0.72rem] text-dark-text2">
+                            <span className="font-mono font-bold text-qsis">{selectedCourse.code}</span>
+                            <span className="mx-1">—</span>
+                            <span>{selectedCourse.title}</span>
+                            <span className="text-dark-text3 ml-1">({selectedCourse.totalFiles} files)</span>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mb-2 p-3 rounded-lg bg-dark-bg border border-qsis/30">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[0.72rem] font-semibold text-dark-text">Create New Course</span>
+                        <button className="text-dark-text3 hover:text-dark-text text-[0.7rem] cursor-pointer bg-transparent border-none" onClick={() => setShowNewCourse(prev => ({ ...prev, [course.id]: false }))}>
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <input
+                          type="text"
+                          placeholder="Course Code (e.g. FSC-1208)"
+                          className="px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
+                          value={newCourseCode[course.id] || ''}
+                          onChange={e => {
+                            const code = e.target.value;
+                            setNewCourseCode(prev => ({ ...prev, [course.id]: code }));
+                            const match = allKnownCourses.find(c => c.code.toUpperCase() === code.trim().toUpperCase());
+                            if (match) {
+                              setNewCourseTitle(prev => ({ ...prev, [course.id]: match.title }));
+                            }
+                          }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Course Title (optional)"
+                          className="px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
+                          value={newCourseTitle[course.id] || ''}
+                          onChange={e => setNewCourseTitle(prev => ({ ...prev, [course.id]: e.target.value }))}
+                        />
+                      </div>
+                      <button
+                        className="w-full py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
+                        onClick={() => handleCreateCourse(course.id)}
+                        disabled={creatingCourse || !newCourseCode[course.id]?.trim()}
+                      >
+                        {creatingCourse ? <><i className="fas fa-spinner fa-spin mr-1"></i>Creating...</> : <><i className="fas fa-plus mr-1"></i>Create & Select</>}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Exam Section & Session */}
+                  {isExamCategory && (
+                    <div className="grid grid-cols-2 gap-2 mb-2">
                       <div>
-                        <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester *</label>
-                        <CustomSelect value={semester} onChange={v => { setSemester(v); setCategory(''); }} placeholder="Select..." className={!department ? 'opacity-50 pointer-events-none' : ''} options={[
+                        <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Section *</label>
+                        <CustomSelect value={course.midFinal} onChange={v => updateCourse(course.id, { midFinal: v })} placeholder="Select..." options={[
                           { value: '', label: 'Select...' },
-                          ...config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' })),
-                          { value: config.relatedSourcesFolder, label: 'Related Sources (Cross-Semester)', icon: 'fa-folder-open' },
-                          ...(['qsis', 'dawah', 'hadith'].includes(userDeptId) ? [{ value: config.relatedKitabsFolder, label: 'Related Kitabs (Shariah Faculty)', icon: 'fa-book' }] : []),
+                          { value: 'Mid', label: 'Mid', icon: 'fa-hourglass-half' },
+                          { value: 'Final', label: 'Final', icon: 'fa-check-double' },
                         ]} />
                       </div>
                       <div>
-                        <label className="text-[0.72rem] text-dark-text2 block mb-1">Category *</label>
-                        <CustomSelect value={category} onChange={setCategory} placeholder="Select..." className={!semester ? 'opacity-50 pointer-events-none' : ''} options={
-                          semester === config.relatedKitabsFolder
-                            ? Object.entries(config.relatedKitabsCategories).map(([key, cat]) => ({ value: key, label: cat.label, icon: 'fa-book' }))
-                            : semester === config.relatedSourcesFolder
-                              ? [{ value: config.relatedSourcesFolder, label: 'Related Sources', icon: 'fa-folder-open' }]
-                              : [
-                                  { value: '', label: 'Select...' },
-                                  { value: config.categories.notes.folder, label: config.categories.notes.label, icon: 'fa-sticky-note', group: 'Exam Sections (inside Mid/Final)' },
-                                  { value: config.categories.questions.folder, label: config.categories.questions.label, icon: 'fa-question-circle', group: 'Exam Sections (inside Mid/Final)' },
-                                  { value: config.categories.sheet.folder, label: config.categories.sheet.label, icon: 'fa-scroll', group: 'Root Categories' },
-                                  { value: config.categories.syllabus.folder, label: config.categories.syllabus.label, icon: 'fa-graduation-cap', group: 'Root Categories' },
-                                  { value: config.categories.other.folder, label: config.categories.other.label, icon: 'fa-folder', group: 'Root Categories' },
-                                ]
-                        } />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Course Groups */}
-                  {courses.map((course, idx) => {
-                    const folderName = course.code.trim()
-                      ? (course.title.trim() ? `${course.code.trim()}-${course.title.trim()}` : course.code.trim())
-                      : '';
-                    const isLimitedCategory = category === config.categories.questions.folder || category === config.categories.notes.folder;
-                    const folderPreview = course.code.trim()
-                      ? (course.title.trim() ? `${course.code.trim()}-${course.title.trim()}` : course.code.trim())
-                      : '';
-                    return (
-                    <div key={course.id} className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-3">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-[0.78rem] font-semibold text-qsis">
-                          <i className="fas fa-book mr-1.5"></i>Course {courses.length > 1 ? idx + 1 : ''}
-                        </span>
-                        {courses.length > 1 && (
-                          <button className="w-6 h-6 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.7rem] hover:bg-red-500/20" onClick={() => removeCourse(course.id)} title="Remove course">
-                            <i className="fas fa-times"></i>
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 mb-2">
-                        <div>
-                          <label className="text-[0.72rem] text-dark-text2 block mb-1">Course Code *</label>
-                          <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. FSC-1208" value={course.code} onChange={e => updateCourse(course.id, { code: e.target.value })} />
-                        </div>
-                        <div>
-                          <label className="text-[0.72rem] text-dark-text2 block mb-1">Course Title</label>
-                          <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none" placeholder="e.g. Islamic Studies" value={course.title} onChange={e => updateCourse(course.id, { title: e.target.value })} />
-                        </div>
-                      </div>
-
-                      {(category === config.categories.questions.folder || category === config.categories.notes.folder) && (
-                        <div className="mb-2">
-                          <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Section *</label>
-                          <CustomSelect value={course.midFinal} onChange={v => updateCourse(course.id, { midFinal: v })} placeholder="Select exam section..." options={[
-                            { value: '', label: 'Select exam section...' },
-                            { value: 'Mid', label: 'Mid', icon: 'fa-hourglass-half' },
-                            { value: 'Final', label: 'Final', icon: 'fa-check-double' },
-                          ]} />
-                        </div>
-                      )}
-
-                      {(category === config.categories.questions.folder || category === config.categories.notes.folder) && !course.midFinal && (
-                        <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
-                          <p className="text-[0.68rem] text-orange-400"><i className="fas fa-exclamation-triangle mr-1"></i>Please select an exam section (Mid or Final) for {category === config.categories.notes.folder ? 'Notes' : 'Previous Questions'}.</p>
-                        </div>
-                      )}
-
-                      {category === config.categories.questions.folder && (
-                        <div className="mb-2">
-                          <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
+                        <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
+                        {category === config.categories.questions.folder ? (
                           <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} options={[
                             { value: 'Both', label: 'Both (Autumn + Spring)', icon: 'fa-layer-group' },
                             { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
                             { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
                           ]} />
-                        </div>
-                      )}
-                      {category === config.categories.notes.folder && (
-                        <div className="mb-2">
-                          <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
-                          <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} placeholder="Select session..." options={[
-                            { value: '', label: 'Select session...' },
+                        ) : (
+                          <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} placeholder="Select..." options={[
+                            { value: '', label: 'Select...' },
                             { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
                             { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
                           ]} />
-                        </div>
-                      )}
-
-                      {folderPreview && department && semester && category && (
-                        <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-qsis/5 border border-qsis/10">
-                          <span className="text-[0.62rem] text-qsis font-mono">
-                            <i className="fas fa-folder mr-1"></i>
-                            {semester === config.relatedKitabsFolder
-                              ? `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${folderPreview}/`
-                                : semester === config.relatedSourcesFolder
-                                  ? `${getFacultyIdForDepartment(department) || department}/${config.relatedSourcesFolder}/${folderPreview}/`
-                                : (category === config.categories.questions.folder || category === config.categories.notes.folder) && course.examSession
-                                  ? `${department}/${semester}/${folderPreview}/${course.midFinal ? course.midFinal + '/' : ''}${category}/${course.examSession}/...`
-                                  : `${department}/${semester}/${folderPreview}/${course.midFinal ? course.midFinal + '/' : ''}${category}/`
-                            }
-                          </span>
-                        </div>
-                      )}
-
-                      <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept={category === config.categories.notes.folder ? '.pdf,.doc,.docx,.ppt,.pptx' : category === config.categories.questions.folder ? '.pdf,.jpg,.jpeg,.png,.gif,.webp' : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv'} onChange={e => handleFilesForCourse(course.id, e)} />
-                      <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => fileInputRefs.current[course.id]?.click()}>
-                        <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
-                        <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
-                        <p className="text-[0.65rem] text-dark-text2">{isLimitedCategory ? '1 file only' : `Max 5 files, ${config.maxUploadSizeMB}MB each`}</p>
+                        )}
                       </div>
+                    </div>
+                  )}
 
-                      {course.files.length > 0 && (
-                        <div className="mt-2 flex flex-col gap-1.5">
-                          {course.files.map((fileMeta, fi) => {
-                            const isNotes = category === config.categories.notes.folder;
-                            const isQuestions = category === config.categories.questions.folder;
-                            const fileIsPdf = isPdf(fileMeta.file.name);
-                            return (
-                              <div key={fi} className="p-2 rounded-lg bg-dark-bg border border-dark-border">
-                                <div className="flex items-center gap-2">
-                                  <div className="text-[0.95rem] flex-shrink-0">{getFileIcon(fileMeta.file.name)}</div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-[0.75rem] font-semibold truncate">{fileMeta.file.name}</div>
+                  {isExamCategory && !course.midFinal && (
+                    <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                      <p className="text-[0.68rem] text-orange-400"><i className="fas fa-exclamation-triangle mr-1"></i>Select exam section (Mid or Final).</p>
+                    </div>
+                  )}
+
+                  {/* Path Preview */}
+                  {courseFolder && department && semester && category && (
+                    <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-qsis/5 border border-qsis/10">
+                      <span className="text-[0.62rem] text-qsis font-mono">
+                        <i className="fas fa-folder mr-1"></i>
+                        {semester === config.relatedKitabsFolder
+                          ? `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${courseFolder}/`
+                          : semester === config.relatedSourcesFolder
+                            ? `${getFacultyIdForDepartment(department) || department}/${config.relatedSourcesFolder}/${courseFolder}/`
+                            : isExamCategory && course.examSession
+                              ? `${department}/${semester}/${courseFolder}/${course.midFinal ? course.midFinal + '/' : ''}${category}/${course.examSession}/...`
+                              : `${department}/${semester}/${courseFolder}/${course.midFinal ? course.midFinal + '/' : ''}${category}/`
+                        }
+                      </span>
+                    </div>
+                  )}
+
+                  {/* File Upload Area */}
+                  <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept={category === config.categories.notes.folder ? '.pdf,.doc,.docx,.ppt,.pptx' : category === config.categories.questions.folder ? '.pdf,.jpg,.jpeg,.png,.gif,.webp' : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv'} onChange={e => handleFilesForCourse(course.id, e)} />
+                  <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => fileInputRefs.current[course.id]?.click()}>
+                    <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
+                    <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
+                    <p className="text-[0.65rem] text-dark-text2">{isExamCategory ? '1 file only' : `Max 5 files, ${config.maxUploadSizeMB}MB each`}</p>
+                  </div>
+
+                  {course.files.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1.5">
+                      {course.files.map((fileMeta, fi) => {
+                        const isNotes = category === config.categories.notes.folder;
+                        const isQuestions = category === config.categories.questions.folder;
+                        const fileIsPdf = isPdf(fileMeta.file.name);
+                        return (
+                          <div key={fi} className="p-2 rounded-lg bg-dark-bg border border-dark-border">
+                            <div className="flex items-center gap-2">
+                              <div className="text-[0.95rem] flex-shrink-0">{getFileIcon(fileMeta.file.name)}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[0.75rem] font-semibold truncate">{fileMeta.file.name}</div>
+                              </div>
+                              <div className="text-[0.62rem] text-dark-text2 flex-shrink-0">{formatSize(fileMeta.file.size)}</div>
+                              <button className="w-5 h-5 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.65rem] hover:bg-red-500/20" onClick={() => removeFileFromCourse(course.id, fi)}>
+                                <i className="fas fa-times"></i>
+                              </button>
+                            </div>
+                            {(isNotes || isQuestions) && (
+                              <div className="mt-1.5">
+                                {isQuestions && fileIsPdf ? (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="text-[0.62rem] text-dark-text3 block mb-0.5">From Year</label>
+                                      <input
+                                        type="number"
+                                        min={CURRENT_YEAR - 10}
+                                        max={CURRENT_YEAR}
+                                        className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        value={fileMeta.yearRange.split('-')[0] || ''}
+                                        onChange={e => {
+                                          const toYear = fileMeta.yearRange.split('-')[1] || String(CURRENT_YEAR);
+                                          const newFiles = [...course.files];
+                                          newFiles[fi] = { ...newFiles[fi], yearRange: `${e.target.value}-${toYear}` };
+                                          updateCourse(course.id, { files: newFiles });
+                                        }}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-[0.62rem] text-dark-text3 block mb-0.5">To Year</label>
+                                      <input
+                                        type="number"
+                                        min={CURRENT_YEAR - 10}
+                                        max={CURRENT_YEAR + 5}
+                                        className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        value={fileMeta.yearRange.split('-')[1] || ''}
+                                        onChange={e => {
+                                          const fromYear = fileMeta.yearRange.split('-')[0] || String(CURRENT_YEAR);
+                                          const newFiles = [...course.files];
+                                          newFiles[fi] = { ...newFiles[fi], yearRange: `${fromYear}-${e.target.value}` };
+                                          updateCourse(course.id, { files: newFiles });
+                                        }}
+                                      />
+                                    </div>
                                   </div>
-                                  <div className="text-[0.62rem] text-dark-text2 flex-shrink-0">{formatSize(fileMeta.file.size)}</div>
-                                  <button className="w-5 h-5 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.65rem] hover:bg-red-500/20" onClick={() => removeFileFromCourse(course.id, fi)}>
-                                    <i className="fas fa-times"></i>
-                                  </button>
-                                </div>
-                                {(isNotes || isQuestions) && (
-                                  <div className="mt-1.5">
-                                    {isQuestions && fileIsPdf ? (
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                          <label className="text-[0.62rem] text-dark-text3 block mb-0.5">From Year</label>
-                                          <input
-                                            type="number"
-                                            min={CURRENT_YEAR - 10}
-                                            max={CURRENT_YEAR}
-                                            className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                            value={fileMeta.yearRange.split('-')[0] || ''}
-                                            onChange={e => {
-                                              const toYear = fileMeta.yearRange.split('-')[1] || String(CURRENT_YEAR);
-                                              const newFiles = [...course.files];
-                                              newFiles[fi] = { ...newFiles[fi], yearRange: `${e.target.value}-${toYear}` };
-                                              updateCourse(course.id, { files: newFiles });
-                                            }}
-                                          />
-                                        </div>
-                                        <div>
-                                          <label className="text-[0.62rem] text-dark-text3 block mb-0.5">To Year</label>
-                                          <input
-                                            type="number"
-                                            min={CURRENT_YEAR - 10}
-                                            max={CURRENT_YEAR + 5}
-                                            className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                            value={fileMeta.yearRange.split('-')[1] || ''}
-                                            onChange={e => {
-                                              const fromYear = fileMeta.yearRange.split('-')[0] || String(CURRENT_YEAR);
-                                              const newFiles = [...course.files];
-                                              newFiles[fi] = { ...newFiles[fi], yearRange: `${fromYear}-${e.target.value}` };
-                                              updateCourse(course.id, { files: newFiles });
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div>
-                                        <label className="text-[0.62rem] text-dark-text3 block mb-0.5">Year</label>
-                                        <input
-                                          type="number"
-                                          min={CURRENT_YEAR - 10}
-                                          max={CURRENT_YEAR + 5}
-                                          className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          value={fileMeta.year}
-                                          onChange={e => {
-                                            const newFiles = [...course.files];
-                                            newFiles[fi] = { ...newFiles[fi], year: e.target.value };
-                                            updateCourse(course.id, { files: newFiles });
-                                          }}
-                                        />
-                                      </div>
-                                    )}
+                                ) : (
+                                  <div>
+                                    <label className="text-[0.62rem] text-dark-text3 block mb-0.5">Year</label>
+                                    <input
+                                      type="number"
+                                      min={CURRENT_YEAR - 10}
+                                      max={CURRENT_YEAR + 5}
+                                      className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                      value={fileMeta.year}
+                                      onChange={e => {
+                                        const newFiles = [...course.files];
+                                        newFiles[fi] = { ...newFiles[fi], year: e.target.value };
+                                        updateCourse(course.id, { files: newFiles });
+                                      }}
+                                    />
                                   </div>
                                 )}
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                  })}
+                  )}
+                </div>
+                );
+              })}
 
-                  {/* Add another course */}
-                  {courses.length < 5 && (
-                    <button className="w-full py-3 rounded-xl border-2 border-dashed border-qsis/40 bg-qsis/5 text-qsis text-[0.85rem] font-bold cursor-pointer hover:border-qsis hover:bg-qsis/10 transition-all mb-4" onClick={addCourse}>
-                      <i className="fas fa-plus-circle mr-2 text-lg"></i> Add Another Course
+              {/* Add another course */}
+              {courses.length < 5 && (
+                <button className="w-full py-3 rounded-xl border-2 border-dashed border-qsis/40 bg-qsis/5 text-qsis text-[0.85rem] font-bold cursor-pointer hover:border-qsis hover:bg-qsis/10 transition-all mb-4" onClick={addCourse}>
+                  <i className="fas fa-plus-circle mr-2 text-lg"></i> Add Another Course
+                </button>
+              )}
+
+              {/* Summary */}
+              <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-4">
+                <div className="flex items-center justify-between text-[0.78rem]">
+                  <span className="text-dark-text2">
+                    <i className="fas fa-file mr-1"></i>{totalFiles} file{totalFiles !== 1 ? 's' : ''} across {courses.filter(c => c.files.length > 0).length} course{courses.filter(c => c.files.length > 0).length !== 1 ? 's' : ''}
+                  </span>
+                  <span className={`font-semibold ${totalSizeMB > 40 ? 'text-red-400' : 'text-qsis'}`}>
+                    {totalSizeMB.toFixed(1)} / 50 MB
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-dark-bg3 rounded-full overflow-hidden mt-2">
+                  <div className="h-full bg-gradient-to-r from-qsis to-accent rounded-full transition-all" style={{ width: `${Math.min((totalSizeMB / 50) * 100, 100)}%` }}></div>
+                </div>
+              </div>
+
+              {/* Auto-filled info */}
+              <div className="bg-dark-bg3 border border-dark-border rounded-xl p-3 mb-4">
+                <p className="text-[0.72rem] text-dark-text2 mb-2">Your info will be auto-included in the PR:</p>
+                <div className="flex flex-wrap gap-2">
+                  {profile.universityId && <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{profile.universityId}</span>}
+                  <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{session?.user?.email || ''}</span>
+                  <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{profile.name || (session as any)?.user?.name || ''}</span>
+                </div>
+              </div>
+
+              {result?.error && (
+                <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
+                  <i className="fas fa-exclamation-circle mr-2"></i>{result.error}
+                  {result.tokenExpired && (
+                    <button className="mt-3 w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer" onClick={async () => {
+                      showToast('Opening GitHub...', 'info');
+                      const installResult = await installGitHubApp();
+                      if (installResult.error || !installResult.token) {
+                        showToast(installResult.error || 'Connection cancelled', 'error');
+                        return;
+                      }
+                      setGithubToken(installResult.token);
+                      fetch('/api/profile', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          githubLogin: installResult.login,
+                          githubToken: installResult.token,
+                          githubInstallationId: installResult.installationId,
+                          githubAvatar: installResult.avatarUrl,
+                        }),
+                      }).catch(() => {});
+                      showToast(`Connected as @${installResult.login}!`, 'success');
+                      window.location.reload();
+                    }}>
+                      <i className="fab fa-github mr-2"></i>Connect with GitHub
                     </button>
                   )}
-
-                  {/* Summary */}
-                  <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-4">
-                    <div className="flex items-center justify-between text-[0.78rem]">
-                      <span className="text-dark-text2">
-                        <i className="fas fa-file mr-1"></i>{totalFiles} file{totalFiles !== 1 ? 's' : ''} across {courses.filter(c => c.files.length > 0).length} course{courses.filter(c => c.files.length > 0).length !== 1 ? 's' : ''}
-                      </span>
-                      <span className={`font-semibold ${totalSizeMB > 40 ? 'text-red-400' : 'text-qsis'}`}>
-                        {totalSizeMB.toFixed(1)} / 50 MB
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 bg-dark-bg3 rounded-full overflow-hidden mt-2">
-                      <div className="h-full bg-gradient-to-r from-qsis to-accent rounded-full transition-all" style={{ width: `${Math.min((totalSizeMB / 50) * 100, 100)}%` }}></div>
-                    </div>
-                  </div>
-
-                  {/* Auto-filled info */}
-                  <div className="bg-dark-bg3 border border-dark-border rounded-xl p-3 mb-4">
-                    <p className="text-[0.72rem] text-dark-text2 mb-2">Your info will be auto-included in the PR:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {profile.universityId && <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{profile.universityId}</span>}
-                      <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{session?.user?.email || ''}</span>
-                      <span className="px-2 py-1 rounded bg-dark-bg text-[0.7rem] font-mono">{profile.name || (session as any)?.user?.name || ''}</span>
-                    </div>
-                  </div>
-
-                  {result?.error && (
-                    <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
-                      <i className="fas fa-exclamation-circle mr-2"></i>{result.error}
-                      {result.tokenExpired && (
-                        <button className="mt-3 w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer" onClick={async () => {
-                          showToast('Opening GitHub...', 'info');
-                          const installResult = await installGitHubApp();
-                          if (installResult.error || !installResult.token) {
-                            showToast(installResult.error || 'Connection cancelled', 'error');
-                            return;
-                          }
-                          setGithubToken(installResult.token);
-                          fetch('/api/profile', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              githubLogin: installResult.login,
-                              githubToken: installResult.token,
-                              githubInstallationId: installResult.installationId,
-                              githubAvatar: installResult.avatarUrl,
-                            }),
-                          }).catch(() => {});
-                          showToast(`Connected as @${installResult.login}!`, 'success');
-                          window.location.reload();
-                        }}>
-                          <i className="fab fa-github mr-2"></i>Connect with GitHub
-                        </button>
-                      )}
-                      {result?.needsPAT && (
-                        <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer" className="mt-3 block text-center py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white no-underline font-semibold text-[0.82rem]">
-                          <i className="fas fa-key mr-2"></i>Create Personal Access Token
-                        </a>
-                      )}
-                    </div>
+                  {result?.needsPAT && (
+                    <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer" className="mt-3 block text-center py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white no-underline font-semibold text-[0.82rem]">
+                      <i className="fas fa-key mr-2"></i>Create Personal Access Token
+                    </a>
                   )}
-
-                  <button
-                    className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={handleSubmit}
-                    disabled={uploading || !canSubmit()}
-                  >
-                    {uploading ? (
-                      <><i className="fas fa-spinner fa-spin mr-2"></i>Creating PR...</>
-                    ) : (
-                      <><i className="fas fa-paper-plane mr-2"></i>Submit {totalFiles} File{totalFiles !== 1 ? 's' : ''} for Review</>
-                    )}
-                  </button>
-                </>
+                </div>
               )}
+
+              <button
+                className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleSubmit}
+                disabled={uploading || !canSubmit()}
+              >
+                {uploading ? (
+                  <><i className="fas fa-spinner fa-spin mr-2"></i>Creating PR...</>
+                ) : (
+                  <><i className="fas fa-paper-plane mr-2"></i>Submit {totalFiles} File{totalFiles !== 1 ? 's' : ''} for Review</>
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

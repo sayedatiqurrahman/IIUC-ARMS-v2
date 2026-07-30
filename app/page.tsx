@@ -833,6 +833,7 @@ export default function BrowsePage() {
             <ReadmeEditor
               folder={`${currentDept}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}${currentMidFinal ? '/' + currentMidFinal : ''}`}
               isOwner={isOwner}
+              isLoggedIn={!!session}
             />
           )}
 
@@ -896,6 +897,7 @@ export default function BrowsePage() {
             <ReadmeEditor
               folder={`${currentDept}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}${currentMidFinal ? '/' + currentMidFinal : ''}/${config.categories[currentCat]?.folder || currentCat}`}
               isOwner={isOwner}
+              isLoggedIn={!!session}
             />
           )}
           {filteredFiles.length === 0 && (
