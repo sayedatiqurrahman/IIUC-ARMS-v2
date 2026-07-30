@@ -756,7 +756,13 @@ export default function BrowsePage() {
               <p className="text-dark-text font-semibold text-sm mb-1">No courses added yet for this semester.</p>
               <p className="text-dark-text3 text-xs mb-4">Be the first to add a course code and title.</p>
               {session && (
-                <button onClick={() => { window.location.href = '/admin'; }} className="px-5 py-2.5 bg-qsis text-white rounded-xl text-xs font-semibold hover:bg-qsis/90 transition-colors">
+                <button onClick={() => {
+                  setAddCourseCode('');
+                  setAddCourseTitle('');
+                  setAddCourseError('');
+                  setAddCourseSuccess('');
+                  setShowAddCourse(true);
+                }} className="px-5 py-2.5 bg-qsis text-white rounded-xl text-xs font-semibold hover:bg-qsis/90 transition-colors">
                   <i className="fas fa-plus mr-1.5"></i>Add Course
                 </button>
               )}

@@ -53,6 +53,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Register service worker for offline/PWA support
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  }, []);
+
+  // Refresh tree when user returns to tab (visibility change) — no polling, saves API calls
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        loadTree(session?.accessToken || '');
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [session?.accessToken]);
+
   useEffect(() => {
     if (status === 'authenticated') {
       loadProfile();
