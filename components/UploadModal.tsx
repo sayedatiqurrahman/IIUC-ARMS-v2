@@ -162,11 +162,29 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!githubToken || !!profile.githubToken;
 
+  // PAT prompt skip tracking
+  const [patSkipCount, setPatSkipCount] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    return parseInt(localStorage.getItem('pat_skip_count') || '0');
+  });
+  const [patDismissed, setPatDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('pat_skip_dismissed') === '1';
+  });
+  const [patInputToken, setPatInputToken] = useState('');
+  const [patSaving, setPatSaving] = useState(false);
+
+  const isLoggedIn = !!(session as any)?.user;
+  const showPatPrompt = isLoggedIn && !hasGitHub && !patDismissed;
+
+  // Get tree length to force memo recomputation when tree refreshes
+  const treeLength = useAppStore(s => s.tree.length);
+
   // Get existing courses from GitHub tree
   const existingCourses = useMemo(() => {
     if (!department || !semester || semester === config.relatedKitabsFolder || semester === config.relatedSourcesFolder) return [];
     return getSemesterCourses(semester, department);
-  }, [department, semester, getSemesterCourses]);
+  }, [department, semester, getSemesterCourses, treeLength]);
 
   // All known courses from all semesters for title auto-fill
   const allKnownCourses = useMemo(() => {
@@ -179,7 +197,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       }
     }
     return Array.from(map.entries()).map(([code, title]) => ({ code, title }));
-  }, [department, getSemesterCourses]);
+  }, [department, getSemesterCourses, treeLength]);
 
   const totalFiles = courses.reduce((sum, c) => sum + c.files.length, 0);
   const totalSizeMB = courses.reduce((sum, c) => sum + c.files.reduce((s, f) => s + f.file.size, 0), 0) / (1024 * 1024);
@@ -224,6 +242,41 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   function linksToReadmeContent(links: Link[]): string {
     if (links.length === 0) return '';
     return links.map(l => `- [${l.title}](${l.url})`).join('\n') + '\n';
+  }
+
+  function handleSkipPat() {
+    const next = patSkipCount + 1;
+    setPatSkipCount(next);
+    localStorage.setItem('pat_skip_count', String(next));
+    if (next >= 3) {
+      setPatDismissed(true);
+      localStorage.setItem('pat_skip_dismissed', '1');
+    }
+  }
+
+  async function handleSavePat() {
+    if (!patInputToken.trim()) return;
+    setPatSaving(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubToken: patInputToken.trim() }),
+      });
+      const data = await res.json();
+      if (data.success || res.ok) {
+        showToast('GitHub connected! Your identity will show in contributor list.', 'success');
+        setPatDismissed(true);
+        localStorage.setItem('pat_skip_dismissed', '1');
+        window.location.reload();
+      } else {
+        showToast(data.error || 'Invalid token', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setPatSaving(false);
+    }
   }
 
   function addCourse() {
@@ -531,6 +584,82 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                 <i className="fab fa-github"></i> View Pull Request
               </a>
               <button className="block mx-auto mt-3 px-4 py-2 text-qsis text-[0.82rem] font-semibold bg-transparent border-none cursor-pointer hover:underline" onClick={onClose}>Close</button>
+            </div>
+          ) : !isLoggedIn ? (
+            /* ── NOT LOGGED IN ── */
+            <div className="text-center py-10">
+              <div className="mb-4">
+                <i className="fas fa-user-lock text-3xl text-dark-text3"></i>
+              </div>
+              <h3 className="text-[1rem] font-bold text-dark-text mb-2">Please Login First</h3>
+              <p className="text-[0.82rem] text-dark-text2 mb-5 max-w-[320px] mx-auto">
+                You need to be logged in to upload files and share resources with your classmates.
+              </p>
+              <button
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.85rem] cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={onLogin}
+              >
+                <i className="fas fa-sign-in-alt mr-2"></i>Login / Sign Up
+              </button>
+              <button className="block mx-auto mt-3 px-4 py-2 text-dark-text3 text-[0.78rem] font-semibold bg-transparent border-none cursor-pointer hover:text-dark-text2" onClick={onClose}>
+                Cancel
+              </button>
+            </div>
+          ) : showPatPrompt ? (
+            /* ── GITHUB PAT PROMPT ── */
+            <div className="py-6">
+              <div className="text-center mb-5">
+                <div className="mb-3">
+                  <i className="fab fa-github text-3xl text-dark-text2"></i>
+                </div>
+                <h3 className="text-[1rem] font-bold text-dark-text mb-1">Connect GitHub</h3>
+                <p className="text-[0.82rem] text-dark-text2 max-w-[360px] mx-auto">
+                  Add your <strong>Personal Access Token (PAT)</strong> so your name appears in the contributor list when you upload files.
+                </p>
+              </div>
+
+              <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
+                <label className="text-[0.72rem] text-dark-text2 block mb-1.5">GitHub Personal Access Token</label>
+                <input
+                  type="password"
+                  placeholder="ghp_xxxxxxxxxxxx or github_pat_xxxx"
+                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] font-mono outline-none focus:border-qsis mb-3"
+                  value={patInputToken}
+                  onChange={e => setPatInputToken(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSavePat()}
+                />
+                <button
+                  className="w-full py-2.5 rounded-lg bg-qsis text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
+                  onClick={handleSavePat}
+                  disabled={patSaving || !patInputToken.trim()}
+                >
+                  {patSaving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : <><i className="fab fa-github mr-2"></i>Connect & Save</>}
+                </button>
+                <p className="text-[0.65rem] text-dark-text3 mt-2 text-center">
+                  <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline">Create a new PAT</a> with <strong>repo</strong> scope
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  className="flex-1 py-2.5 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.82rem] font-semibold cursor-pointer hover:bg-dark-bg2 transition-colors"
+                  onClick={handleSkipPat}
+                >
+                  {patSkipCount < 2 ? `Skip (${3 - patSkipCount - 1} left)` : 'Skip (1 left)'}
+                </button>
+                <button className="flex-1 py-2.5 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text3 text-[0.82rem] font-semibold cursor-pointer hover:bg-dark-bg2 transition-colors" onClick={onClose}>
+                  Cancel
+                </button>
+              </div>
+
+              {patSkipCount >= 2 && (
+                <div className="mt-3 px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                  <p className="text-[0.7rem] text-orange-400 text-center">
+                    <i className="fas fa-exclamation-triangle mr-1"></i>
+                    This is your last chance. After skipping, you won&apos;t see this prompt again. Your uploads won&apos;t show your identity.
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <>
