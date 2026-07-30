@@ -242,40 +242,198 @@ function PermissionsTab() {
 
 function CoursesTab({ effectiveRole, profile }: { effectiveRole: string; profile: any }) {
   const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
+  const loadTree = useAppStore(s => s.loadTree);
+  const session = useAppStore(s => s.profile);
   const [selectedDept, setSelectedDept] = useState(profile?.department || 'qsis');
   const [selectedSem, setSelectedSem] = useState('1st-semister');
+  const [showAdd, setShowAdd] = useState(false);
+  const [addCode, setAddCode] = useState('');
+  const [addTitle, setAddTitle] = useState('');
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [editCourse, setEditCourse] = useState<{ code: string; title: string } | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteCourse, setDeleteCourse] = useState<{ code: string; title: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const courses = getSemesterCourses(selectedSem, selectedDept);
 
+  async function handleAdd() {
+    if (!addCode.trim() || !addTitle.trim()) { setAddError('Code and title required'); return; }
+    setAddLoading(true); setAddError('');
+    try {
+      const res = await fetch('/api/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ department: selectedDept, semester: selectedSem, code: addCode.trim(), title: addTitle.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok && !data.success) throw new Error(data.error || 'Failed');
+      setShowAdd(false); setAddCode(''); setAddTitle('');
+      loadTree();
+    } catch (e: any) { setAddError(e.message); }
+    finally { setAddLoading(false); }
+  }
+
+  async function handleEdit() {
+    if (!editCourse || !editTitle.trim()) return;
+    setEditLoading(true);
+    try {
+      const res = await fetch('/api/courses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: editCourse.code, semester: selectedSem, department: selectedDept, title: editTitle.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setEditCourse(null); setEditTitle('');
+      loadTree();
+    } catch (e: any) { alert(e.message); }
+    finally { setEditLoading(false); }
+  }
+
+  async function handleDelete() {
+    if (!deleteCourse) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch('/api/courses', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: deleteCourse.code, semester: selectedSem, department: selectedDept }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setDeleteCourse(null);
+      loadTree();
+    } catch (e: any) { alert(e.message); }
+    finally { setDeleteLoading(false); }
+  }
+
   return (
     <div>
-      <h3 className="text-sm font-semibold text-dark-text mb-1"><i className="fas fa-book text-indigo-400 mr-2"></i>Courses (from GitHub)</h3>
-      <p className="text-dark-text3 text-xs mb-3">Courses are read from the GitHub folder structure. Folder format: <code className="bg-dark-bg px-1 py-0.5 rounded text-qsis">Code - Title/Mid|Final/NOTES|sheet|Syllabus|Previous Questions</code></p>
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-book text-indigo-400 mr-2"></i>Courses (from GitHub)</h3>
+        <button onClick={() => { setShowAdd(true); setAddCode(''); setAddTitle(''); setAddError(''); }}
+          className="px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold cursor-pointer hover:opacity-90 flex items-center gap-1.5">
+          <i className="fas fa-plus"></i> Add Course
+        </button>
+      </div>
+      <p className="text-dark-text3 text-xs mb-3">Manage courses for each department and semester.</p>
 
       <div className="flex flex-wrap gap-2 mb-4">
-        <CustomSelect
-          value={selectedDept}
-          onChange={setSelectedDept}
-          placeholder="Select department..."
-          options={FACULTIES.flatMap(f => f.departments.map(d => ({
-            value: d.id,
-            label: `${d.shortName} — ${d.name}`,
-            icon: 'fa-building',
-            group: `${f.shortName} — ${f.name}`,
-          })))}
-        />
-        <CustomSelect
-          value={selectedSem}
-          onChange={setSelectedSem}
-          placeholder="Select semester..."
-          options={config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }))}
-        />
+        <CustomSelect value={selectedDept} onChange={setSelectedDept} placeholder="Department..."
+          options={FACULTIES.flatMap(f => f.departments.map(d => ({ value: d.id, label: `${d.shortName} — ${d.name}`, icon: 'fa-building', group: f.shortName })))} />
+        <CustomSelect value={selectedSem} onChange={setSelectedSem} placeholder="Semester..."
+          options={config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }))} />
       </div>
 
+      {/* Add Course Modal — Step 1: Enter details */}
+      {showAdd && !addCode.trim() && (
+        <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4" onClick={() => setShowAdd(false)}>
+          <div className="bg-dark-bg2 w-full max-w-sm rounded-2xl border border-dark-border p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-dark-text mb-3"><i className="fas fa-book-medical text-qsis mr-2"></i>Add Course</h3>
+            {addError && <p className="text-red-400 text-[0.72rem] mb-2">{addError}</p>}
+            <input type="text" placeholder="Course Code (e.g. QSM-3601)" value={addCode} onChange={e => setAddCode(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis mb-2" />
+            <input type="text" placeholder="Course Title (e.g. Ulumul Quran)" value={addTitle} onChange={e => setAddTitle(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis mb-3" />
+            <div className="flex gap-2">
+              <button onClick={() => { if (addCode.trim() && addTitle.trim()) { /* stay on step 1 if empty */ } }}
+                disabled={!addCode.trim() || !addTitle.trim()}
+                className="flex-1 py-2 rounded-lg bg-qsis text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
+                <i className="fas fa-eye mr-1"></i>Preview
+              </button>
+              <button onClick={() => setShowAdd(false)} className="flex-1 py-2 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.82rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Course Modal — Step 2: Preview & Confirm */}
+      {showAdd && addCode.trim() && addTitle.trim() && (
+        <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4" onClick={() => setShowAdd(false)}>
+          <div className="bg-dark-bg2 w-full max-w-sm rounded-2xl border border-dark-border p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-dark-text mb-3"><i className="fas fa-clipboard-check text-qsis mr-2"></i>Confirm Course</h3>
+
+            {/* Course preview */}
+            <div className="bg-dark-bg3 border border-dark-border rounded-xl p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-mono text-qsis text-sm font-bold">{addCode.trim()}</span>
+                <span className="text-dark-text3">—</span>
+                <span className="text-dark-text text-sm">{addTitle.trim()}</span>
+              </div>
+              <p className="text-[0.68rem] text-dark-text3 mb-2">Folder that will be created on GitHub:</p>
+              <div className="bg-dark-bg border border-dark-border rounded-lg p-2 font-mono text-[0.65rem] text-qsis/80 space-y-0.5">
+                <div>{selectedDept}/{selectedSem}/<span className="text-qsis font-bold">{addCode.trim()} - {addTitle.trim()}</span>/</div>
+                <div className="ml-3 text-dark-text3">├── Mid/</div>
+                <div className="ml-6 text-dark-text3">├── NOTES/</div>
+                <div className="ml-6 text-dark-text3">└── Previous Questions/</div>
+                <div className="ml-3 text-dark-text3">├── Final/</div>
+                <div className="ml-6 text-dark-text3">├── NOTES/</div>
+                <div className="ml-6 text-dark-text3">└── Previous Questions/</div>
+                <div className="ml-3 text-dark-text3">├── sheet/</div>
+                <div className="ml-3 text-dark-text3">├── Syllabus/</div>
+                <div className="ml-3 text-dark-text3">└── Other/</div>
+              </div>
+            </div>
+
+            {addError && <p className="text-red-400 text-[0.72rem] mb-2">{addError}</p>}
+            <div className="flex gap-2">
+              <button onClick={handleAdd} disabled={addLoading}
+                className="flex-1 py-2 rounded-lg bg-qsis text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
+                {addLoading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Creating...</> : <><i className="fas fa-check mr-1"></i>Yes, Create</>}
+              </button>
+              <button onClick={() => { setAddTitle(''); }} className="flex-1 py-2 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.82rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2">
+                <i className="fas fa-arrow-left mr-1"></i>Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Course Modal */}
+      {editCourse && (
+        <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4" onClick={() => setEditCourse(null)}>
+          <div className="bg-dark-bg2 w-full max-w-sm rounded-2xl border border-dark-border p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-dark-text mb-1"><i className="fas fa-edit text-blue-400 mr-2"></i>Edit Course</h3>
+            <p className="text-dark-text3 text-[0.72rem] mb-3">Editing <span className="font-mono text-qsis">{editCourse.code}</span></p>
+            <input type="text" placeholder="New course title" value={editTitle} onChange={e => setEditTitle(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis mb-3" />
+            <div className="flex gap-2">
+              <button onClick={handleEdit} disabled={editLoading || !editTitle.trim()}
+                className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
+                {editLoading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : <><i className="fas fa-check mr-1"></i>Save</>}
+              </button>
+              <button onClick={() => setEditCourse(null)} className="flex-1 py-2 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.82rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Course Modal */}
+      {deleteCourse && (
+        <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4" onClick={() => setDeleteCourse(null)}>
+          <div className="bg-dark-bg2 w-full max-w-sm rounded-2xl border border-dark-border p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-red-400 mb-2"><i className="fas fa-trash mr-2"></i>Delete Course</h3>
+            <p className="text-dark-text2 text-[0.82rem] mb-1">Are you sure you want to delete:</p>
+            <p className="font-mono text-qsis text-sm font-bold mb-3">{deleteCourse.code} — {deleteCourse.title}</p>
+            <p className="text-orange-400 text-[0.72rem] mb-3"><i className="fas fa-exclamation-triangle mr-1"></i>This will remove the course from the database. GitHub folder will remain.</p>
+            <div className="flex gap-2">
+              <button onClick={handleDelete} disabled={deleteLoading}
+                className="flex-1 py-2 rounded-lg bg-red-500 text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
+                {deleteLoading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Deleting...</> : <><i className="fas fa-trash mr-1"></i>Delete</>}
+              </button>
+              <button onClick={() => setDeleteCourse(null)} className="flex-1 py-2 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.82rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2">
-        {courses.length === 0 && <p className="text-dark-text3 text-sm text-center py-6">No courses found in this semester. Add course folders to GitHub: <code className="bg-dark-bg px-1 rounded">upload_academic_files/{selectedDept}/{selectedSem}/Code - Title/Mid/NOTES/</code></p>}
+        {courses.length === 0 && <p className="text-dark-text3 text-sm text-center py-6">No courses found for {selectedDept}/{selectedSem}.</p>}
         {courses.map(c => (
-          <div key={c.code} className="flex items-center gap-3 px-4 py-3 bg-dark-bg2 border border-dark-border rounded-xl hover:border-qsis/30 transition-colors">
+          <div key={c.code} className="flex items-center gap-3 px-4 py-3 bg-dark-bg2 border border-dark-border rounded-xl hover:border-qsis/30 transition-colors group">
             <span className="text-qsis font-mono text-xs font-bold min-w-[80px]">{c.code}</span>
             <span className="flex-1 text-dark-text text-xs">{c.title}</span>
             <span className="text-dark-text3 text-xs">{c.totalFiles} files</span>
@@ -285,6 +443,16 @@ function CoursesTab({ effectiveRole, profile }: { effectiveRole: string; profile
                   <i className={`fas fa-${cat.icon} mr-0.5`}></i>{cat.count}
                 </span>
               ))}
+            </div>
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => { setEditCourse({ code: c.code, title: c.title }); setEditTitle(c.title); }}
+                className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 border-none cursor-pointer flex items-center justify-center text-[0.7rem] hover:bg-blue-500/20" title="Edit title">
+                <i className="fas fa-pen"></i>
+              </button>
+              <button onClick={() => setDeleteCourse({ code: c.code, title: c.title })}
+                className="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.7rem] hover:bg-red-500/20" title="Delete course">
+                <i className="fas fa-trash"></i>
+              </button>
             </div>
           </div>
         ))}
