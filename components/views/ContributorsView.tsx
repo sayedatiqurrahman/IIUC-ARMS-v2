@@ -36,7 +36,7 @@ export default function ContributorsView() {
 
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [userView, setUserView] = useState<'sectioned' | 'grid'>('sectioned');
-  const [activeTab, setActiveTab] = useState<'developers' | 'resources'>('developers');
+  const [activeTab, setActiveTab] = useState<'all' | 'developers' | 'resources'>('all');
   const [deptFilter, setDeptFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -61,14 +61,16 @@ export default function ContributorsView() {
   const founder = useMemo(() => contributors.find((c: any) => c.role === 'Founder & Lead'), [contributors]);
   const nonFounder = useMemo(() => contributors.filter((c: any) => c.role !== 'Founder & Lead'), [contributors]);
 
-  // Categories
+  // Categories — exclusive, no overlap
   const bothRepos = useMemo(() => nonFounder.filter((c: any) => c.roleType === 'both'), [nonFounder]);
-  const developers = useMemo(() =>
-    nonFounder.filter((c: any) => c.v2Contributions > 0 || c.roleType === 'developer' || c.roleType === 'both'),
+  // Developers: ONLY people who contributed to code repo (not both)
+  const developersOnly = useMemo(() =>
+    nonFounder.filter((c: any) => c.v2Contributions > 0 && c.roleType !== 'both'),
     [nonFounder]
   );
-  const resourceProviders = useMemo(() =>
-    nonFounder.filter((c: any) => c.dataContributions > 0 || c.roleType === 'resource_provider' || c.roleType === 'both'),
+  // Resource providers: ONLY people who contributed to data repo (not both)
+  const resourcesOnly = useMemo(() =>
+    nonFounder.filter((c: any) => c.dataContributions > 0 && c.roleType !== 'both'),
     [nonFounder]
   );
 
@@ -98,10 +100,17 @@ export default function ContributorsView() {
 
   const effectiveView = settings.allowUserToggle ? userView : settings.viewMode;
 
-  // Sectioned mode lists
-  const filteredBoth = useMemo(() => applyFilters(bothRepos), [bothRepos, deptFilter, searchQuery]);
-  const filteredDevs = useMemo(() => applyFilters(developers), [developers, deptFilter, searchQuery]);
-  const filteredResources = useMemo(() => applyFilters(resourceProviders), [resourceProviders, deptFilter, searchQuery]);
+  // Tab-filtered lists
+  const tabList = useMemo(() => {
+    if (activeTab === 'developers') return applyFilters(developersOnly);
+    if (activeTab === 'resources') return applyFilters(resourcesOnly);
+    // 'all' = everyone sorted by contribution (both repos first, then by contribution)
+    return applyFilters(nonFounder).sort((a: any, b: any) => {
+      if (a.roleType === 'both' && b.roleType !== 'both') return -1;
+      if (a.roleType !== 'both' && b.roleType === 'both') return 1;
+      return b.contributions - a.contributions;
+    });
+  }, [activeTab, nonFounder, developersOnly, resourcesOnly, deptFilter, searchQuery]);
 
   // Grid mode: all sorted together
   const allSorted = useMemo(() => {
@@ -151,14 +160,18 @@ export default function ContributorsView() {
           {founder && <FounderCard c={founder} />}
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-4 gap-3 mb-5">
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
-              <div className="text-[1.3rem] font-bold text-blue-400">{developers.length}</div>
+              <div className="text-[1.3rem] font-bold text-purple-400">{bothRepos.length}</div>
+              <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-code-branch mr-1"></i>Both</div>
+            </div>
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
+              <div className="text-[1.3rem] font-bold text-blue-400">{developersOnly.length}</div>
               <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-laptop-code mr-1"></i>Developers</div>
             </div>
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
-              <div className="text-[1.3rem] font-bold text-orange-400">{resourceProviders.length}</div>
-              <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-book-open mr-1"></i>Resource Providers</div>
+              <div className="text-[1.3rem] font-bold text-orange-400">{resourcesOnly.length}</div>
+              <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-book-open mr-1"></i>Resources</div>
             </div>
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
               <div className="text-[1.3rem] font-bold text-qsis">{contributors.length}</div>
@@ -194,35 +207,37 @@ export default function ContributorsView() {
               {/* Sectioned Tabs */}
               {effectiveView === 'sectioned' && (
                 <div className="flex gap-1 p-1 bg-dark-bg2 border border-dark-border rounded-xl">
+                  <button
+                    onClick={() => { setActiveTab('all'); setDeptFilter('all'); setSearchQuery(''); }}
+                    className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
+                      activeTab === 'all' ? 'bg-purple-500/20 text-purple-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
+                    }`}
+                  >
+                    <i className="fas fa-layer-group mr-1"></i>All
+                    <span className="ml-1 text-[0.6rem] opacity-70">({nonFounder.length})</span>
+                  </button>
                   {settings.sectionCount === 3 && (
                     <button
                       onClick={() => { setActiveTab('developers'); setDeptFilter('all'); setSearchQuery(''); }}
                       className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
-                        activeTab === 'developers' ? 'bg-purple-500/20 text-purple-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
+                        activeTab === 'developers' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
                       }`}
                     >
-                      <i className="fas fa-code-branch mr-1"></i>Both
-                      <span className="ml-1 text-[0.6rem] opacity-70">({bothRepos.length})</span>
+                      <i className="fas fa-laptop-code mr-1"></i>Developers
+                      <span className="ml-1 text-[0.6rem] opacity-70">({developersOnly.length})</span>
                     </button>
                   )}
-                  <button
-                    onClick={() => { setActiveTab('developers'); setDeptFilter('all'); setSearchQuery(''); }}
-                    className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
-                      activeTab === 'developers' && (settings.sectionCount === 2 || activeTab !== 'developers') ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
-                    }`}
-                  >
-                    <i className="fas fa-laptop-code mr-1"></i>Developers
-                    <span className="ml-1 text-[0.6rem] opacity-70">({developers.length})</span>
-                  </button>
-                  <button
-                    onClick={() => { setActiveTab('resources'); setDeptFilter('all'); setSearchQuery(''); }}
-                    className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
-                      activeTab === 'resources' ? 'bg-orange-500/20 text-orange-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
-                    }`}
-                  >
-                    <i className="fas fa-book-open mr-1"></i>Resources
-                    <span className="ml-1 text-[0.6rem] opacity-70">({resourceProviders.length})</span>
-                  </button>
+                  {settings.sectionCount === 3 && (
+                    <button
+                      onClick={() => { setActiveTab('resources'); setDeptFilter('all'); setSearchQuery(''); }}
+                      className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
+                        activeTab === 'resources' ? 'bg-orange-500/20 text-orange-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
+                      }`}
+                    >
+                      <i className="fas fa-book-open mr-1"></i>Resources
+                      <span className="ml-1 text-[0.6rem] opacity-70">({resourcesOnly.length})</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -259,58 +274,13 @@ export default function ContributorsView() {
           {/* ═══ SECTIONED VIEW ═══ */}
           {effectiveView === 'sectioned' ? (
             <div>
-              {/* 3-part: Both repos section */}
-              {settings.sectionCount === 3 && activeTab === 'developers' && filteredBoth.length > 0 && (
-                <div className="mb-5">
-                  <h4 className="text-[0.82rem] font-bold text-purple-400 mb-3 flex items-center gap-2">
-                    <i className="fas fa-code-branch"></i> Contributed to Both Repos
-                    <span className="text-[0.65rem] font-normal text-dark-text3">({filteredBoth.length})</span>
-                  </h4>
-                  <div className="space-y-2">
-                    {filteredBoth.map((c: any, idx: number) => (
-                      <RankedCard key={c.id} c={c} rank={idx + 1} settings={settings} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Developers */}
-              {(activeTab === 'developers' || settings.sectionCount === 2) && (
-                <div className="mb-5">
-                  {settings.sectionCount === 3 && (
-                    <h4 className="text-[0.82rem] font-bold text-blue-400 mb-3 flex items-center gap-2">
-                      <i className="fas fa-laptop-code"></i> Web App Developers
-                      <span className="text-[0.65rem] font-normal text-dark-text3">({filteredDevs.length})</span>
-                    </h4>
-                  )}
-                  {filteredDevs.length === 0 ? (
-                    <div className="text-center py-6 text-dark-text2 text-[0.8rem]">No developers found.</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredDevs.map((c: any, idx: number) => (
-                        <RankedCard key={c.id} c={c} rank={idx + 1} settings={settings} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Resource Providers */}
-              {activeTab === 'resources' && (
-                <div className="mb-5">
-                  <h4 className="text-[0.82rem] font-bold text-orange-400 mb-3 flex items-center gap-2">
-                    <i className="fas fa-book-open"></i> Resource Providers
-                    <span className="text-[0.65rem] font-normal text-dark-text3">({filteredResources.length})</span>
-                  </h4>
-                  {filteredResources.length === 0 ? (
-                    <div className="text-center py-6 text-dark-text2 text-[0.8rem]">No resource providers found.</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredResources.map((c: any, idx: number) => (
-                        <RankedCard key={c.id} c={c} rank={idx + 1} settings={settings} />
-                      ))}
-                    </div>
-                  )}
+              {tabList.length === 0 ? (
+                <div className="text-center py-6 text-dark-text2 text-[0.8rem]">No contributors found.</div>
+              ) : (
+                <div className="space-y-2">
+                  {tabList.map((c: any, idx: number) => (
+                    <RankedCard key={c.id} c={c} rank={idx + 1} settings={settings} />
+                  ))}
                 </div>
               )}
             </div>
