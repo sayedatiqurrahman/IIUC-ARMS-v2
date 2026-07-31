@@ -61,16 +61,20 @@ export default function ContributorsView() {
   const founder = useMemo(() => contributors.find((c: any) => c.role === 'Founder & Lead'), [contributors]);
   const nonFounder = useMemo(() => contributors.filter((c: any) => c.role !== 'Founder & Lead'), [contributors]);
 
-  // Categories — include anyone who contributed to that repo
-  const bothRepos = useMemo(() => nonFounder.filter((c: any) => c.roleType === 'both'), [nonFounder]);
-  // Developers: anyone with code contributions (including both-repo people)
-  const developersAll = useMemo(() =>
+  // Simple repo-based categories
+  // Developers = anyone who contributed to QSIS-ARMS-v2 (code repo)
+  const developers = useMemo(() =>
     nonFounder.filter((c: any) => c.v2Contributions > 0),
     [nonFounder]
   );
-  // Resource providers: anyone with data contributions (including both-repo people)
-  const resourcesAll = useMemo(() =>
+  // Resources = anyone who contributed to QSIS-ACADEMIC-FILES-MANAFGER (data repo)
+  const resources = useMemo(() =>
     nonFounder.filter((c: any) => c.dataContributions > 0),
+    [nonFounder]
+  );
+  // Both = people in both lists
+  const bothRepos = useMemo(() =>
+    nonFounder.filter((c: any) => c.v2Contributions > 0 && c.dataContributions > 0),
     [nonFounder]
   );
 
@@ -100,27 +104,15 @@ export default function ContributorsView() {
 
   const effectiveView = settings.allowUserToggle ? userView : settings.viewMode;
 
-  // Tab-filtered lists
+  // Tab-filtered lists — simple: developers = ARMS-v2, resources = FILES-MANAGER, all = merged
   const tabList = useMemo(() => {
-    if (activeTab === 'developers') return applyFilters(developersAll);
-    if (activeTab === 'resources') return applyFilters(resourcesAll);
-    // 'all' = everyone sorted by contribution (both repos first, then by contribution)
-    return applyFilters(nonFounder).sort((a: any, b: any) => {
-      if (a.roleType === 'both' && b.roleType !== 'both') return -1;
-      if (a.roleType !== 'both' && b.roleType === 'both') return 1;
-      return b.contributions - a.contributions;
-    });
-  }, [activeTab, nonFounder, developersAll, resourcesAll, deptFilter, searchQuery]);
-
-  // Grid mode: all sorted together
-  const allSorted = useMemo(() => {
-    const list = applyFilters(nonFounder);
-    return list.sort((a: any, b: any) => {
-      if (a.roleType === 'both' && b.roleType !== 'both') return -1;
-      if (a.roleType !== 'both' && b.roleType === 'both') return 1;
-      return b.contributions - a.contributions;
-    });
-  }, [nonFounder, deptFilter, searchQuery]);
+    if (activeTab === 'developers') return applyFilters(developers);
+    if (activeTab === 'resources') return applyFilters(resources);
+    // 'all' = developers first, then resources (skip duplicates)
+    const devLogins = new Set(developers.map((c: any) => c.login));
+    const merged = [...developers, ...resources.filter((c: any) => !devLogins.has(c.login))];
+    return applyFilters(merged);
+  }, [activeTab, developers, resources, deptFilter, searchQuery]);
 
   return (
     <section className="mb-5">
@@ -166,11 +158,11 @@ export default function ContributorsView() {
               <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-code-branch mr-1"></i>Both</div>
             </div>
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
-              <div className="text-[1.3rem] font-bold text-blue-400">{developersAll.length}</div>
+              <div className="text-[1.3rem] font-bold text-blue-400">{developers.length}</div>
               <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-laptop-code mr-1"></i>Developers</div>
             </div>
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
-              <div className="text-[1.3rem] font-bold text-orange-400">{resourcesAll.length}</div>
+              <div className="text-[1.3rem] font-bold text-orange-400">{resources.length}</div>
               <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-book-open mr-1"></i>Resources</div>
             </div>
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
@@ -214,7 +206,7 @@ export default function ContributorsView() {
                     }`}
                   >
                     <i className="fas fa-layer-group mr-1"></i>All
-                    <span className="ml-1 text-[0.6rem] opacity-70">({nonFounder.length})</span>
+                    <span className="ml-1 text-[0.6rem] opacity-70">({developers.length + resources.length - bothRepos.length})</span>
                   </button>
                   {settings.sectionCount === 3 && (
                     <button
@@ -224,7 +216,7 @@ export default function ContributorsView() {
                       }`}
                     >
                       <i className="fas fa-laptop-code mr-1"></i>Developers
-                      <span className="ml-1 text-[0.6rem] opacity-70">({developersAll.length})</span>
+                      <span className="ml-1 text-[0.6rem] opacity-70">({developers.length})</span>
                     </button>
                   )}
                   {settings.sectionCount === 3 && (
@@ -235,7 +227,7 @@ export default function ContributorsView() {
                       }`}
                     >
                       <i className="fas fa-book-open mr-1"></i>Resources
-                      <span className="ml-1 text-[0.6rem] opacity-70">({resourcesAll.length})</span>
+                      <span className="ml-1 text-[0.6rem] opacity-70">({resources.length})</span>
                     </button>
                   )}
                 </div>
@@ -287,11 +279,11 @@ export default function ContributorsView() {
           ) : (
             /* ═══ GRID VIEW ═══ */
             <div>
-              {allSorted.length === 0 ? (
+              {tabList.length === 0 ? (
                 <div className="text-center py-6 text-dark-text2 text-[0.8rem]">No contributors found.</div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {allSorted.map((c: any) => (
+                  {tabList.map((c: any) => (
                     <GridCard key={c.id} c={c} settings={settings} />
                   ))}
                 </div>
