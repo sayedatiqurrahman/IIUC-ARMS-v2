@@ -474,41 +474,110 @@ export function buildSemesterList(semNumber: string): string {
 
 export function buildSearchResults(query: string, tree: any[]): string {
   const q = query.toLowerCase();
-  const matches: { path: string; parts: string[] }[] = [];
+  const COURSE_RE = /^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)/i;
 
+  // 1) Search file names
+  const fileMatches: { path: string; parts: string[] }[] = [];
   for (const item of tree) {
     if (item.type !== 'blob') continue;
     const p: string = item.path;
     if (!p.startsWith(config.uploadPath + '/')) continue;
     const fileName = p.split('/').pop() || '';
+    if (fileName === '.gitkeep' || fileName.toLowerCase() === 'readme.md') continue;
     if (!fileName.toLowerCase().includes(q)) continue;
     const rel = p.substring(config.uploadPath.length + 1);
-    matches.push({ path: p, parts: rel.split('/') });
+    fileMatches.push({ path: p, parts: rel.split('/') });
   }
 
-  if (matches.length === 0) {
+  // 2) Search course folder names
+  const courseMatches = new Map<string, { dept: string; sem: string; folder: string; code: string; title: string }>();
+  for (const item of tree) {
+    const p: string = item.path;
+    if (!p.startsWith(config.uploadPath + '/')) continue;
+    const rel = p.substring(config.uploadPath.length + 1);
+    const parts = rel.split('/');
+    if (parts.length < 3) continue;
+    const courseFolder = parts[2] || '';
+    if (!COURSE_RE.test(courseFolder)) continue;
+    const m = courseFolder.match(COURSE_RE)!;
+    const code = m[1].toUpperCase();
+    const title = m[2].trim();
+    const key = `${parts[0]}/${parts[1]}/${code}`;
+    if (!courseMatches.has(key)) {
+      courseMatches.set(key, { dept: parts[0], sem: parts[1], folder: courseFolder, code, title });
+    }
+  }
+
+  // Filter course matches by query
+  const matchedCourses = Array.from(courseMatches.values()).filter(c =>
+    c.code.toLowerCase().includes(q) || c.title.toLowerCase().includes(q)
+  );
+
+  if (fileMatches.length === 0 && matchedCourses.length === 0) {
     return `🔍 No results for "<b>${esc(query)}</b>"\n\nTry a different search term.`;
   }
 
-  const shown = matches.slice(0, 10);
-  let msg = `<b>🔍 Search: "${esc(query)}"</b>\n`;
-  msg += `Found ${matches.length} file${matches.length > 1 ? 's' : ''}\n\n`;
+  let msg = `<b>🔍 Search: "${esc(query)}"</b>\n\n`;
+  const buttons: any[][] = [];
 
-  for (const m of shown) {
-    const dept = m.parts[0];
-    const sem = m.parts[1];
-    const cat = m.parts[2];
-    const course = m.parts[3] || '';
-    const courseCode = course.split('-')[0]?.toUpperCase() || course;
-    const fileName = m.path.split('/').pop() || '';
-    const link = buildCourseLink(courseCode, dept, sem);
-    msg += `📄 <a href="${link}">${esc(fileName)}</a>\n`;
-    msg += `   ${esc(getDeptName(dept))} · ${esc(courseCode)}\n\n`;
+  // Show matched courses
+  for (const c of matchedCourses.slice(0, 5)) {
+    const semLabel = config.semesters.find(s => s.id === c.sem)?.label || c.sem;
+    const courseFiles = tree.filter(item => {
+      const ip: string = item.path;
+      if (item.type !== 'blob') return false;
+      if (!ip.startsWith(config.uploadPath + '/')) return false;
+      const fileName = ip.split('/').pop() || '';
+      if (fileName === '.gitkeep' || fileName.toLowerCase() === 'readme.md') return false;
+      return ip.includes(c.folder + '/');
+    });
+
+    const catCounts: Record<string, number> = {};
+    for (const f of courseFiles) {
+      const rel = f.path.substring(config.uploadPath.length + 1);
+      const fParts = rel.split('/');
+      let catName = 'other';
+      for (let i = 3; i < fParts.length; i++) {
+        const fn = fParts[i].toLowerCase();
+        if (fn === 'mid' || fn === 'final') continue;
+        catName = detectCategory(fParts[i]);
+        break;
+      }
+      catCounts[catName] = (catCounts[catName] || 0) + 1;
+    }
+
+    const catParts = Object.entries(catCounts).map(([k, v]) => {
+      const meta = CATEGORY_META[k];
+      return `${meta?.icon || '📁'} ${meta?.label || k}: ${v}`;
+    }).join(' · ');
+
+    msg += `📚 <b>${esc(c.code)}</b> — ${esc(c.title)}\n`;
+    msg += `  📍 ${esc(semLabel)} · ${esc(getDeptName(c.dept))}\n`;
+    if (catParts) msg += `  ${catParts}\n`;
+    const directUrl = `${SITE_URL}/?dept=${c.dept}&sem=${c.sem}&course=${c.code}`;
+    buttons.push([{ text: `📂 Open ${c.code} — ${getDeptName(c.dept)} ${semLabel}`, url: directUrl }]);
+    msg += '\n';
   }
 
-  if (matches.length > 10) {
-    msg += `<i>...and ${matches.length - 10} more. Search on website →</i>\n`;
-    msg += `<a href="${buildBrowseLink({ q: query })}">Open IIUC-ARMS →</a>`;
+  // Show matched files (limit 5)
+  if (fileMatches.length > 0) {
+    msg += `<b>📄 Files:</b>\n`;
+    for (const m of fileMatches.slice(0, 5)) {
+      const dept = m.parts[0];
+      const sem = m.parts[1];
+      let courseCode = '';
+      for (let i = 2; i < m.parts.length; i++) {
+        const cm = m.parts[i].match(COURSE_RE);
+        if (cm) { courseCode = cm[1].toUpperCase(); break; }
+      }
+      const fileName = m.path.split('/').pop() || '';
+      const directUrl = `${SITE_URL}/?dept=${dept}&sem=${sem}&course=${courseCode}`;
+      msg += `  📄 <a href="${directUrl}">${esc(fileName)}</a> — ${esc(getDeptName(dept))}\n`;
+    }
+  }
+
+  if (matchedCourses.length > 5 || fileMatches.length > 5) {
+    msg += `\n<a href="${buildBrowseLink({ q: query })}">View all on IIUC-ARMS →</a>`;
   }
 
   return msg.trim();
