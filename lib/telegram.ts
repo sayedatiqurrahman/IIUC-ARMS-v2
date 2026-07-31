@@ -362,45 +362,33 @@ export function buildWelcomeMessage(): string {
   return (
     `🎓 <b>IIUC-ARMS Bot</b>\n\n` +
     `Find academic resources for IIUC courses.\n\n` +
-    `<b>How to use:</b>\n` +
-    `• Send a course code → <code>QUR101</code>\n` +
-    `• Search files → <code>/search notes</code>\n` +
-    `• List departments → <code>/departments</code>\n` +
-    `• Browse semester → <code>/semester 3</code>\n\n` +
-    `<b>📎 Shared Links:</b>\n` +
-    `Courses with 📎 have shared links.\n` +
-    `Open on website to view and add links.\n\n` +
-    `All results link directly to the website — no files shared here.\n\n` +
+    `<b>Quick Start:</b>\n` +
+    `• Type a course code → <code>QSM-3602</code>\n` +
+    `• Type a course code → <code>/code QSM-3602</code>\n` +
+    `• Browse all → <code>/departments</code>\n` +
+    `• Search anything → <code>/search notes</code>\n\n` +
     `<i>📚 Powered by IIUC-ARMS</i>`
   );
 }
 
 export function buildHelpMessage(): string {
   return (
-    `📖 <b>IIUC-ARMS Bot Commands</b>\n\n` +
-    `<b>🔍 Browse & Search:</b>\n` +
-    `<code>QUR101</code> — Search a course by code\n` +
-    `<code>/course-code QSM-3602</code> — Search a specific course\n` +
-    `<code>/courses</code> — List all courses (dept > sem > courses)\n` +
-    `<code>/courses qs</code> — Courses in QSIS dept only\n` +
-    `<code>/courses qs 3</code> — Courses in QSIS, 3rd semester\n` +
-    `<code>/departments</code> — List all departments with links\n` +
-    `<code>/semester 3</code> — Courses in semester 3\n` +
-    `<code>/search notes</code> — Search files by name\n` +
-    `<code>/stats</code> — View site statistics\n\n` +
-    `<b>📎 Shared Links:</b>\n` +
-    `Courses with 📎 have shared links (notes, resources).\n` +
-    `Open on website to view and add shared links.\n\n` +
-    `<b>📢 Admin Only:</b>\n` +
-    `<code>/broadcast &lt;message&gt;</code> — Send announcement to all users\n\n` +
-    `<b>Examples:</b>\n` +
-    `• <code>QUR101</code>\n` +
-    `• <code>/course-code QSM-3602</code>\n` +
-    `• <code>/courses cse 3</code>\n` +
-    `• <code>/search notes</code>\n` +
-    `• <code>/semester 3</code>\n` +
-    `• <code>/stats</code>\n\n` +
-    `<i>All results show links to the website. No files are shared directly.</i>`
+    `📖 <b>IIUC-ARMS Bot — Commands</b>\n\n` +
+    `<b>📚 Course Lookup:</b>\n` +
+    `<code>QSM-3602</code> — Type any course code\n` +
+    `<code>/code QSM-3602</code> — Same as above\n` +
+    `→ Shows file counts, category breakdown & Open button\n\n` +
+    `<b>🔍 Search & Browse:</b>\n` +
+    `<code>/search notes</code> — Search files & courses\n` +
+    `<code>/departments</code> — List all departments\n` +
+    `<code>/semester 3</code> — Browse semester 3\n` +
+    `<code>/courses</code> — List all courses\n` +
+    `<code>/courses qs</code> — Courses in QSIS dept\n` +
+    `<code>/courses qs 3</code> — QSIS 3rd semester\n` +
+    `<code>/stats</code> — Site statistics\n\n` +
+    `<b>📢 Admin:</b>\n` +
+    `<code>/broadcast &lt;msg&gt;</code> — Announce to all users\n\n` +
+    `<i>Tap any Open button to view on IIUC-ARMS website.</i>`
   );
 }
 
