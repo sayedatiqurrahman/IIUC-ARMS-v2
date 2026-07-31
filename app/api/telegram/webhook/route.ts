@@ -145,6 +145,8 @@ async function handleMessage(msg: any) {
   const chatType = msg.chat.type;
   const isGroup = chatType === 'group' || chatType === 'supergroup';
 
+  console.log(`[TG] msg from ${chatId}: "${text}" | TOKEN=${process.env.TELEGRAM_BOT_TOKEN ? 'SET(' + process.env.TELEGRAM_BOT_TOKEN.substring(0, 5) + '...)' : 'MISSING'}`);
+
   // In groups, only respond to commands and mentions
   if (isGroup) {
     const isCommand = msg.entities?.some((e: any) => e.type === 'bot_command' && e.offset === 0);

@@ -41,11 +41,16 @@ export async function resolveGithubToken(): Promise<string> {
 // ─── Telegram API helpers ─────────────────────────────────────────
 
 export async function sendMessage(chatId: number, text: string, extra?: any) {
-  return fetch(`${API}/sendMessage`, {
+  const res = await fetch(`${API}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra }),
   });
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(`[TG] sendMessage FAILED: ${res.status} ${body.substring(0, 300)}`);
+  }
+  return res;
 }
 
 export async function sendMessageWithButton(chatId: number, text: string, buttonText: string, buttonUrl: string) {
