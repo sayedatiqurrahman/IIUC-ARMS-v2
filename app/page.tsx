@@ -793,10 +793,10 @@ export default function BrowsePage() {
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-[0.95rem]">{course.code} — {course.title}</div>
                     <div className="flex gap-2 mt-[5px] flex-wrap">
-                      {course.categories.map(cat => (
-                        <span key={cat.key} className={`text-[0.68rem] px-2 py-[2px] rounded-full border ${cat.hasLinks ? 'bg-pink-500/10 text-pink-400 border-pink-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border'}`}>
+                      {course.categories.map((cat: any) => (
+                        <span key={cat.key} className={`text-[0.68rem] px-2 py-[2px] rounded-full border ${(cat as any).hasLinks ? 'bg-pink-500/10 text-pink-400 border-pink-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border'}`}>
                           {cat.label}: {cat.count}
-                          {cat.hasLinks && <i className="fas fa-link ml-1 text-[0.6rem]"></i>}
+                          {(cat as any).hasLinks && <i className="fas fa-link ml-1 text-[0.6rem]"></i>}
                         </span>
                       ))}
                     </div>
