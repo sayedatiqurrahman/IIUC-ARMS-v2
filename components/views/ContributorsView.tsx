@@ -103,18 +103,19 @@ export default function ContributorsView() {
 
   const effectiveView = settings.allowUserToggle ? userView : settings.viewMode;
 
-  // Tab-filtered lists — developers = ARMS-v2, resources = FILES-MANAGER, all = developers first then resources
+  // Tab-filtered lists with per-tab sorting
   const tabList = useMemo(() => {
-    if (activeTab === 'developers') return applyFilters(developers);
-    if (activeTab === 'resources') return applyFilters(resources);
-    // 'all' = developers first, then resources (no duplicates), sorted by total contribution
+    if (activeTab === 'developers') {
+      return applyFilters(developers).sort((a: any, b: any) => b.v2Contributions - a.v2Contributions);
+    }
+    if (activeTab === 'resources') {
+      return applyFilters(resources).sort((a: any, b: any) => b.dataContributions - a.dataContributions);
+    }
+    // 'all' = merged, ranked by combined total (v2 + data + PRs)
     const devLogins = new Set(developers.map((c: any) => c.login));
     const merged = [...developers, ...resources.filter((c: any) => !devLogins.has(c.login))];
     return applyFilters(merged).sort((a: any, b: any) => {
-      // Rank by combined total: v2 + data + PRs
-      const aTotal = a.v2Contributions + a.dataContributions + a.prCount;
-      const bTotal = b.v2Contributions + b.dataContributions + b.prCount;
-      return bTotal - aTotal;
+      return (b.v2Contributions + b.dataContributions + b.prCount) - (a.v2Contributions + a.dataContributions + a.prCount);
     });
   }, [activeTab, developers, resources, deptFilter, searchQuery]);
 
