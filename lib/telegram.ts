@@ -135,6 +135,31 @@ export function detectCategory(name: string): string {
   return 'other';
 }
 
+// Detect README.md (shared links) for a course in the tree
+export function hasSharedLinks(tree: any[], deptId: string, semId: string, courseFolder: string): boolean {
+  const prefix = `${config.uploadPath}/${deptId}/${semId}/${courseFolder}/`;
+  for (const item of tree) {
+    if (item.type !== 'blob') continue;
+    if (!item.path.startsWith(prefix)) continue;
+    const fileName = item.path.split('/').pop();
+    if (fileName?.toLowerCase() === 'readme.md') return true;
+  }
+  return false;
+}
+
+// Count README.md files under a course folder (shared links indicator)
+export function countSharedLinks(tree: any[], deptId: string, semId: string, courseFolder: string): number {
+  const prefix = `${config.uploadPath}/${deptId}/${semId}/${courseFolder}/`;
+  let count = 0;
+  for (const item of tree) {
+    if (item.type !== 'blob') continue;
+    if (!item.path.startsWith(prefix)) continue;
+    const fileName = item.path.split('/').pop();
+    if (fileName?.toLowerCase() === 'readme.md') count++;
+  }
+  return count;
+}
+
 export const CATEGORY_META: Record<string, { label: string; icon: string; folder: string }> = {
   sheet:     { label: 'Sheets',             icon: '📊', folder: 'sheet' },
   notes:     { label: 'Notes',              icon: '📝', folder: 'NOTES' },
@@ -270,7 +295,11 @@ export function buildWelcomeMessage(): string {
     `<b>How to use:</b>\n` +
     `• Send a course code → <code>QUR101</code>\n` +
     `• Search files → <code>/search notes</code>\n` +
-    `• List departments → <code>/departments</code>\n\n` +
+    `• List departments → <code>/departments</code>\n` +
+    `• Browse semester → <code>/semester 3</code>\n\n` +
+    `<b>📎 Shared Links:</b>\n` +
+    `Courses with 📎 have shared links.\n` +
+    `Open on website to view and add links.\n\n` +
     `All results link directly to the website — no files shared here.\n\n` +
     `<i>📚 Powered by IIUC-ARMS</i>`
   );
@@ -289,6 +318,9 @@ export function buildHelpMessage(): string {
     `<code>/semester 3</code> — Courses in semester 3\n` +
     `<code>/search notes</code> — Search files by name\n` +
     `<code>/stats</code> — View site statistics\n\n` +
+    `<b>📎 Shared Links:</b>\n` +
+    `Courses with 📎 have shared links (notes, resources).\n` +
+    `Open on website to view and add shared links.\n\n` +
     `<b>📢 Admin Only:</b>\n` +
     `<code>/broadcast &lt;message&gt;</code> — Send announcement to all users\n\n` +
     `<b>Examples:</b>\n` +
@@ -302,7 +334,7 @@ export function buildHelpMessage(): string {
   );
 }
 
-export function buildCourseResult(courseCode: string, info: CourseInfo, files: FoundFile[]): string {
+export function buildCourseResult(courseCode: string, info: CourseInfo, files: FoundFile[], tree?: any[]): string {
   let msg = `<b>📚 ${esc(courseCode)}</b>\n`;
   msg += `📄 ${info.totalFiles} file${info.totalFiles !== 1 ? 's' : ''} found\n\n`;
 
@@ -326,7 +358,9 @@ export function buildCourseResult(courseCode: string, info: CourseInfo, files: F
         return `${meta?.icon || '📁'} ${meta?.label || c}`;
       }).join(' · ');
       const link = buildCourseLink(courseCode, dept, sem);
-      msg += `  📅 ${esc(semLabel)} — ${sFiles.length} files\n`;
+      const links = tree ? hasSharedLinks(tree, dept, sem, sFiles[0]?.courseFolder || '') : false;
+      const linkBadge = links ? ' 📎 Shared Links' : '';
+      msg += `  📅 ${esc(semLabel)} — ${sFiles.length} files${linkBadge}\n`;
       msg += `    ${catList}\n`;
       msg += `    <a href="${link}">Open on IIUC-ARMS →</a>\n\n`;
     }
@@ -465,8 +499,8 @@ export function broadcastCallbackData(action: 'confirm' | 'cancel'): string {
 // ─── Course listing by dept/sem ────────────────────────────────────
 
 export function buildCoursesList(tree: any[], deptId?: string, semId?: string): string {
-  // Structure: Map<dept, Map<sem, Map<code, {title, files}>>>
-  const tree2 = new Map<string, Map<string, Map<string, { title: string; files: number }>>>();
+  // Structure: Map<dept, Map<sem, Map<code, {title, files, folder}>>>
+  const tree2 = new Map<string, Map<string, Map<string, { title: string; files: number; folder: string }>>>();
 
   for (const item of tree) {
     if (item.type !== 'blob') continue;
@@ -495,7 +529,7 @@ export function buildCoursesList(tree: any[], deptId?: string, semId?: string): 
     if (!semMap.has(sem)) semMap.set(sem, new Map());
     const courseMap = semMap.get(sem)!;
     if (!courseMap.has(code)) {
-      courseMap.set(code, { title, files: 0 });
+      courseMap.set(code, { title, files: 0, folder: courseFolder });
     }
     courseMap.get(code)!.files++;
   }
@@ -521,7 +555,9 @@ export function buildCoursesList(tree: any[], deptId?: string, semId?: string): 
       const sortedCourses = Array.from(courseMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
       for (const [code, info] of sortedCourses) {
         const link = buildCourseLink(code, dept, sem);
-        msg += `    • <code>${esc(code)}</code> — ${esc(info.title)} (${info.files} files)\n`;
+        const links = hasSharedLinks(tree, dept, sem, info.folder);
+        const linkBadge = links ? ' 📎' : '';
+        msg += `    • <code>${esc(code)}</code> — ${esc(info.title)} (${info.files} files${linkBadge})\n`;
         msg += `      <a href="${link}">Open →</a>\n`;
       }
     }

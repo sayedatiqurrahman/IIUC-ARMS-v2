@@ -231,7 +231,7 @@ async function handleMessage(msg: any) {
         };
       });
 
-      const summary = buildCourseResult(code, info, files);
+      const summary = buildCourseResult(code, info, files, tree);
       const websiteLink = buildCourseLink(code);
       await sendMessage(chatId, summary, {
         reply_markup: {
