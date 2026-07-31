@@ -120,7 +120,7 @@ export async function deleteMessage(chatId: number, messageId: number) {
 // ─── GitHub tree cache ────────────────────────────────────────────
 
 let treeCache: { tree: any[]; ts: number } | null = null;
-const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_TTL = 2 * 60 * 1000;
 
 export async function getGithubTree(): Promise<any[]> {
   if (treeCache && Date.now() - treeCache.ts < CACHE_TTL) return treeCache.tree;
@@ -772,5 +772,10 @@ export function parseCallbackData(data: string): { type: string; args: string[] 
   if (parts[0] === 'broadcast' && parts.length >= 2) {
     return { type: 'broadcast', args: [parts[1]] };
   }
+  // Start menu callbacks
+  if (data === 'start_faculties') return { type: 'start_faculties', args: [] };
+  if (data === 'start_contributors') return { type: 'start_contributors', args: [] };
+  if (data === 'start_devby') return { type: 'start_devby', args: [] };
+  if (data === 'start_help') return { type: 'start_help', args: [] };
   return null;
 }

@@ -165,7 +165,21 @@ async function handleMessage(msg: any) {
   try {
     // ─── /start ───
     if (cleanText === '/start') {
-      await sendMessage(chatId, buildWelcomeMessage());
+      await sendMessage(chatId, buildWelcomeMessage(), {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🚀 Open IIUC-ARMS', url: SITE_URL }],
+            [
+              { text: '🏫 Faculties', callback_data: 'start_faculties' },
+              { text: '👥 Contributors', callback_data: 'start_contributors' },
+            ],
+            [
+              { text: '💻 Developed By', callback_data: 'start_devby' },
+              { text: '📖 Help', callback_data: 'start_help' },
+            ],
+          ],
+        },
+      });
       return;
     }
 
@@ -235,13 +249,13 @@ async function handleMessage(msg: any) {
           );
           return;
         }
-        let msg = `<b>📚 ${esc(code)}</b>\n`;
+        const courseTitle = locations[0].title || code;
+        let msg = `<b>📚 ${esc(code)}</b> — ${esc(courseTitle)}\n`;
         msg += `📂 Course exists but no files uploaded yet.\n\n`;
         const buttons: any[][] = [];
         for (const loc of locations) {
           const semLabel = config.semesters.find(s => s.id === loc.sem)?.label || loc.sem;
           msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(loc.dept))}\n`;
-          if (loc.title) msg += `  ${esc(loc.title)}\n`;
           const directUrl = `${SITE_URL}/?dept=${loc.dept}&sem=${loc.sem}&course=${code}`;
           buttons.push([{ text: `📂 Open ${code} — ${getDeptName(loc.dept)} ${semLabel}`, url: directUrl }]);
         }
@@ -371,13 +385,13 @@ async function handleMessage(msg: any) {
           );
           return;
         }
-        let msg = `<b>📚 ${esc(courseCode)}</b>\n`;
+        const courseTitle = locations[0].title || courseCode;
+        let msg = `<b>📚 ${esc(courseCode)}</b> — ${esc(courseTitle)}\n`;
         msg += `📂 Course exists but no files uploaded yet.\n\n`;
         const buttons: any[][] = [];
         for (const loc of locations) {
           const semLabel = config.semesters.find(s => s.id === loc.sem)?.label || loc.sem;
           msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(loc.dept))}\n`;
-          if (loc.title) msg += `  ${esc(loc.title)}\n`;
           const directUrl = `${SITE_URL}/?dept=${loc.dept}&sem=${loc.sem}&course=${courseCode}`;
           buttons.push([{ text: `📂 Open ${courseCode} — ${getDeptName(loc.dept)} ${semLabel}`, url: directUrl }]);
         }
@@ -465,6 +479,38 @@ async function handleCallbackQuery(cq: any) {
   if (!parsed) return;
 
   try {
+    // ─── Start menu buttons ───
+    if (parsed.type === 'start_faculties') {
+      await editMessageText(chatId, messageId, buildDeptList(), {
+        reply_markup: { inline_keyboard: [[{ text: '🌐 Open IIUC-ARMS', url: SITE_URL }]] },
+      });
+      return;
+    }
+    if (parsed.type === 'start_contributors') {
+      await editMessageText(chatId, messageId,
+        `👥 <b>Contributors</b>\n\n` +
+        `All course files are uploaded and maintained by our contributors.\n` +
+        `Visit the Contributors page to see who contributed.\n\n` +
+        `<a href="${SITE_URL}/contributors">Open Contributors Page →</a>`,
+        { reply_markup: { inline_keyboard: [[{ text: '👥 Open Contributors', url: SITE_URL + '/contributors' }]] } }
+      );
+      return;
+    }
+    if (parsed.type === 'start_devby') {
+      await editMessageText(chatId, messageId,
+        `💻 <b>Developed By</b>\n\n` +
+        `<b>Sayed Atiqur Rahman</b>\n` +
+        `🎓 IIUC • Programming Light\n\n` +
+        `🌐 <a href="${SITE_URL}">Open IIUC-ARMS →</a>`,
+        { reply_markup: { inline_keyboard: [[{ text: '🌐 Open IIUC-ARMS', url: SITE_URL }]] } }
+      );
+      return;
+    }
+    if (parsed.type === 'start_help') {
+      await editMessageText(chatId, messageId, buildHelpMessage());
+      return;
+    }
+
     // ─── Category buttons ───
     if (parsed.type === 'cat') {
       const [courseCode, category] = parsed.args;
