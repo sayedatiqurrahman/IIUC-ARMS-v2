@@ -96,9 +96,10 @@ model Course {
 }
 
 model SiteSettings {
-  id          String   @id @default("site-settings")
-  permissions Json     @default("{}")
-  updatedAt   DateTime @updatedAt
+  id                  String   @id @default("site-settings")
+  permissions         Json     @default("{}")
+  contributorSettings Json     @default("{}")
+  updatedAt           DateTime @updatedAt
 }
 
 model SemesterCourse {

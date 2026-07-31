@@ -694,7 +694,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await fetch('/api/contributors');
       if (res.ok) {
         const data = await res.json();
-        set({ contributors: data });
+        // API returns { contributors, settings }
+        if (Array.isArray(data)) {
+          set({ contributors: data });
+        } else {
+          set({ contributors: data.contributors || [] });
+        }
       } else {
         set({ contributors: [] });
       }

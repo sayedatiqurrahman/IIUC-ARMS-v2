@@ -37,6 +37,28 @@ interface Contributor {
   source: 'github' | 'db' | 'both';
 }
 
+interface ContributorSettings {
+  hiddenLogins: string[];
+  sortBy: 'contributions' | 'name' | 'commits' | 'prs';
+  layout: 'ranked' | 'grid' | 'list';
+  showRanks: boolean;
+  showStats: boolean;
+  showDeptFilter: boolean;
+  showSearch: boolean;
+  showOnlyCommitters: boolean;
+}
+
+const DEFAULT_CONTRIBUTOR_SETTINGS: ContributorSettings = {
+  hiddenLogins: [],
+  sortBy: 'contributions',
+  layout: 'ranked',
+  showRanks: true,
+  showStats: true,
+  showDeptFilter: true,
+  showSearch: true,
+  showOnlyCommitters: true,
+};
+
 function getDeptLabel(deptId: string): string {
   for (const f of FACULTIES) {
     for (const d of f.departments) {
@@ -195,7 +217,7 @@ export async function GET() {
       else if (isData) c.roleType = 'resource_provider';
     }
 
-    // Merge DB profiles
+    // Merge DB profiles (enrich existing GitHub contributors, don't create new ones)
     for (const p of dbProfiles) {
       let matchedContributor: Contributor | undefined;
 
@@ -231,34 +253,37 @@ export async function GET() {
         matchedContributor.hideEmail = !!p.hideEmail;
         matchedContributor.profileComplete = profileComplete;
         matchedContributor.source = 'both';
-      } else {
-        // DB-only contributor (no GitHub activity but has a profile)
-        const c = ensure(
-          p.githubLogin || p.email?.split('@')[0] || p.userId,
-          '',
-          '',
-          p.userId
-        );
-        c.name = p.name || c.name;
-        c.email = p.publicEmail || p.email || '';
-        c.title = p.title || '';
-        c.department = p.department || '';
-        c.section = p.section || '';
-        c.universityId = p.universityId || '';
-        c.whatsapp = p.whatsapp || '';
-        c.semester = p.semester || '';
-        c.source = 'db';
-        c.profileComplete = profileComplete;
       }
+      // DB-only profiles are NOT added as contributors (no GitHub activity = not a contributor)
     }
 
-    const contributors = Array.from(map.values()).sort((a, b) => {
-      if (a.role === 'Founder & Lead' && b.role !== 'Founder & Lead') return -1;
-      if (a.role !== 'Founder & Lead' && b.role === 'Founder & Lead') return 1;
-      if (a.roleType === 'both' && b.roleType !== 'both') return -1;
-      if (a.roleType !== 'both' && b.roleType === 'both') return 1;
-      return b.contributions - a.contributions;
-    });
+    // Load contributor settings (hidden list, sort, layout)
+    let settings: ContributorSettings = DEFAULT_CONTRIBUTOR_SETTINGS;
+    try {
+      const { prisma } = await import('@/lib/prisma');
+      const siteSettings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
+      if (siteSettings?.contributorSettings) {
+        settings = { ...DEFAULT_CONTRIBUTOR_SETTINGS, ...(siteSettings.contributorSettings as any) };
+      }
+    } catch {}
+
+    const hiddenSet = new Set(settings.hiddenLogins.map(l => l.toLowerCase()));
+
+    const contributors = Array.from(map.values())
+      // Filter out hidden contributors
+      .filter(c => !hiddenSet.has(c.login.toLowerCase()))
+      // Filter to only people with actual commits (not just PRs)
+      .filter(c => settings.showOnlyCommitters ? (c.v2Contributions + c.dataContributions) > 0 : true)
+      .sort((a, b) => {
+        if (a.role === 'Founder & Lead' && b.role !== 'Founder & Lead') return -1;
+        if (a.role !== 'Founder & Lead' && b.role === 'Founder & Lead') return 1;
+        if (a.roleType === 'both' && b.roleType !== 'both') return -1;
+        if (a.roleType !== 'both' && b.roleType === 'both') return 1;
+        if (settings.sortBy === 'name') return a.name.localeCompare(b.name);
+        if (settings.sortBy === 'commits') return (b.v2Contributions + b.dataContributions) - (a.v2Contributions + a.dataContributions);
+        if (settings.sortBy === 'prs') return b.prCount - a.prCount;
+        return b.contributions - a.contributions;
+      });
 
     // Enrich with department labels
     for (const c of contributors) {
@@ -269,7 +294,7 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json(contributors);
+    return NextResponse.json({ contributors, settings });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Failed to load contributors' }, { status: 500 });
   }
