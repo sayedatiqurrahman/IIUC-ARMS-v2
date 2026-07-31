@@ -53,6 +53,14 @@ export async function sendMessage(chatId: number, text: string, extra?: any) {
   return res;
 }
 
+export async function sendChatAction(chatId: number, action: string = 'typing') {
+  return fetch(`${API}/sendChatAction`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, action }),
+  });
+}
+
 export async function sendMessageWithButton(chatId: number, text: string, buttonText: string, buttonUrl: string) {
   return fetch(`${API}/sendMessage`, {
     method: 'POST',
@@ -227,22 +235,42 @@ export function findCourseFiles(tree: any[], courseCode: string): FoundFile[] {
 
     const deptId = parts[0];
     const semId = parts[1];
-    const catFolder = parts[2];
-    const courseFolder = parts[3];
 
-    // Folder format: "QSM-3602 - Title" or "QSM3602 - Title"
+    // New structure: dept/sem/COURSE/Mid|Final/cat/file (course at parts[2])
+    // Old structure: dept/sem/cat/COURSE/file (course at parts[3])
+    const COURSE_RE = /^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)/i;
+    let courseIdx = -1;
+    if (parts[2] && COURSE_RE.test(parts[2])) {
+      courseIdx = 2;
+    } else if (parts[3] && COURSE_RE.test(parts[3])) {
+      courseIdx = 3;
+    }
+    if (courseIdx < 0) continue;
+
+    const courseFolder = parts[courseIdx];
     const dashIdx = courseFolder.indexOf(' - ');
     const folderCode = dashIdx > 0 ? courseFolder.substring(0, dashIdx).toUpperCase() : courseFolder.split(' ')[0].toUpperCase();
     const folderCodeNoHyphen = folderCode.replace('-', '');
 
-    // Match: exact or without hyphen
     if (folderCode !== code && folderCodeNoHyphen !== codeNoHyphen) continue;
 
-    const category = detectCategory(catFolder);
+    // Determine category from remaining parts
+    let category = 'other';
+    const catIdx = courseIdx + 1;
+    if (catIdx < parts.length) {
+      const next = parts[catIdx];
+      if (next === 'Mid' || next === 'Final') {
+        if (catIdx + 1 < parts.length) {
+          category = detectCategory(parts[catIdx + 1]);
+        }
+      } else if (next !== '.gitkeep' && next.toLowerCase() !== 'readme.md') {
+        category = detectCategory(next);
+      }
+    }
 
     results.push({
       path: p,
-      fileName: parts.slice(4).join('/') || courseFolder,
+      fileName: parts.slice(courseIdx + 1).join('/') || courseFolder,
       category,
       semester: semId,
       department: deptId,

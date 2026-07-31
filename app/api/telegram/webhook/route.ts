@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   sendMessage,
+  sendChatAction,
   answerCallbackQuery,
   editMessageText,
   deleteMessage,
@@ -146,6 +147,9 @@ async function handleMessage(msg: any) {
   const isGroup = chatType === 'group' || chatType === 'supergroup';
 
   console.log(`[TG] msg from ${chatId}: "${text}" | TOKEN=${process.env.TELEGRAM_BOT_TOKEN ? 'SET(' + process.env.TELEGRAM_BOT_TOKEN.substring(0, 5) + '...)' : 'MISSING'}`);
+
+  // Show typing indicator
+  await sendChatAction(chatId);
 
   // In groups, only respond to commands and mentions
   if (isGroup) {
