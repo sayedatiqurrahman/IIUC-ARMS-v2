@@ -1073,7 +1073,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   getSemesterCourses: (semId, departmentId?) => {
     const uploadTree = get().getUploadTree();
     const prefix = semId + '/';
-    const courseMap = new Map<string, { title: string; categories: Map<string, number>; totalFiles: number; midCount: number; finalCount: number; rootCount: number }>();
+    const courseMap = new Map<string, { title: string; categories: Map<string, number>; totalFiles: number; midCount: number; finalCount: number; rootCount: number; readmes: Set<string> }>();
     const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
 
     // First pass: detect courses from folder structure (tree items)
@@ -1094,7 +1094,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const code = dashMatch[1].toUpperCase();
         const title = dashMatch[2].trim();
         if (!courseMap.has(code)) {
-          courseMap.set(code, { title, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0 });
+          courseMap.set(code, { title, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0, readmes: new Set() });
         } else {
           const c = courseMap.get(code)!;
           if (title !== code && c.title === code) c.title = title;
