@@ -111,13 +111,10 @@ export default function ContributorsView() {
     const devLogins = new Set(developers.map((c: any) => c.login));
     const merged = [...developers, ...resources.filter((c: any) => !devLogins.has(c.login))];
     return applyFilters(merged).sort((a: any, b: any) => {
-      // Both-repo contributors first
-      const aBoth = a.v2Contributions > 0 && a.dataContributions > 0;
-      const bBoth = b.v2Contributions > 0 && b.dataContributions > 0;
-      if (aBoth && !bBoth) return -1;
-      if (!aBoth && bBoth) return 1;
-      // Then by total contributions
-      return (b.v2Contributions + b.dataContributions + b.prCount) - (a.v2Contributions + a.dataContributions + a.prCount);
+      // Rank by combined total: v2 + data + PRs
+      const aTotal = a.v2Contributions + a.dataContributions + a.prCount;
+      const bTotal = b.v2Contributions + b.dataContributions + b.prCount;
+      return bTotal - aTotal;
     });
   }, [activeTab, developers, resources, deptFilter, searchQuery]);
 

@@ -307,10 +307,7 @@ export async function GET() {
         // 1. Founder always first
         if (a.role === 'Founder & Lead') return -1;
         if (b.role === 'Founder & Lead') return 1;
-        // 2. Both repos contributors next
-        if (a.roleType === 'both' && b.roleType !== 'both') return -1;
-        if (a.roleType !== 'both' && b.roleType === 'both') return 1;
-        // 3. Then by total contributions (commits + PRs)
+        // 2. Rank by combined total: commits + PRs from both repos
         const aTotal = a.v2Contributions + a.dataContributions + a.prCount;
         const bTotal = b.v2Contributions + b.dataContributions + b.prCount;
         if (settings.sortBy === 'name') return a.name.localeCompare(b.name);
