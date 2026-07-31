@@ -525,12 +525,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   navigateToMidFinal: (midFinal) => {
-    const { breadcrumbs } = get();
+    const { currentDept, currentSem, currentCourseCode, currentCourseTitle } = get();
     set({
       currentMidFinal: midFinal,
+      currentCat: '',
       view: 'categories',
       breadcrumbs: [
-        ...breadcrumbs,
+        { label: 'Departments', icon: 'fa-building', onClick: () => get().goHome() },
+        ...(currentDept ? [{ label: (() => { for (const f of FACULTIES) { const d = f.departments.find(dd => dd.id === currentDept); if (d) return d.shortName; } return currentDept; })(), icon: 'fa-building', onClick: () => get().navigateToDepartment(currentDept) }] : []),
+        ...(currentSem ? [{ label: currentSem.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()), icon: 'fa-calendar', onClick: () => get().navigateToSemester(currentSem) }] : []),
+        ...(currentCourseCode ? [{ label: currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : currentCourseCode, icon: 'fa-book', onClick: () => get().navigateToCourse(currentCourseCode, currentCourseTitle) }] : []),
         { label: midFinal, icon: 'fa-folder' },
       ],
     });
@@ -1307,7 +1311,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         label: config.categories[key as keyof typeof config.categories]?.label || key,
         icon: config.categories[key as keyof typeof config.categories]?.icon || 'folder',
         count: catMap.get(key)?.files.length || 0,
-        files: catMap.get(key)?.files || [],
+        files: (catMap.get(key)?.files || []).sort((a: any, b: any) => {
+          const ya = parseInt(extractYear(a.path) || '0');
+          const yb = parseInt(extractYear(b.path) || '0');
+          if (yb !== ya) return yb - ya;
+          const aSpring = /spring/i.test(a.path) ? 1 : 0;
+          const bSpring = /spring/i.test(b.path) ? 1 : 0;
+          return bSpring - aSpring;
+        }),
         hasLinks: courseReadmes.has(key.toLowerCase()),
       }));
       return [...virtualCats, ...rootCats];
@@ -1319,7 +1330,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       label: config.categories[key as keyof typeof config.categories]?.label || key,
       icon: config.categories[key as keyof typeof config.categories]?.icon || 'folder',
       count: data.files.length,
-      files: data.files,
+      files: data.files.sort((a: any, b: any) => {
+        const ya = parseInt(extractYear(a.path) || '0');
+        const yb = parseInt(extractYear(b.path) || '0');
+        if (yb !== ya) return yb - ya;
+        const aSpring = /spring/i.test(a.path) ? 1 : 0;
+        const bSpring = /spring/i.test(b.path) ? 1 : 0;
+        return bSpring - aSpring;
+      }),
       hasLinks: courseReadmes.has((midFinal + '/' + key).toLowerCase()),
     }));
 

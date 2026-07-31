@@ -300,7 +300,7 @@ export default function ContributorsView() {
 
       {/* How to Become a Contributor */}
       {!contributorsLoading && contributors.length > 0 && (
-        <div className="mt-12 pt-8 border-t border-dark-border">
+        <div className="mt-24 pt-8 border-t  border-dark-border">
           <div className="bg-gradient-to-br from-qsis/10 to-accent/5 border border-qsis/25 rounded-2xl p-5">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-qsis/20 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -399,21 +399,18 @@ function FounderCard({ c }: { c: any }) {
             <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
               <i className="fab fa-github mr-1"></i>@{c.login}
             </a>
-            {c.v2Contributions > 0 && (
-              <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
-                <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions} Web App
-              </span>
-            )}
-            {c.dataContributions > 0 && (
-              <span className="text-[0.65rem] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
-                <i className="fas fa-book-open mr-1"></i>{c.dataContributions} Data
-              </span>
-            )}
-            {c.prCount > 0 && (
-              <span className="text-[0.65rem] text-accent bg-accent/10 px-2 py-0.5 rounded-full">
-                <i className="fas fa-code-merge mr-1"></i>{c.prCount} PRs
-              </span>
-            )}
+            <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+              <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions} Code
+            </span>
+            <span className="text-[0.65rem] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
+              <i className="fas fa-book-open mr-1"></i>{c.dataContributions} Data
+            </span>
+            <span className="text-[0.65rem] text-accent bg-accent/10 px-2 py-0.5 rounded-full">
+              <i className="fas fa-code-merge mr-1"></i>{c.prCount} PRs
+            </span>
+            <span className="text-[0.65rem] font-bold text-dark-text bg-dark-bg3 px-2 py-0.5 rounded-full">
+              <i className="fas fa-star mr-1 text-yellow-500"></i>{c.v2Contributions + c.dataContributions + c.prCount} Total
+            </span>
           </div>
         </div>
       </div>
@@ -486,24 +483,22 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
       </div>
       {settings.showStats && (
         <div className="flex items-center gap-3 flex-shrink-0">
-          {c.v2Contributions > 0 && (
-            <div className="text-center">
-              <div className="text-[0.85rem] font-bold text-blue-400">{c.v2Contributions}</div>
-              <div className="text-[0.58rem] text-dark-text3">Code</div>
-            </div>
-          )}
-          {c.dataContributions > 0 && (
-            <div className="text-center">
-              <div className="text-[0.85rem] font-bold text-orange-400">{c.dataContributions}</div>
-              <div className="text-[0.58rem] text-dark-text3">Data</div>
-            </div>
-          )}
-          {c.prCount > 0 && (
-            <div className="text-center">
-              <div className="text-[0.85rem] font-bold text-accent">{c.prCount}</div>
-              <div className="text-[0.58rem] text-dark-text3">PRs</div>
-            </div>
-          )}
+          <div className="text-center">
+            <div className="text-[0.85rem] font-bold text-blue-400">{c.v2Contributions}</div>
+            <div className="text-[0.58rem] text-dark-text3">Code</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[0.85rem] font-bold text-orange-400">{c.dataContributions}</div>
+            <div className="text-[0.58rem] text-dark-text3">Data</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[0.85rem] font-bold text-accent">{c.prCount}</div>
+            <div className="text-[0.58rem] text-dark-text3">PRs</div>
+          </div>
+          <div className="text-center border-l border-dark-border pl-3 ml-1">
+            <div className="text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions + c.prCount}</div>
+            <div className="text-[0.58rem] text-dark-text3">Total</div>
+          </div>
         </div>
       )}
       <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0">
@@ -558,21 +553,18 @@ function GridCard({ c, settings }: { c: any; settings: Settings }) {
       <div className="px-5 py-3 border-t border-dark-border">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {c.v2Contributions > 0 && (
-              <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
-                <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions}
-              </span>
-            )}
-            {c.dataContributions > 0 && (
-              <span className="text-[0.65rem] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
-                <i className="fas fa-book-open mr-1"></i>{c.dataContributions}
-              </span>
-            )}
-            {c.prCount > 0 && (
-              <span className="text-[0.65rem] text-accent bg-accent/10 px-2 py-0.5 rounded-full">
-                <i className="fas fa-code-merge mr-1"></i>{c.prCount} PRs
-              </span>
-            )}
+            <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+              <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions}
+            </span>
+            <span className="text-[0.65rem] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
+              <i className="fas fa-book-open mr-1"></i>{c.dataContributions}
+            </span>
+            <span className="text-[0.65rem] text-accent bg-accent/10 px-2 py-0.5 rounded-full">
+              <i className="fas fa-code-merge mr-1"></i>{c.prCount} PRs
+            </span>
+            <span className="text-[0.65rem] font-bold text-dark-text bg-dark-bg3 px-2 py-0.5 rounded-full">
+              <i className="fas fa-star mr-1 text-yellow-500"></i>{c.v2Contributions + c.dataContributions + c.prCount}
+            </span>
           </div>
           <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="View GitHub Profile">
             <i className="fab fa-github text-[0.9rem]"></i>

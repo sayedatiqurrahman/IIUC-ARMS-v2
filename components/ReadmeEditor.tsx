@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAppStore } from '@/lib/store';
+import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
+import CustomSelect from '@/components/CustomSelect';
 
 interface ReadmeEditorProps {
   folder: string;
@@ -32,6 +34,34 @@ function linksToContent(links: { title: string; url: string }[]): string {
   return links.map(l => `- [${l.title}](${l.url})`).join('\n') + '\n';
 }
 
+function getSemesterLabelFromFolder(folder: string): string {
+  const parts = folder.split('/');
+  for (const part of parts) {
+    const sem = config.semesters.find(s => s.id === part);
+    if (sem) return sem.label;
+  }
+  return '';
+}
+
+const YEAR_OPTIONS = Array.from({ length: 6 }, (_, i) => {
+  const year = new Date().getFullYear() - i;
+  return { value: String(year), label: String(year), icon: 'fa-calendar' };
+});
+
+const SESSION_OPTIONS = [
+  { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
+  { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
+];
+
+function extractYearFromTitle(title: string): number {
+  const match = title.match(/\b(20\d{2})\b/);
+  return match ? parseInt(match[1]) : 0;
+}
+
+function sortLinksByYear(links: { title: string; url: string }[]): { title: string; url: string }[] {
+  return [...links].sort((a, b) => extractYearFromTitle(b.title) - extractYearFromTitle(a.title));
+}
+
 export default function ReadmeEditor({ folder, isOwner, isLoggedIn, canEdit, courseCode, courseTitle, category, midFinal }: ReadmeEditorProps) {
   const [content, setContent] = useState('');
   const [sha, setSha] = useState<string | null>(null);
@@ -39,8 +69,21 @@ export default function ReadmeEditor({ folder, isOwner, isLoggedIn, canEdit, cou
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
-  const [newLinkTitle, setNewLinkTitle] = useState('');
   const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [newLinkSession, setNewLinkSession] = useState(
+    new Date().getMonth() >= 4 && new Date().getMonth() <= 9 ? 'Autumn' : 'Spring'
+  );
+  const [newLinkYear, setNewLinkYear] = useState(String(new Date().getFullYear()));
+
+  const profile = useAppStore(s => s.profile);
+  const authorName = profile.name || '';
+
+  const semesterLabel = useMemo(() => getSemesterLabelFromFolder(folder), [folder]);
+
+  const autoTitle = useMemo(() => {
+    if (!newLinkSession || !newLinkYear || !semesterLabel || !authorName) return '';
+    return `${newLinkSession} ${newLinkYear} - ${semesterLabel} - ${authorName}`;
+  }, [newLinkSession, newLinkYear, semesterLabel, authorName]);
 
   const loadReadme = useCallback(async () => {
     setLoading(true);
@@ -61,7 +104,7 @@ export default function ReadmeEditor({ folder, isOwner, isLoggedIn, canEdit, cou
     loadReadme();
   }, [loadReadme]);
 
-  const links = parseLinks(content);
+  const links = useMemo(() => sortLinksByYear(parseLinks(content)), [content]);
 
   async function handleSave(newContent?: string) {
     const contentToSave = newContent || editContent;
@@ -89,15 +132,14 @@ export default function ReadmeEditor({ folder, isOwner, isLoggedIn, canEdit, cou
   }
 
   function handleAddLink() {
-    if (!newLinkTitle.trim() || !newLinkUrl.trim()) {
-      showToast('Please enter both title and URL', 'error');
+    if (!autoTitle.trim() || !newLinkUrl.trim()) {
+      showToast('Please select year and enter URL', 'error');
       return;
     }
     const url = newLinkUrl.trim().startsWith('http') ? newLinkUrl.trim() : `https://${newLinkUrl.trim()}`;
-    const newLink = `- [${newLinkTitle.trim()}](${url})`;
+    const newLink = `- [${autoTitle.trim()}](${url})`;
     const updated = content ? content.trim() + '\n' + newLink + '\n' : newLink + '\n';
     handleSave(updated);
-    setNewLinkTitle('');
     setNewLinkUrl('');
   }
 
@@ -133,26 +175,48 @@ export default function ReadmeEditor({ folder, isOwner, isLoggedIn, canEdit, cou
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
-                placeholder="Link title"
-                value={newLinkTitle}
-                onChange={e => setNewLinkTitle(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis"
+                placeholder="Auto-generated title"
+                value={autoTitle}
+                readOnly
+                className="flex-1 px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.78rem] outline-none cursor-not-allowed"
               />
+            </div>
+            <div className="flex gap-2 mb-2">
+              <div className="w-[130px]">
+                <CustomSelect
+                  value={newLinkSession}
+                  onChange={setNewLinkSession}
+                  placeholder="Session"
+                  options={SESSION_OPTIONS}
+                />
+              </div>
+              <div className="w-[100px]">
+                <CustomSelect
+                  value={newLinkYear}
+                  onChange={setNewLinkYear}
+                  placeholder="Year"
+                  options={YEAR_OPTIONS}
+                />
+              </div>
               <input
                 type="url"
                 placeholder="https://..."
                 value={newLinkUrl}
                 onChange={e => setNewLinkUrl(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddLink()}
                 className="flex-1 px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis"
               />
               <button
                 className="px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.75rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
                 onClick={handleAddLink}
-                disabled={saving || !newLinkTitle.trim() || !newLinkUrl.trim()}
+                disabled={saving || !newLinkUrl.trim() || !autoTitle.trim()}
               >
                 <i className="fas fa-plus"></i>
               </button>
             </div>
+            <p className="text-[0.68rem] text-dark-text3 mb-2">
+              Title: <code className="bg-dark-bg3 px-1 rounded">{autoTitle || 'Autumn 2026 - 6th Semester - AuthorName'}</code>
+            </p>
             <p className="text-[0.68rem] text-dark-text3 mb-2">
               Or edit raw markdown: <code className="bg-dark-bg3 px-1 rounded">- [Title](https://url)</code>
             </p>

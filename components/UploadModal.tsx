@@ -46,15 +46,41 @@ interface UploadModalProps {
   onClose: () => void;
 }
 
-function LinksEditor({ links, onAdd, onRemove }: { links: Link[]; onAdd: (title: string, url: string) => void; onRemove: (idx: number) => void }) {
-  const [title, setTitle] = useState('');
+const SESSION_OPTIONS = [
+  { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
+  { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
+];
+
+function extractYearFromTitle(title: string): number {
+  const match = title.match(/\b(20\d{2})\b/);
+  return match ? parseInt(match[1]) : 0;
+}
+
+function sortLinksByYear(links: { title: string; url: string }[]): { title: string; url: string }[] {
+  return [...links].sort((a, b) => extractYearFromTitle(b.title) - extractYearFromTitle(a.title));
+}
+
+function LinksEditor({ links, onAdd, onRemove, semesterLabel, authorName }: { links: Link[]; onAdd: (title: string, url: string) => void; onRemove: (idx: number) => void; semesterLabel?: string; authorName?: string }) {
+  const [session, setSession] = useState(CURRENT_SEASON);
+  const [year, setYear] = useState(String(CURRENT_YEAR));
   const [url, setUrl] = useState('');
   const [expanded, setExpanded] = useState(false);
 
+  const autoTitle = useMemo(() => {
+    if (!session || !year || !semesterLabel || !authorName) return '';
+    return `${session} ${year} - ${semesterLabel} - ${authorName}`;
+  }, [session, year, semesterLabel, authorName]);
+
+  const yearOptions = useMemo(() => Array.from({ length: 6 }, (_, i) => {
+    const y = CURRENT_YEAR - i;
+    return { value: String(y), label: String(y), icon: 'fa-calendar' };
+  }), []);
+
+  const sortedLinks = useMemo(() => sortLinksByYear(links), [links]);
+
   function handleAdd() {
-    if (!title.trim() || !url.trim()) return;
-    onAdd(title, url);
-    setTitle('');
+    if (!autoTitle.trim() || !url.trim()) return;
+    onAdd(autoTitle.trim(), url);
     setUrl('');
   }
 
@@ -72,9 +98,9 @@ function LinksEditor({ links, onAdd, onRemove }: { links: Link[]; onAdd: (title:
       </button>
       {expanded && (
         <div className="px-3 pb-3 border-t border-dark-border">
-          {links.length > 0 && (
+          {sortedLinks.length > 0 && (
             <div className="flex flex-col gap-1.5 mt-2 mb-2">
-              {links.map((link, i) => (
+              {sortedLinks.map((link, i) => (
                 <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border group">
                   <i className="fas fa-external-link-alt text-[0.6rem] text-dark-text3"></i>
                   <span className="text-[0.75rem] text-dark-text font-semibold truncate flex-1">{link.title}</span>
@@ -86,15 +112,19 @@ function LinksEditor({ links, onAdd, onRemove }: { links: Link[]; onAdd: (title:
               ))}
             </div>
           )}
+          {autoTitle && (
+            <div className="px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border mb-2">
+              <span className="text-[0.72rem] text-dark-text2">Title: </span>
+              <span className="text-[0.72rem] text-qsis font-semibold">{autoTitle}</span>
+            </div>
+          )}
           <div className="flex gap-2 mt-1">
-            <input
-              type="text"
-              placeholder="Link title"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAdd()}
-              className="flex-1 px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis"
-            />
+            <div className="w-[110px]">
+              <CustomSelect value={session} onChange={setSession} placeholder="Session" options={SESSION_OPTIONS} />
+            </div>
+            <div className="w-[90px]">
+              <CustomSelect value={year} onChange={setYear} placeholder="Year" options={yearOptions} />
+            </div>
             <input
               type="url"
               placeholder="https://..."
@@ -106,12 +136,12 @@ function LinksEditor({ links, onAdd, onRemove }: { links: Link[]; onAdd: (title:
             <button
               className="px-2.5 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
               onClick={handleAdd}
-              disabled={!title.trim() || !url.trim()}
+              disabled={!autoTitle.trim() || !url.trim()}
             >
               <i className="fas fa-plus"></i>
             </button>
           </div>
-          <p className="text-[0.6rem] text-dark-text3 mt-1.5">Links will be saved as README.md in the course folder.</p>
+          <p className="text-[0.6rem] text-dark-text3 mt-1.5">Title: Autumn 2026 - 6th Semester - Author</p>
         </div>
       )}
     </div>
@@ -869,6 +899,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                       links={course.links}
                       onAdd={(title, url) => addLink(course.id, title, url)}
                       onRemove={(idx) => removeLink(course.id, idx)}
+                      semesterLabel={config.semesters.find(s => s.id === semester)?.label || semester}
+                      authorName={profile.name || (session as any)?.user?.name || ''}
                     />
                   )}
 

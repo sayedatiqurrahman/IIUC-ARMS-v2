@@ -701,6 +701,8 @@ export function buildStatsMessage(tree: any[]): string {
   const courseSet = new Set<string>();
   let totalFiles = 0;
 
+  const validSems = new Set(config.semesters.map(s => s.id));
+
   for (const item of tree) {
     if (item.type !== 'blob') continue;
     const p: string = item.path;
@@ -708,16 +710,19 @@ export function buildStatsMessage(tree: any[]): string {
 
     const rel = p.substring(config.uploadPath.length + 1);
     const parts = rel.split('/');
-    if (parts.length < 4) continue;
+    if (parts.length < 3) continue;
 
     const dept = parts[0];
     const sem = parts[1];
-    const courseFolder = parts[3];
+
+    if (!validSems.has(sem)) continue;
+    if (parts[parts.length - 1] === '.gitkeep') continue;
 
     deptCounts.set(dept, (deptCounts.get(dept) || 0) + 1);
     semCounts.set(sem, (semCounts.get(sem) || 0) + 1);
     totalFiles++;
 
+    const courseFolder = parts[2];
     const codeMatch = courseFolder.match(/^([A-Z]{2,5}-?\d{3,5})/i);
     if (codeMatch) courseSet.add(codeMatch[1].toUpperCase());
   }
@@ -735,7 +740,11 @@ export function buildStatsMessage(tree: any[]): string {
   if (sortedDepts.length > 10) msg += `  <i>...and ${sortedDepts.length - 10} more</i>\n`;
 
   msg += `\n<b>By Semester:</b>\n`;
-  const sortedSems = Array.from(semCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const sortedSems = Array.from(semCounts.entries()).sort((a, b) => {
+    const ai = config.semesters.findIndex(s => s.id === a[0]);
+    const bi = config.semesters.findIndex(s => s.id === b[0]);
+    return ai - bi;
+  });
   for (const [sem, count] of sortedSems) {
     const semLabel = config.semesters.find(s => s.id === sem)?.label || sem;
     msg += `  ${semLabel}: ${count} files\n`;

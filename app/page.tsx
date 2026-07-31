@@ -159,6 +159,7 @@ export default function BrowsePage() {
     const dept = params.get('dept');
     const sem = params.get('sem');
     const course = params.get('course');
+    const mf = params.get('mf');
     const cat = params.get('cat');
 
     if (q) {
@@ -177,15 +178,21 @@ export default function BrowsePage() {
               const courses = getSemesterCourses(sem, dept);
               const found = courses.find(c => c.code.toUpperCase() === course.toUpperCase());
               if (found) navigateToCourse(found.code, found.title);
+              if (mf) {
+                setTimeout(() => {
+                  const { navigateToMidFinal } = useAppStore.getState();
+                  navigateToMidFinal(mf);
+                }, 150);
+              }
               if (cat) {
                 setTimeout(() => {
                   const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
                   if (catKey) navigateToCategory(catKey);
-                }, 100);
+                }, mf ? 250 : 150);
               }
-            }, 100);
+            }, 200);
           }
-        }, 100);
+        }, 200);
       }
     }
   }, [mounted, loading]);
@@ -195,21 +202,59 @@ export default function BrowsePage() {
     if (!mounted) return;
     const prevData = prevOnboardDataRef.current;
     prevOnboardDataRef.current = onboardData;
-    // Detect transition from null to having data (onboarding just completed)
     if (!prevData && onboardData && userDeptId && view === 'departments') {
       navigateToDepartment(userDeptId);
+      // Also navigate into the user's semester
+      const semId = onboardData.semester
+        ? config.semesters.find(s => s.label === onboardData.semester)?.id
+        : null;
+      if (semId && semId !== 'graduated') {
+        setTimeout(() => {
+          const { navigateToSemester } = useAppStore.getState();
+          navigateToSemester(semId);
+        }, 150);
+      }
     }
   }, [onboardData, mounted]);
 
-  // Auto-navigate returning users into their department on page load
+  // Auto-navigate returning users into their department on page load (only if no URL params / personalized)
   useEffect(() => {
     if (!mounted || loading) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasUrlParams = urlParams.has('dept') || urlParams.has('q');
+    if (hasUrlParams) return;
     const dept = onboardData?.department || profile.department || '';
     if (!dept || view !== 'departments') return;
-    // Already inside a dept? skip
     const target = FACULTIES.flatMap(f => f.departments).find(d => d.name === dept || d.id === dept);
-    if (target) navigateToDepartment(target.id);
+    if (target) {
+      navigateToDepartment(target.id);
+      const semId = onboardData?.semester
+        ? config.semesters.find(s => s.label === onboardData.semester)?.id
+        : profile.semester;
+      if (semId && semId !== 'graduated') {
+        setTimeout(() => {
+          const { navigateToSemester } = useAppStore.getState();
+          navigateToSemester(semId);
+        }, 200);
+      }
+    }
   }, [mounted, loading]);
+
+  // Auto-navigate when user updates semester from dashboard
+  const prevSemesterRef = useRef(profile.semester);
+  useEffect(() => {
+    if (!mounted || loading) return;
+    const newSem = profile.semester;
+    const oldSem = prevSemesterRef.current;
+    prevSemesterRef.current = newSem;
+    if (!newSem || newSem === 'graduated' || newSem === oldSem) return;
+    // Only re-navigate if already inside a department
+    const { currentDept, view: currentView } = useAppStore.getState();
+    if (currentDept && (currentView === 'courses' || currentView === 'semesters')) {
+      const { navigateToSemester } = useAppStore.getState();
+      navigateToSemester(newSem);
+    }
+  }, [profile.semester, mounted, loading]);
 
   // Onboarding-based personalization
   const userSemesterId = onboardData

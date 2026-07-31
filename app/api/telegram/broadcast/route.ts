@@ -2,20 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-import { sendMessageWithButton } from '@/lib/telegram';
-import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
+import { sendMessageWithButtons } from '@/lib/telegram';
 
 const BOT_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN || ''}`;
+const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'iiuc_arms_bot';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
 
-async function getAppBotToken(): Promise<string | null> {
-  try {
-    const installations = await getAppInstallations();
-    if (!Array.isArray(installations) || installations.length === 0) return null;
-    return await getInstallationAccessToken(installations[0].id);
-  } catch { return null; }
-}
-
-// POST — send broadcast message to all bot users
+// POST — send broadcast message to channel with Start Bot + Open App buttons
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.admin);
   if (!rl.success) return rl.response!;
@@ -29,50 +22,54 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Only owner can broadcast' }, { status: 403 });
     }
 
-    const { message, button } = await req.json();
+    const { message, channel } = await req.json();
     if (!message?.trim()) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    // Get bot token
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {
       return NextResponse.json({ error: 'Telegram bot token not configured' }, { status: 500 });
     }
 
-    // Get bot info to find bot username
-    const botInfoRes = await fetch(`${BOT_API}/getMe`);
-    const botInfo = await botInfoRes.json();
-    const botUsername = botInfo?.result?.username;
-
-    // Get recent updates to find user chat IDs
-    // Note: Telegram doesn't provide a way to list all users
-    // We need to store chat IDs when users interact with the bot
-    // For now, send to the owner's chat ID
-    const OWNER_CHAT_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID || '0');
-    if (!OWNER_CHAT_ID) {
-      return NextResponse.json({ error: 'TELEGRAM_OWNER_CHAT_ID not set' }, { status: 500 });
+    // Channel chat_id (e.g. @channelusername or -100xxxxxxxxxx)
+    const chatId = channel || process.env.TELEGRAM_CHANNEL_ID || '';
+    if (!chatId) {
+      return NextResponse.json({ error: 'TELEGRAM_CHANNEL_ID not set or channel param required' }, { status: 500 });
     }
 
-    const broadcastMsg = `📢 <b>Announcement</b>\n\n${message}`;
-    const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+    const startBotUrl = `https://t.me/${BOT_USERNAME}?start`;
+    const openAppUrl = SITE_URL;
 
-    await sendMessageWithButton(OWNER_CHAT_ID, broadcastMsg, button?.text || 'Open IIUC-ARMS', button?.url || SITE_URL);
+    const broadcastMsg = `📢 <b>IIUC-ARMS</b>\n\n${message}`;
 
-    return NextResponse.json({ success: true, sent: true });
+    const result = await sendMessageWithButtons(
+      chatId,
+      broadcastMsg,
+      [
+        [{ text: '🚀 Start Bot', url: startBotUrl }],
+        [{ text: '🌐 Open App', url: openAppUrl }],
+      ]
+    );
+
+    const body = await result.json();
+    if (!body.ok) {
+      return NextResponse.json({ error: body.description || 'Failed to send' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, messageId: body.result?.message_id });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to broadcast' }, { status: 500 });
   }
 }
 
-// GET — list Telegram bot users (chat IDs from DB)
+// GET — list Telegram bot users count
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
 
   try {
     const { prisma } = await import('@/lib/prisma');
-    // Get all profiles that have interacted with the bot
     const profiles = await prisma.profile.findMany({
       select: { userId: true, name: true, email: true },
       orderBy: { userId: 'asc' },
