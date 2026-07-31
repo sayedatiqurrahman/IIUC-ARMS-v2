@@ -455,14 +455,11 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
           {isFounder && (
             <span className="px-1.5 py-0.5 rounded-md bg-qsis/20 text-qsis text-[0.58rem] font-bold"><i className="fas fa-crown mr-0.5"></i>Founder</span>
           )}
-          {isBoth && (
-            <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 text-[0.58rem] font-bold">Both</span>
+          {isDev && (
+            <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.58rem] font-bold"><i className="fas fa-laptop-code mr-0.5"></i>Developer</span>
           )}
-          {isDev && !isBoth && !isFounder && (
-            <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.58rem] font-bold">Developer</span>
-          )}
-          {isResource && !isBoth && !isFounder && (
-            <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.58rem] font-bold">Resource</span>
+          {isResource && (
+            <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.58rem] font-bold"><i className="fas fa-book-open mr-0.5"></i>Resource Provider</span>
           )}
           {c.profileComplete && (
             <span className="px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-400 text-[0.58rem] font-bold"><i className="fas fa-check-circle mr-0.5"></i>Complete</span>
@@ -533,19 +530,14 @@ function GridCard({ c, settings }: { c: any; settings: Settings }) {
           @{c.login}
         </a>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
-          {isBoth && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold bg-purple-500/15 text-purple-400">
-              <i className="fas fa-code-branch"></i>Both
-            </span>
-          )}
-          {isDev && !isBoth && (
+          {isDev && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold bg-blue-500/15 text-blue-400">
               <i className="fas fa-laptop-code"></i>Developer
             </span>
           )}
-          {isResource && !isBoth && (
+          {isResource && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold bg-orange-500/15 text-orange-400">
-              <i className="fas fa-book-open"></i>Resource
+              <i className="fas fa-book-open"></i>Resource Provider
             </span>
           )}
           {c.profileComplete && (
