@@ -61,16 +61,16 @@ export default function ContributorsView() {
   const founder = useMemo(() => contributors.find((c: any) => c.role === 'Founder & Lead'), [contributors]);
   const nonFounder = useMemo(() => contributors.filter((c: any) => c.role !== 'Founder & Lead'), [contributors]);
 
-  // Categories — exclusive, no overlap
+  // Categories — include anyone who contributed to that repo
   const bothRepos = useMemo(() => nonFounder.filter((c: any) => c.roleType === 'both'), [nonFounder]);
-  // Developers: ONLY people who contributed to code repo (not both)
-  const developersOnly = useMemo(() =>
-    nonFounder.filter((c: any) => c.v2Contributions > 0 && c.roleType !== 'both'),
+  // Developers: anyone with code contributions (including both-repo people)
+  const developersAll = useMemo(() =>
+    nonFounder.filter((c: any) => c.v2Contributions > 0),
     [nonFounder]
   );
-  // Resource providers: ONLY people who contributed to data repo (not both)
-  const resourcesOnly = useMemo(() =>
-    nonFounder.filter((c: any) => c.dataContributions > 0 && c.roleType !== 'both'),
+  // Resource providers: anyone with data contributions (including both-repo people)
+  const resourcesAll = useMemo(() =>
+    nonFounder.filter((c: any) => c.dataContributions > 0),
     [nonFounder]
   );
 
@@ -102,15 +102,15 @@ export default function ContributorsView() {
 
   // Tab-filtered lists
   const tabList = useMemo(() => {
-    if (activeTab === 'developers') return applyFilters(developersOnly);
-    if (activeTab === 'resources') return applyFilters(resourcesOnly);
+    if (activeTab === 'developers') return applyFilters(developersAll);
+    if (activeTab === 'resources') return applyFilters(resourcesAll);
     // 'all' = everyone sorted by contribution (both repos first, then by contribution)
     return applyFilters(nonFounder).sort((a: any, b: any) => {
       if (a.roleType === 'both' && b.roleType !== 'both') return -1;
       if (a.roleType !== 'both' && b.roleType === 'both') return 1;
       return b.contributions - a.contributions;
     });
-  }, [activeTab, nonFounder, developersOnly, resourcesOnly, deptFilter, searchQuery]);
+  }, [activeTab, nonFounder, developersAll, resourcesAll, deptFilter, searchQuery]);
 
   // Grid mode: all sorted together
   const allSorted = useMemo(() => {
@@ -166,11 +166,11 @@ export default function ContributorsView() {
               <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-code-branch mr-1"></i>Both</div>
             </div>
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
-              <div className="text-[1.3rem] font-bold text-blue-400">{developersOnly.length}</div>
+              <div className="text-[1.3rem] font-bold text-blue-400">{developersAll.length}</div>
               <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-laptop-code mr-1"></i>Developers</div>
             </div>
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
-              <div className="text-[1.3rem] font-bold text-orange-400">{resourcesOnly.length}</div>
+              <div className="text-[1.3rem] font-bold text-orange-400">{resourcesAll.length}</div>
               <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-book-open mr-1"></i>Resources</div>
             </div>
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
@@ -224,7 +224,7 @@ export default function ContributorsView() {
                       }`}
                     >
                       <i className="fas fa-laptop-code mr-1"></i>Developers
-                      <span className="ml-1 text-[0.6rem] opacity-70">({developersOnly.length})</span>
+                      <span className="ml-1 text-[0.6rem] opacity-70">({developersAll.length})</span>
                     </button>
                   )}
                   {settings.sectionCount === 3 && (
@@ -235,7 +235,7 @@ export default function ContributorsView() {
                       }`}
                     >
                       <i className="fas fa-book-open mr-1"></i>Resources
-                      <span className="ml-1 text-[0.6rem] opacity-70">({resourcesOnly.length})</span>
+                      <span className="ml-1 text-[0.6rem] opacity-70">({resourcesAll.length})</span>
                     </button>
                   )}
                 </div>
@@ -303,71 +303,75 @@ export default function ContributorsView() {
 
       {/* How to Become a Contributor */}
       {!contributorsLoading && contributors.length > 0 && (
-        <div className="mt-8 bg-gradient-to-br from-qsis/10 to-accent/5 border border-qsis/25 rounded-2xl p-5">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-qsis/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <i className="fas fa-trophy text-qsis text-[1.1rem]"></i>
+        <div className="mt-12 pt-8 border-t border-dark-border">
+          <div className="bg-gradient-to-br from-qsis/10 to-accent/5 border border-qsis/25 rounded-2xl p-5">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-qsis/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i className="fas fa-trophy text-qsis text-[1.1rem]"></i>
+              </div>
+              <div>
+                <h4 className="text-[0.95rem] font-bold text-dark-text mb-1">Want Your Name Here?</h4>
+                <p className="text-[0.8rem] text-dark-text2 leading-relaxed">
+                  Upload academic documents — notes, sheets, previous questions, or syllabus — for your department. Every valid contribution earns you a spot on this page.
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="text-[0.95rem] font-bold text-dark-text mb-1">Want Your Name Here?</h4>
-              <p className="text-[0.8rem] text-dark-text2 leading-relaxed">
-                Upload academic documents — notes, sheets, previous questions, or syllabus — for your department. Every valid contribution earns you a spot on this page.
-              </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-dark-bg border border-dark-border">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+                  <i className="fas fa-upload text-blue-400 text-[0.75rem]"></i>
+                </div>
+                <div>
+                  <div className="text-[0.75rem] font-semibold">1. Upload Files</div>
+                  <div className="text-[0.62rem] text-dark-text2">Notes, sheets, questions</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-dark-bg border border-dark-border">
+                <div className="w-8 h-8 rounded-lg bg-accent/15 flex items-center justify-center flex-shrink-0">
+                  <i className="fas fa-check-circle text-accent text-[0.75rem]"></i>
+                </div>
+                <div>
+                  <div className="text-[0.75rem] font-semibold">2. Get Reviewed</div>
+                  <div className="text-[0.62rem] text-dark-text2">Team verifies quality</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-dark-bg border border-dark-border">
+                <div className="w-8 h-8 rounded-lg bg-green-500/15 flex items-center justify-center flex-shrink-0">
+                  <i className="fas fa-user-check text-green-400 text-[0.75rem]"></i>
+                </div>
+                <div>
+                  <div className="text-[0.75rem] font-semibold">3. Get Listed</div>
+                  <div className="text-[0.62rem] text-dark-text2">Your name &amp; profile here</div>
+                </div>
+              </div>
             </div>
+            <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-qsis to-accent text-white font-semibold text-[0.8rem] cursor-pointer hover:shadow-[0_4px_16px_rgba(34,197,94,0.3)] hover:scale-[1.02] transition-all border-none" onClick={() => router.push('/')}>
+              <i className="fas fa-upload"></i> Start Uploading
+            </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-dark-bg border border-dark-border">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center flex-shrink-0">
-                <i className="fas fa-upload text-blue-400 text-[0.75rem]"></i>
-              </div>
-              <div>
-                <div className="text-[0.75rem] font-semibold">1. Upload Files</div>
-                <div className="text-[0.62rem] text-dark-text2">Notes, sheets, questions</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-dark-bg border border-dark-border">
-              <div className="w-8 h-8 rounded-lg bg-accent/15 flex items-center justify-center flex-shrink-0">
-                <i className="fas fa-check-circle text-accent text-[0.75rem]"></i>
-              </div>
-              <div>
-                <div className="text-[0.75rem] font-semibold">2. Get Reviewed</div>
-                <div className="text-[0.62rem] text-dark-text2">Team verifies quality</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-dark-bg border border-dark-border">
-              <div className="w-8 h-8 rounded-lg bg-green-500/15 flex items-center justify-center flex-shrink-0">
-                <i className="fas fa-user-check text-green-400 text-[0.75rem]"></i>
-              </div>
-              <div>
-                <div className="text-[0.75rem] font-semibold">3. Get Listed</div>
-                <div className="text-[0.62rem] text-dark-text2">Your name &amp; profile here</div>
-              </div>
-            </div>
-          </div>
-          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-qsis to-accent text-white font-semibold text-[0.8rem] cursor-pointer hover:shadow-[0_4px_16px_rgba(34,197,94,0.3)] hover:scale-[1.02] transition-all border-none" onClick={() => router.push('/')}>
-            <i className="fas fa-upload"></i> Start Uploading
-          </button>
         </div>
       )}
 
       {/* Support Us */}
       {!contributorsLoading && contributors.length > 0 && (
-        <div className="mt-8 bg-gradient-to-br from-qsis/5 to-accent/5 border border-qsis/20 rounded-2xl p-6 text-center">
-          <h4 className="text-[1.05rem] font-bold text-dark-text mb-2">
-            <i className="fas fa-heart text-red-400 mr-2"></i>Support Our Work
-          </h4>
-          <p className="text-[0.82rem] text-dark-text2 mb-4 max-w-md mx-auto">
-            If this project helps you, please give us a star on GitHub. It motivates us to keep building and maintaining this resource for the IIUC community.
-          </p>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            <a href={`https://github.com/${config.owner}/QSIS-ARMS-v2`} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-qsis to-accent text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(34,197,94,0.3)] hover:scale-105 transition-all">
-              <i className="fas fa-star"></i> Star IIUC-ARMS v2
-            </a>
-            <a href={`https://github.com/${config.owner}/QSIS-ACADEMIC-FILES-MANAFGER`} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:scale-105 transition-all">
-              <i className="fas fa-star"></i> Star Academic Files
-            </a>
+        <div className="mt-10 pt-8 border-t border-dark-border">
+          <div className="bg-gradient-to-br from-qsis/5 to-accent/5 border border-qsis/20 rounded-2xl p-6 text-center">
+            <h4 className="text-[1.05rem] font-bold text-dark-text mb-2">
+              <i className="fas fa-heart text-red-400 mr-2"></i>Support Our Work
+            </h4>
+            <p className="text-[0.82rem] text-dark-text2 mb-4 max-w-md mx-auto">
+              If this project helps you, please give us a star on GitHub. It motivates us to keep building and maintaining this resource for the IIUC community.
+            </p>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <a href={`https://github.com/${config.owner}/QSIS-ARMS-v2`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-qsis to-accent text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(34,197,94,0.3)] hover:scale-105 transition-all">
+                <i className="fas fa-star"></i> Star IIUC-ARMS v2
+              </a>
+              <a href={`https://github.com/${config.owner}/QSIS-ACADEMIC-FILES-MANAFGER`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:scale-105 transition-all">
+                <i className="fas fa-star"></i> Star Academic Files
+              </a>
+            </div>
           </div>
         </div>
       )}
@@ -428,6 +432,10 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
     3: 'bg-orange-600 text-white',
   };
 
+  const isDev = c.v2Contributions > 0;
+  const isResource = c.dataContributions > 0;
+  const isBoth = isDev && isResource;
+
   return (
     <div className={`flex items-center gap-4 p-4 rounded-xl border transition-all hover:border-qsis/40 hover:shadow-[0_2px_12px_rgba(34,197,94,0.1)] ${
       rank <= 3 ? 'bg-dark-bg2 border-qsis/20' : 'bg-dark-bg2 border-dark-border'
@@ -441,14 +449,17 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[0.9rem] font-bold text-dark-text truncate">{c.name || c.login}</span>
-          {c.roleType === 'both' && (
+          {isBoth && (
             <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 text-[0.58rem] font-bold">Both</span>
           )}
-          {c.role === 'Developer' && (
+          {isDev && !isBoth && (
             <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.58rem] font-bold">Developer</span>
           )}
-          {c.role === 'Resource Provider' && (
+          {isResource && !isBoth && (
             <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.58rem] font-bold">Resource</span>
+          )}
+          {c.profileComplete && (
+            <span className="px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-400 text-[0.58rem] font-bold"><i className="fas fa-check-circle mr-0.5"></i>Complete</span>
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap mt-0.5">
@@ -458,6 +469,16 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
           {(c as any).departmentLabel && (
             <span className="text-[0.65rem] text-dark-text3">
               <i className="fas fa-building mr-1 text-teal-400"></i>{(c as any).departmentShortName || c.department}
+            </span>
+          )}
+          {c.universityId && !c.hideUniversityId && (
+            <span className="text-[0.65rem] text-dark-text3">
+              <i className="fas fa-id-card mr-1 text-qsis"></i>{c.universityId}
+            </span>
+          )}
+          {c.semester && !c.hideSemester && (
+            <span className="text-[0.65rem] text-dark-text3">
+              <i className="fas fa-graduation-cap mr-1 text-accent"></i>{c.semester === 'graduated' ? '🎓 Graduated' : config.semesters.find((s: any) => s.id === c.semester)?.label || c.semester}
             </span>
           )}
         </div>
@@ -493,6 +514,10 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
 
 /* ═══════════ GRID CARD (Grid View) ═══════════ */
 function GridCard({ c, settings }: { c: any; settings: Settings }) {
+  const isDev = c.v2Contributions > 0;
+  const isResource = c.dataContributions > 0;
+  const isBoth = isDev && isResource;
+
   return (
     <div className="bg-dark-bg2 border border-dark-border rounded-2xl overflow-hidden hover:border-qsis hover:shadow-[0_4px_24px_rgba(34,197,94,0.15)] transition-all group">
       <div className="bg-gradient-to-br from-qsis/10 to-accent/10 px-5 pt-6 pb-4 text-center">
@@ -501,25 +526,36 @@ function GridCard({ c, settings }: { c: any; settings: Settings }) {
         <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
           @{c.login}
         </a>
-        <div className="mt-2">
-          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold ${
-            c.roleType === 'both' ? 'bg-purple-500/15 text-purple-400' :
-            c.role === 'Developer' ? 'bg-blue-500/15 text-blue-400' :
-            c.role === 'Resource Provider' ? 'bg-orange-500/15 text-orange-400' :
-            'bg-dark-bg3 text-dark-text2'
-          }`}>
-            <i className={`fas ${
-              c.roleType === 'both' ? 'fa-code-branch' :
-              c.role === 'Developer' ? 'fa-laptop-code' :
-              c.role === 'Resource Provider' ? 'fa-book-open' :
-              'fa-user'
-            }`}></i>
-            {c.role}
-          </span>
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
+          {isBoth && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold bg-purple-500/15 text-purple-400">
+              <i className="fas fa-code-branch"></i>Both
+            </span>
+          )}
+          {isDev && !isBoth && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold bg-blue-500/15 text-blue-400">
+              <i className="fas fa-laptop-code"></i>Developer
+            </span>
+          )}
+          {isResource && !isBoth && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold bg-orange-500/15 text-orange-400">
+              <i className="fas fa-book-open"></i>Resource
+            </span>
+          )}
+          {c.profileComplete && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6rem] font-medium bg-green-500/10 text-green-400">
+              <i className="fas fa-check-circle"></i>Complete
+            </span>
+          )}
         </div>
         {(c as any).departmentLabel && (
           <p className="text-[0.68rem] text-dark-text3 mt-2">
             <i className="fas fa-building mr-1 text-teal-400"></i>{(c as any).departmentLabel}
+          </p>
+        )}
+        {c.universityId && !c.hideUniversityId && (
+          <p className="text-[0.65rem] text-dark-text3 mt-1">
+            <i className="fas fa-id-card mr-1 text-qsis"></i>ID: {c.universityId}
           </p>
         )}
       </div>
