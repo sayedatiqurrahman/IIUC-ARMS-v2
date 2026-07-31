@@ -23,6 +23,8 @@ import {
   parseCallbackData,
   CATEGORY_META,
   esc,
+  getDeptName,
+  getDeptFullName,
 } from '@/lib/telegram';
 import { config } from '@/lib/config';
 import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
