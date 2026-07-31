@@ -803,7 +803,7 @@ export default function BrowsePage() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="text-[0.75rem] text-dark-text2 flex items-center gap-1.5 justify-end">
-                      {course.hasSharedLinks && <span className="text-pink-400"><i className="fas fa-link text-[0.65rem]"></i></span>}
+                      {(course as any).hasSharedLinks && <span className="text-pink-400"><i className="fas fa-link text-[0.65rem]"></i></span>}
                       {course.totalFiles} files
                     </div>
                     {course.hasMidFinal && (
