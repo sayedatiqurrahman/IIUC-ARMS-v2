@@ -689,6 +689,27 @@ export default function DashboardView() {
               </div>
             </div>
 
+            {/* PAT Recommendation for GitHub App users */}
+            {!(profile.githubToken?.startsWith('ghp_') || profile.githubToken?.startsWith('github_pat_')) && (
+              <div className="mb-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <div className="flex items-start gap-2.5">
+                  <i className="fas fa-exclamation-triangle text-amber-400 text-[0.8rem] mt-0.5"></i>
+                  <div className="flex-1">
+                    <p className="text-[0.78rem] font-semibold text-amber-400 mb-1">Want to appear in Contributors?</p>
+                    <p className="text-[0.7rem] text-dark-text2 leading-relaxed">
+                      Your uploads are committed as <strong>qsis-arms[bot]</strong>, not your GitHub account. To appear in the Contributors list, connect a <strong>Personal Access Token</strong> — your uploads will then be credited to you.
+                    </p>
+                    <button
+                      onClick={() => setShowTokenModal(true)}
+                      className="mt-2 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 text-[0.72rem] font-semibold cursor-pointer hover:bg-amber-500/30 border-none transition-all"
+                    >
+                      <i className="fas fa-key mr-1"></i>Switch to PAT
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {ghStats && (
               <div className="flex gap-2 flex-wrap mb-3">
                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border">
@@ -795,7 +816,7 @@ export default function DashboardView() {
               </button>
             </div>
             <p className="text-[0.68rem] text-dark-text2 text-center">
-              GitHub App is easiest. PAT is needed only for contributor badge.
+              GitHub App uploads as bot. Use PAT to appear in Contributors list.
             </p>
           </div>
         )}
