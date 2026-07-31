@@ -1,4 +1,4 @@
-const CACHE_NAME = 'qs-arms-v1';
+const CACHE_NAME = 'iiuc-arms-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -23,24 +23,38 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for static
+// Fetch: network-first for API and navigation, cache-first for static
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // API calls: network-first (fresh data when online, cache fallback when offline)
+  // API calls: always network-first, never cache
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Cache successful GET API responses for offline fallback
-          if (request.method === 'GET' && response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(request))
+      fetch(request).catch(() => {
+        return new Response(JSON.stringify({ error: 'Offline — please try again' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      })
+    );
+    return;
+  }
+
+  // Navigation requests (deep links from Telegram, etc.): network-first
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).then((response) => {
+        // Cache the HTML shell for offline
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        return response;
+      }).catch(() => {
+        // Offline: serve cached version or fallback to root
+        return caches.match(request).then((cached) => {
+          return cached || caches.match('/');
+        });
+      })
     );
     return;
   }

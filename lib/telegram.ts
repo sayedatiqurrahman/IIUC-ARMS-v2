@@ -3,7 +3,7 @@ import { FACULTIES } from '@/lib/departments';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const API = `https://api.telegram.org/bot${TOKEN}`;
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://qsis-arms.eu.cc';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
 
 // ─── Telegram API helpers ─────────────────────────────────────────
 
@@ -12,6 +12,38 @@ export async function sendMessage(chatId: number, text: string, extra?: any) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra }),
+  });
+}
+
+export async function sendMessageWithButton(chatId: number, text: string, buttonText: string, buttonUrl: string) {
+  return fetch(`${API}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: {
+        inline_keyboard: [[{ text: buttonText, url: buttonUrl }]],
+      },
+    }),
+  });
+}
+
+export async function sendMessageWithButtons(chatId: number, text: string, buttons: { text: string; callback_data?: string; url?: string }[][]) {
+  return fetch(`${API}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: {
+        inline_keyboard: buttons,
+      },
+    }),
   });
 }
 
@@ -118,6 +150,7 @@ export interface CourseInfo {
 
 export function findCourseFiles(tree: any[], courseCode: string): FoundFile[] {
   const code = courseCode.toUpperCase().trim();
+  const codeNoHyphen = code.replace('-', '');
   const results: FoundFile[] = [];
 
   for (const item of tree) {
@@ -134,9 +167,13 @@ export function findCourseFiles(tree: any[], courseCode: string): FoundFile[] {
     const catFolder = parts[2];
     const courseFolder = parts[3];
 
-    const courseParts = courseFolder.split('-');
-    const coursePrefix = courseParts[0]?.toUpperCase() || '';
-    if (coursePrefix !== code) continue;
+    // Folder format: "QSM-3602 - Title" or "QSM3602 - Title"
+    const dashIdx = courseFolder.indexOf(' - ');
+    const folderCode = dashIdx > 0 ? courseFolder.substring(0, dashIdx).toUpperCase() : courseFolder.split(' ')[0].toUpperCase();
+    const folderCodeNoHyphen = folderCode.replace('-', '');
+
+    // Match: exact or without hyphen
+    if (folderCode !== code && folderCodeNoHyphen !== codeNoHyphen) continue;
 
     const category = detectCategory(catFolder);
 
@@ -185,7 +222,7 @@ export function buildCourseLink(courseCode: string, dept?: string, sem?: string,
 
 // ─── Message builders ─────────────────────────────────────────────
 
-function esc(s: string): string {
+export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
@@ -204,32 +241,61 @@ export function buildWelcomeMessage(): string {
 
 export function buildHelpMessage(): string {
   return (
-    `📖 <b>Commands</b>\n\n` +
+    `📖 <b>IIUC-ARMS Bot Commands</b>\n\n` +
+    `<b>🔍 Browse & Search:</b>\n` +
     `<code>QUR101</code> — Search a course by code\n` +
-    `<code>/search &lt;query&gt;</code> — Search files, courses, semesters\n` +
-    `<code>/departments</code> — List all departments\n` +
-    `<code>/semester &lt;1-8&gt;</code> — Browse a semester\n` +
-    `<code>/help</code> — Show this help\n\n` +
+    `<code>/course-code QSM-3602</code> — Search a specific course\n` +
+    `<code>/courses</code> — List all courses (dept > sem > courses)\n` +
+    `<code>/courses qs</code> — Courses in QSIS dept only\n` +
+    `<code>/courses qs 3</code> — Courses in QSIS, 3rd semester\n` +
+    `<code>/departments</code> — List all departments with links\n` +
+    `<code>/semester 3</code> — Courses in semester 3\n` +
+    `<code>/search notes</code> — Search files by name\n` +
+    `<code>/stats</code> — View site statistics\n\n` +
+    `<b>📢 Admin Only:</b>\n` +
+    `<code>/broadcast &lt;message&gt;</code> — Send announcement to all users\n\n` +
     `<b>Examples:</b>\n` +
     `• <code>QUR101</code>\n` +
+    `• <code>/course-code QSM-3602</code>\n` +
+    `• <code>/courses cse 3</code>\n` +
     `• <code>/search notes</code>\n` +
     `• <code>/semester 3</code>\n` +
-    `• <code>/departments</code>\n\n` +
-    `<i>All results link to the website for download.</i>`
+    `• <code>/stats</code>\n\n` +
+    `<i>All results show links to the website. No files are shared directly.</i>`
   );
 }
 
-export function buildCourseResult(courseCode: string, info: CourseInfo): string {
-  const deptNames = info.departments.map(d => getDeptName(d)).join(', ');
-  const semLabels = info.semesters.map(s => config.semesters.find(ss => ss.id === s)?.label || s).join(', ');
-
+export function buildCourseResult(courseCode: string, info: CourseInfo, files: FoundFile[]): string {
   let msg = `<b>📚 ${esc(courseCode)}</b>\n`;
-  msg += `📂 Found in: <b>${esc(deptNames)}</b>\n`;
-  msg += `📅 Semesters: <b>${esc(semLabels)}</b>\n`;
-  msg += `📄 Files: ${info.totalFiles}\n\n`;
-  msg += `Select a category to open on website:`;
+  msg += `📄 ${info.totalFiles} file${info.totalFiles !== 1 ? 's' : ''} found\n\n`;
 
-  return msg;
+  // Group by dept > sem
+  const byDept = new Map<string, Map<string, FoundFile[]>>();
+  for (const f of files) {
+    if (!byDept.has(f.department)) byDept.set(f.department, new Map());
+    const semMap = byDept.get(f.department)!;
+    if (!semMap.has(f.semester)) semMap.set(f.semester, []);
+    semMap.get(f.semester)!.push(f);
+  }
+
+  for (const [dept, semMap] of Array.from(byDept.entries())) {
+    const deptName = getDeptFullName(dept);
+    msg += `<b>🏢 ${esc(deptName)} (${getDeptName(dept)})</b>\n`;
+    for (const [sem, sFiles] of Array.from(semMap.entries())) {
+      const semLabel = config.semesters.find(s => s.id === sem)?.label || sem;
+      const categories = Array.from(new Set(sFiles.map(f => f.category)));
+      const catList = categories.map(c => {
+        const meta = CATEGORY_META[c];
+        return `${meta?.icon || '📁'} ${meta?.label || c}`;
+      }).join(' · ');
+      const link = buildCourseLink(courseCode, dept, sem);
+      msg += `  📅 ${esc(semLabel)} — ${sFiles.length} files\n`;
+      msg += `    ${catList}\n`;
+      msg += `    <a href="${link}">Open on IIUC-ARMS →</a>\n\n`;
+    }
+  }
+
+  return msg.trim();
 }
 
 export function buildCategoryResult(courseCode: string, category: string, files: FoundFile[]): string {
@@ -347,6 +413,148 @@ export function catCallbackData(courseCode: string, category: string): string {
   return `cat:${courseCode}:${category}`;
 }
 
+export function deleteConfirmData(courseId: string): string {
+  return `del_confirm:${courseId}`;
+}
+
+export function deleteRejectData(courseId: string): string {
+  return `del_reject:${courseId}`;
+}
+
+export function broadcastCallbackData(action: 'confirm' | 'cancel'): string {
+  return `broadcast:${action}`;
+}
+
+// ─── Course listing by dept/sem ────────────────────────────────────
+
+export function buildCoursesList(tree: any[], deptId?: string, semId?: string): string {
+  // Structure: Map<dept, Map<sem, Map<code, {title, files}>>>
+  const tree2 = new Map<string, Map<string, Map<string, { title: string; files: number }>>>();
+
+  for (const item of tree) {
+    if (item.type !== 'blob') continue;
+    const p: string = item.path;
+    if (!p.startsWith(config.uploadPath + '/')) continue;
+
+    const rel = p.substring(config.uploadPath.length + 1);
+    const parts = rel.split('/');
+    if (parts.length < 4) continue;
+
+    const dept = parts[0];
+    const sem = parts[1];
+    const courseFolder = parts[3];
+
+    if (deptId && dept !== deptId) continue;
+    if (semId && sem !== semId) continue;
+
+    const codeMatch = courseFolder.match(/^([A-Z]{2,5}-?\d{3,5})\s*-\s*(.+)/i);
+    if (!codeMatch) continue;
+
+    const code = codeMatch[1].toUpperCase();
+    const title = codeMatch[2].trim();
+
+    if (!tree2.has(dept)) tree2.set(dept, new Map());
+    const semMap = tree2.get(dept)!;
+    if (!semMap.has(sem)) semMap.set(sem, new Map());
+    const courseMap = semMap.get(sem)!;
+    if (!courseMap.has(code)) {
+      courseMap.set(code, { title, files: 0 });
+    }
+    courseMap.get(code)!.files++;
+  }
+
+  if (tree2.size === 0) {
+    const filter = deptId && semId ? ` in ${getDeptName(deptId)} / ${semId}` : deptId ? ` in ${getDeptName(deptId)}` : semId ? ` in ${semId}` : '';
+    return `📚 No courses found${filter}.\n\nTry:\n• <code>/departments</code> to browse\n• <code>/semester 3</code> to see semesters`;
+  }
+
+  let msg = `<b>📚 Courses</b>\n`;
+
+  const sortedDepts = Array.from(tree2.keys()).sort();
+  for (const dept of sortedDepts) {
+    const semMap = tree2.get(dept)!;
+    msg += `\n<b>🏢 ${esc(getDeptFullName(dept))}</b>\n`;
+
+    const sortedSems = Array.from(semMap.keys()).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    for (const sem of sortedSems) {
+      const courseMap = semMap.get(sem)!;
+      const semLabel = config.semesters.find(s => s.id === sem)?.label || sem;
+      msg += `\n  📅 <b>${esc(semLabel)}</b>\n`;
+
+      const sortedCourses = Array.from(courseMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      for (const [code, info] of sortedCourses) {
+        const link = buildCourseLink(code, dept, sem);
+        msg += `    • <code>${esc(code)}</code> — ${esc(info.title)} (${info.files} files)\n`;
+        msg += `      <a href="${link}">Open →</a>\n`;
+      }
+    }
+  }
+
+  return msg.trim();
+}
+
+// ─── Stats builder ─────────────────────────────────────────────────
+
+export function buildStatsMessage(tree: any[]): string {
+  const deptCounts = new Map<string, number>();
+  const semCounts = new Map<string, number>();
+  const courseSet = new Set<string>();
+  let totalFiles = 0;
+
+  for (const item of tree) {
+    if (item.type !== 'blob') continue;
+    const p: string = item.path;
+    if (!p.startsWith(config.uploadPath + '/')) continue;
+
+    const rel = p.substring(config.uploadPath.length + 1);
+    const parts = rel.split('/');
+    if (parts.length < 4) continue;
+
+    const dept = parts[0];
+    const sem = parts[1];
+    const courseFolder = parts[3];
+
+    deptCounts.set(dept, (deptCounts.get(dept) || 0) + 1);
+    semCounts.set(sem, (semCounts.get(sem) || 0) + 1);
+    totalFiles++;
+
+    const codeMatch = courseFolder.match(/^([A-Z]{2,5}-?\d{3,5})/i);
+    if (codeMatch) courseSet.add(codeMatch[1].toUpperCase());
+  }
+
+  let msg = `<b>📊 IIUC-ARMS Statistics</b>\n\n`;
+  msg += `📄 Total files: <b>${totalFiles}</b>\n`;
+  msg += `📚 Total courses: <b>${courseSet.size}</b>\n`;
+  msg += `🏢 Departments: <b>${deptCounts.size}</b>\n\n`;
+
+  msg += `<b>By Department:</b>\n`;
+  const sortedDepts = Array.from(deptCounts.entries()).sort((a, b) => b[1] - a[1]);
+  for (const [dept, count] of sortedDepts.slice(0, 10)) {
+    msg += `  ${getDeptName(dept)}: ${count} files\n`;
+  }
+  if (sortedDepts.length > 10) msg += `  <i>...and ${sortedDepts.length - 10} more</i>\n`;
+
+  msg += `\n<b>By Semester:</b>\n`;
+  const sortedSems = Array.from(semCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  for (const [sem, count] of sortedSems) {
+    const semLabel = config.semesters.find(s => s.id === sem)?.label || sem;
+    msg += `  ${semLabel}: ${count} files\n`;
+  }
+
+  return msg.trim();
+}
+
+// ─── Broadcast message builder ─────────────────────────────────────
+
+export function buildBroadcastPreview(message: string, fromName: string): string {
+  return (
+    `📢 <b>Announcement</b>\n\n` +
+    `${message}\n\n` +
+    `— <i>${esc(fromName)}</i>\n` +
+    `<i>IIUC-ARMS</i>`
+  );
+}
+
 export function parseCallbackData(data: string): { type: string; args: string[] } | null {
   const parts = data.split(':');
   if (parts[0] === 'cat' && parts.length === 3) {
@@ -354,6 +562,15 @@ export function parseCallbackData(data: string): { type: string; args: string[] 
   }
   if (parts[0] === 'search' && parts.length >= 2) {
     return { type: 'search', args: [parts.slice(1).join(':')] };
+  }
+  if (parts[0] === 'del_confirm' && parts.length === 2) {
+    return { type: 'del_confirm', args: [parts[1]] };
+  }
+  if (parts[0] === 'del_reject' && parts.length === 2) {
+    return { type: 'del_reject', args: [parts[1]] };
+  }
+  if (parts[0] === 'broadcast' && parts.length >= 2) {
+    return { type: 'broadcast', args: [parts[1]] };
   }
   return null;
 }

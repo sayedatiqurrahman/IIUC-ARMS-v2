@@ -75,7 +75,7 @@ export default function CustomSelect({ options, value, onChange, placeholder = '
     if (open) {
       // Highlight current selection or first item
       const idx = flatOptions.findIndex(o => o.value === value);
-      setHighlighted(idx >= 0 ? 0 : 0);
+      setHighlighted(idx >= 0 ? idx : 0);
     }
   }, [open, searchable, value, flatOptions]);
 
@@ -177,7 +177,9 @@ export default function CustomSelect({ options, value, onChange, placeholder = '
               </div>
             </div>
           )}
-          <div ref={listRef} className="overflow-y-auto flex-1 min-h-0" role="listbox">
+          <div ref={listRef} className="overflow-y-auto flex-1 min-h-0 scroll-smooth" role="listbox"
+            onWheel={(e) => e.stopPropagation()}
+          >
             {hasGroups ? (
               Array.from(groups.entries()).map(([grp, opts]) => {
                 let globalIdx = -1;
@@ -199,11 +201,11 @@ export default function CustomSelect({ options, value, onChange, placeholder = '
                           disabled={opt.disabled}
                           onClick={() => { onChange(opt.value); setOpen(false); }}
                           onMouseEnter={() => !opt.disabled && setHighlighted(idx)}
-                          className={`w-full px-3 py-2 flex items-center gap-2.5 text-left cursor-pointer border-none transition-colors text-[0.78rem] disabled:opacity-40 disabled:cursor-not-allowed ${isHighlighted ? 'bg-dark-bg3' : ''} ${opt.value === value ? 'bg-qsis/10 text-qsis' : 'bg-transparent text-dark-text hover:bg-dark-bg3'}`}
+                          className={`w-full px-3 py-2 flex items-center gap-2.5 text-left cursor-pointer border-none transition-all text-[0.78rem] disabled:opacity-40 disabled:cursor-not-allowed ${isHighlighted ? 'bg-qsis/15 text-qsis font-semibold' : ''} ${opt.value === value ? 'bg-qsis/10 text-qsis' : 'bg-transparent text-dark-text hover:bg-dark-bg3'}`}
                           role="option"
                           aria-selected={opt.value === value}
                         >
-                          {opt.icon && <i className={`fas ${opt.icon} text-[0.65rem] flex-shrink-0 ${opt.value === value ? 'text-qsis' : 'text-dark-text3'}`}></i>}
+                          {opt.icon && <i className={`fas ${opt.icon} text-[0.65rem] flex-shrink-0 ${isHighlighted ? 'text-qsis' : opt.value === value ? 'text-qsis' : 'text-dark-text3'}`}></i>}
                           <span className="flex-1 truncate">{opt.label}</span>
                           {opt.value === value && <i className="fas fa-check text-qsis text-[0.6rem] flex-shrink-0"></i>}
                         </button>
@@ -224,11 +226,11 @@ export default function CustomSelect({ options, value, onChange, placeholder = '
                     disabled={opt.disabled}
                     onClick={() => { onChange(opt.value); setOpen(false); }}
                     onMouseEnter={() => !opt.disabled && setHighlighted(idx)}
-                    className={`w-full px-3 py-2 flex items-center gap-2.5 text-left cursor-pointer border-none transition-colors text-[0.78rem] disabled:opacity-40 disabled:cursor-not-allowed ${isHighlighted ? 'bg-dark-bg3' : ''} ${opt.value === value ? 'bg-qsis/10 text-qsis' : 'bg-transparent text-dark-text hover:bg-dark-bg3'}`}
+                    className={`w-full px-3 py-2 flex items-center gap-2.5 text-left cursor-pointer border-none transition-all text-[0.78rem] disabled:opacity-40 disabled:cursor-not-allowed ${isHighlighted ? 'bg-qsis/15 text-qsis font-semibold' : ''} ${opt.value === value ? 'bg-qsis/10 text-qsis' : 'bg-transparent text-dark-text hover:bg-dark-bg3'}`}
                     role="option"
                     aria-selected={opt.value === value}
                   >
-                    {opt.icon && <i className={`fas ${opt.icon} text-[0.65rem] flex-shrink-0 ${opt.value === value ? 'text-qsis' : 'text-dark-text3'}`}></i>}
+                    {opt.icon && <i className={`fas ${opt.icon} text-[0.65rem] flex-shrink-0 ${isHighlighted ? 'text-qsis' : opt.value === value ? 'text-qsis' : 'text-dark-text3'}`}></i>}
                     <span className="flex-1 truncate">{opt.label}</span>
                     {opt.value === value && <i className="fas fa-check text-qsis text-[0.6rem] flex-shrink-0"></i>}
                   </button>

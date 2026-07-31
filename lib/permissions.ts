@@ -15,6 +15,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   copyFile: ['admin'],
   renameFile: ['admin'],
   deleteFile: ['admin'],
+  editLinks: ['admin', 'manager', 'teacher', 'cr'],
 };
 
 let cachedPermissions: Record<string, string[]> | null = null;
@@ -26,7 +27,12 @@ export async function getPermissions(): Promise<Record<string, string[]>> {
   if (cachedPermissions && now - lastFetch < CACHE_TTL) return cachedPermissions;
   try {
     const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
-    cachedPermissions = (settings?.permissions as Record<string, string[]>) || DEFAULT_PERMISSIONS;
+    const saved = (settings?.permissions as Record<string, string[]>) || {};
+    const merged: Record<string, string[]> = {};
+    for (const key of Object.keys(DEFAULT_PERMISSIONS)) {
+      merged[key] = saved[key] || DEFAULT_PERMISSIONS[key];
+    }
+    cachedPermissions = merged;
   } catch {
     cachedPermissions = DEFAULT_PERMISSIONS;
   }

@@ -54,8 +54,9 @@ button { font-family: inherit; }
 
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
 
-@keyframes spin { to { transform: rotate(360deg); } }
-.fa-spin { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.fa-spin { animation: fa-spin 1s linear infinite !important; }
+@keyframes fa-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 /* Book page-turn loading animation */
 .loading-container {

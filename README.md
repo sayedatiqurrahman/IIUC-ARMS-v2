@@ -2,7 +2,7 @@
 
 **IIUC Academic Resource Management System** — A centralized platform for managing and sharing academic resources across all IIUC departments, with special focus on Qur'anic Sciences & Islamic Studies.
 
-## Live: [qsis-arms.eu.cc](https://qsis-arms.eu.cc)
+## Live: [iiuc-arms.eu.cc](https://iiuc-arms.eu.cc)
 
 ## Community
 - **WhatsApp Community:** [Join for updates](https://chat.whatsapp.com/BVsl3W6ep6D0JMyRzOIhUy)

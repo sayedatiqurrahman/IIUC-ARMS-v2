@@ -8,6 +8,7 @@ interface ReadmeEditorProps {
   folder: string;
   isOwner: boolean;
   isLoggedIn: boolean;
+  canEdit?: boolean;
   courseCode?: string;
   courseTitle?: string;
   category?: string;
@@ -31,7 +32,7 @@ function linksToContent(links: { title: string; url: string }[]): string {
   return links.map(l => `- [${l.title}](${l.url})`).join('\n') + '\n';
 }
 
-export default function ReadmeEditor({ folder, isOwner, isLoggedIn, courseCode, courseTitle, category, midFinal }: ReadmeEditorProps) {
+export default function ReadmeEditor({ folder, isOwner, isLoggedIn, canEdit, courseCode, courseTitle, category, midFinal }: ReadmeEditorProps) {
   const [content, setContent] = useState('');
   const [sha, setSha] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,11 +109,8 @@ export default function ReadmeEditor({ folder, isOwner, isLoggedIn, courseCode, 
     );
   }
 
-  // Non-logged-in users see nothing
-  if (!isLoggedIn) return null;
-
-  // Owner sees the full editor
-  if (isOwner) {
+  // Owner or admin/manager/teacher/CR: full editor with links preview
+  if (isOwner || canEdit) {
     return (
       <div className="mb-3 bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden">
         <div className="flex items-center justify-between px-3 py-2 border-b border-dark-border">
@@ -207,7 +205,7 @@ export default function ReadmeEditor({ folder, isOwner, isLoggedIn, courseCode, 
     );
   }
 
-  // Logged-in non-owner: show links if any, otherwise show course info placeholder
+  // Everyone else (logged-in non-owner AND non-logged-in): read-only links preview
   if (links.length > 0) {
     return (
       <div className="mb-3 bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden">
@@ -238,38 +236,6 @@ export default function ReadmeEditor({ folder, isOwner, isLoggedIn, courseCode, 
     );
   }
 
-  // No links and not owner — show info placeholder
-  return (
-    <div className="mb-3 bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden">
-      <div className="px-3 py-2 border-b border-dark-border">
-        <span className="text-[0.75rem] font-semibold text-dark-text2 flex items-center gap-1.5">
-          <i className="fas fa-info-circle text-dark-text3"></i> Course Info
-        </span>
-      </div>
-      <div className="p-3">
-        <div className="flex flex-wrap gap-2 text-[0.72rem]">
-          {courseCode && (
-            <span className="px-2 py-1 rounded-lg bg-qsis/10 text-qsis font-mono font-bold">
-              {courseCode}
-            </span>
-          )}
-          {courseTitle && (
-            <span className="px-2 py-1 rounded-lg bg-dark-bg3 text-dark-text2">
-              {courseTitle}
-            </span>
-          )}
-          {category && (
-            <span className="px-2 py-1 rounded-lg bg-dark-bg3 text-dark-text3">
-              <i className="fas fa-folder mr-1"></i>{category}
-            </span>
-          )}
-          {midFinal && (
-            <span className={`px-2 py-1 rounded-lg font-semibold ${midFinal === 'Mid' ? 'bg-yellow-400/10 text-yellow-400' : 'bg-green-400/10 text-green-400'}`}>
-              {midFinal}
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  // No links — show course info placeholder for everyone
+  return null;
 }

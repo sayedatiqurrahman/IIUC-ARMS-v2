@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { prisma } from '@/lib/prisma';
 
 // GET: list students in CR's department+semester
 export async function GET(req: NextRequest) {
   try {
+    const { prisma } = await import('@/lib/prisma');
     const session = await getServerSession(authOptions);
     const email = session?.user?.email;
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
 // POST: assign ACR or transfer CR role
 export async function POST(req: NextRequest) {
   try {
+    const { prisma } = await import('@/lib/prisma');
     const session = await getServerSession(authOptions);
     const email = session?.user?.email;
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

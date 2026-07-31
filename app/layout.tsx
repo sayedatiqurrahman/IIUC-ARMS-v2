@@ -6,7 +6,7 @@ import Providers from '@/components/Providers';
 import AppShell from '@/components/AppShell';
 import './globals.css';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://qsis-arms.eu.cc';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -82,6 +82,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <head>
         <link rel="icon" href="/arms-logo-icon.png" sizes="any" />
+        <link rel="apple-touch-icon" href="/arms-logo-icon.png" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="IIUC-ARMS" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
       </head>
       <body className="min-h-screen">

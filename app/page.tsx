@@ -27,6 +27,7 @@ export default function BrowsePage() {
   const isOwner = email ? config.ownerEmails.includes(email.toLowerCase()) : false;
 
   const [filePerms, setFilePerms] = useState<Record<string, boolean>>({});
+  const [coursePerms, setCoursePerms] = useState({ canAdd: false, canEdit: false, canDelete: false, canEditLinks: false });
   const [moveTarget, setMoveTarget] = useState<{ path: string; name: string; mode: 'move' | 'copy' } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ path: string; name: string } | null>(null);
@@ -111,6 +112,12 @@ export default function BrowsePage() {
           copy: isOwner || check('copyFile'),
           rename: isOwner || check('renameFile'),
           delete: isOwner || check('deleteFile'),
+        });
+        setCoursePerms({
+          canAdd: check('addCourse'),
+          canEdit: check('editCourse'),
+          canDelete: check('deleteCourse'),
+          canEditLinks: check('editLinks'),
         });
       } catch {}
     };
@@ -759,7 +766,7 @@ export default function BrowsePage() {
               <i className="fas fa-book-open text-4xl mb-4 block text-qsis opacity-40"></i>
               <p className="text-dark-text font-semibold text-sm mb-1">No courses added yet for this semester.</p>
               <p className="text-dark-text3 text-xs mb-4">Be the first to add a course code and title.</p>
-              {session && (
+              {session && coursePerms.canAdd && (
                 <button onClick={() => {
                   setAddCourseCode('');
                   setAddCourseTitle('');
@@ -808,7 +815,7 @@ export default function BrowsePage() {
           </div>
 
           {/* Add Course Button — logged in only */}
-          {session && (
+          {session && coursePerms.canAdd && (
             <div className="mt-4 text-center">
               <button
                 onClick={() => {
@@ -838,14 +845,6 @@ export default function BrowsePage() {
               <i className="fas fa-arrow-left"></i> Back
             </button>
           </div>
-
-          {currentDept && currentSem && currentCourseCode && (
-            <ReadmeEditor
-              folder={`${currentDept}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}${currentMidFinal ? '/' + currentMidFinal : ''}`}
-              isOwner={isOwner}
-              isLoggedIn={!!session}
-            />
-          )}
 
           {filteredCategories.length === 0 && (
             <div className="text-center py-8 text-dark-text2">
@@ -903,13 +902,6 @@ export default function BrowsePage() {
               <i className="fas fa-arrow-left"></i> Back
             </button>
           </div>
-          {currentDept && currentSem && currentCourseCode && (
-            <ReadmeEditor
-              folder={`${currentDept}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}${currentMidFinal ? '/' + currentMidFinal : ''}/${config.categories[currentCat]?.folder || currentCat}`}
-              isOwner={isOwner}
-              isLoggedIn={!!session}
-            />
-          )}
           {filteredFiles.length === 0 && (
             <div className="text-center py-8 text-dark-text2">
               <i className="fas fa-search text-3xl mb-3 block opacity-40"></i>
@@ -1012,6 +1004,21 @@ export default function BrowsePage() {
             </a>
           </div>
           <p className="text-[0.72rem] text-dark-text2 mt-3"><i className="fas fa-code-branch mr-1"></i>Fork either repo to contribute — check out the README for guidelines!</p>
+        </div>
+      )}
+
+      {/* Shared Links — at the very bottom of page, like GitHub README */}
+      {!loading && !error && currentDept && currentSem && currentCourseCode && (view === 'categories' || view === 'files') && (
+        <div className="mt-6">
+          <ReadmeEditor
+            folder={view === 'files' && currentMidFinal && currentCat
+              ? `${currentDept}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}/${currentMidFinal}/${config.categories[currentCat]?.folder || currentCat}`
+              : `${currentDept}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}${currentMidFinal ? '/' + currentMidFinal : ''}`
+            }
+            isOwner={isOwner}
+            isLoggedIn={!!session}
+            canEdit={coursePerms.canEditLinks}
+          />
         </div>
       )}
       </>

@@ -346,7 +346,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   deleteCourse: async (id) => {
     try {
-      const res = await fetch(`/api/courses?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/courses`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
       const data = await res.json();
       if (data.success) {
         set(s => ({ dbCourses: s.dbCourses.filter(c => c.id !== id) }));

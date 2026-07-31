@@ -12,7 +12,7 @@ const GITHUB_API = 'https://api.github.com';
 const OWNER_CHAT_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID || '0');
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TG_API = `https://api.telegram.org/bot${TG_TOKEN}`;
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://qsis-arms.eu.cc';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
 
 function ghHeaders(token: string) {
   return {

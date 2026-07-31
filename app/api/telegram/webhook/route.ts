@@ -15,12 +15,101 @@ import {
   buildSemesterList,
   buildSearchResults,
   buildCourseLink,
+  buildBrowseLink,
+  buildCoursesList,
+  buildStatsMessage,
+  broadcastCallbackData,
   catCallbackData,
   parseCallbackData,
   CATEGORY_META,
+  esc,
 } from '@/lib/telegram';
+import { config } from '@/lib/config';
+import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
 
-const COURSE_REGEX = /^[A-Z]{2,5}\d{2,4}[A-Z]?$/i;
+const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
+const GITHUB_API = 'https://api.github.com';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+
+async function getAppBotToken(): Promise<string | null> {
+  try {
+    const installations = await getAppInstallations();
+    if (!Array.isArray(installations) || installations.length === 0) return null;
+    return await getInstallationAccessToken(installations[0].id);
+  } catch { return null; }
+}
+
+function ghHeaders(token: string) {
+  return {
+    Authorization: `token ${token}`,
+    Accept: 'application/vnd.github.v3+json',
+    'Content-Type': 'application/json',
+  };
+}
+
+async function getAllFilesInFolder(token: string, folderPath: string): Promise<{ path: string; sha: string }[]> {
+  const url = `${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${folderPath}`;
+  const res = await fetch(url, { headers: ghHeaders(token) });
+  if (!res.ok) return [];
+  const items = await res.json();
+  if (!Array.isArray(items)) return [];
+  const files: { path: string; sha: string }[] = [];
+  for (const item of items) {
+    if (item.type === 'file') files.push({ path: item.path, sha: item.sha });
+    else if (item.type === 'dir') {
+      const sub = await getAllFilesInFolder(token, item.path);
+      files.push(...sub);
+    }
+  }
+  return files;
+}
+
+async function batchDeleteFiles(token: string, files: { path: string; sha: string }[]): Promise<number> {
+  if (files.length === 0) return 0;
+  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
+  if (!refRes.ok) return 0;
+  const refData = await refRes.json();
+  const baseCommitSha = refData.object.sha;
+
+  const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
+  if (!commitRes.ok) return 0;
+  const commitData = await commitRes.json();
+  const baseTreeSha = commitData.tree.sha;
+
+  const fullTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
+  if (!fullTreeRes.ok) return 0;
+  const fullTreeData = await fullTreeRes.json();
+
+  const deletePaths = new Set(files.map(f => f.path));
+  const keepItems = (fullTreeData.tree || []).filter((item: any) => !deletePaths.has(item.path));
+  if (keepItems.length === 0) return 0;
+
+  const treeItems = keepItems.map((item: any) => ({
+    path: item.path, mode: item.mode, type: item.type,
+    sha: item.type === 'blob' ? item.sha : undefined,
+  }));
+
+  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
+    method: 'POST', headers: ghHeaders(token),
+    body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems }),
+  });
+  if (!treeRes.ok) return 0;
+  const treeData = await treeRes.json();
+
+  const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
+    method: 'POST', headers: ghHeaders(token),
+    body: JSON.stringify({ message: `Delete course: ${files.length} files`, tree: treeData.sha, parents: [baseCommitSha] }),
+  });
+  if (!newCommitRes.ok) return 0;
+  const newCommitData = await newCommitRes.json();
+
+  await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
+    method: 'PATCH', headers: ghHeaders(token),
+    body: JSON.stringify({ sha: newCommitData.sha, force: true }),
+  });
+
+  return files.length;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,116 +135,254 @@ export async function POST(req: NextRequest) {
 async function handleMessage(msg: any) {
   const chatId = msg.chat.id;
   const text = (msg.text || '').trim();
-  const chatType = msg.chat.type; // 'private', 'group', 'supergroup', 'channel'
+  const chatType = msg.chat.type;
   const isGroup = chatType === 'group' || chatType === 'supergroup';
 
   // In groups, only respond to commands and mentions
   if (isGroup) {
-    const botUsername = msg.entities?.some((e: any) => e.type === 'mention' && e.offset === 0);
     const isCommand = msg.entities?.some((e: any) => e.type === 'bot_command' && e.offset === 0);
-
-    // In groups: respond to /start, /help, /search, /departments, /semester, course codes, or mentions
-    if (!isCommand && !botUsername && !COURSE_REGEX.test(text)) {
-      return; // Ignore random messages in groups
-    }
+    const isMention = msg.entities?.some((e: any) => e.type === 'mention' && e.offset === 0);
+    if (!isCommand && !isMention && !COURSE_REGEX.test(text)) return;
   }
 
-  if (text === '/start') {
-    await sendMessage(chatId, buildWelcomeMessage());
-    return;
-  }
+  // Strip bot mention
+  const cleanText = text.replace(/@\S+/g, '').trim();
 
-  if (text === '/help') {
-    await sendMessage(chatId, buildHelpMessage());
-    return;
-  }
-
-  if (text === '/departments' || text.startsWith('/departments@')) {
-    await sendMessage(chatId, buildDeptList());
-    return;
-  }
-
-  if (text.startsWith('/semester')) {
-    const parts = text.split(/\s+/);
-    const semNum = parts[1] || '';
-    if (!semNum || !/^[1-8]$/.test(semNum)) {
-      await sendMessage(chatId, `Usage: <code>/semester 3</code>\nSemester number must be 1-8.`);
+  try {
+    // ─── /start ───
+    if (cleanText === '/start') {
+      await sendMessage(chatId, buildWelcomeMessage());
       return;
     }
-    await sendMessage(chatId, buildSemesterList(semNum));
-    return;
-  }
 
-  if (text.startsWith('/search')) {
-    const parts = text.replace(/@\S+/, '').split(/\s+/).slice(1);
-    const query = parts.join(' ').trim();
-    if (!query) {
-      await sendMessage(chatId, `Usage: <code>/search notes</code> or <code>/search CSE</code>`);
+    // ─── /help ───
+    if (cleanText === '/help') {
+      await sendMessage(chatId, buildHelpMessage());
       return;
     }
-    const tree = await getGithubTree();
-    await sendMessage(chatId, buildSearchResults(query, tree));
-    return;
-  }
 
-  // Strip bot mention from text in groups
-  const cleanText = text.replace(/@\S+/, '').trim();
+    // ─── /departments ───
+    if (cleanText === '/departments') {
+      await sendMessage(chatId, buildDeptList(), {
+        reply_markup: { inline_keyboard: [[{ text: '🌐 Open IIUC-ARMS', url: SITE_URL }]] },
+      });
+      return;
+    }
 
-  if (COURSE_REGEX.test(cleanText)) {
-    const courseCode = cleanText.toUpperCase();
-    const tree = await getGithubTree();
-    const files = findCourseFiles(tree, courseCode);
-    const info = getCourseInfo(files);
+    // ─── /semester N ───
+    if (cleanText.startsWith('/semester')) {
+      const semNum = cleanText.replace('/semester', '').trim();
+      if (!semNum || !/^[1-8]$/.test(semNum)) {
+        await sendMessage(chatId, `Usage: <code>/semester 3</code>\nSemester number must be 1-8.`);
+        return;
+      }
+      const num = parseInt(semNum);
+      const semId = `${num}${num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th'}-semister`;
+      const tree = await getGithubTree();
+      if (!tree.length) {
+        await sendMessage(chatId, `⚠️ Could not load course data. Try again later.`);
+        return;
+      }
+      await sendMessage(chatId, buildCoursesList(tree, undefined, semId), {
+        reply_markup: { inline_keyboard: [[{ text: '🌐 Open IIUC-ARMS', url: SITE_URL }]] },
+      });
+      return;
+    }
 
-    if (!info) {
+    // ─── /course-code CODE or /code CODE ───
+    if (cleanText.startsWith('/course-code') || cleanText.startsWith('/code')) {
+      const code = cleanText.replace(/^(\/course-code|\/code)\s*/i, '').trim().toUpperCase();
+      if (!code || !/^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i.test(code)) {
+        await sendMessage(chatId,
+          `Usage: <code>/course-code QSM-3602</code>\n\n` +
+          `Course code format: 2-5 letters + 3-5 digits\n` +
+          `Examples: QUR101, QSM-3602, CSE101`
+        );
+        return;
+      }
+      const tree = await getGithubTree();
+      if (!tree.length) {
+        await sendMessage(chatId, `⚠️ Could not load course data. Try again later.`);
+        return;
+      }
+      const files = findCourseFiles(tree, code);
+      const info = getCourseInfo(files);
+
+      if (!info) {
+        await sendMessage(chatId,
+          `❌ No files found for <b>${esc(code)}</b>.\n\n` +
+          `💡 Try:\n` +
+          `• Check the course code spelling\n` +
+          `• <code>/departments</code> to browse\n` +
+          `• <code>/search ${code}</code> to search`
+        );
+        return;
+      }
+
+      const buttons = info.categories.map(cat => {
+        const meta = CATEGORY_META[cat];
+        return {
+          text: `${meta?.icon || '📁'} ${meta?.label || cat}`,
+          callback_data: catCallbackData(code, cat),
+        };
+      });
+
+      const summary = buildCourseResult(code, info, files);
+      const websiteLink = buildCourseLink(code);
+      await sendMessage(chatId, summary, {
+        reply_markup: {
+          inline_keyboard: [
+            buttons,
+            [{ text: '🌐 View on Website', url: websiteLink }],
+          ],
+        },
+      });
+      return;
+    }
+
+    // ─── /courses [dept] [sem] ───
+    if (cleanText.startsWith('/courses')) {
+      const args = cleanText.replace('/courses', '').trim().split(/\s+/);
+      const deptId = args[0] || '';
+      const semNum = args[1] || '';
+
+      let semId = '';
+      if (semNum && /^[1-8]$/.test(semNum)) {
+        const num = parseInt(semNum);
+        semId = `${num}${num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th'}-semister`;
+      }
+
+      const tree = await getGithubTree();
+      if (!tree.length) {
+        await sendMessage(chatId, `⚠️ Could not load course data. Try again later.`);
+        return;
+      }
+      await sendMessage(chatId, buildCoursesList(tree, deptId || undefined, semId || undefined));
+      return;
+    }
+
+    // ─── /search query ───
+    if (cleanText.startsWith('/search')) {
+      const query = cleanText.replace('/search', '').trim();
+      if (!query) {
+        await sendMessage(chatId,
+          `Usage: <code>/search notes</code>\n\n` +
+          `Search for files, courses, or folders by name.`
+        );
+        return;
+      }
+      const tree = await getGithubTree();
+      if (!tree.length) {
+        await sendMessage(chatId, `⚠️ Could not load course data. Try again later.`);
+        return;
+      }
+      await sendMessage(chatId, buildSearchResults(query, tree));
+      return;
+    }
+
+    // ─── /stats ───
+    if (cleanText === '/stats') {
+      const tree = await getGithubTree();
+      if (!tree.length) {
+        await sendMessage(chatId, `⚠️ Could not load course data. Try again later.`);
+        return;
+      }
+      await sendMessage(chatId, buildStatsMessage(tree));
+      return;
+    }
+
+    // ─── /broadcast (owner only) ───
+    if (cleanText.startsWith('/broadcast')) {
+      const broadcastMsg = cleanText.replace('/broadcast', '').trim();
+      if (!broadcastMsg) {
+        await sendMessage(chatId, `Usage: <code>/broadcast Your announcement message</code>\n\nOnly the owner can use this command.`);
+        return;
+      }
       await sendMessage(chatId,
-        `❌ No files found for <b>${courseCode}</b>.\n\n` +
-        `💡 Try:\n` +
-        `• Check the course code spelling\n` +
-        `• <code>/departments</code> to browse\n` +
-        `• <code>/search ${courseCode}</code> to search`
+        `📢 <b>Broadcast Preview</b>\n\n` +
+        `${broadcastMsg}\n\n` +
+        `Use the admin panel to send this to all users.`,
       );
       return;
     }
 
-    // Build category buttons
-    const buttons = info.categories.map(cat => {
-      const meta = CATEGORY_META[cat];
-      return {
-        text: `${meta?.icon || '📁'} ${meta?.label || cat}`,
-        callback_data: catCallbackData(courseCode, cat),
-      };
-    });
+    // ─── Plain course code (e.g. QSM-3602, QUR101) ───
+    if (COURSE_REGEX.test(cleanText)) {
+      const courseCode = cleanText.toUpperCase().replace('-', '').length > cleanText.length - 2
+        ? cleanText.toUpperCase()
+        : cleanText.toUpperCase();
 
-    const summary = buildCourseResult(courseCode, info);
+      const tree = await getGithubTree();
+      if (!tree.length) {
+        await sendMessage(chatId, `⚠️ Could not load course data. Try again later.`);
+        return;
+      }
+      const files = findCourseFiles(tree, courseCode);
+      const info = getCourseInfo(files);
 
-    await sendMessage(chatId, summary, {
-      reply_markup: { inline_keyboard: [buttons] },
-    });
-    return;
-  }
+      if (!info) {
+        await sendMessage(chatId,
+          `❌ No files found for <b>${esc(courseCode)}</b>.\n\n` +
+          `💡 Try:\n` +
+          `• Check the course code spelling\n` +
+          `• <code>/departments</code> to browse\n` +
+          `• <code>/search ${courseCode}</code> to search`
+        );
+        return;
+      }
 
-  // Unknown command
-  if (text.startsWith('/')) {
+      const buttons = info.categories.map(cat => {
+        const meta = CATEGORY_META[cat];
+        return {
+          text: `${meta?.icon || '📁'} ${meta?.label || cat}`,
+          callback_data: catCallbackData(courseCode, cat),
+        };
+      });
+
+      const summary = buildCourseResult(courseCode, info, files);
+      const websiteLink = buildCourseLink(courseCode);
+      await sendMessage(chatId, summary, {
+        reply_markup: {
+          inline_keyboard: [
+            buttons,
+            [{ text: '🌐 View on Website', url: websiteLink }],
+          ],
+        },
+      });
+      return;
+    }
+
+    // ─── Unknown command ───
+    if (cleanText.startsWith('/')) {
+      await sendMessage(chatId,
+        `🤔 Unknown command.\n\n` +
+        `Try:\n` +
+        `• <code>QUR101</code> — search a course\n` +
+        `• <code>/course-code QSM-3602</code> — search by code\n` +
+        `• <code>/search notes</code> — search files\n` +
+        `• <code>/departments</code> — list departments\n` +
+        `• <code>/help</code> — all commands`
+      );
+      return;
+    }
+
+    // ─── Plain text in private chat ───
+    if (!isGroup) {
+      await sendMessage(chatId,
+        `🤔 Send a course code like <code>QSM-3602</code> to search.\n\n` +
+        `Or try:\n` +
+        `• <code>/course-code QSM-3602</code>\n` +
+        `• <code>/search notes</code>\n` +
+        `• <code>/departments</code>\n` +
+        `• <code>/help</code>`
+      );
+    }
+  } catch (err: any) {
+    console.error(`Telegram command error [${cleanText}]:`, err);
     await sendMessage(chatId,
-      `🤔 Unknown command.\n\n` +
-      `Try:\n` +
-      `• <code>QUR101</code> — search a course\n` +
-      `• <code>/search notes</code> — search files\n` +
-      `• <code>/departments</code> — list departments\n` +
-      `• <code>/help</code> — all commands`
-    );
-    return;
-  }
-
-  // Plain text in private chat
-  if (!isGroup) {
-    await sendMessage(chatId,
-      `🤔 Send a course code like <code>QUR101</code> to search.\n\n` +
-      `Or try:\n` +
-      `• <code>/search notes</code>\n` +
-      `• <code>/departments</code>\n` +
-      `• <code>/help</code>`
+      `⚠️ Something went wrong processing your request.\n` +
+      `Error: ${esc(err?.message || 'Unknown error')}\n\n` +
+      `Try again or use <code>/help</code> for commands.`
     );
   }
 }
@@ -172,34 +399,127 @@ async function handleCallbackQuery(cq: any) {
   const parsed = parseCallbackData(data);
   if (!parsed) return;
 
-  if (parsed.type === 'cat') {
-    const [courseCode, category] = parsed.args;
-    if (!courseCode || !category) return;
+  try {
+    // ─── Category buttons ───
+    if (parsed.type === 'cat') {
+      const [courseCode, category] = parsed.args;
+      if (!courseCode || !category) return;
 
-    const tree = await getGithubTree();
-    const files = findCourseFiles(tree, courseCode);
-    const text = buildCategoryResult(courseCode, category, files);
+      const tree = await getGithubTree();
+      const files = findCourseFiles(tree, courseCode);
+      const text = buildCategoryResult(courseCode, category, files);
 
-    // Rebuild buttons with current category highlighted
-    const info = getCourseInfo(files);
-    const buttons = (info?.categories || []).map(cat => {
-      const meta = CATEGORY_META[cat];
-      return {
-        text: `${cat === category ? '✅ ' : ''}${meta?.icon || '📁'} ${meta?.label || cat}`,
-        callback_data: catCallbackData(courseCode, cat),
-      };
-    });
+      const info = getCourseInfo(files);
+      const buttons = (info?.categories || []).map(cat => {
+        const meta = CATEGORY_META[cat];
+        return {
+          text: `${cat === category ? '✅ ' : ''}${meta?.icon || '📁'} ${meta?.label || cat}`,
+          callback_data: catCallbackData(courseCode, cat),
+        };
+      });
 
-    // Add "Open on Website" button
-    const websiteLink = buildCourseLink(courseCode);
+      const websiteLink = buildCourseLink(courseCode);
 
-    await editMessageText(chatId, messageId, text, {
-      reply_markup: {
-        inline_keyboard: [
-          buttons,
-          [{ text: '🌐 Open on IIUC-ARMS', url: websiteLink }],
-        ],
-      },
-    });
+      await editMessageText(chatId, messageId, text, {
+        reply_markup: {
+          inline_keyboard: [
+            buttons,
+            [{ text: '🌐 Open on IIUC-ARMS', url: websiteLink }],
+          ],
+        },
+      });
+    }
+
+    // ─── Delete confirm ───
+    if (parsed.type === 'del_confirm') {
+      const courseKey = parsed.args[0];
+      if (!courseKey) return;
+
+      const [dept, sem, code] = courseKey.split('/');
+      if (!dept || !sem || !code) return;
+
+      const { prisma } = await import('@/lib/prisma');
+      const course = await prisma.course.findFirst({ where: { code: code.toUpperCase(), semester: sem, department: dept } });
+      if (!course) {
+        await editMessageText(chatId, messageId, `⚠️ Course not found. It may have already been deleted.`);
+        return;
+      }
+
+      let githubDeleted = 0;
+      try {
+        const botToken = await getAppBotToken();
+        if (botToken) {
+          const cleanTitle = course.title.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+          const folderPath = `${config.uploadPath}/${course.department}/${course.semester}/${course.code} - ${cleanTitle}`;
+          const allFiles = await getAllFilesInFolder(botToken, folderPath);
+          githubDeleted = await batchDeleteFiles(botToken, allFiles);
+        }
+      } catch {}
+
+      await prisma.course.delete({ where: { id: course.id } });
+
+      const semLabel = config.semesters.find(s => s.id === course.semester)?.label || course.semester;
+      const pageLink = buildBrowseLink({ dept: course.department, sem: course.semester });
+      await editMessageText(chatId, messageId, [
+        `✅ <b>Course Deleted</b>`, ``,
+        `<b>Code:</b> <code>${course.code}</code>`,
+        `<b>Title:</b> ${course.title}`,
+        `<b>GitHub files removed:</b> ${githubDeleted}`, ``,
+        `<i>Approved by owner</i>`,
+      ].join('\n'), {
+        reply_markup: { inline_keyboard: [[{ text: `📂 View in ${semLabel}`, url: pageLink }]] },
+      });
+    }
+
+    // ─── Delete reject ───
+    if (parsed.type === 'del_reject') {
+      const courseKey = parsed.args[0];
+      if (!courseKey) return;
+
+      const [dept, sem, code] = courseKey.split('/');
+      const semLabel = sem ? (config.semesters.find(s => s.id === sem)?.label || sem) : '';
+      const pageLink = dept && sem ? buildBrowseLink({ dept, sem }) : '';
+
+      await editMessageText(chatId, messageId, [
+        `❌ <b>Delete Rejected</b>`, ``,
+        code ? `<b>Code:</b> <code>${code}</code>` : '', ``,
+        `<i>Rejected by owner</i>`,
+      ].join('\n'), {
+        reply_markup: { inline_keyboard: pageLink ? [[{ text: `📂 View in ${semLabel}`, url: pageLink }]] : [] },
+      });
+    }
+
+    // ─── Broadcast confirm/cancel ───
+    if (parsed.type === 'broadcast') {
+      const action = parsed.args[0];
+      if (action === 'cancel') {
+        await editMessageText(chatId, messageId, `❌ Broadcast cancelled.`);
+        return;
+      }
+      if (action === 'confirm') {
+        const isOwner = config.ownerEmails.includes(String(chatId));
+        if (!isOwner) {
+          await editMessageText(chatId, messageId, `❌ Only the owner can broadcast.`);
+          return;
+        }
+        const rawCallback = data.replace('broadcast:confirm:', '');
+        let broadcastMsg = '';
+        try {
+          broadcastMsg = Buffer.from(rawCallback, 'base64').toString('utf-8');
+        } catch {
+          await editMessageText(chatId, messageId, `❌ Could not decode broadcast message.`);
+          return;
+        }
+        if (!broadcastMsg) {
+          await editMessageText(chatId, messageId, `❌ Empty broadcast message.`);
+          return;
+        }
+        await editMessageText(chatId, messageId, `⏳ Broadcasting...`);
+        await sendMessage(chatId, `📢 Broadcast ready. Use the admin panel to send.`);
+      }
+    }
+  } catch (err: any) {
+    console.error('Callback query error:', err);
+    await sendMessage(chatId, `⚠️ Error processing action: ${err?.message || 'Unknown'}`);
   }
 }
