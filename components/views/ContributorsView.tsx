@@ -59,23 +59,22 @@ export default function ContributorsView() {
   }, []);
 
   const founder = useMemo(() => contributors.find((c: any) => c.role === 'Founder & Lead'), [contributors]);
-  const nonFounder = useMemo(() => contributors.filter((c: any) => c.role !== 'Founder & Lead'), [contributors]);
 
-  // Simple repo-based categories
+  // Simple repo-based categories — ALL contributors including founder
   // Developers = anyone who contributed to QSIS-ARMS-v2 (code repo)
   const developers = useMemo(() =>
-    nonFounder.filter((c: any) => c.v2Contributions > 0),
-    [nonFounder]
+    contributors.filter((c: any) => c.v2Contributions > 0),
+    [contributors]
   );
   // Resources = anyone who contributed to QSIS-ACADEMIC-FILES-MANAFGER (data repo)
   const resources = useMemo(() =>
-    nonFounder.filter((c: any) => c.dataContributions > 0),
-    [nonFounder]
+    contributors.filter((c: any) => c.dataContributions > 0),
+    [contributors]
   );
   // Both = people in both lists
   const bothRepos = useMemo(() =>
-    nonFounder.filter((c: any) => c.v2Contributions > 0 && c.dataContributions > 0),
-    [nonFounder]
+    contributors.filter((c: any) => c.v2Contributions > 0 && c.dataContributions > 0),
+    [contributors]
   );
 
   // Departments
@@ -432,30 +431,37 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
     3: 'bg-orange-600 text-white',
   };
 
+  const isFounder = c.role === 'Founder & Lead';
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
   const isBoth = isDev && isResource;
 
   return (
     <div className={`flex items-center gap-4 p-4 rounded-xl border transition-all hover:border-qsis/40 hover:shadow-[0_2px_12px_rgba(34,197,94,0.1)] ${
+      isFounder ? 'bg-gradient-to-br from-qsis/10 to-accent/10 border-qsis/30' :
       rank <= 3 ? 'bg-dark-bg2 border-qsis/20' : 'bg-dark-bg2 border-dark-border'
     }`}>
       {settings.showRanks && (
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-[0.85rem] ${rankColors[rank] || 'bg-dark-bg3 text-dark-text2'}`}>
-          #{rank}
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-[0.85rem] ${
+          isFounder ? 'bg-qsis text-white' : rankColors[rank] || 'bg-dark-bg3 text-dark-text2'
+        }`}>
+          {isFounder ? <i className="fas fa-crown text-[0.7rem]"></i> : `#${rank}`}
         </div>
       )}
-      <Image src={c.avatar_url} alt={c.login} width={48} height={48} className="w-12 h-12 rounded-full border-2 border-dark-border object-cover flex-shrink-0" />
+      <Image src={c.avatar_url} alt={c.login} width={48} height={48} className={`w-12 h-12 rounded-full object-cover flex-shrink-0 ${isFounder ? 'border-2 border-qsis' : 'border-2 border-dark-border'}`} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[0.9rem] font-bold text-dark-text truncate">{c.name || c.login}</span>
+          {isFounder && (
+            <span className="px-1.5 py-0.5 rounded-md bg-qsis/20 text-qsis text-[0.58rem] font-bold"><i className="fas fa-crown mr-0.5"></i>Founder</span>
+          )}
           {isBoth && (
             <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 text-[0.58rem] font-bold">Both</span>
           )}
-          {isDev && !isBoth && (
+          {isDev && !isBoth && !isFounder && (
             <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.58rem] font-bold">Developer</span>
           )}
-          {isResource && !isBoth && (
+          {isResource && !isBoth && !isFounder && (
             <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.58rem] font-bold">Resource</span>
           )}
           {c.profileComplete && (
