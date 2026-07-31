@@ -224,7 +224,7 @@ export async function GET() {
       }
     }
 
-    // Process PRs — also track PR authors who aren't in contributors list
+    // Process PRs — track PR authors and count PRs as contributions
     for (const pr of [...v2Prs, ...dataPrs]) {
       const u = pr.user;
       if (!u?.login || isBot(u.login, u.type)) continue;
@@ -232,12 +232,16 @@ export async function GET() {
       const isData = dataPrs.includes(pr);
       const c = ensure(u.login, u.avatar_url, u.html_url, String(u.id));
       c.prCount += 1;
+      // Count each merged PR as a contribution to that repo
+      if (isV2) c.v2Contributions += 1;
+      if (isData) c.dataContributions += 1;
+      c.contributions += 1;
       // Update role based on PR repos
       if (c.role !== 'Founder & Lead') {
         if (isV2 && isData) {
           c.role = 'Developer & Resource Provider';
           c.roleType = 'both';
-        } else if (isData && c.v2Contributions > 0) {
+        } else if (isData && c.v2Contributions > 1) {
           c.role = 'Developer & Resource Provider';
           c.roleType = 'both';
         } else if (isData) {
@@ -306,11 +310,13 @@ export async function GET() {
         // 2. Both repos contributors next
         if (a.roleType === 'both' && b.roleType !== 'both') return -1;
         if (a.roleType !== 'both' && b.roleType === 'both') return 1;
-        // 3. Then by selected sort
+        // 3. Then by total contributions (commits + PRs)
+        const aTotal = a.v2Contributions + a.dataContributions + a.prCount;
+        const bTotal = b.v2Contributions + b.dataContributions + b.prCount;
         if (settings.sortBy === 'name') return a.name.localeCompare(b.name);
         if (settings.sortBy === 'commits') return (b.v2Contributions + b.dataContributions) - (a.v2Contributions + a.dataContributions);
         if (settings.sortBy === 'prs') return b.prCount - a.prCount;
-        return b.contributions - a.contributions;
+        return bTotal - aTotal;
       });
 
     // Enrich with department labels

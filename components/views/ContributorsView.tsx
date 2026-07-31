@@ -104,14 +104,22 @@ export default function ContributorsView() {
 
   const effectiveView = settings.allowUserToggle ? userView : settings.viewMode;
 
-  // Tab-filtered lists — simple: developers = ARMS-v2, resources = FILES-MANAGER, all = merged
+  // Tab-filtered lists — developers = ARMS-v2, resources = FILES-MANAGER, all = developers first then resources
   const tabList = useMemo(() => {
     if (activeTab === 'developers') return applyFilters(developers);
     if (activeTab === 'resources') return applyFilters(resources);
-    // 'all' = developers first, then resources (skip duplicates)
+    // 'all' = developers first, then resources (no duplicates), sorted by total contribution
     const devLogins = new Set(developers.map((c: any) => c.login));
     const merged = [...developers, ...resources.filter((c: any) => !devLogins.has(c.login))];
-    return applyFilters(merged);
+    return applyFilters(merged).sort((a: any, b: any) => {
+      // Both-repo contributors first
+      const aBoth = a.v2Contributions > 0 && a.dataContributions > 0;
+      const bBoth = b.v2Contributions > 0 && b.dataContributions > 0;
+      if (aBoth && !bBoth) return -1;
+      if (!aBoth && bBoth) return 1;
+      // Then by total contributions
+      return (b.v2Contributions + b.dataContributions + b.prCount) - (a.v2Contributions + a.dataContributions + a.prCount);
+    });
   }, [activeTab, developers, resources, deptFilter, searchQuery]);
 
   return (
