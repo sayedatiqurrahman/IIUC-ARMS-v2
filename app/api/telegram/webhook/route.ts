@@ -7,6 +7,7 @@ import {
   deleteMessage,
   getGithubTree,
   findCourseFiles,
+  findCourseLocations,
   getCourseInfo,
   buildWelcomeMessage,
   buildHelpMessage,
@@ -222,13 +223,29 @@ async function handleMessage(msg: any) {
       const info = getCourseInfo(files);
 
       if (!info) {
-        await sendMessage(chatId,
-          `❌ No files found for <b>${esc(code)}</b>.\n\n` +
-          `💡 Try:\n` +
-          `• Check the course code spelling\n` +
-          `• <code>/departments</code> to browse\n` +
-          `• <code>/search ${code}</code> to search`
-        );
+        // Fallback: detect course from folder names even with no real files
+        const locations = findCourseLocations(tree, code);
+        if (locations.length === 0) {
+          await sendMessage(chatId,
+            `❌ No course found for <b>${esc(code)}</b>.\n\n` +
+            `💡 Try:\n` +
+            `• Check the course code spelling\n` +
+            `• <code>/departments</code> to browse\n` +
+            `• <code>/search ${code}</code> to search`
+          );
+          return;
+        }
+        let msg = `<b>📚 ${esc(code)}</b>\n`;
+        msg += `📂 Course exists but no files uploaded yet.\n\n`;
+        const buttons: any[][] = [];
+        for (const loc of locations) {
+          const semLabel = config.semesters.find(s => s.id === loc.sem)?.label || loc.sem;
+          msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(loc.dept))}\n`;
+          if (loc.title) msg += `  ${esc(loc.title)}\n`;
+          const directUrl = `${SITE_URL}/?dept=${loc.dept}&sem=${loc.sem}&course=${code}`;
+          buttons.push([{ text: `📂 Open ${code} — ${getDeptName(loc.dept)} ${semLabel}`, url: directUrl }]);
+        }
+        await sendMessage(chatId, msg, { reply_markup: { inline_keyboard: buttons } });
         return;
       }
 
@@ -343,13 +360,28 @@ async function handleMessage(msg: any) {
       const info = getCourseInfo(files);
 
       if (!info) {
-        await sendMessage(chatId,
-          `❌ No files found for <b>${esc(courseCode)}</b>.\n\n` +
-          `💡 Try:\n` +
-          `• Check the course code spelling\n` +
-          `• <code>/departments</code> to browse\n` +
-          `• <code>/search ${courseCode}</code> to search`
-        );
+        const locations = findCourseLocations(tree, courseCode);
+        if (locations.length === 0) {
+          await sendMessage(chatId,
+            `❌ No course found for <b>${esc(courseCode)}</b>.\n\n` +
+            `💡 Try:\n` +
+            `• Check the course code spelling\n` +
+            `• <code>/departments</code> to browse\n` +
+            `• <code>/search ${courseCode}</code> to search`
+          );
+          return;
+        }
+        let msg = `<b>📚 ${esc(courseCode)}</b>\n`;
+        msg += `📂 Course exists but no files uploaded yet.\n\n`;
+        const buttons: any[][] = [];
+        for (const loc of locations) {
+          const semLabel = config.semesters.find(s => s.id === loc.sem)?.label || loc.sem;
+          msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(loc.dept))}\n`;
+          if (loc.title) msg += `  ${esc(loc.title)}\n`;
+          const directUrl = `${SITE_URL}/?dept=${loc.dept}&sem=${loc.sem}&course=${courseCode}`;
+          buttons.push([{ text: `📂 Open ${courseCode} — ${getDeptName(loc.dept)} ${semLabel}`, url: directUrl }]);
+        }
+        await sendMessage(chatId, msg, { reply_markup: { inline_keyboard: buttons } });
         return;
       }
 
@@ -373,7 +405,7 @@ async function handleMessage(msg: any) {
             return `${meta?.icon || '📁'} ${meta?.label || k}: ${v}`;
           }).join(' · ');
           msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(dept))}\n`;
-          msg += `  ${catParts}\n`;
+          if (catParts) msg += `  ${catParts}\n`;
           const directUrl = `${SITE_URL}/?dept=${dept}&sem=${sem}&course=${courseCode}`;
           buttons.push([{ text: `📂 Open ${courseCode} — ${getDeptName(dept)} ${semLabel}`, url: directUrl }]);
         }

@@ -225,7 +225,6 @@ export function findCourseFiles(tree: any[], courseCode: string): FoundFile[] {
   const results: FoundFile[] = [];
 
   for (const item of tree) {
-    if (item.type !== 'blob') continue;
     const p: string = item.path;
     if (!p.startsWith(config.uploadPath + '/')) continue;
 
@@ -256,6 +255,9 @@ export function findCourseFiles(tree: any[], courseCode: string): FoundFile[] {
     const folderCodeNoHyphen = folderCode.replace('-', '');
 
     if (folderCode !== code && folderCodeNoHyphen !== codeNoHyphen) continue;
+
+    // Skip blobs that are .gitkeep or README.md (already filtered above)
+    if (item.type !== 'blob') continue;
 
     // Determine category from remaining parts
     let category = 'other';
@@ -297,6 +299,38 @@ export function getCourseInfo(files: FoundFile[]): CourseInfo | null {
     categories: cats,
     totalFiles: files.length,
   };
+}
+
+// Find course folders from tree even if they have no real files
+export function findCourseLocations(tree: any[], courseCode: string): { dept: string; sem: string; title: string }[] {
+  const code = courseCode.toUpperCase().trim();
+  const codeNoHyphen = code.replace('-', '');
+  const COURSE_RE = /^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)/i;
+  const results: { dept: string; sem: string; title: string }[] = [];
+  const seen = new Set<string>();
+
+  for (const item of tree) {
+    const p: string = item.path;
+    if (!p.startsWith(config.uploadPath + '/')) continue;
+    const rel = p.substring(config.uploadPath.length + 1);
+    const parts = rel.split('/');
+    if (parts.length < 3) continue;
+
+    const courseFolder = parts[2] || '';
+    const m = courseFolder.match(COURSE_RE);
+    if (!m) continue;
+
+    const folderCode = m[1].toUpperCase();
+    const folderCodeNoHyphen = folderCode.replace('-', '');
+    if (folderCode !== code && folderCodeNoHyphen !== codeNoHyphen) continue;
+
+    const key = `${parts[0]}/${parts[1]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push({ dept: parts[0], sem: parts[1], title: m[2].trim() });
+  }
+
+  return results;
 }
 
 // ─── Website deep link builder ────────────────────────────────────
