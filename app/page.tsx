@@ -794,14 +794,18 @@ export default function BrowsePage() {
                     <div className="font-semibold text-[0.95rem]">{course.code} — {course.title}</div>
                     <div className="flex gap-2 mt-[5px] flex-wrap">
                       {course.categories.map(cat => (
-                        <span key={cat.key} className="text-[0.68rem] px-2 py-[2px] rounded-full bg-dark-bg3 text-dark-text2 border border-dark-border">
+                        <span key={cat.key} className={`text-[0.68rem] px-2 py-[2px] rounded-full border ${cat.hasLinks ? 'bg-pink-500/10 text-pink-400 border-pink-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border'}`}>
                           {cat.label}: {cat.count}
+                          {cat.hasLinks && <i className="fas fa-link ml-1 text-[0.6rem]"></i>}
                         </span>
                       ))}
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="text-[0.75rem] text-dark-text2">{course.totalFiles} files</div>
+                    <div className="text-[0.75rem] text-dark-text2 flex items-center gap-1.5 justify-end">
+                      {course.hasSharedLinks && <span className="text-pink-400"><i className="fas fa-link text-[0.65rem]"></i></span>}
+                      {course.totalFiles} files
+                    </div>
                     {course.hasMidFinal && (
                       <div className="flex gap-1 mt-1 justify-end">
                         <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-yellow-400/15 text-yellow-400">Mid Term</span>
@@ -862,7 +866,10 @@ export default function BrowsePage() {
                     <div key={cat.key} className="flex items-center gap-3.5 p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-yellow-400/50 hover:bg-yellow-400/5 hover:shadow-[0_0_16px_rgba(250,204,21,.15)] hover:translate-x-1 transition-all" onClick={() => navigateToMidFinal('Mid')}>
                       <div className="text-[1.5rem] text-yellow-400"><i className="fas fa-pen-fancy"></i></div>
                       <div className="text-[0.95rem] font-semibold">Mid</div>
-                      <div className="text-[0.75rem] text-dark-text2 ml-auto">{cat.count} files</div>
+                      <div className="flex items-center gap-2 ml-auto">
+                        {(cat as any).hasLinks && <span className="text-[0.7rem] px-1.5 py-[2px] rounded bg-pink-500/15 text-pink-400"><i className="fas fa-link mr-1"></i>Links</span>}
+                        <div className="text-[0.75rem] text-dark-text2">{cat.count} files</div>
+                      </div>
                     </div>
                   );
                 }
@@ -870,7 +877,10 @@ export default function BrowsePage() {
                   <div key={cat.key} className="flex items-center gap-3.5 p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-green-400/50 hover:bg-green-400/5 hover:shadow-[0_0_16px_rgba(34,197,94,.15)] hover:translate-x-1 transition-all" onClick={() => navigateToMidFinal('Final')}>
                     <div className="text-[1.5rem] text-green-400"><i className="fas fa-graduation-cap"></i></div>
                     <div className="text-[0.95rem] font-semibold">Final</div>
-                    <div className="text-[0.75rem] text-dark-text2 ml-auto">{cat.count} files</div>
+                    <div className="flex items-center gap-2 ml-auto">
+                      {(cat as any).hasLinks && <span className="text-[0.7rem] px-1.5 py-[2px] rounded bg-pink-500/15 text-pink-400"><i className="fas fa-link mr-1"></i>Links</span>}
+                      <div className="text-[0.75rem] text-dark-text2">{cat.count} files</div>
+                    </div>
                   </div>
                 );
               })}
@@ -885,7 +895,10 @@ export default function BrowsePage() {
                 <div key={cat.key} className="flex items-center gap-3.5 p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl cursor-pointer hover:border-accent hover:shadow-[0_0_16px_rgba(16,185,129,.2)] hover:translate-x-1 transition-all" onClick={() => navigateToCategory(cat.key)}>
                   <div className="text-[1.5rem]" style={{color: catConfig.color}}><i className={`fas ${catConfig.icon}`}></i></div>
                   <div className="text-[0.95rem] font-semibold">{cat.label}</div>
-                  <div className="text-[0.75rem] text-dark-text2 ml-auto">{cat.count} files</div>
+                  <div className="flex items-center gap-2 ml-auto">
+                    {(cat as any).hasLinks && <span className="text-[0.7rem] px-1.5 py-[2px] rounded bg-pink-500/15 text-pink-400"><i className="fas fa-link mr-1"></i>Links</span>}
+                    <div className="text-[0.75rem] text-dark-text2">{cat.count} files</div>
+                  </div>
                 </div>
               );
             })}
