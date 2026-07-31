@@ -78,23 +78,27 @@ const PERMISSION_ACTIONS = [
 interface ContributorSettings {
   hiddenLogins: string[];
   sortBy: 'contributions' | 'name' | 'commits' | 'prs';
-  layout: 'ranked' | 'grid' | 'list';
+  viewMode: 'sectioned' | 'grid';
+  sectionCount: 2 | 3;
   showRanks: boolean;
   showStats: boolean;
   showDeptFilter: boolean;
   showSearch: boolean;
   showOnlyCommitters: boolean;
+  allowUserToggle: boolean;
 }
 
 const DEFAULT_SETTINGS: ContributorSettings = {
   hiddenLogins: [],
   sortBy: 'contributions',
-  layout: 'ranked',
+  viewMode: 'sectioned',
+  sectionCount: 3,
   showRanks: true,
   showStats: true,
   showDeptFilter: true,
   showSearch: true,
   showOnlyCommitters: true,
+  allowUserToggle: true,
 };
 
 interface ContributorItem {
@@ -232,6 +236,34 @@ function ContributorsTab() {
             </select>
           </div>
 
+          {/* View Mode */}
+          <div>
+            <label className="text-[0.65rem] text-dark-text3 block mb-1">View Mode</label>
+            <select
+              value={settings.viewMode}
+              onChange={e => save({ ...settings, viewMode: e.target.value as any })}
+              className="w-full px-2 py-1.5 text-[0.75rem] bg-dark-bg3 border border-dark-border rounded-lg text-dark-text cursor-pointer"
+            >
+              <option value="sectioned">Sectioned (by role)</option>
+              <option value="grid">Grid (all ranked together)</option>
+            </select>
+          </div>
+
+          {/* Section Count (only when sectioned) */}
+          {settings.viewMode === 'sectioned' && (
+            <div>
+              <label className="text-[0.65rem] text-dark-text3 block mb-1">Sections</label>
+              <select
+                value={settings.sectionCount}
+                onChange={e => save({ ...settings, sectionCount: Number(e.target.value) as 2 | 3 })}
+                className="w-full px-2 py-1.5 text-[0.75rem] bg-dark-bg3 border border-dark-border rounded-lg text-dark-text cursor-pointer"
+              >
+                <option value={3}>3 (Both + Dev + Resource)</option>
+                <option value={2}>2 (Dev + Resource)</option>
+              </select>
+            </div>
+          )}
+
           {/* Toggles */}
           {[
             { key: 'showRanks', label: 'Show Ranks', icon: 'fa-trophy' },
@@ -239,6 +271,7 @@ function ContributorsTab() {
             { key: 'showDeptFilter', label: 'Dept Filter', icon: 'fa-filter' },
             { key: 'showSearch', label: 'Show Search', icon: 'fa-search' },
             { key: 'showOnlyCommitters', label: 'Only Committers', icon: 'fa-code-branch' },
+            { key: 'allowUserToggle', label: 'User View Toggle', icon: 'fa-toggle-on' },
           ].map(t => (
             <label key={t.key} className="flex items-center gap-2 cursor-pointer">
               <input

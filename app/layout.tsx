@@ -78,6 +78,23 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'IIUC-ARMS',
+    alternateName: 'QSIS Academic Resource Management System',
+    url: siteUrl,
+    description: 'Free open-source academic resource management system for IIUC departments including Qur\'anic Sciences & Islamic Studies. Browse, share, and manage notes, sheets, syllabi, and previous questions.',
+    applicationCategory: 'EducationalApplication',
+    operatingSystem: 'Web',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    author: { '@type': 'Person', name: 'Sayed Atiqur Rahman', url: 'https://github.com/sayedatiqurrahman' },
+    publisher: { '@type': 'Organization', name: 'Programming Light' },
+    inLanguage: 'en',
+    isAccessibleForFree: true,
+    keywords: ['QSIS', 'IIUC', 'academic resources', 'Quranic Sciences', 'Islamic Studies', 'notes', 'previous questions', 'sheets', 'syllabus'],
+  };
+
   return (
     <html lang="en" className="dark">
       <head>
@@ -87,7 +104,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="IIUC-ARMS" />
+        <meta name="theme-color" content="#0f172a" />
+        <meta name="msapplication-TileColor" content="#0f172a" />
+        <meta name="msapplication-TileImage" content="/arms-logo-icon.png" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
       </head>
       <body className="min-h-screen">
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>

@@ -40,24 +40,45 @@ interface Contributor {
 interface ContributorSettings {
   hiddenLogins: string[];
   sortBy: 'contributions' | 'name' | 'commits' | 'prs';
-  layout: 'ranked' | 'grid' | 'list';
+  viewMode: 'sectioned' | 'grid';
+  sectionCount: 2 | 3;
   showRanks: boolean;
   showStats: boolean;
   showDeptFilter: boolean;
   showSearch: boolean;
   showOnlyCommitters: boolean;
+  allowUserToggle: boolean;
 }
 
 const DEFAULT_CONTRIBUTOR_SETTINGS: ContributorSettings = {
   hiddenLogins: [],
   sortBy: 'contributions',
-  layout: 'ranked',
+  viewMode: 'sectioned',
+  sectionCount: 3,
   showRanks: true,
   showStats: true,
   showDeptFilter: true,
   showSearch: true,
   showOnlyCommitters: true,
+  allowUserToggle: true,
 };
+
+// Bot accounts to always exclude
+const BOT_LOGINS = new Set([
+  'github-actions[bot]',
+  'qsis-arms[bot]',
+  'renovate[bot]',
+  'dependabot[bot]',
+  'codecov[bot]',
+  'sonarcloud[bot]',
+]);
+
+function isBot(login: string, type?: string): boolean {
+  if (BOT_LOGINS.has(login.toLowerCase())) return true;
+  if (login.endsWith('[bot]')) return true;
+  if (type === 'Bot' || type === 'App') return true;
+  return false;
+}
 
 function getDeptLabel(deptId: string): string {
   for (const f of FACULTIES) {
@@ -149,7 +170,6 @@ export async function GET() {
     const token = await getGithubToken();
     const GITHUB_API = 'https://api.github.com';
 
-    // Fetch all contributors and PRs from both repos (with auth + pagination)
     const [v2Contributors, dataContributors, v2Prs, dataPrs] = await Promise.all([
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/QSIS-ARMS-v2/contributors`, token),
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contributors`, token),
@@ -176,62 +196,71 @@ export async function GET() {
       return c;
     };
 
-    // Process contributors from v2 repo
+    // Process contributors from v2 (code) repo
     for (const gh of v2Contributors) {
-      if (gh.type === 'Bot' || gh.login === 'github-actions[bot]') continue;
+      if (isBot(gh.login, gh.type)) continue;
       const c = ensure(gh.login, gh.avatar_url, gh.html_url, String(gh.id));
       c.v2Contributions = gh.contributions || 0;
       c.contributions += gh.contributions || 0;
       c.role = gh.login === config.owner ? 'Founder & Lead' : 'Developer';
+      c.roleType = 'developer';
     }
 
     // Process contributors from data repo
     for (const gh of dataContributors) {
-      if (gh.type === 'Bot' || gh.login === 'github-actions[bot]') continue;
+      if (isBot(gh.login, gh.type)) continue;
       const c = ensure(gh.login, gh.avatar_url, gh.html_url, String(gh.id));
       c.dataContributions = gh.contributions || 0;
       c.contributions += gh.contributions || 0;
+      // Determine role based on what they contributed to
       if (c.role !== 'Founder & Lead') {
-        c.role = c.v2Contributions > 0 ? 'Developer & Resource Provider' : 'Resource Provider';
+        if (c.v2Contributions > 0) {
+          c.role = 'Developer & Resource Provider';
+          c.roleType = 'both';
+        } else {
+          c.role = 'Resource Provider';
+          c.roleType = 'resource_provider';
+        }
       }
-      c.roleType = c.v2Contributions > 0 ? 'both' : 'resource_provider';
     }
 
-    // Process PRs from both repos
+    // Process PRs — also track PR authors who aren't in contributors list
     for (const pr of [...v2Prs, ...dataPrs]) {
-      if (pr.user?.type === 'Bot') continue;
       const u = pr.user;
-      if (!u?.login) continue;
-      const c = ensure(u.login, u.avatar_url, u.html_url, String(u.id));
-      c.prCount += 1;
+      if (!u?.login || isBot(u.login, u.type)) continue;
       const isV2 = v2Prs.includes(pr);
       const isData = dataPrs.includes(pr);
-      if (isV2 && !isData) {
-        if (c.role !== 'Founder & Lead') c.role = c.v2Contributions > 0 ? 'Developer' : 'Contributor';
-      } else if (isData && !isV2) {
-        if (c.role !== 'Founder & Lead') c.role = c.v2Contributions > 0 ? 'Developer & Resource Provider' : 'Resource Provider';
-      } else if (isV2 && isData) {
-        if (c.role !== 'Founder & Lead') c.role = 'Developer & Resource Provider';
+      const c = ensure(u.login, u.avatar_url, u.html_url, String(u.id));
+      c.prCount += 1;
+      // Update role based on PR repos
+      if (c.role !== 'Founder & Lead') {
+        if (isV2 && isData) {
+          c.role = 'Developer & Resource Provider';
+          c.roleType = 'both';
+        } else if (isData && c.v2Contributions > 0) {
+          c.role = 'Developer & Resource Provider';
+          c.roleType = 'both';
+        } else if (isData) {
+          c.role = 'Resource Provider';
+          c.roleType = 'resource_provider';
+        } else if (isV2) {
+          if (c.role === 'Contributor' || c.role === 'Resource Provider') {
+            c.role = c.dataContributions > 0 ? 'Developer & Resource Provider' : 'Developer';
+            c.roleType = c.dataContributions > 0 ? 'both' : 'developer';
+          }
+        }
       }
-      if (isV2 && isData) c.roleType = 'both';
-      else if (isData) c.roleType = 'resource_provider';
     }
 
-    // Merge DB profiles (enrich existing GitHub contributors, don't create new ones)
+    // Merge DB profiles
     for (const p of dbProfiles) {
       let matchedContributor: Contributor | undefined;
-
-      if (p.githubLogin) {
-        matchedContributor = map.get(p.githubLogin);
-      }
+      if (p.githubLogin) matchedContributor = map.get(p.githubLogin);
       if (!matchedContributor && p.email) {
-        const loginFromEmail = p.email.split('@')[0];
-        matchedContributor = map.get(loginFromEmail);
+        matchedContributor = map.get(p.email.split('@')[0]);
       }
-
-      const profileComplete = !!(p.universityId && p.whatsapp && p.semester);
-
       if (matchedContributor) {
+        const profileComplete = !!(p.universityId && p.whatsapp && p.semester);
         matchedContributor.email = p.publicEmail || '';
         matchedContributor.name = p.name || matchedContributor.name;
         matchedContributor.title = p.title || matchedContributor.title;
@@ -254,10 +283,9 @@ export async function GET() {
         matchedContributor.profileComplete = profileComplete;
         matchedContributor.source = 'both';
       }
-      // DB-only profiles are NOT added as contributors (no GitHub activity = not a contributor)
     }
 
-    // Load contributor settings (hidden list, sort, layout)
+    // Load contributor settings
     let settings: ContributorSettings = DEFAULT_CONTRIBUTOR_SETTINGS;
     try {
       const { prisma } = await import('@/lib/prisma');
@@ -270,15 +298,15 @@ export async function GET() {
     const hiddenSet = new Set(settings.hiddenLogins.map(l => l.toLowerCase()));
 
     const contributors = Array.from(map.values())
-      // Filter out hidden contributors
       .filter(c => !hiddenSet.has(c.login.toLowerCase()))
-      // Filter to only people with actual commits (not just PRs)
-      .filter(c => settings.showOnlyCommitters ? (c.v2Contributions + c.dataContributions) > 0 : true)
       .sort((a, b) => {
-        if (a.role === 'Founder & Lead' && b.role !== 'Founder & Lead') return -1;
-        if (a.role !== 'Founder & Lead' && b.role === 'Founder & Lead') return 1;
+        // 1. Founder always first
+        if (a.role === 'Founder & Lead') return -1;
+        if (b.role === 'Founder & Lead') return 1;
+        // 2. Both repos contributors next
         if (a.roleType === 'both' && b.roleType !== 'both') return -1;
         if (a.roleType !== 'both' && b.roleType === 'both') return 1;
+        // 3. Then by selected sort
         if (settings.sortBy === 'name') return a.name.localeCompare(b.name);
         if (settings.sortBy === 'commits') return (b.v2Contributions + b.dataContributions) - (a.v2Contributions + a.dataContributions);
         if (settings.sortBy === 'prs') return b.prCount - a.prCount;
