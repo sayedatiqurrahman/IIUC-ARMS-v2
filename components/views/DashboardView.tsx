@@ -697,7 +697,7 @@ export default function DashboardView() {
                   <div className="flex-1">
                     <p className="text-[0.78rem] font-semibold text-amber-400 mb-1">Want to appear in Contributors?</p>
                     <p className="text-[0.7rem] text-dark-text2 leading-relaxed">
-                      Your uploads are committed as <strong>qsis-arms[bot]</strong>, not your GitHub account. To appear in the Contributors list, connect a <strong>Personal Access Token</strong> — your uploads will then be credited to you.
+                      Connected via <strong>GitHub App</strong> — your uploads are committed as <strong>qsis-arms[bot]</strong>, not your account. Switch to a <strong>Personal Access Token</strong> so your uploads credit you and you appear in the Contributors list.
                     </p>
                     <button
                       onClick={() => setShowTokenModal(true)}
@@ -806,18 +806,23 @@ export default function DashboardView() {
                 <span className="text-[0.72rem] text-dark-text2">Connect GitHub to upload files and appear in Contributors</span>
               </div>
             </div>
-            <button className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.85rem] font-bold cursor-pointer hover:opacity-90 transition-all shadow-lg shadow-qsis/20" onClick={handleInstallGitHub}>
-              <i className="fab fa-github"></i> Connect with GitHub App
+            <button className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.85rem] font-bold cursor-pointer hover:opacity-90 transition-all shadow-lg shadow-qsis/20" onClick={() => setShowTokenModal(true)}>
+              <i className="fas fa-key"></i> Connect with Personal Access Token
               <span className="text-[0.65rem] bg-white/20 px-2 py-0.5 rounded-full ml-1">Recommended</span>
             </button>
             <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg3">
-              <button className="flex items-center gap-2 bg-transparent border-none text-dark-text2 text-[0.78rem] font-semibold cursor-pointer hover:text-qsis transition-colors" onClick={() => setShowTokenModal(true)}>
-                <i className="fas fa-key"></i> Or paste a Personal Access Token
+              <button className="flex items-center gap-2 bg-transparent border-none text-dark-text2 text-[0.78rem] font-semibold cursor-pointer hover:text-qsis transition-colors" onClick={handleInstallGitHub}>
+                <i className="fab fa-github"></i> Or connect with GitHub App
               </button>
             </div>
-            <p className="text-[0.68rem] text-dark-text2 text-center">
-              GitHub App uploads as bot. Use PAT to appear in Contributors list.
-            </p>
+            <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/15">
+              <p className="text-[0.68rem] text-amber-400 text-center leading-relaxed">
+                <i className="fas fa-info-circle mr-1"></i>
+                <strong>PAT</strong> = your uploads credited to you, you appear in Contributors.
+                <br/>
+                <strong>GitHub App</strong> = uploads as bot, you won&apos;t appear in Contributors. Optional.
+              </p>
+            </div>
           </div>
         )}
       </div>
