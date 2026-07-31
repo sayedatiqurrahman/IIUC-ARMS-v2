@@ -31,6 +31,10 @@ const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
 const GITHUB_API = 'https://api.github.com';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
 
+function openLink(target: string): string {
+  return SITE_URL + '/open?url=' + encodeURIComponent(target);
+}
+
 async function getAppBotToken(): Promise<string | null> {
   try {
     const installations = await getAppInstallations();
@@ -164,7 +168,7 @@ async function handleMessage(msg: any) {
     // ─── /departments ───
     if (cleanText === '/departments') {
       await sendMessage(chatId, buildDeptList(), {
-        reply_markup: { inline_keyboard: [[{ text: '🌐 Open IIUC-ARMS', url: SITE_URL }]] },
+        reply_markup: { inline_keyboard: [[{ text: '🌐 Open IIUC-ARMS', url: openLink(SITE_URL) }] ]},
       });
       return;
     }
@@ -184,7 +188,7 @@ async function handleMessage(msg: any) {
         return;
       }
       await sendMessage(chatId, buildCoursesList(tree, undefined, semId), {
-        reply_markup: { inline_keyboard: [[{ text: '🌐 Open IIUC-ARMS', url: SITE_URL }]] },
+        reply_markup: { inline_keyboard: [[{ text: '🌐 Open IIUC-ARMS', url: openLink(SITE_URL) }] ]},
       });
       return;
     }

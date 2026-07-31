@@ -207,9 +207,13 @@ export function getCourseInfo(files: FoundFile[]): CourseInfo | null {
 
 // ─── Website deep link builder ────────────────────────────────────
 
+function telegramLink(url: string): string {
+  return SITE_URL + '/open?url=' + encodeURIComponent(url);
+}
+
 export function buildBrowseLink(params: Record<string, string>): string {
   const qs = new URLSearchParams(params);
-  return `${SITE_URL}/?${qs.toString()}`;
+  return telegramLink(SITE_URL + '/?' + qs.toString());
 }
 
 export function buildCourseLink(courseCode: string, dept?: string, sem?: string, cat?: string): string {
@@ -217,7 +221,7 @@ export function buildCourseLink(courseCode: string, dept?: string, sem?: string,
   if (dept) params.dept = dept;
   if (sem) params.sem = sem;
   if (cat) params.cat = cat;
-  return buildBrowseLink(params);
+  return telegramLink(SITE_URL + '/?' + new URLSearchParams(params).toString());
 }
 
 // ─── Message builders ─────────────────────────────────────────────
