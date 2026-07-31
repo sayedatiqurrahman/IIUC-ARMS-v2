@@ -229,6 +229,9 @@ export function findCourseFiles(tree: any[], courseCode: string): FoundFile[] {
     const p: string = item.path;
     if (!p.startsWith(config.uploadPath + '/')) continue;
 
+    const fileName = p.split('/').pop() || '';
+    if (fileName === '.gitkeep' || fileName.toLowerCase() === 'readme.md') continue;
+
     const rel = p.substring(config.uploadPath.length + 1);
     const parts = rel.split('/');
     if (parts.length < 4) continue;

@@ -233,21 +233,28 @@ async function handleMessage(msg: any) {
       }
 
       const depts = Array.from(new Set(files.map(f => f.department)));
-      const sems = Array.from(new Set(files.map(f => f.semester)));
 
-      let msg = `<b>📚 ${esc(code)}</b>\n`;
-      msg += `📄 ${info.totalFiles} file${info.totalFiles !== 1 ? 's' : ''} available\n\n`;
+      let msg = `<b>📚 ${esc(code)}</b>\n\n`;
 
       const buttons: any[][] = [];
 
       for (const dept of depts) {
-        const deptName = getDeptFullName(dept);
         const deptSems = Array.from(new Set(files.filter(f => f.department === dept).map(f => f.semester)));
         for (const sem of deptSems) {
+          const semFiles = files.filter(f => f.department === dept && f.semester === sem);
           const semLabel = config.semesters.find(s => s.id === sem)?.label || sem;
-          msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(dept))} Dept.\n`;
-          const directUrl = `${SITE_URL}/?dept=${dept}&sem=${sem}&q=${code}`;
-          buttons.push([{ text: `📚 Open ${code} — ${getDeptName(dept)} ${semLabel}`, url: directUrl }]);
+          const catCounts: Record<string, number> = {};
+          for (const f of semFiles) {
+            catCounts[f.category] = (catCounts[f.category] || 0) + 1;
+          }
+          const catParts = Object.entries(catCounts).map(([k, v]) => {
+            const meta = CATEGORY_META[k];
+            return `${meta?.icon || '📁'} ${meta?.label || k}: ${v}`;
+          }).join(' · ');
+          msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(dept))}\n`;
+          msg += `  ${catParts}\n`;
+          const directUrl = `${SITE_URL}/?dept=${dept}&sem=${sem}&course=${code}`;
+          buttons.push([{ text: `📂 Open ${code} — ${getDeptName(dept)} ${semLabel}`, url: directUrl }]);
         }
       }
 
@@ -347,21 +354,28 @@ async function handleMessage(msg: any) {
       }
 
       const depts = Array.from(new Set(files.map(f => f.department)));
-      const sems = Array.from(new Set(files.map(f => f.semester)));
 
-      let msg = `<b>📚 ${esc(courseCode)}</b>\n`;
-      msg += `📄 ${info.totalFiles} file${info.totalFiles !== 1 ? 's' : ''} available\n\n`;
+      let msg = `<b>📚 ${esc(courseCode)}</b>\n\n`;
 
       const buttons: any[][] = [];
 
       for (const dept of depts) {
-        const deptName = getDeptFullName(dept);
         const deptSems = Array.from(new Set(files.filter(f => f.department === dept).map(f => f.semester)));
         for (const sem of deptSems) {
+          const semFiles = files.filter(f => f.department === dept && f.semester === sem);
           const semLabel = config.semesters.find(s => s.id === sem)?.label || sem;
-          msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(dept))} Dept.\n`;
-          const directUrl = `${SITE_URL}/?dept=${dept}&sem=${sem}&q=${courseCode}`;
-          buttons.push([{ text: `📚 Open ${courseCode} — ${getDeptName(dept)} ${semLabel}`, url: directUrl }]);
+          const catCounts: Record<string, number> = {};
+          for (const f of semFiles) {
+            catCounts[f.category] = (catCounts[f.category] || 0) + 1;
+          }
+          const catParts = Object.entries(catCounts).map(([k, v]) => {
+            const meta = CATEGORY_META[k];
+            return `${meta?.icon || '📁'} ${meta?.label || k}: ${v}`;
+          }).join(' · ');
+          msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(dept))}\n`;
+          msg += `  ${catParts}\n`;
+          const directUrl = `${SITE_URL}/?dept=${dept}&sem=${sem}&course=${courseCode}`;
+          buttons.push([{ text: `📂 Open ${courseCode} — ${getDeptName(dept)} ${semLabel}`, url: directUrl }]);
         }
       }
 
