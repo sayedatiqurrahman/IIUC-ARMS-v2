@@ -118,6 +118,7 @@ async function batchDeleteFiles(token: string, files: { path: string; sha: strin
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    console.log('[TG] Webhook received:', JSON.stringify(body).substring(0, 200));
 
     if (body.callback_query) {
       await handleCallbackQuery(body.callback_query);
@@ -131,7 +132,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
-    console.error('Telegram webhook error:', err);
+    console.error('[TG] Webhook error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -223,23 +224,27 @@ async function handleMessage(msg: any) {
         return;
       }
 
-      const buttons = info.categories.map(cat => {
-        const meta = CATEGORY_META[cat];
-        return {
-          text: `${meta?.icon || '📁'} ${meta?.label || cat}`,
-          callback_data: catCallbackData(code, cat),
-        };
-      });
+      const depts = Array.from(new Set(files.map(f => f.department)));
+      const sems = Array.from(new Set(files.map(f => f.semester)));
 
-      const summary = buildCourseResult(code, info, files, tree);
-      const websiteLink = buildCourseLink(code);
-      await sendMessage(chatId, summary, {
-        reply_markup: {
-          inline_keyboard: [
-            buttons,
-            [{ text: '🌐 View on Website', url: websiteLink }],
-          ],
-        },
+      let msg = `<b>📚 ${esc(code)}</b>\n`;
+      msg += `📄 ${info.totalFiles} file${info.totalFiles !== 1 ? 's' : ''} available\n\n`;
+
+      const buttons: any[][] = [];
+
+      for (const dept of depts) {
+        const deptName = getDeptFullName(dept);
+        const deptSems = Array.from(new Set(files.filter(f => f.department === dept).map(f => f.semester)));
+        for (const sem of deptSems) {
+          const semLabel = config.semesters.find(s => s.id === sem)?.label || sem;
+          msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(dept))} Dept.\n`;
+          const directUrl = `${SITE_URL}/?dept=${dept}&sem=${sem}&q=${code}`;
+          buttons.push([{ text: `📚 Open ${code} — ${getDeptName(dept)} ${semLabel}`, url: directUrl }]);
+        }
+      }
+
+      await sendMessage(chatId, msg, {
+        reply_markup: { inline_keyboard: buttons },
       });
       return;
     }
@@ -312,9 +317,7 @@ async function handleMessage(msg: any) {
 
     // ─── Plain course code (e.g. QSM-3602, QUR101) ───
     if (COURSE_REGEX.test(cleanText)) {
-      const courseCode = cleanText.toUpperCase().replace('-', '').length > cleanText.length - 2
-        ? cleanText.toUpperCase()
-        : cleanText.toUpperCase();
+      const courseCode = cleanText.toUpperCase();
 
       const tree = await getGithubTree();
       if (!tree.length) {
@@ -335,23 +338,27 @@ async function handleMessage(msg: any) {
         return;
       }
 
-      const buttons = info.categories.map(cat => {
-        const meta = CATEGORY_META[cat];
-        return {
-          text: `${meta?.icon || '📁'} ${meta?.label || cat}`,
-          callback_data: catCallbackData(courseCode, cat),
-        };
-      });
+      const depts = Array.from(new Set(files.map(f => f.department)));
+      const sems = Array.from(new Set(files.map(f => f.semester)));
 
-      const summary = buildCourseResult(courseCode, info, files);
-      const websiteLink = buildCourseLink(courseCode);
-      await sendMessage(chatId, summary, {
-        reply_markup: {
-          inline_keyboard: [
-            buttons,
-            [{ text: '🌐 View on Website', url: websiteLink }],
-          ],
-        },
+      let msg = `<b>📚 ${esc(courseCode)}</b>\n`;
+      msg += `📄 ${info.totalFiles} file${info.totalFiles !== 1 ? 's' : ''} available\n\n`;
+
+      const buttons: any[][] = [];
+
+      for (const dept of depts) {
+        const deptName = getDeptFullName(dept);
+        const deptSems = Array.from(new Set(files.filter(f => f.department === dept).map(f => f.semester)));
+        for (const sem of deptSems) {
+          const semLabel = config.semesters.find(s => s.id === sem)?.label || sem;
+          msg += `📍 <b>${esc(semLabel)}</b> — ${esc(getDeptName(dept))} Dept.\n`;
+          const directUrl = `${SITE_URL}/?dept=${dept}&sem=${sem}&q=${courseCode}`;
+          buttons.push([{ text: `📚 Open ${courseCode} — ${getDeptName(dept)} ${semLabel}`, url: directUrl }]);
+        }
+      }
+
+      await sendMessage(chatId, msg, {
+        reply_markup: { inline_keyboard: buttons },
       });
       return;
     }
