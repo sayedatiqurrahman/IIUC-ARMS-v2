@@ -476,18 +476,19 @@ export default function DashboardView() {
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">WhatsApp</label>
                 <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
               </div>
-              {/* Semester — students only */}
-              {isStudent && (
-                <div>
-                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Current Semester</label>
-                  <CustomSelect
-                    value={profileForm.semester}
-                    onChange={value => setProfileForm(p => ({ ...p, semester: value }))}
-                    placeholder="Select semester..."
-                    options={config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }))}
-                  />
-                </div>
-              )}
+              {/* Semester */}
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1">Current Semester</label>
+                <CustomSelect
+                  value={profileForm.semester}
+                  onChange={value => setProfileForm(p => ({ ...p, semester: value }))}
+                  placeholder="Select semester..."
+                  options={[
+                    ...config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' })),
+                    { value: 'graduated', label: '🎓 Graduated', icon: 'fa-graduation-cap' },
+                  ]}
+                />
+              </div>
               {/* Section — students only */}
               {isStudent && (
                 <div>
@@ -529,12 +530,10 @@ export default function DashboardView() {
                 <input type="checkbox" checked={profileForm.hideWhatsapp} onChange={e => setProfileForm(p => ({ ...p, hideWhatsapp: e.target.checked }))} className="accent-qsis" />
                 <span className="text-[0.78rem] text-dark-text">Hide WhatsApp from public profile</span>
               </label>
-              {isStudent && (
-                <label className="flex items-center gap-2 cursor-pointer mb-2">
-                  <input type="checkbox" checked={profileForm.hideSemester} onChange={e => setProfileForm(p => ({ ...p, hideSemester: e.target.checked }))} className="accent-qsis" />
-                  <span className="text-[0.78rem] text-dark-text">Hide Semester from public profile</span>
-                </label>
-              )}
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <input type="checkbox" checked={profileForm.hideSemester} onChange={e => setProfileForm(p => ({ ...p, hideSemester: e.target.checked }))} className="accent-qsis" />
+                <span className="text-[0.78rem] text-dark-text">Hide Semester from public profile</span>
+              </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={profileForm.hideEmail} onChange={e => setProfileForm(p => ({ ...p, hideEmail: e.target.checked }))} className="accent-qsis" />
                 <span className="text-[0.78rem] text-dark-text">Hide Email from public profile</span>
@@ -596,7 +595,7 @@ export default function DashboardView() {
               {profile.semester && (
                 <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                   <span className="text-[0.7rem] text-dark-text2 block mb-1">Semester</span>
-                  <span className="text-[0.85rem] font-semibold">{config.semesters.find(s => s.id === profile.semester)?.label || profile.semester}</span>
+                  <span className="text-[0.85rem] font-semibold">{profile.semester === 'graduated' ? '🎓 Graduated' : config.semesters.find(s => s.id === profile.semester)?.label || profile.semester}</span>
                 </div>
               )}
               {profile.section && isStudent && (

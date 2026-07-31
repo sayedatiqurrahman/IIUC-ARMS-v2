@@ -1,9 +1,42 @@
 import { config } from '@/lib/config';
 import { FACULTIES } from '@/lib/departments';
+import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const API = `https://api.telegram.org/bot${TOKEN}`;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+
+// ─── GitHub token resolver (App token > env token > empty) ─────────
+
+let cachedToken: string | null = null;
+let cachedTokenTs = 0;
+const TOKEN_CACHE_TTL = 50 * 60 * 1000;
+
+export async function resolveGithubToken(): Promise<string> {
+  if (cachedToken && Date.now() - cachedTokenTs < TOKEN_CACHE_TTL) return cachedToken;
+
+  // Try env token first
+  if (process.env.GITHUB_TOKEN) {
+    cachedToken = process.env.GITHUB_TOKEN;
+    cachedTokenTs = Date.now();
+    return cachedToken;
+  }
+
+  // Try GitHub App installation token
+  try {
+    const installations = await getAppInstallations();
+    if (Array.isArray(installations) && installations.length > 0) {
+      const token = await getInstallationAccessToken(installations[0].id);
+      if (token) {
+        cachedToken = token;
+        cachedTokenTs = Date.now();
+        return token;
+      }
+    }
+  } catch {}
+
+  return '';
+}
 
 // ─── Telegram API helpers ─────────────────────────────────────────
 
@@ -79,12 +112,12 @@ const CACHE_TTL = 5 * 60 * 1000;
 export async function getGithubTree(): Promise<any[]> {
   if (treeCache && Date.now() - treeCache.ts < CACHE_TTL) return treeCache.tree;
 
-  const token = process.env.GITHUB_TOKEN || '';
+  const token = await resolveGithubToken();
   const headers: Record<string, string> = { Accept: 'application/vnd.github.v3+json' };
   if (token) headers['Authorization'] = `token ${token}`;
 
   const url = `https://api.github.com/repos/${config.owner}/${config.repo}/git/trees/${config.branch}?recursive=1`;
-  const res = await fetch(url, { headers, next: { revalidate: 300 } });
+  const res = await fetch(url, { headers, cache: 'no-store' });
   if (!res.ok) return [];
   const data = await res.json();
   treeCache = { tree: data.tree || [], ts: Date.now() };

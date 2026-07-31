@@ -406,7 +406,7 @@ function RankedCard({ c, rank }: { c: any; rank: number }) {
           )}
           {c.semester && !c.hideSemester && (
             <span className="text-[0.65rem] text-dark-text3">
-              <i className="fas fa-graduation-cap mr-1 text-accent"></i>{config.semesters.find(s => s.id === c.semester)?.label || c.semester}
+              <i className="fas fa-graduation-cap mr-1 text-accent"></i>{c.semester === 'graduated' ? '🎓 Graduated' : config.semesters.find(s => s.id === c.semester)?.label || c.semester}
             </span>
           )}
         </div>
@@ -530,7 +530,7 @@ function SimpleCard({ c }: { c: any }) {
                 </div>
                 <div className="min-w-0">
                   <div className="text-[0.65rem] text-dark-text2 leading-tight">Semester</div>
-                  <div className="text-[0.82rem] font-semibold truncate">{config.semesters.find(s => s.id === c.semester)?.label || c.semester}</div>
+                  <div className="text-[0.82rem] font-semibold truncate">{c.semester === 'graduated' ? '🎓 Graduated' : config.semesters.find(s => s.id === c.semester)?.label || c.semester}</div>
                 </div>
               </div>
             )}

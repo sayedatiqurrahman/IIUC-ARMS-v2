@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { config } from '@/lib/config';
+import { resolveGithubToken } from '@/lib/telegram';
 
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-auth-token') || process.env.GITHUB_TOKEN || '';
+  const token = req.headers.get('x-auth-token') || await resolveGithubToken();
 
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',
