@@ -699,7 +699,9 @@ export function buildStatsMessage(tree: any[]): string {
   const deptCounts = new Map<string, number>();
   const semCounts = new Map<string, number>();
   const courseSet = new Set<string>();
+  const courseDeptMap = new Map<string, string>();
   let totalFiles = 0;
+  let totalLinks = 0;
 
   const validSems = new Set(config.semesters.map(s => s.id));
 
@@ -718,17 +720,30 @@ export function buildStatsMessage(tree: any[]): string {
     if (!validSems.has(sem)) continue;
     if (parts[parts.length - 1] === '.gitkeep') continue;
 
+    const fileName = parts[parts.length - 1].toLowerCase();
+    const isReadme = fileName === 'readme.md';
+
+    if (isReadme) {
+      totalLinks++;
+      continue;
+    }
+
     deptCounts.set(dept, (deptCounts.get(dept) || 0) + 1);
     semCounts.set(sem, (semCounts.get(sem) || 0) + 1);
     totalFiles++;
 
     const courseFolder = parts[2];
     const codeMatch = courseFolder.match(/^([A-Z]{2,5}-?\d{3,5})/i);
-    if (codeMatch) courseSet.add(codeMatch[1].toUpperCase());
+    if (codeMatch) {
+      const code = codeMatch[1].toUpperCase();
+      courseSet.add(code);
+      if (!courseDeptMap.has(code)) courseDeptMap.set(code, dept);
+    }
   }
 
   let msg = `<b>📊 IIUC-ARMS Statistics</b>\n\n`;
   msg += `📄 Total files: <b>${totalFiles}</b>\n`;
+  msg += `🔗 Shared links: <b>${totalLinks}</b>\n`;
   msg += `📚 Total courses: <b>${courseSet.size}</b>\n`;
   msg += `🏢 Departments: <b>${deptCounts.size}</b>\n\n`;
 

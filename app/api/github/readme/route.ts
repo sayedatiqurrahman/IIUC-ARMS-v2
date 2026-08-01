@@ -75,11 +75,11 @@ export async function GET(req: NextRequest) {
   try {
     const folder = req.nextUrl.searchParams.get('folder') || '';
     const token = await resolveToken(req);
-    if (!token) return NextResponse.json({ content: '', sha: null });
 
     const readmePath = folder ? `${config.uploadPath}/${folder}/README.md` : `${config.uploadPath}/README.md`;
     const url = `${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${readmePath}?ref=${config.branch}`;
-    const res = await fetch(url, { headers: ghHeaders(token) });
+    const headers: Record<string, string> = token ? ghHeaders(token) : { Accept: 'application/vnd.github.v3+json' };
+    const res = await fetch(url, { headers });
 
     if (!res.ok) return NextResponse.json({ content: '', sha: null });
 

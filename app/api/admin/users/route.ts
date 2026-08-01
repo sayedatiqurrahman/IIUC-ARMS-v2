@@ -66,6 +66,8 @@ export async function GET(req: NextRequest) {
         title: profile?.title || null,
         role: profile?.role || config.detectRole(userEmail),
         isBanned: profile?.isBanned || false,
+        banReason: (profile as any).banReason || null,
+        bannedBy: (profile as any).bannedBy || null,
         isCR: profile?.isCR || false,
         isACR: profile?.isACR || false,
         department: profile?.department || null,
@@ -91,6 +93,8 @@ export async function GET(req: NextRequest) {
           title: profile.title || null,
           role: profile.role || 'user',
           isBanned: profile.isBanned || false,
+          banReason: (profile as any).banReason || null,
+          bannedBy: (profile as any).bannedBy || null,
           isCR: profile.isCR || false,
           isACR: profile.isACR || false,
           department: profile.department || null,
@@ -173,6 +177,11 @@ export async function POST(req: NextRequest) {
 
     // ─── BAN ───
     if (action === 'ban') {
+      const { banReason } = body;
+      const banData: Record<string, any> = { isBanned: true, bannedBy: email };
+      if (banReason && typeof banReason === 'string' && banReason.trim()) {
+        banData.banReason = banReason.trim().slice(0, 500);
+      }
       // Admin can ban anyone except other admins (unless owner)
       if (effectiveRole === 'admin') {
         if (targetEffectiveRole === 'admin' && !isOwner) {
@@ -181,7 +190,7 @@ export async function POST(req: NextRequest) {
         if (targetEffectiveRole === 'admin' && isOwner) {
           return NextResponse.json({ error: 'Cannot ban the owner' }, { status: 403 });
         }
-        await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: true } });
+        await prisma.profile.update({ where: { userId: targetEmail }, data: banData });
         return NextResponse.json({ success: true, message: 'User banned' });
       }
       // Teacher can ban: students, users, managers (not admins, not other teachers)
@@ -192,7 +201,7 @@ export async function POST(req: NextRequest) {
         if (targetEffectiveRole === 'teacher') {
           return NextResponse.json({ error: 'Teachers cannot ban other teachers' }, { status: 403 });
         }
-        await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: true } });
+        await prisma.profile.update({ where: { userId: targetEmail }, data: banData });
         return NextResponse.json({ success: true, message: 'User banned' });
       }
       // Manager can ban: students, users only (not teachers, not managers, not admins)
@@ -200,7 +209,7 @@ export async function POST(req: NextRequest) {
         if (targetEffectiveRole === 'admin' || targetEffectiveRole === 'teacher' || targetEffectiveRole === 'manager') {
           return NextResponse.json({ error: 'Managers cannot ban admins, teachers, or other managers' }, { status: 403 });
         }
-        await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: true } });
+        await prisma.profile.update({ where: { userId: targetEmail }, data: banData });
         return NextResponse.json({ success: true, message: 'User banned' });
       }
     }
@@ -210,7 +219,7 @@ export async function POST(req: NextRequest) {
       if (effectiveRole !== 'admin') {
         return NextResponse.json({ error: 'Only admins can unban' }, { status: 403 });
       }
-      await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: false } });
+      await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: false, banReason: null, bannedBy: null } });
       return NextResponse.json({ success: true, message: 'User unbanned' });
     }
 

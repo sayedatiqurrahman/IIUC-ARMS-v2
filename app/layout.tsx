@@ -96,7 +96,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   };
 
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/arms-logo-icon.png" sizes="any" />
         <link rel="apple-touch-icon" href="/arms-logo-icon.png" />
@@ -113,7 +113,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
       </head>
-      <body className="min-h-screen">
+      <body className="min-h-screen" suppressHydrationWarning>
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
         <Providers>
           <AppShell>{children}</AppShell>

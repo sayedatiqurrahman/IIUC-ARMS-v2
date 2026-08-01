@@ -23,6 +23,8 @@ model Profile {
   image           String?
   role            String?  @default("user")
   isBanned        Boolean  @default(false)
+  banReason        String?
+  bannedBy        String?
   githubLogin     String?
   githubToken     String?
   githubInstallationId String?

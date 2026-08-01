@@ -1085,7 +1085,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   getSemesterCourses: (semId, departmentId?) => {
     const uploadTree = get().getUploadTree();
     const prefix = semId + '/';
-    const courseMap = new Map<string, { title: string; categories: Map<string, number>; totalFiles: number; midCount: number; finalCount: number; rootCount: number; readmes: Set<string> }>();
+    const courseMap = new Map<string, { title: string; categories: Map<string, number>; totalFiles: number; midCount: number; finalCount: number; rootCount: number; readmes: Set<string>; mdFiles: Set<string> }>();
     const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
 
     // First pass: detect courses from folder structure (tree items)
@@ -1106,7 +1106,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const code = dashMatch[1].toUpperCase();
         const title = dashMatch[2].trim();
         if (!courseMap.has(code)) {
-          courseMap.set(code, { title, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0, readmes: new Set() });
+          courseMap.set(code, { title, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0, readmes: new Set(), mdFiles: new Set() });
         } else {
           const c = courseMap.get(code)!;
           if (title !== code && c.title === code) c.title = title;
@@ -1133,7 +1133,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const { code, title, category, midFinal } = parsed;
 
       if (!courseMap.has(code)) {
-        courseMap.set(code, { title: code, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0, readmes: new Set() });
+        courseMap.set(code, { title: code, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0, readmes: new Set(), mdFiles: new Set() });
       }
       const c = courseMap.get(code)!;
       if (title !== code && c.title === code) c.title = title;
@@ -1145,11 +1145,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       c.categories.set(category, (c.categories.get(category) || 0) + 1);
     });
 
-    // Detect README.md (shared links) per course
+    // Detect README.md and .md files per course
     uploadTree.forEach((item: any) => {
       if (item.type !== 'blob') return;
       const fileName = item.path.split('/').pop();
-      if (fileName?.toLowerCase() !== 'readme.md') return;
+      const lowerName = fileName?.toLowerCase() || '';
+      if (!lowerName.endsWith('.md')) return;
       if (departmentId) {
         const matchesDept = item.department === departmentId;
         const matchesFaculty = facultyId && item.department === facultyId;
@@ -1163,7 +1164,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!dashMatch) return;
       const code = dashMatch[1].toUpperCase();
       const c = courseMap.get(code);
-      if (c) c.readmes.add(parts.slice(1).join('/').replace(/\/README\.md$/i, '').toLowerCase());
+      if (c) {
+        const folderPath = parts.slice(1).join('/').replace(/\/[^/]+$/i, '').toLowerCase();
+        c.readmes.add(folderPath);
+        c.mdFiles.add(folderPath);
+      }
     });
 
     return Array.from(courseMap.entries())
@@ -1180,6 +1185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         totalFiles: data.totalFiles,
         hasMidFinal: data.midCount > 0 || data.finalCount > 0,
         hasSharedLinks: data.readmes.size > 0,
+        hasMd: data.mdFiles.size > 0,
       }))
       .sort((a, b) => a.code.localeCompare(b.code));
   },
@@ -1255,16 +1261,21 @@ export const useAppStore = create<AppState>((set, get) => ({
       catMap.get(parsed.category)!.files.push(item);
     });
 
-    // Collect README.md folder paths for this course (to detect shared links)
+    // Collect README.md and .md file folder paths for this course
     const courseReadmes = new Set<string>();
+    const courseMdFiles = new Set<string>();
     uploadTree.forEach((item: any) => {
       if (item.type !== 'blob') return;
       const fileName = item.path.split('/').pop();
-      if (fileName?.toLowerCase() !== 'readme.md') return;
+      const lowerName = fileName?.toLowerCase() || '';
+      if (!lowerName.endsWith('.md')) return;
       const rel = item.path.substring(prefix.length);
       if (!rel.toLowerCase().startsWith(code.toLowerCase() + ' - ')) return;
-      const afterCourse = rel.substring(rel.indexOf('/') + 1).replace(/\/README\.md$/i, '');
-      courseReadmes.add(afterCourse.toLowerCase());
+      const afterCourse = rel.substring(rel.indexOf('/') + 1).replace(/\/[^/]+$/i, '').toLowerCase();
+      courseMdFiles.add(afterCourse);
+      if (lowerName === 'readme.md') {
+        courseReadmes.add(afterCourse);
+      }
     });
 
     // When no midFinal, add Mid and Final as virtual categories
@@ -1290,17 +1301,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         else if (parsed.midFinal === 'Final') finalCount++;
       });
 
-      // Check README.md at Mid/Final level
-      midHasLinks = courseReadmes.has('mid');
-      finalHasLinks = courseReadmes.has('final');
+      // Check README.md at Mid/Final level (prefix match: any README under mid/ or final/)
+      midHasLinks = Array.from(courseReadmes).some(k => k.startsWith('mid'));
+      finalHasLinks = Array.from(courseReadmes).some(k => k.startsWith('final'));
+      const midHasMd = Array.from(courseMdFiles).some(k => k.startsWith('mid'));
+      const finalHasMd = Array.from(courseMdFiles).some(k => k.startsWith('final'));
 
       // Also detect Mid/Final from folder structure
       const hasMidFolder = folderSet.has('Mid/notes') || folderSet.has('Mid/questions') || folderSet.has('Mid/sheet') || folderSet.has('Mid/syllabus') || folderSet.has('Mid/other');
       const hasFinalFolder = folderSet.has('Final/notes') || folderSet.has('Final/questions') || folderSet.has('Final/sheet') || folderSet.has('Final/syllabus') || folderSet.has('Final/other');
 
-      const virtualCats: { key: string; label: string; icon: string; count: number; files: any[]; hasLinks: boolean }[] = [];
-      if (midCount > 0 || hasMidFolder) virtualCats.push({ key: '_mid', label: 'Mid', icon: 'fa-pen-fancy', count: midCount, files: [], hasLinks: midHasLinks });
-      if (finalCount > 0 || hasFinalFolder) virtualCats.push({ key: '_final', label: 'Final', icon: 'fa-graduation-cap', count: finalCount, files: [], hasLinks: finalHasLinks });
+      const virtualCats: { key: string; label: string; icon: string; count: number; files: any[]; hasLinks: boolean; hasMd: boolean }[] = [];
+      if (midCount > 0 || hasMidFolder) virtualCats.push({ key: '_mid', label: 'Mid', icon: 'fa-pen-fancy', count: midCount, files: [], hasLinks: midHasLinks, hasMd: midHasMd });
+      if (finalCount > 0 || hasFinalFolder) virtualCats.push({ key: '_final', label: 'Final', icon: 'fa-graduation-cap', count: finalCount, files: [], hasLinks: finalHasLinks, hasMd: finalHasMd });
 
       // Root categories: include from files AND from folder structure
       const rootCatKeys = new Set<string>(Array.from(catMap.keys()));
@@ -1322,7 +1335,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           const bSpring = /spring/i.test(b.path) ? 1 : 0;
           return bSpring - aSpring;
         }),
-        hasLinks: courseReadmes.has(key.toLowerCase()),
+        hasLinks: Array.from(courseReadmes).some(k => k === key.toLowerCase() || k.startsWith(key.toLowerCase() + '/')),
+        hasMd: Array.from(courseMdFiles).some(k => k === key.toLowerCase() || k.startsWith(key.toLowerCase() + '/')),
       }));
       return [...virtualCats, ...rootCats];
     }
@@ -1342,6 +1356,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         return bSpring - aSpring;
       }),
       hasLinks: courseReadmes.has((midFinal + '/' + key).toLowerCase()),
+      hasMd: courseMdFiles.has((midFinal + '/' + key).toLowerCase()),
     }));
 
     // Add folders that exist but have no files yet
@@ -1357,6 +1372,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           count: 0,
           files: [],
           hasLinks: courseReadmes.has((midFinal + '/' + catKey).toLowerCase()),
+          hasMd: courseMdFiles.has((midFinal + '/' + catKey).toLowerCase()),
         });
       }
     });

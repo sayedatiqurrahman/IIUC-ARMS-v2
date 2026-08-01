@@ -19,6 +19,7 @@ export default function BrowsePage() {
   const profile = useAppStore(s => s.profile);
   const [mounted, setMounted] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
+  const deepLinkingRef = useRef(false);
 
   const email = session?.user?.email || profile.email || '';
   const userRole = email ? config.detectRole(email) : null;
@@ -151,88 +152,126 @@ export default function BrowsePage() {
     }
   }, [session?.accessToken, loadTree]);
 
-  // Deep-link: read URL params on load
+  // Deep-link: navigate to URL params once tree data is loaded
   useEffect(() => {
-    if (!mounted || loading) return;
-    const params = new URLSearchParams(window.location.search);
-    const q = params.get('q');
-    const dept = params.get('dept');
-    const sem = params.get('sem');
-    const course = params.get('course');
-    const mf = params.get('mf');
-    const cat = params.get('cat');
+    if (!mounted) return;
+    const p = new URLSearchParams(window.location.search);
+    const dept = p.get('dept');
+    if (!dept) return;
+    const sem = p.get('sem') || '';
+    const course = p.get('course') || '';
+    const mf = p.get('mf') || '';
+    const cat = p.get('cat') || '';
 
-    if (q) {
-      setSearchQuery(q);
-      return;
-    }
+    // Block URL sync during deep link navigation
+    deepLinkingRef.current = true;
 
-    if (dept && view === 'departments') {
-      navigateToDepartment(dept);
-      if (sem) {
-        setTimeout(() => {
-          const { navigateToSemester: navSem } = useAppStore.getState();
-          navSem(sem);
-          if (course) {
-            setTimeout(() => {
-              const { getSemesterCourses: getCourses, navigateToCourse: navCourse } = useAppStore.getState();
-              const courses = getCourses(sem, dept);
-              const found = courses.find(c => c.code.toUpperCase() === course.toUpperCase());
-              if (found) {
-                navCourse(found.code, found.title);
+    // Wait for tree data to load before navigating
+    if (loading) return;
+
+    // Only navigate from departments view (initial state)
+    if (view !== 'departments') return;
+
+    navigateToDepartment(dept);
+    if (sem) {
+      setTimeout(() => {
+        useAppStore.getState().navigateToSemester(sem);
+        if (course) {
+          setTimeout(() => {
+            const st2 = useAppStore.getState();
+            const courses = st2.getSemesterCourses(sem, dept);
+            const found = courses.find(c => c.code.toUpperCase() === course.toUpperCase());
+            if (found) {
+              st2.navigateToCourse(found.code, found.title);
+              const finishNav = (delay = 300) => {
                 if (mf) {
                   setTimeout(() => {
-                    const { navigateToMidFinal } = useAppStore.getState();
-                    navigateToMidFinal(mf);
-                  }, 200);
-                }
-                if (cat) {
-                  setTimeout(() => {
-                    const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
-                    if (catKey) navigateToCategory(catKey);
-                  }, mf ? 300 : 200);
-                }
-              } else {
-                setTimeout(() => {
-                  const retryCourses = useAppStore.getState().getSemesterCourses(sem, dept);
-                  const retryFound = retryCourses.find(c => c.code.toUpperCase() === course.toUpperCase());
-                  if (retryFound) {
-                    useAppStore.getState().navigateToCourse(retryFound.code, retryFound.title);
-                    if (mf) {
-                      setTimeout(() => useAppStore.getState().navigateToMidFinal(mf), 200);
-                    }
+                    useAppStore.getState().navigateToMidFinal(mf);
                     if (cat) {
                       setTimeout(() => {
                         const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
                         if (catKey) useAppStore.getState().navigateToCategory(catKey);
-                      }, mf ? 300 : 200);
+                        setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                      }, 150);
+                    } else {
+                      setTimeout(() => { deepLinkingRef.current = false; }, delay);
                     }
-                  }
-                }, 500);
-              }
-            }, 300);
-          }
-        }, 300);
-      }
+                  }, 150);
+                } else if (cat) {
+                  setTimeout(() => {
+                    const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
+                    if (catKey) useAppStore.getState().navigateToCategory(catKey);
+                    setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                  }, 150);
+                } else {
+                  setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                }
+              };
+              finishNav();
+            } else {
+              setTimeout(() => {
+                const retryCourses = useAppStore.getState().getSemesterCourses(sem, dept);
+                const retryFound = retryCourses.find(c => c.code.toUpperCase() === course.toUpperCase());
+                if (retryFound) {
+                  useAppStore.getState().navigateToCourse(retryFound.code, retryFound.title);
+                  const finishRetryNav = (delay = 300) => {
+                    if (mf) {
+                      setTimeout(() => {
+                        useAppStore.getState().navigateToMidFinal(mf);
+                        if (cat) {
+                          setTimeout(() => {
+                            const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
+                            if (catKey) useAppStore.getState().navigateToCategory(catKey);
+                            setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                          }, 150);
+                        } else {
+                          setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                        }
+                      }, 150);
+                    } else if (cat) {
+                      setTimeout(() => {
+                        const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
+                        if (catKey) useAppStore.getState().navigateToCategory(catKey);
+                        setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                      }, 150);
+                    } else {
+                      setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                    }
+                  };
+                  finishRetryNav();
+                } else {
+                  deepLinkingRef.current = false;
+                }
+              }, 500);
+            }
+          }, 300);
+        } else {
+          setTimeout(() => { deepLinkingRef.current = false; }, 300);
+        }
+      }, 300);
+    } else {
+      setTimeout(() => { deepLinkingRef.current = false; }, 300);
     }
   }, [mounted, loading]);
 
   // Auto-navigate to user's department after onboarding completes
   useEffect(() => {
     if (!mounted) return;
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dept')) return;
     const prevData = prevOnboardDataRef.current;
     prevOnboardDataRef.current = onboardData;
-    if (!prevData && onboardData && userDeptId && view === 'departments') {
-      navigateToDepartment(userDeptId);
-      // Also navigate into the user's semester
-      const semId = onboardData.semester
-        ? config.semesters.find(s => s.label === onboardData.semester)?.id
-        : null;
-      if (semId && semId !== 'graduated') {
-        setTimeout(() => {
-          const { navigateToSemester } = useAppStore.getState();
-          navigateToSemester(semId);
-        }, 150);
+    if (!prevData && onboardData && view === 'departments') {
+      // Default: navigate to user's own department
+      if (userDeptId) {
+        navigateToDepartment(userDeptId);
+        const semId = onboardData.semester
+          ? config.semesters.find(s => s.label === onboardData.semester)?.id
+          : null;
+        if (semId && semId !== 'graduated') {
+          setTimeout(() => {
+            useAppStore.getState().navigateToSemester(semId);
+          }, 150);
+        }
       }
     }
   }, [onboardData, mounted]);
@@ -240,9 +279,7 @@ export default function BrowsePage() {
   // Auto-navigate returning users into their department on page load (only if no URL params / personalized)
   useEffect(() => {
     if (!mounted || loading) return;
-    const urlParams = new URLSearchParams(window.location.search);
-    const hasUrlParams = urlParams.has('dept') || urlParams.has('q');
-    if (hasUrlParams) return;
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dept')) return;
     const dept = onboardData?.department || profile.department || '';
     if (!dept || view !== 'departments') return;
     const target = FACULTIES.flatMap(f => f.departments).find(d => d.name === dept || d.id === dept);
@@ -306,7 +343,7 @@ export default function BrowsePage() {
 
   // Sync URL params on navigation
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || deepLinkingRef.current) return;
     const params = new URLSearchParams();
     if (view === 'departments') {
       // root — no params
@@ -333,7 +370,7 @@ export default function BrowsePage() {
     const qs = params.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState({}, '', url);
-  }, [mounted, view, currentDept, currentSem, currentCourseCode, currentCat, searchQuery, isSearching]);
+  }, [mounted, view, currentDept, currentSem, currentCourseCode, currentCat, currentMidFinal, searchQuery, isSearching]);
 
   const filteredSemesters = semesters.filter(sem => {
     const matchLabel = !searchQuery || sem.label.toLowerCase().includes(searchQuery.toLowerCase());
@@ -575,19 +612,19 @@ export default function BrowsePage() {
           {currentCourseCode && (
             <>
               <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
-              <span className="text-dark-text font-semibold text-[0.75rem]">{currentCourseCode}</span>
+              <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem] font-semibold" onClick={() => navigateToCourse(currentCourseCode, currentCourseTitle)}>{currentCourseCode}</button>
             </>
           )}
           {currentMidFinal && (
             <>
               <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
-              <span className="text-dark-text text-[0.75rem]">{currentMidFinal}</span>
+              <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem]" onClick={() => navigateToMidFinal(currentMidFinal)}>{currentMidFinal}</button>
             </>
           )}
           {view === 'files' && currentCat && (
             <>
               <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
-              <span className="text-dark-text text-[0.75rem]">{config.categories[currentCat as keyof typeof config.categories]?.label || currentCat}</span>
+              <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem]" onClick={() => navigateToCategory(currentCat)}>{config.categories[currentCat as keyof typeof config.categories]?.label || currentCat}</button>
             </>
           )}
         </div>
@@ -859,9 +896,10 @@ export default function BrowsePage() {
                     <div className="font-semibold text-[0.95rem]">{course.code} — {course.title}</div>
                     <div className="flex gap-2 mt-[5px] flex-wrap">
                       {course.categories.map((cat: any) => (
-                        <span key={cat.key} className={`text-[0.68rem] px-2 py-[2px] rounded-full border ${(cat as any).hasLinks ? 'bg-pink-500/15 text-pink-400 border-pink-500/40 font-semibold' : 'bg-dark-bg3 text-dark-text2 border-dark-border'}`}>
+                        <span key={cat.key} className={`text-[0.68rem] px-2 py-[2px] rounded-full border ${(cat as any).hasLinks ? 'bg-pink-500/15 text-pink-400 border-pink-500/40 font-semibold' : (cat as any).hasMd ? 'bg-blue-500/15 text-blue-400 border-blue-500/40 font-semibold' : 'bg-dark-bg3 text-dark-text2 border-dark-border'}`}>
                           {cat.label}: {cat.count}
                           {(cat as any).hasLinks && <i className="fas fa-link ml-1 text-[0.55rem]"></i>}
+                          {!(cat as any).hasLinks && (cat as any).hasMd && <i className="fas fa-file-alt ml-1 text-[0.55rem]"></i>}
                         </span>
                       ))}
                     </div>
@@ -869,6 +907,7 @@ export default function BrowsePage() {
                   <div className="text-right flex-shrink-0">
                     <div className="text-[0.75rem] text-dark-text2 flex items-center gap-1.5 justify-end">
                       {(course as any).hasSharedLinks && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-400 text-[0.6rem] font-bold border border-pink-500/30"><i className="fas fa-link text-[0.55rem]"></i>Links</span>}
+                      {(course as any).hasMd && !(course as any).hasSharedLinks && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[0.6rem] font-bold border border-blue-500/30"><i className="fas fa-file-alt text-[0.55rem]"></i>.md</span>}
                       {course.totalFiles} files
                     </div>
                     {course.hasMidFinal && (
@@ -933,6 +972,7 @@ export default function BrowsePage() {
                       <div className="text-[0.95rem] font-semibold">Mid</div>
                       <div className="flex items-center gap-2 ml-auto">
                         {(cat as any).hasLinks && <span className="text-[0.7rem] px-1.5 py-[2px] rounded bg-pink-500/15 text-pink-400"><i className="fas fa-link mr-1"></i>Links</span>}
+                        {(cat as any).hasMd && !(cat as any).hasLinks && <span className="text-[0.7rem] px-1.5 py-[2px] rounded bg-blue-500/15 text-blue-400"><i className="fas fa-file-alt mr-1"></i>.md</span>}
                         <div className="text-[0.75rem] text-dark-text2">{cat.count} files</div>
                       </div>
                     </div>
@@ -944,6 +984,7 @@ export default function BrowsePage() {
                     <div className="text-[0.95rem] font-semibold">Final</div>
                     <div className="flex items-center gap-2 ml-auto">
                       {(cat as any).hasLinks && <span className="text-[0.7rem] px-1.5 py-[2px] rounded bg-pink-500/15 text-pink-400"><i className="fas fa-link mr-1"></i>Links</span>}
+                      {(cat as any).hasMd && !(cat as any).hasLinks && <span className="text-[0.7rem] px-1.5 py-[2px] rounded bg-blue-500/15 text-blue-400"><i className="fas fa-file-alt mr-1"></i>.md</span>}
                       <div className="text-[0.75rem] text-dark-text2">{cat.count} files</div>
                     </div>
                   </div>
@@ -962,6 +1003,7 @@ export default function BrowsePage() {
                   <div className="text-[0.95rem] font-semibold">{cat.label}</div>
                   <div className="flex items-center gap-2 ml-auto">
                     {(cat as any).hasLinks && <span className="text-[0.7rem] px-1.5 py-[2px] rounded bg-pink-500/15 text-pink-400"><i className="fas fa-link mr-1"></i>Links</span>}
+                    {(cat as any).hasMd && !(cat as any).hasLinks && <span className="text-[0.7rem] px-1.5 py-[2px] rounded bg-blue-500/15 text-blue-400"><i className="fas fa-file-alt mr-1"></i>.md</span>}
                     <div className="text-[0.75rem] text-dark-text2">{cat.count} files</div>
                   </div>
                 </div>

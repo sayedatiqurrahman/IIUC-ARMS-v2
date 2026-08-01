@@ -16,6 +16,8 @@ interface UserRecord {
   role: string | null;
   title?: string;
   isBanned?: boolean;
+  banReason?: string | null;
+  bannedBy?: string | null;
   isCR?: boolean;
   isACR?: boolean;
   githubLogin?: string;
@@ -994,13 +996,20 @@ export default function AdminPanelView() {
   const handleBan = async (targetEmail: string, isBanned: boolean) => {
     const action = isBanned ? 'unban' : 'ban';
     const label = isBanned ? 'Unban' : 'Ban';
-    if (!confirm(`${label} user ${targetEmail}?`)) return;
+    let banReason = '';
+    if (!isBanned) {
+      const reason = prompt(`Ban ${targetEmail}?\n\nEnter a reason (optional):`);
+      if (reason === null) return;
+      banReason = reason;
+    } else {
+      if (!confirm(`Unban user ${targetEmail}?`)) return;
+    }
     setActionLoading(targetEmail + action);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetEmail, action }),
+        body: JSON.stringify({ targetEmail, action, banReason }),
       });
       const data = await res.json();
       if (data.success) {
@@ -1391,6 +1400,12 @@ export default function AdminPanelView() {
               {u.githubLogin && <a href={`https://github.com/${u.githubLogin}`} target="_blank" rel="noopener noreferrer" className="text-dark-text3 hover:text-dark-text"><i className="fab fa-github text-[0.7rem]"></i></a>}
             </div>
             <p className="text-[0.72rem] text-dark-text3 truncate">{u.email}{u.universityId ? ` (${u.universityId})` : ''}{u.semester ? ` — ${u.semester}` : ''}</p>
+            {u.isBanned && u.banReason && (
+              <div className="mt-1.5 p-1.5 rounded bg-red-500/10 border border-red-500/20">
+                <p className="text-[0.62rem] text-red-400"><i className="fas fa-info-circle mr-1"></i>{u.banReason}</p>
+                {u.bannedBy && <p className="text-[0.58rem] text-dark-text3 mt-0.5">Banned by: {u.bannedBy}</p>}
+              </div>
+            )}
             {u.lastSignIn && <p className="text-[0.62rem] text-dark-text3 mt-0.5"><i className="fas fa-clock mr-0.5"></i>{formatDate(u.lastSignIn)}</p>}
           </div>
           {/* Actions */}

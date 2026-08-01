@@ -47,6 +47,8 @@ interface RoutineItem {
   femalePeriods?: RoutinePeriod[];
   maleSlots?: RoutineSlot[];
   femaleSlots?: RoutineSlot[];
+  maleRoom?: string;
+  femaleRoom?: string;
   createdAt?: number;
   published?: boolean;
   isDraft?: boolean;
@@ -167,6 +169,8 @@ interface DraftData {
   femalePeriods?: RoutinePeriod[];
   maleSlots?: RoutineSlot[];
   femaleSlots?: RoutineSlot[];
+  maleRoom?: string;
+  femaleRoom?: string;
   step?: string;
 }
 
@@ -356,8 +360,23 @@ export default function RoutineView() {
 
   const email = session?.user?.email || profile.email || '';
   const isOwner = config.ownerEmails.includes(email);
-  const canPublish = config.canPublishRoutine(email, profile) || isOwner;
-  const canCreateAllBranch = config.canPublishRoutine(email, profile) || isOwner;
+  const [permissions, setPermissions] = useState<Record<string, string[]>>({});
+  const [canPublish, setCanPublish] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/settings/permissions')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) return;
+        const perms = data.permissions || {};
+        setPermissions(perms);
+        const role = config.getEffectiveRole(email, profile.role);
+        const roleKey = profile.isCR ? 'cr' : role;
+        const allowed = perms.publishRoutine || ['admin', 'manager', 'teacher', 'cr'];
+        setCanPublish(isOwner || allowed.includes(roleKey));
+      })
+      .catch(() => {});
+  }, [email, profile.role, profile.isCR, isOwner]);
 
   const sharedRoutines: RoutineItem[] = Array.isArray(routineData) ? routineData : [];
   const routines = sharedRoutines;
@@ -439,6 +458,10 @@ export default function RoutineView() {
   }, [myRoutines, persistMyRoutines]);
 
   const handlePublish = useCallback((routine: RoutineItem) => {
+    if (!canPublish) {
+      showToast('Permission denied: Only Admin, Manager, or Teacher can publish routines.', 'error');
+      return;
+    }
     if (!confirm(`Publish "${routine.semester}" for all users?`)) return;
     const publisherName = session?.user?.name || profile.name || 'Unknown';
     const published = {
@@ -464,7 +487,7 @@ export default function RoutineView() {
     }).catch(() => {});
 
     showToast('Routine published! All users can now see it.', 'success');
-  }, [publishedRoutines, myRoutines, persistMyRoutines, session, profile]);
+  }, [publishedRoutines, myRoutines, persistMyRoutines, session, profile, canPublish]);
 
   const handleUnpublish = useCallback((id: string) => {
     const updated = publishedRoutines.filter(r => r.id !== id);
@@ -639,7 +662,7 @@ export default function RoutineView() {
               }}>
                 <i className="fas fa-plus"></i> Create New
               </button>
-              {canCreateAllBranch && (
+              {canPublish && (
                 <button className="routine-btn routine-btn-accent" onClick={() => setViewMode('allBranch')}>
                   <i className="fas fa-layer-group"></i> All Semester Routine Routine
                 </button>
@@ -1767,7 +1790,20 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'6px'}}><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M17 14h-6"/><path d="M13 18H7"/><path d="M7 14h.01"/><path d="M17 18h.01"/></svg>
               Session {routine.session}
             </span>
-            {routine.room && <span className="routine-badge routine-badge-room">
+            {routine.gender === 'both' && (routine.maleRoom || routine.femaleRoom) ? (
+              <>
+                {routine.maleRoom && <span className="routine-badge routine-badge-room">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'4px'}}><path d="M11 20H2"/><path d="M11 4.562v16.157a1 1 0 0 0 1.242.97L19 20V5.562a2 2 0 0 0-1.515-1.94l-4-1A2 2 0 0 0 11 4.561z"/><path d="M11 4H8a2 2 0 0 0-2 2v14"/><path d="M14 12h.01"/><path d="M22 20h-3"/></svg>
+                  <i className="fas fa-mars" style={{marginRight:4,fontSize:'0.65rem'}}></i>
+                  {/^\d+$/.test(routine.maleRoom) ? `Room ${routine.maleRoom}` : routine.maleRoom}
+                </span>}
+                {routine.femaleRoom && <span className="routine-badge routine-badge-room">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'4px'}}><path d="M11 20H2"/><path d="M11 4.562v16.157a1 1 0 0 0 1.242.97L19 20V5.562a2 2 0 0 0-1.515-1.94l-4-1A2 2 0 0 0 11 4.561z"/><path d="M11 4H8a2 2 0 0 0-2 2v14"/><path d="M14 12h.01"/><path d="M22 20h-3"/></svg>
+                  <i className="fas fa-venus" style={{marginRight:4,fontSize:'0.65rem'}}></i>
+                  {/^\d+$/.test(routine.femaleRoom) ? `Room ${routine.femaleRoom}` : routine.femaleRoom}
+                </span>}
+              </>
+            ) : routine.room && <span className="routine-badge routine-badge-room">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline-block',verticalAlign:'-0.15em',marginRight:'6px'}}><path d="M11 20H2"/><path d="M11 4.562v16.157a1 1 0 0 0 1.242.97L19 20V5.562a2 2 0 0 0-1.515-1.94l-4-1A2 2 0 0 0 11 4.561z"/><path d="M11 4H8a2 2 0 0 0-2 2v14"/><path d="M14 12h.01"/><path d="M22 20h-3"/></svg>
               {/^\d+$/.test(routine.room) ? `Room ${routine.room}` : routine.room}
             </span>}
@@ -1850,6 +1886,8 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
   const [gender, setGender] = useState<'male' | 'female' | 'both' | null>(existing?.gender || null);
   const [session, setSession] = useState(existing?.session || getDefaultSession());
   const [room, setRoom] = useState(existing?.room || '');
+  const [maleRoom, setMaleRoom] = useState(existing?.maleRoom || '');
+  const [femaleRoom, setFemaleRoom] = useState(existing?.femaleRoom || '');
   const [periods, setPeriods] = useState<RoutinePeriod[]>(existing?.periods || [...DEFAULT_PERIODS]);
   const [days, setDays] = useState<string[]>(existing?.days || [...DEFAULT_DAYS]);
   const [courses, setCourses] = useState<RoutineCourse[]>(existing?.courses || []);
@@ -1870,6 +1908,8 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
       if (draft.gender !== undefined) setGender(draft.gender || null);
       if (draft.session) setSession(draft.session);
       if (draft.room !== undefined) setRoom(draft.room || '');
+      if (draft.maleRoom !== undefined) setMaleRoom(draft.maleRoom || '');
+      if (draft.femaleRoom !== undefined) setFemaleRoom(draft.femaleRoom || '');
       if (draft.periods) setPeriods(draft.periods);
       if (draft.days) setDays(draft.days);
       if (draft.courses) setCourses(draft.courses);
@@ -1886,12 +1926,12 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
   useEffect(() => {
     if (existing) return;
     const timer = setTimeout(() => {
-      saveDraft({ semester, branch, gender, session, room, periods, days, courses, slots, malePeriods, femalePeriods, maleSlots, femaleSlots, step });
+      saveDraft({ semester, branch, gender, session, room, periods, days, courses, slots, malePeriods, femalePeriods, maleSlots, femaleSlots, step, maleRoom, femaleRoom });
       setDraftSaved(true);
       setTimeout(() => setDraftSaved(false), 2000);
     }, 1000);
     return () => clearTimeout(timer);
-  }, [semester, branch, gender, session, room, periods, days, courses, slots, malePeriods, femalePeriods, maleSlots, femaleSlots, step, existing]);
+  }, [semester, branch, gender, session, room, periods, days, courses, slots, malePeriods, femalePeriods, maleSlots, femaleSlots, step, existing, maleRoom, femaleRoom]);
 
   const classPeriods = periods.filter(p => !p.isBreak);
   const nonBreakIdx = (pIdx: number, refPeriods: RoutinePeriod[]) => {
@@ -1994,7 +2034,7 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
       department: existing?.department || 'Department of Qur\'anic Sciences & Islamic Studies',
       university: existing?.university || 'International Islamic University Chittagong',
       periods, days, courses, slots,
-      ...(isBoth ? { malePeriods, femalePeriods, maleSlots, femaleSlots } : {}),
+      ...(isBoth ? { malePeriods, femalePeriods, maleSlots, femaleSlots, maleRoom, femaleRoom } : {}),
       createdAt: existing?.createdAt || Date.now(),
       isDraft: true,
     };
@@ -2053,10 +2093,23 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
               <label>Session</label>
               <input placeholder="e.g. Spring - 2026" value={session} onChange={e => setSession(e.target.value)} />
             </div>
-            <div className="routine-form-group">
-              <label>Room / Venue</label>
-              <input placeholder="e.g. Room 301, Building B" value={room} onChange={e => setRoom(e.target.value)} />
-            </div>
+            {gender === 'both' ? (
+              <>
+                <div className="routine-form-group">
+                  <label><i className="fas fa-mars text-blue-400 mr-1"></i>Male Room</label>
+                  <input placeholder="e.g. Room 301" value={maleRoom} onChange={e => setMaleRoom(e.target.value)} />
+                </div>
+                <div className="routine-form-group">
+                  <label><i className="fas fa-venus text-pink-400 mr-1"></i>Female Room</label>
+                  <input placeholder="e.g. Room 202" value={femaleRoom} onChange={e => setFemaleRoom(e.target.value)} />
+                </div>
+              </>
+            ) : (
+              <div className="routine-form-group">
+                <label>Room / Venue</label>
+                <input placeholder="e.g. Room 301, Building B" value={room} onChange={e => setRoom(e.target.value)} />
+              </div>
+            )}
             <div className="routine-form-group routine-form-full">
               <label>Class Days</label>
               <div className="routine-day-selector">

@@ -29,6 +29,8 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [totpCode, setTotpCode] = useState('');
   const [pendingCredentials, setPendingCredentials] = useState<{ idToken: string; email: string } | null>(null);
   const [magicLink2faSent, setMagicLink2faSent] = useState(false);
+  const [banReason, setBanReason] = useState<string | null>(null);
+  const [bannedBy, setBannedBy] = useState<string | null>(null);
   const turnstileContainerId = 'login-turnstile-container';
   const { renderWidget, getToken, reset } = useTurnstile();
   const isDev = process.env.NODE_ENV === 'development';
@@ -59,6 +61,8 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       setTotpCode('');
       setPendingCredentials(null);
       setMagicLink2faSent(false);
+      setBanReason(null);
+      setBannedBy(null);
     }
   }, [isOpen]);
 
@@ -107,6 +111,8 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         });
         const banData = await banCheck.json();
         if (banData.banned) {
+          setBanReason(banData.banReason || null);
+          setBannedBy(banData.bannedBy || null);
           setError('YOUR_ACCOUNT_IS_BANNED');
           setLoading(false);
           return;
@@ -468,7 +474,18 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 <i className="fas fa-ban text-red-400 text-lg mt-0.5"></i>
                 <div>
                   <p className="text-red-400 font-semibold mb-1">Account Suspended</p>
-                  <p className="text-dark-text2">Your account has been suspended by an administrator. You cannot access the system. Contact admin for more information.</p>
+                  <p className="text-dark-text2">Your account has been suspended. You cannot access the system.</p>
+                  {banReason && (
+                    <div className="mt-2 p-2 rounded bg-dark-bg3 border border-dark-border">
+                      <p className="text-[0.72rem] text-dark-text3 mb-0.5">Reason:</p>
+                      <p className="text-[0.78rem] text-dark-text font-medium">{banReason}</p>
+                    </div>
+                  )}
+                  {bannedBy && (
+                    <p className="text-[0.68rem] text-dark-text3 mt-1.5">
+                      <i className="fas fa-user-shield mr-1"></i>Banned by: {bannedBy}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
