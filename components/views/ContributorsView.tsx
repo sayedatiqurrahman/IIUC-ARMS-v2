@@ -430,96 +430,114 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
   const isFounder = c.role === 'Founder & Lead';
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
-  const isBoth = isDev && isResource;
 
   return (
-    <div className={`flex items-center gap-4 p-4 rounded-xl border transition-all hover:border-qsis/40 hover:shadow-[0_2px_12px_rgba(34,197,94,0.1)] ${
+    <div className={`rounded-xl border transition-all hover:border-qsis/40 hover:shadow-[0_2px_12px_rgba(34,197,94,0.1)] ${
       isFounder ? 'bg-gradient-to-br from-qsis/10 to-accent/10 border-qsis/30' :
       rank <= 3 ? 'bg-dark-bg2 border-qsis/20' : 'bg-dark-bg2 border-dark-border'
     }`}>
-      {settings.showRanks && (
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-[0.85rem] ${
-          isFounder ? 'bg-qsis text-white' : rankColors[rank] || 'bg-dark-bg3 text-dark-text2'
-        }`}>
-          {isFounder ? <i className="fas fa-crown text-[0.7rem]"></i> : `#${rank}`}
+      {/* Main row */}
+      <div className="flex items-center gap-3 p-3 sm:p-4">
+        {settings.showRanks && (
+          <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-[0.8rem] sm:text-[0.85rem] ${
+            isFounder ? 'bg-qsis text-white' : rankColors[rank] || 'bg-dark-bg3 text-dark-text2'
+          }`}>
+            {isFounder ? <i className="fas fa-crown text-[0.65rem]"></i> : `#${rank}`}
+          </div>
+        )}
+        <Image src={c.avatar_url} alt={c.login} width={48} height={48} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover flex-shrink-0 ${isFounder ? 'border-2 border-qsis' : 'border-2 border-dark-border'}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <span className="text-[0.82rem] sm:text-[0.9rem] font-bold text-dark-text truncate">{c.name || c.login}</span>
+            {isFounder && (
+              <span className="px-1.5 py-0.5 rounded-md bg-qsis/20 text-qsis text-[0.55rem] sm:text-[0.58rem] font-bold"><i className="fas fa-crown mr-0.5"></i>Founder</span>
+            )}
+            {isDev && (
+              <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.55rem] sm:text-[0.58rem] font-bold"><i className="fas fa-laptop-code mr-0.5"></i>Dev</span>
+            )}
+            {isResource && (
+              <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.55rem] sm:text-[0.58rem] font-bold"><i className="fas fa-book-open mr-0.5"></i>Resource</span>
+            )}
+            {c.profileComplete && (
+              <span className="hidden sm:inline px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-400 text-[0.55rem] font-bold"><i className="fas fa-check-circle mr-0.5"></i>Complete</span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mt-0.5">
+            <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.65rem] sm:text-[0.72rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
+              <i className="fab fa-github mr-1"></i>@{c.login}
+            </a>
+            {(c as any).departmentShortName && (
+              <span className="text-[0.6rem] sm:text-[0.65rem] text-dark-text3 hidden sm:inline">
+                <i className="fas fa-building mr-1 text-teal-400"></i>{(c as any).departmentShortName}
+              </span>
+            )}
+            {c.universityId && !c.hideUniversityId && (
+              <span className="text-[0.6rem] sm:text-[0.65rem] text-dark-text3 hidden sm:inline">
+                <i className="fas fa-id-card mr-1 text-qsis"></i>{c.universityId}
+              </span>
+            )}
+            {c.semester && !c.hideSemester && (
+              <span className="text-[0.6rem] sm:text-[0.65rem] text-dark-text3 hidden sm:inline">
+                <i className="fas fa-graduation-cap mr-1 text-accent"></i>{c.semester === 'graduated' ? '🎓 Graduated' : config.semesters.find((s: any) => s.id === c.semester)?.label || c.semester}
+              </span>
+            )}
+          </div>
         </div>
-      )}
-      <Image src={c.avatar_url} alt={c.login} width={48} height={48} className={`w-12 h-12 rounded-full object-cover flex-shrink-0 ${isFounder ? 'border-2 border-qsis' : 'border-2 border-dark-border'}`} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[0.9rem] font-bold text-dark-text truncate">{c.name || c.login}</span>
-          {isFounder && (
-            <span className="px-1.5 py-0.5 rounded-md bg-qsis/20 text-qsis text-[0.58rem] font-bold"><i className="fas fa-crown mr-0.5"></i>Founder</span>
-          )}
-          {isDev && (
-            <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.58rem] font-bold"><i className="fas fa-laptop-code mr-0.5"></i>Developer</span>
-          )}
-          {isResource && (
-            <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.58rem] font-bold"><i className="fas fa-book-open mr-0.5"></i>Resource Provider</span>
-          )}
-          {c.profileComplete && (
-            <span className="px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-400 text-[0.58rem] font-bold"><i className="fas fa-check-circle mr-0.5"></i>Complete</span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap mt-0.5">
-          <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.72rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
-            <i className="fab fa-github mr-1"></i>@{c.login}
-          </a>
-          {(c as any).departmentLabel && (
-            <span className="text-[0.65rem] text-dark-text3">
-              <i className="fas fa-building mr-1 text-teal-400"></i>{(c as any).departmentShortName || c.department}
-            </span>
-          )}
-          {c.universityId && !c.hideUniversityId && (
-            <span className="text-[0.65rem] text-dark-text3">
-              <i className="fas fa-id-card mr-1 text-qsis"></i>{c.universityId}
-            </span>
-          )}
-          {c.semester && !c.hideSemester && (
-            <span className="text-[0.65rem] text-dark-text3">
-              <i className="fas fa-graduation-cap mr-1 text-accent"></i>{c.semester === 'graduated' ? '🎓 Graduated' : config.semesters.find((s: any) => s.id === c.semester)?.label || c.semester}
-            </span>
-          )}
-          {((c.publicEmail && !c.hideEmail) || (c.email && !c.hideEmail && !c.publicEmail)) && (
-            <span className="text-[0.65rem] text-dark-text3">
-              <i className="fas fa-envelope mr-1 text-blue-400"></i>{c.publicEmail || c.email}
-            </span>
-          )}
-          {c.whatsapp && !c.hideWhatsapp && (
-            <span className="text-[0.65rem] text-dark-text3">
-              <i className="fab fa-whatsapp mr-1 text-green-400"></i>{c.whatsapp}
-            </span>
-          )}
-          {c.company && !c.hideCompany && (
-            <span className="text-[0.65rem] text-dark-text3">
-              <i className="fas fa-briefcase mr-1 text-purple-400"></i>{c.companyUrl ? <a href={c.companyUrl} target="_blank" rel="noopener noreferrer" className="text-dark-text3 hover:text-qsis no-underline transition-colors">{c.company}</a> : c.company}
-            </span>
-          )}
-        </div>
+        {settings.showStats && (
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <div className="text-center">
+              <div className="text-[0.75rem] sm:text-[0.85rem] font-bold text-blue-400">{c.v2Contributions}</div>
+              <div className="text-[0.5rem] sm:text-[0.58rem] text-dark-text3">Code</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[0.75rem] sm:text-[0.85rem] font-bold text-orange-400">{c.dataContributions}</div>
+              <div className="text-[0.5rem] sm:text-[0.58rem] text-dark-text3">Data</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[0.75rem] sm:text-[0.85rem] font-bold text-accent">{c.prCount}</div>
+              <div className="text-[0.5rem] sm:text-[0.58rem] text-dark-text3">PRs</div>
+            </div>
+            <div className="text-center border-l border-dark-border pl-2 sm:pl-3 ml-0.5 sm:ml-1">
+              <div className="text-[0.75rem] sm:text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions}</div>
+              <div className="text-[0.5rem] sm:text-[0.58rem] text-dark-text3">Total</div>
+            </div>
+          </div>
+        )}
+        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="hidden sm:flex w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-dark-bg3 items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0">
+          <i className="fab fa-github"></i>
+        </a>
       </div>
-      {settings.showStats && (
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <div className="text-center">
-            <div className="text-[0.85rem] font-bold text-blue-400">{c.v2Contributions}</div>
-            <div className="text-[0.58rem] text-dark-text3">Code</div>
-          </div>
-          <div className="text-center">
-            <div className="text-[0.85rem] font-bold text-orange-400">{c.dataContributions}</div>
-            <div className="text-[0.58rem] text-dark-text3">Data</div>
-          </div>
-          <div className="text-center">
-            <div className="text-[0.85rem] font-bold text-accent">{c.prCount}</div>
-            <div className="text-[0.58rem] text-dark-text3">PRs</div>
-          </div>
-          <div className="text-center border-l border-dark-border pl-3 ml-1">
-            <div className="text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions}</div>
-            <div className="text-[0.58rem] text-dark-text3">Total</div>
-          </div>
-        </div>
-      )}
-      <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0">
-        <i className="fab fa-github"></i>
-      </a>
+      {/* Mobile extra info row */}
+      <div className="flex items-center gap-2 px-3 pb-3 sm:hidden flex-wrap">
+        {(c as any).departmentShortName && (
+          <span className="text-[0.58rem] text-dark-text3">
+            <i className="fas fa-building mr-1 text-teal-400"></i>{(c as any).departmentShortName}
+          </span>
+        )}
+        {c.universityId && !c.hideUniversityId && (
+          <span className="text-[0.58rem] text-dark-text3">
+            <i className="fas fa-id-card mr-1 text-qsis"></i>{c.universityId}
+          </span>
+        )}
+        {c.semester && !c.hideSemester && (
+          <span className="text-[0.58rem] text-dark-text3">
+            <i className="fas fa-graduation-cap mr-1 text-accent"></i>{c.semester === 'graduated' ? '🎓 Grad' : config.semesters.find((s: any) => s.id === c.semester)?.label?.replace(' Semester', '') || c.semester}
+          </span>
+        )}
+        {(() => {
+          const displayEmail = c.publicEmail || c.email;
+          if (displayEmail && !c.hideEmail) return (
+            <span className="text-[0.58rem] text-dark-text3">
+              <i className="fas fa-envelope mr-1 text-blue-400"></i>{displayEmail}
+            </span>
+          );
+        })()}
+        {c.whatsapp && !c.hideWhatsapp && (
+          <span className="text-[0.58rem] text-dark-text3">
+            <i className="fab fa-whatsapp mr-1 text-green-400"></i>{c.whatsapp}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
