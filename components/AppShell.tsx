@@ -286,7 +286,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   </a>
                   <a href="https://t.me/iiuc_arms" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 rounded-xl bg-dark-bg3 border border-dark-border hover:border-blue-500/30 transition-colors">
                     <div className="w-7 h-7 rounded-md bg-blue-500/20 flex items-center justify-center"><i className="fab fa-telegram text-blue-400 text-sm"></i></div>
-                    <span className="text-[0.78rem] text-dark-text">Telegram Channel</span>
+                    <div>
+                      <span className="text-[0.78rem] text-dark-text block">Telegram Channel</span>
+                      <span className="text-[0.6rem] text-dark-text3">Announcements & updates</span>
+                    </div>
+                  </a>
+                  <a href="https://t.me/iiuc_arms_chat" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 rounded-xl bg-dark-bg3 border border-dark-border hover:border-blue-500/30 transition-colors">
+                    <div className="w-7 h-7 rounded-md bg-blue-500/20 flex items-center justify-center"><i className="fab fa-telegram text-blue-400 text-sm"></i></div>
+                    <div>
+                      <span className="text-[0.78rem] text-dark-text block">Telegram Group</span>
+                      <span className="text-[0.6rem] text-dark-text3">Discuss & get support</span>
+                    </div>
                   </a>
                 </div>
               </div>
@@ -366,6 +376,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <a href="https://t.me/iiuc_arms" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
                   <div className="w-7 h-7 rounded-md bg-blue-500/20 flex items-center justify-center"><i className="fab fa-telegram text-blue-400 text-sm"></i></div>
                   <span className="text-[0.78rem] text-dark-text2 group-hover:text-blue-400 transition-colors">Telegram Channel</span>
+                </a>
+                <a href="https://t.me/iiuc_arms_chat" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
+                  <div className="w-7 h-7 rounded-md bg-blue-500/20 flex items-center justify-center"><i className="fab fa-telegram text-blue-400 text-sm"></i></div>
+                  <span className="text-[0.78rem] text-dark-text2 group-hover:text-blue-400 transition-colors">Telegram Group</span>
                 </a>
               </div>
               <p className="text-[0.65rem] text-dark-text3 mt-2">Get updates &amp; discuss support</p>

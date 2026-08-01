@@ -528,78 +528,104 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
 function GridCard({ c, settings }: { c: any; settings: Settings }) {
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
-  const isBoth = isDev && isResource;
+
+  const infoItems: { icon: string; iconClass: string; text: string; color: string; link?: string }[] = [];
+  if ((c as any).departmentShortName) {
+    infoItems.push({ icon: '\uf1ad', iconClass: 'fas fa-building', text: (c as any).departmentShortName, color: 'text-teal-400' });
+  }
+  if (c.universityId && !c.hideUniversityId) {
+    infoItems.push({ icon: '', iconClass: 'fas fa-id-card', text: c.universityId, color: 'text-qsis' });
+  }
+  if (c.semester && !c.hideSemester) {
+    const semLabel = c.semester === 'graduated' ? 'Graduated' : config.semesters.find((s: any) => s.id === c.semester)?.label || c.semester;
+    infoItems.push({ icon: '', iconClass: 'fas fa-graduation-cap', text: semLabel, color: 'text-accent' });
+  }
+  const displayEmail = c.publicEmail || c.email;
+  if (displayEmail && !c.hideEmail) {
+    infoItems.push({ icon: '', iconClass: 'fas fa-envelope', text: displayEmail, color: 'text-blue-400' });
+  }
+  if (c.whatsapp && !c.hideWhatsapp) {
+    infoItems.push({ icon: '', iconClass: 'fab fa-whatsapp', text: c.whatsapp, color: 'text-green-400' });
+  }
+  if (c.company && !c.hideCompany) {
+    infoItems.push({ icon: '', iconClass: 'fas fa-briefcase', text: c.company, color: 'text-purple-400', link: c.companyUrl || undefined });
+  }
 
   return (
-    <div className="bg-dark-bg2 border border-dark-border rounded-2xl overflow-hidden hover:border-qsis hover:shadow-[0_4px_24px_rgba(34,197,94,0.15)] transition-all group">
-      <div className="bg-gradient-to-br from-qsis/10 to-accent/10 px-5 pt-6 pb-4 text-center">
-        <Image src={c.avatar_url} alt={c.login} width={72} height={72} className="w-[72px] h-[72px] rounded-full mx-auto mb-3 object-cover border-[3px] border-qsis" />
-        <h4 className="text-[1rem] font-bold text-dark-text">{c.name || c.login}</h4>
-        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
+    <div className="bg-dark-bg2 border border-dark-border rounded-2xl overflow-hidden hover:border-qsis/50 hover:shadow-[0_4px_20px_rgba(34,197,94,0.12)] transition-all group flex flex-col">
+      {/* Header */}
+      <div className="relative px-4 pt-5 pb-3 text-center bg-gradient-to-b from-qsis/5 to-transparent">
+        <div className="relative inline-block mb-2.5">
+          <Image src={c.avatar_url} alt={c.login} width={64} height={64} className="w-16 h-16 rounded-full object-cover border-2 border-dark-border group-hover:border-qsis/50 transition-colors" />
+          {isDev && isResource && (
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-qsis flex items-center justify-center" title="Developer & Resource Provider">
+              <i className="fas fa-star text-white text-[0.45rem]"></i>
+            </div>
+          )}
+        </div>
+        <h4 className="text-[0.88rem] font-bold text-dark-text leading-tight truncate">{c.name || c.login}</h4>
+        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
           @{c.login}
         </a>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
           {isDev && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold bg-blue-500/15 text-blue-400">
-              <i className="fas fa-laptop-code"></i>Developer
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-semibold bg-blue-500/15 text-blue-400">
+              <i className="fas fa-laptop-code text-[0.5rem]"></i>Dev
             </span>
           )}
           {isResource && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.68rem] font-semibold bg-orange-500/15 text-orange-400">
-              <i className="fas fa-book-open"></i>Resource Provider
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-semibold bg-orange-500/15 text-orange-400">
+              <i className="fas fa-book-open text-[0.5rem]"></i>Resource
             </span>
           )}
           {c.profileComplete && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6rem] font-medium bg-green-500/10 text-green-400">
-              <i className="fas fa-check-circle"></i>Complete
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[0.58rem] font-medium bg-green-500/10 text-green-400">
+              <i className="fas fa-check-circle text-[0.45rem]"></i>Complete
             </span>
           )}
         </div>
-        {(c as any).departmentLabel && (
-          <p className="text-[0.68rem] text-dark-text3 mt-2">
-            <i className="fas fa-building mr-1 text-teal-400"></i>{(c as any).departmentLabel}
-          </p>
-        )}
-        {c.universityId && !c.hideUniversityId && (
-          <p className="text-[0.65rem] text-dark-text3 mt-1">
-            <i className="fas fa-id-card mr-1 text-qsis"></i>ID: {c.universityId}
-          </p>
-        )}
-        {((c.publicEmail && !c.hideEmail) || (c.email && !c.hideEmail && !c.publicEmail)) && (
-          <p className="text-[0.65rem] text-dark-text3 mt-1">
-            <i className="fas fa-envelope mr-1 text-blue-400"></i>{c.publicEmail || c.email}
-          </p>
-        )}
-        {c.whatsapp && !c.hideWhatsapp && (
-          <p className="text-[0.65rem] text-dark-text3 mt-1">
-            <i className="fab fa-whatsapp mr-1 text-green-400"></i>{c.whatsapp}
-          </p>
-        )}
-        {c.company && !c.hideCompany && (
-          <p className="text-[0.65rem] text-dark-text3 mt-1">
-            <i className="fas fa-briefcase mr-1 text-purple-400"></i>{c.companyUrl ? <a href={c.companyUrl} target="_blank" rel="noopener noreferrer" className="text-dark-text3 hover:text-qsis no-underline transition-colors">{c.company}</a> : c.company}
-          </p>
-        )}
       </div>
-      <div className="px-5 py-3 border-t border-dark-border">
+
+      {/* Info list */}
+      {infoItems.length > 0 && (
+        <div className="px-4 pb-3 flex-1">
+          <div className="space-y-1">
+            {infoItems.map((item, i) => (
+              <div key={i} className="flex items-center gap-2 text-[0.65rem] text-dark-text3 min-w-0">
+                <i className={`${item.iconClass} ${item.color} w-3.5 text-center flex-shrink-0 text-[0.6rem]`}></i>
+                {item.link ? (
+                  <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-dark-text3 hover:text-qsis truncate no-underline transition-colors">{item.text}</a>
+                ) : (
+                  <span className="truncate">{item.text}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Stats footer */}
+      <div className="px-4 py-2.5 border-t border-dark-border bg-dark-bg3/50">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
-              <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[0.6rem] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
+              <i className="fas fa-laptop-code mr-0.5"></i>{c.v2Contributions}
             </span>
-            <span className="text-[0.65rem] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
-              <i className="fas fa-book-open mr-1"></i>{c.dataContributions}
+            <span className="text-[0.6rem] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">
+              <i className="fas fa-book-open mr-0.5"></i>{c.dataContributions}
             </span>
-            <span className="text-[0.65rem] text-accent bg-accent/10 px-2 py-0.5 rounded-full">
-              <i className="fas fa-code-merge mr-1"></i>{c.prCount} PRs
-            </span>
-            <span className="text-[0.65rem] font-bold text-dark-text bg-dark-bg3 px-2 py-0.5 rounded-full">
-              <i className="fas fa-star mr-1 text-yellow-500"></i>{c.v2Contributions + c.dataContributions}
+            <span className="text-[0.6rem] text-accent bg-accent/10 px-1.5 py-0.5 rounded">
+              <i className="fas fa-code-merge mr-0.5"></i>{c.prCount}
             </span>
           </div>
-          <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="View GitHub Profile">
-            <i className="fab fa-github text-[0.9rem]"></i>
-          </a>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[0.6rem] font-bold text-yellow-500">
+              {c.v2Contributions + c.dataContributions}
+            </span>
+            <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-6 h-6 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="GitHub">
+              <i className="fab fa-github text-[0.7rem]"></i>
+            </a>
+          </div>
         </div>
       </div>
     </div>
