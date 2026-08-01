@@ -559,8 +559,8 @@ function GridCard({ c, settings }: { c: any; settings: Settings }) {
             isFounder ? 'border-qsis shadow-[0_0_16px_rgba(34,197,94,0.3)]' : 'border-dark-border group-hover:border-qsis/50'
           }`} />
           {isFounder && (
-            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-lg ring-2 ring-dark-bg2" title="Founder & Lead">
-              <i className="fas fa-crown text-white text-[0.6rem]"></i>
+            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2" title="Founder & Lead">
+              <i className="fas fa-crown text-white text-[0.55rem]"></i>
             </div>
           )}
           {!isFounder && isDev && isResource && (
@@ -596,6 +596,9 @@ function GridCard({ c, settings }: { c: any; settings: Settings }) {
           )}
         </div>
       </div>
+
+      {/* Green separator line */}
+      <div className="h-px bg-gradient-to-r from-transparent via-qsis/40 to-transparent mx-4"></div>
 
       {/* Info section with labels */}
       <div className="px-4 pb-3 flex-1">
