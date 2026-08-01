@@ -111,11 +111,11 @@ export default function ContributorsView() {
     if (activeTab === 'resources') {
       return applyFilters(resources).sort((a: any, b: any) => b.dataContributions - a.dataContributions);
     }
-    // 'all' = merged, ranked by combined total (v2 + data + PRs)
+    // 'all' = merged, ranked by combined total (v2 + data)
     const devLogins = new Set(developers.map((c: any) => c.login));
     const merged = [...developers, ...resources.filter((c: any) => !devLogins.has(c.login))];
     return applyFilters(merged).sort((a: any, b: any) => {
-      return (b.v2Contributions + b.dataContributions + b.prCount) - (a.v2Contributions + a.dataContributions + a.prCount);
+      return (b.v2Contributions + b.dataContributions) - (a.v2Contributions + a.dataContributions);
     });
   }, [activeTab, developers, resources, deptFilter, searchQuery]);
 
@@ -409,7 +409,7 @@ function FounderCard({ c }: { c: any }) {
               <i className="fas fa-code-merge mr-1"></i>{c.prCount} PRs
             </span>
             <span className="text-[0.65rem] font-bold text-dark-text bg-dark-bg3 px-2 py-0.5 rounded-full">
-              <i className="fas fa-star mr-1 text-yellow-500"></i>{c.v2Contributions + c.dataContributions + c.prCount} Total
+              <i className="fas fa-star mr-1 text-yellow-500"></i>{c.v2Contributions + c.dataContributions} Total
             </span>
           </div>
         </div>
@@ -496,7 +496,7 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
             <div className="text-[0.58rem] text-dark-text3">PRs</div>
           </div>
           <div className="text-center border-l border-dark-border pl-3 ml-1">
-            <div className="text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions + c.prCount}</div>
+            <div className="text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions}</div>
             <div className="text-[0.58rem] text-dark-text3">Total</div>
           </div>
         </div>
@@ -563,7 +563,7 @@ function GridCard({ c, settings }: { c: any; settings: Settings }) {
               <i className="fas fa-code-merge mr-1"></i>{c.prCount} PRs
             </span>
             <span className="text-[0.65rem] font-bold text-dark-text bg-dark-bg3 px-2 py-0.5 rounded-full">
-              <i className="fas fa-star mr-1 text-yellow-500"></i>{c.v2Contributions + c.dataContributions + c.prCount}
+              <i className="fas fa-star mr-1 text-yellow-500"></i>{c.v2Contributions + c.dataContributions}
             </span>
           </div>
           <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="View GitHub Profile">
