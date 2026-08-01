@@ -380,12 +380,42 @@ export default function ContributorsView() {
 /* ═══════════ FOUNDER CARD ═══════════ */
 function FounderCard({ c }: { c: any }) {
   return (
-    <div className="bg-gradient-to-br from-qsis/10 to-accent/10 border-2 border-qsis/40 rounded-2xl p-5 mb-5 ring-1 ring-qsis/20">
-      <div className="flex items-center gap-4">
+    <div className="bg-gradient-to-br from-qsis/10 to-accent/10 border-2 border-qsis/40 rounded-2xl p-4 sm:p-5 mb-5 ring-1 ring-qsis/20">
+      {/* Mobile: vertical centered layout */}
+      <div className="sm:hidden text-center">
+        <div className="relative inline-block mb-3">
+          <Image src={c.avatar_url} alt={c.login} width={72} height={72} className="w-[72px] h-[72px] rounded-full border-[3px] border-qsis shadow-[0_0_24px_rgba(34,197,94,0.4)] object-cover" />
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2">
+            <i className="fas fa-crown text-white text-[0.6rem]"></i>
+          </div>
+        </div>
+        <h3 className="text-[1rem] font-bold text-dark-text">{c.name || c.login}</h3>
+        <p className="text-[0.75rem] text-qsis font-medium mb-1">{config.founderName}</p>
+        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors no-underline inline-block mb-2.5">
+          <i className="fab fa-github mr-1"></i>@{c.login}
+        </a>
+        <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
+          <span className="px-2 py-0.5 rounded-full bg-qsis/25 text-qsis text-[0.6rem] font-bold ring-1 ring-qsis/40">
+            <i className="fas fa-crown mr-1"></i>Founder & Lead
+          </span>
+        </div>
+        <div className="flex items-center justify-center gap-2 bg-dark-bg3/50 rounded-xl px-3 py-2.5 mt-2">
+          <div className="flex-1 text-center"><div className="text-[0.85rem] font-bold text-blue-400">{c.v2Contributions}</div><div className="text-[0.5rem] text-dark-text3">Code</div></div>
+          <div className="w-px h-6 bg-dark-border"></div>
+          <div className="flex-1 text-center"><div className="text-[0.85rem] font-bold text-orange-400">{c.dataContributions}</div><div className="text-[0.5rem] text-dark-text3">Data</div></div>
+          <div className="w-px h-6 bg-dark-border"></div>
+          <div className="flex-1 text-center"><div className="text-[0.85rem] font-bold text-accent">{c.prCount}</div><div className="text-[0.5rem] text-dark-text3">PRs</div></div>
+          <div className="w-px h-6 bg-dark-border"></div>
+          <div className="flex-1 text-center"><div className="text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions}</div><div className="text-[0.5rem] text-dark-text3">Total</div></div>
+        </div>
+      </div>
+
+      {/* Desktop: horizontal layout */}
+      <div className="hidden sm:flex items-center gap-4">
         <div className="relative flex-shrink-0">
           <Image src={c.avatar_url} alt={c.login} width={80} height={80} className="w-20 h-20 rounded-full border-[3px] border-qsis shadow-[0_0_24px_rgba(34,197,94,0.4)] object-cover" />
-          <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-qsis flex items-center justify-center shadow-lg">
-            <i className="fas fa-crown text-white text-[0.7rem]"></i>
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2">
+            <i className="fas fa-crown text-white text-[0.6rem]"></i>
           </div>
         </div>
         <div className="flex-1 min-w-0">
@@ -572,7 +602,7 @@ function GridCard({ c, settings }: { c: any; settings: Settings }) {
       isFounder ? 'border-qsis/40 ring-1 ring-qsis/20' : 'border-dark-border hover:border-qsis/50 hover:shadow-[0_4px_20px_rgba(34,197,94,0.12)]'
     }`}>
       {/* Header */}
-      <div className={`relative px-4 pt-5 pb-3 text-center ${isFounder ? 'bg-gradient-to-b from-qsis/15 to-transparent' : 'bg-gradient-to-b from-qsis/5 to-transparent'}`}>
+      <div className={`relative px-4 pt-5 pb-3 text-center via-qsis/40 ${isFounder ? 'bg-gradient-to-b from-qsis/15 to-transparent' : 'bg-gradient-to-b from-qsis/5 to-transparent'}`}>
         <div className="relative inline-block mb-2.5">
           <Image src={c.avatar_url} alt={c.login} width={64} height={64} className={`w-16 h-16 rounded-full object-cover border-2 transition-colors ${
             isFounder ? 'border-qsis shadow-[0_0_16px_rgba(34,197,94,0.3)]' : 'border-dark-border group-hover:border-qsis/50'
