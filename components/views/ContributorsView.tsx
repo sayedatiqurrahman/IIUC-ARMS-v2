@@ -650,7 +650,7 @@ function GridCard({ c, settings }: { c: any; settings: Settings }) {
       <div className="h-px bg-gradient-to-r from-transparent via-qsis/40 to-transparent mx-4"></div>
 
       {/* Info section with labels */}
-      <div className="px-4 pb-3 flex-1">
+      <div className="px-4 pb-3 flex-1 mt-3">
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
           {(c as any).departmentShortName && (
             <div className="flex items-center gap-1.5 min-w-0">

@@ -859,16 +859,16 @@ export default function BrowsePage() {
                     <div className="font-semibold text-[0.95rem]">{course.code} — {course.title}</div>
                     <div className="flex gap-2 mt-[5px] flex-wrap">
                       {course.categories.map((cat: any) => (
-                        <span key={cat.key} className={`text-[0.68rem] px-2 py-[2px] rounded-full border ${(cat as any).hasLinks ? 'bg-pink-500/10 text-pink-400 border-pink-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border'}`}>
+                        <span key={cat.key} className={`text-[0.68rem] px-2 py-[2px] rounded-full border ${(cat as any).hasLinks ? 'bg-pink-500/15 text-pink-400 border-pink-500/40 font-semibold' : 'bg-dark-bg3 text-dark-text2 border-dark-border'}`}>
                           {cat.label}: {cat.count}
-                          {(cat as any).hasLinks && <i className="fas fa-link ml-1 text-[0.6rem]"></i>}
+                          {(cat as any).hasLinks && <i className="fas fa-link ml-1 text-[0.55rem]"></i>}
                         </span>
                       ))}
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="text-[0.75rem] text-dark-text2 flex items-center gap-1.5 justify-end">
-                      {(course as any).hasSharedLinks && <span className="text-pink-400"><i className="fas fa-link text-[0.65rem]"></i></span>}
+                      {(course as any).hasSharedLinks && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-400 text-[0.6rem] font-bold border border-pink-500/30"><i className="fas fa-link text-[0.55rem]"></i>Links</span>}
                       {course.totalFiles} files
                     </div>
                     {course.hasMidFinal && (
