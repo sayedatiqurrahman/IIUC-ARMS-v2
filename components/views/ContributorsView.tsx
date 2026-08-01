@@ -480,6 +480,21 @@ function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Set
               <i className="fas fa-graduation-cap mr-1 text-accent"></i>{c.semester === 'graduated' ? '🎓 Graduated' : config.semesters.find((s: any) => s.id === c.semester)?.label || c.semester}
             </span>
           )}
+          {((c.publicEmail && !c.hideEmail) || (c.email && !c.hideEmail && !c.publicEmail)) && (
+            <span className="text-[0.65rem] text-dark-text3">
+              <i className="fas fa-envelope mr-1 text-blue-400"></i>{c.publicEmail || c.email}
+            </span>
+          )}
+          {c.whatsapp && !c.hideWhatsapp && (
+            <span className="text-[0.65rem] text-dark-text3">
+              <i className="fab fa-whatsapp mr-1 text-green-400"></i>{c.whatsapp}
+            </span>
+          )}
+          {c.company && !c.hideCompany && (
+            <span className="text-[0.65rem] text-dark-text3">
+              <i className="fas fa-briefcase mr-1 text-purple-400"></i>{c.companyUrl ? <a href={c.companyUrl} target="_blank" rel="noopener noreferrer" className="text-dark-text3 hover:text-qsis no-underline transition-colors">{c.company}</a> : c.company}
+            </span>
+          )}
         </div>
       </div>
       {settings.showStats && (
@@ -548,6 +563,21 @@ function GridCard({ c, settings }: { c: any; settings: Settings }) {
         {c.universityId && !c.hideUniversityId && (
           <p className="text-[0.65rem] text-dark-text3 mt-1">
             <i className="fas fa-id-card mr-1 text-qsis"></i>ID: {c.universityId}
+          </p>
+        )}
+        {((c.publicEmail && !c.hideEmail) || (c.email && !c.hideEmail && !c.publicEmail)) && (
+          <p className="text-[0.65rem] text-dark-text3 mt-1">
+            <i className="fas fa-envelope mr-1 text-blue-400"></i>{c.publicEmail || c.email}
+          </p>
+        )}
+        {c.whatsapp && !c.hideWhatsapp && (
+          <p className="text-[0.65rem] text-dark-text3 mt-1">
+            <i className="fab fa-whatsapp mr-1 text-green-400"></i>{c.whatsapp}
+          </p>
+        )}
+        {c.company && !c.hideCompany && (
+          <p className="text-[0.65rem] text-dark-text3 mt-1">
+            <i className="fas fa-briefcase mr-1 text-purple-400"></i>{c.companyUrl ? <a href={c.companyUrl} target="_blank" rel="noopener noreferrer" className="text-dark-text3 hover:text-qsis no-underline transition-colors">{c.company}</a> : c.company}
           </p>
         )}
       </div>

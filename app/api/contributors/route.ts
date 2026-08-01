@@ -33,6 +33,7 @@ interface Contributor {
   hideUniversityId: boolean;
   hideSemester: boolean;
   hideEmail: boolean;
+  hideCompany: boolean;
   profileComplete: boolean;
   source: 'github' | 'db' | 'both';
 }
@@ -189,7 +190,7 @@ export async function GET() {
         universityId: '', whatsapp: '', semester: '',
         facebook: '', twitter: '', linkedin: '', website: '',
         company: '', companyUrl: '', publicEmail: '',
-        hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false,
+        hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false,
         profileComplete: false, source: 'github',
       };
       map.set(login, c);
@@ -284,6 +285,7 @@ export async function GET() {
         matchedContributor.hideUniversityId = !!p.hideUniversityId;
         matchedContributor.hideSemester = !!p.hideSemester;
         matchedContributor.hideEmail = !!p.hideEmail;
+        matchedContributor.hideCompany = !!(p as any).hideCompany;
         matchedContributor.profileComplete = profileComplete;
         matchedContributor.source = 'both';
       }

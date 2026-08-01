@@ -136,13 +136,13 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
         const idToken = await user.getIdToken();
 
-        // Check TOTP status
-        const totpRes = await fetch('/api/auth/totp/check', {
+        // Check TOTP status for email method
+        const totpRes = await fetch('/api/auth/totp/check?method=email', {
           headers: { Authorization: `Bearer ${idToken}` },
         });
         const totpData = await totpRes.json();
 
-        // Always require 2FA — store credentials and show 2FA screen
+        // Always require 2FA for email+password — store credentials and show 2FA screen
         setPendingCredentials({ idToken, email });
         setTotpAvailable(totpRes.ok && !!totpData.totpEnabled);
         setTotpStep(true);
@@ -179,7 +179,21 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       const turnstileValid = await verifyTurnstileToken();
       if (!turnstileValid) { setLoading(false); return; }
 
-      const { idToken } = await signInWithGoogle();
+      const { idToken, user } = await signInWithGoogle();
+
+      const totpRes = await fetch('/api/auth/totp/check?method=google', {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const totpData = await totpRes.json();
+
+      if (totpData.totpRequired && totpData.totpEnabled) {
+        setPendingCredentials({ idToken, email: user.email || '' });
+        setTotpAvailable(true);
+        setTotpStep(true);
+        setLoading(false);
+        return;
+      }
+
       const result = await signIn('credentials', {
         idToken,
         redirect: false,

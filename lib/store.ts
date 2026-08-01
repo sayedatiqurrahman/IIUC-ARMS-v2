@@ -152,6 +152,7 @@ export interface Profile {
   hideUniversityId: boolean;
   hideSemester: boolean;
   hideEmail: boolean;
+  hideCompany: boolean;
 }
 
 const defaultProfile: Profile = {
@@ -161,7 +162,7 @@ const defaultProfile: Profile = {
   githubLogin: '', githubToken: '', githubInstallationId: '', githubAvatar: '',
   facebook: '', twitter: '', linkedin: '', website: '',
   company: '', companyUrl: '', publicEmail: '',
-  hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false,
+  hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false,
 };
 
 /* ─── store ─── */

@@ -29,6 +29,7 @@ model Profile {
   githubAvatar    String?
   totpSecret      String?
   totpEnabled     Boolean  @default(false)
+  totpMethods     String[] @default(["email"])
   facebook        String?
   twitter         String?
   linkedin        String?
@@ -40,6 +41,7 @@ model Profile {
   hideUniversityId Boolean @default(false)
   hideSemester    Boolean  @default(false)
   hideEmail       Boolean  @default(false)
+  hideCompany     Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
