@@ -52,7 +52,7 @@ interface RoutineItem {
   createdAt?: number;
   published?: boolean;
   isDraft?: boolean;
-  publishedBy?: { name: string; title?: string };
+  publishedBy?: { name: string; title?: string; email?: string };
   publishedAt?: number;
 }
 
@@ -469,7 +469,7 @@ export default function RoutineView() {
       published: true,
       isDraft: false,
       id: `pub-${Date.now()}`,
-      publishedBy: { name: publisherName },
+      publishedBy: { name: publisherName, email },
       publishedAt: Date.now(),
     };
     const updated = publishedRoutines.filter(r => !(r.semester === routine.semester && r.branch === routine.branch));
@@ -495,6 +495,17 @@ export default function RoutineView() {
     savePublishedRoutines(updated);
     showToast('Routine unpublished', 'success');
   }, [publishedRoutines]);
+
+  const canEditPublished = useCallback((routine: RoutineItem) => {
+    if (isOwner) return true;
+    if (routine.publishedBy?.email && routine.publishedBy.email === email) return true;
+    return false;
+  }, [isOwner, email]);
+
+  const handleEditPublished = useCallback((id: string) => {
+    setEditingId(id);
+    setViewMode('builder');
+  }, []);
 
   const handleExport = useCallback(async (format: 'pdf' | 'png' | 'jpeg') => {
     if (!printRef.current) return;
@@ -595,17 +606,29 @@ export default function RoutineView() {
   }, [currentPreview]);
 
   const handleSaveBuilder = useCallback((routine: RoutineItem) => {
-    let updated: RoutineItem[];
-    if (editingId) {
-      updated = myRoutines.map(r => r.id === editingId ? routine : r);
+    const isPublishedEdit = editingId && publishedRoutines.some(r => r.id === editingId);
+    if (isPublishedEdit) {
+      const updated = publishedRoutines.map(r => r.id === editingId ? { ...routine, published: true, isDraft: false, publishedBy: r.publishedBy, publishedAt: r.publishedAt } : r);
+      setPublishedRoutines(updated);
+      savePublishedRoutines(updated);
+      fetch('/api/published-routines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routines: updated.filter(r => r.id === editingId) }),
+      }).catch(() => {});
     } else {
-      updated = [...myRoutines, routine];
+      let updated: RoutineItem[];
+      if (editingId) {
+        updated = myRoutines.map(r => r.id === editingId ? routine : r);
+      } else {
+        updated = [...myRoutines, routine];
+      }
+      persistMyRoutines(updated);
     }
-    persistMyRoutines(updated);
     setEditingId(null);
     setViewMode('manager');
     showToast(editingId ? 'Routine updated!' : 'Routine created!', 'success');
-  }, [myRoutines, editingId, persistMyRoutines]);
+  }, [myRoutines, editingId, persistMyRoutines, publishedRoutines]);
 
   const handleCancelBuilder = useCallback(() => {
     setEditingId(null);
@@ -751,7 +774,7 @@ export default function RoutineView() {
                   <h4 className="routine-manager-section-title"><i className="fas fa-globe"></i> Published Routines</h4>
                   <div className="routine-manager-grid">
                     {allVisibleRoutines.map(r => (
-                      <RoutineCard key={r.id} routine={r} isPublished onView={handleView} onUnpublish={canPublish ? handleUnpublish : undefined} />
+                      <RoutineCard key={r.id} routine={r} isPublished onView={handleView} onEdit={canEditPublished(r) ? handleEditPublished : undefined} onUnpublish={canPublish ? handleUnpublish : undefined} />
                     ))}
                   </div>
                 </div>
@@ -771,7 +794,7 @@ export default function RoutineView() {
             </div>
           </div>
           <RoutineBuilder
-            existing={editingId ? myRoutines.find(r => r.id === editingId) || null : null}
+            existing={editingId ? (myRoutines.find(r => r.id === editingId) || publishedRoutines.find(r => r.id === editingId) || null) : null}
             onSave={handleSaveBuilder}
             onCancel={handleCancelBuilder}
           />
@@ -812,7 +835,7 @@ export default function RoutineView() {
             } else {
               updated = publishedRoutines.filter(r => !routines.some(nr => nr.semester === r.semester && nr.gender === r.gender && nr.branch === r.branch));
               routines.forEach(r => {
-                updated.push({ ...r, publishedBy: { name: publisherName }, publishedAt: Date.now() });
+                updated.push({ ...r, publishedBy: { name: publisherName, email }, publishedAt: Date.now() });
               });
             }
             setPublishedRoutines(updated);

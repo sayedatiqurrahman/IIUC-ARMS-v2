@@ -40,7 +40,7 @@ interface ExamRoutineItem {
   createdAt?: number;
   published?: boolean;
   isDraft?: boolean;
-  publishedBy?: { name: string; title?: string };
+  publishedBy?: { name: string; title?: string; email?: string };
   publishedAt?: number;
 }
 
@@ -137,10 +137,17 @@ export default function ExamRoutineView() {
       id, semester, session: sessionVal, department, examType, rows, slots: examSlots,
       createdAt: Date.now(), published: false, isDraft: true,
     };
-    const updated = examRoutines.filter(r => r.id !== id);
-    updated.push(routine);
-    persistDrafts(updated);
-    showToast('Exam routine saved as draft', 'success');
+    const isPublishedEdit = editingId && publishedRoutines.some(r => r.id === editingId);
+    if (isPublishedEdit) {
+      const updated = publishedRoutines.map(r => r.id === editingId ? { ...routine, published: true, isDraft: false, publishedBy: r.publishedBy, publishedAt: r.publishedAt } : r);
+      persistPublished(updated);
+      showToast('Published routine updated!', 'success');
+    } else {
+      const updated = examRoutines.filter(r => r.id !== id);
+      updated.push(routine);
+      persistDrafts(updated);
+      showToast('Exam routine saved as draft', 'success');
+    }
     setViewMode('manager');
   }
 
@@ -314,9 +321,12 @@ export default function ExamRoutineView() {
               <p className="text-[0.75rem] text-dark-text3 mt-1">Click &quot;New Exam Routine&quot; to create one</p>
             </div>
           )}
-          {publishedRoutines.map(r => (
-            <ExamRoutineCard key={r.id} routine={r} slots={r.slots || examSlots} onView={() => { setEditingId(r.id); setRows(r.rows); setExamSlots(r.slots || examSlots); setSemester(r.semester); setSessionVal(r.session); setDepartment(r.department); setExamType(r.examType); setViewMode('preview'); }} onUnpublish={() => unpublishRoutine(r.id)} canManage={canPublish} isPublished />
-          ))}
+          {publishedRoutines.map(r => {
+            const canEditPub = isOwner || (r.publishedBy?.email && r.publishedBy.email === email);
+            return (
+              <ExamRoutineCard key={r.id} routine={r} slots={r.slots || examSlots} onView={() => { setEditingId(r.id); setRows(r.rows); setExamSlots(r.slots || examSlots); setSemester(r.semester); setSessionVal(r.session); setDepartment(r.department); setExamType(r.examType); setViewMode('preview'); }} onEdit={canEditPub ? () => editRoutine(r) : undefined} onUnpublish={() => unpublishRoutine(r.id)} canManage={canPublish} isPublished />
+            );
+          })}
           {examRoutines.map(r => (
             <ExamRoutineCard key={r.id} routine={r} slots={r.slots || examSlots} onView={() => editRoutine(r)} onPublish={() => publishRoutine(r)} onDelete={() => deleteRoutine(r.id)} canManage={canPublish} />
           ))}
@@ -429,7 +439,7 @@ export default function ExamRoutineView() {
                   const routine: ExamRoutineItem = {
                     id, semester, session: sessionVal, department, examType, rows, slots: examSlots,
                     createdAt: Date.now(), published: true, isDraft: false,
-                    publishedBy: { name: profile.name || email.split('@')[0], title: profile.title || undefined },
+                    publishedBy: { name: profile.name || email.split('@')[0], title: profile.title || undefined, email },
                     publishedAt: Date.now(),
                   };
                   const updated = publishedRoutines.filter(p => !(p.semester === routine.semester && p.department === routine.department && p.examType === routine.examType));
@@ -467,7 +477,7 @@ export default function ExamRoutineView() {
             const publisherName = profile.name || email.split('@')[0];
             const published = items.map(r => ({
               ...r, published: true, isDraft: false,
-              publishedBy: { name: publisherName, title: profile.title || undefined },
+      publishedBy: { name: publisherName, title: profile.title || undefined, email },
               publishedAt: Date.now(),
             }));
             let updated = [...publishedRoutines];
@@ -485,10 +495,11 @@ export default function ExamRoutineView() {
   );
 }
 
-function ExamRoutineCard({ routine, slots, onView, onPublish, onUnpublish, onDelete, canManage, isPublished }: {
+function ExamRoutineCard({ routine, slots, onView, onEdit, onPublish, onUnpublish, onDelete, canManage, isPublished }: {
   routine: ExamRoutineItem;
   slots: ExamSlot[];
   onView: () => void;
+  onEdit?: () => void;
   onPublish?: () => void;
   onUnpublish?: () => void;
   onDelete?: () => void;
@@ -516,6 +527,7 @@ function ExamRoutineCard({ routine, slots, onView, onPublish, onUnpublish, onDel
         </div>
         <div className="flex gap-2">
           <button onClick={onView} className="routine-btn"><i className="fas fa-eye mr-1"></i>View</button>
+          {onEdit && <button onClick={onEdit} className="routine-btn routine-btn-edit"><i className="fas fa-edit mr-1"></i>Edit</button>}
           {canManage && !isPublished && onPublish && <button onClick={onPublish} className="routine-btn routine-btn-primary"><i className="fas fa-globe mr-1"></i>Publish</button>}
           {canManage && isPublished && onUnpublish && <button onClick={onUnpublish} className="routine-btn text-yellow-400"><i className="fas fa-eye-slash mr-1"></i>Unpublish</button>}
           {canManage && !isPublished && onDelete && <button onClick={onDelete} className="routine-btn text-red-400"><i className="fas fa-trash"></i></button>}
