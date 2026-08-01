@@ -30,7 +30,8 @@ const DEFAULT_SETTINGS: Settings = {
 
 export default function ContributorsView() {
   const router = useRouter();
-  const contributors = useAppStore(s => s.contributors);
+  const contributorsRaw = useAppStore(s => s.contributors);
+  const contributors = Array.isArray(contributorsRaw) ? contributorsRaw : [];
   const contributorsLoading = useAppStore(s => s.contributorsLoading);
   const loadContributors = useAppStore(s => s.loadContributors);
 

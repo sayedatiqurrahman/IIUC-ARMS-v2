@@ -701,8 +701,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         // API returns { contributors, settings }
         if (Array.isArray(data)) {
           set({ contributors: data });
+        } else if (Array.isArray(data.contributors)) {
+          set({ contributors: data.contributors });
         } else {
-          set({ contributors: data.contributors || [] });
+          set({ contributors: [] });
         }
       } else {
         set({ contributors: [] });
