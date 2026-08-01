@@ -58,6 +58,7 @@ export default function DashboardView() {
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [patInput, setPatInput] = useState('');
   const [patLoading, setPatLoading] = useState(false);
+  const [patValid, setPatValid] = useState<boolean | null>(null);
 
   const [totpEnabled, setTotpEnabled] = useState(false);
   const [totpLoading, setTotpLoading] = useState(false);
@@ -74,6 +75,18 @@ export default function DashboardView() {
   useEffect(() => {
     loadProfile();
   }, []);
+
+  // Validate PAT on load — if expired show reconnect
+  useEffect(() => {
+    const token = profile.githubToken;
+    if (!token || !token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
+      setPatValid(null);
+      return;
+    }
+    fetch('https://api.github.com/user', {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
+    }).then(r => setPatValid(r.ok)).catch(() => setPatValid(false));
+  }, [profile.githubToken]);
 
   // Check TOTP status on mount
   useEffect(() => {
@@ -171,6 +184,7 @@ export default function DashboardView() {
       }));
       setGhUser(null);
       setGhStats(null);
+      setPatValid(null);
       showToast('GitHub disconnected', 'success');
     } catch {
       showToast('Disconnect failed. Please try again.', 'error');
@@ -240,6 +254,7 @@ export default function DashboardView() {
         profile: { ...s.profile, githubLogin: ghUser.login, githubToken: token, githubAvatar: ghUser.avatar_url },
         githubToken: token,
       }));
+      setPatValid(true);
       setGhUser({ login: ghUser.login, name: ghUser.name || ghUser.login, avatar_url: ghUser.avatar_url });
       setShowTokenModal(false);
       setPatInput('');
@@ -743,7 +758,7 @@ export default function DashboardView() {
             )}
 
             {/* PAT Section — for contributor visibility */}
-            {!profile.githubToken?.startsWith('ghp_') && !profile.githubToken?.startsWith('github_pat_') ? (
+            {(!profile.githubToken?.startsWith('ghp_') && !profile.githubToken?.startsWith('github_pat_')) ? (
               <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-3">
                 <p className="text-[0.78rem] text-qsis font-semibold mb-1"><i className="fas fa-star mr-1"></i>Appear in Contributors List</p>
                 <p className="text-[0.72rem] text-dark-text2 mb-2">Add a Personal Access Token to show your name in our Contributors page.</p>
@@ -768,6 +783,22 @@ export default function DashboardView() {
                   <i className="fas fa-external-link-alt mr-1"></i>Create new token (No expiry, repo scope)
                 </a>
               </div>
+            ) : patValid === false ? (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-amber-400">
+                    <i className="fas fa-exclamation-triangle"></i>
+                    <span className="text-[0.72rem] font-semibold">PAT expired or invalid — Reconnect to appear in Contributors</span>
+                  </div>
+                  <button
+                    className="px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 whitespace-nowrap"
+                    onClick={() => { setPatInput(''); setPatValid(null); }}
+                    disabled={patLoading}
+                  >
+                    <i className="fas fa-redo mr-1"></i>Reconnect
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="flex items-center justify-between gap-2 text-[0.72rem] text-qsis mb-3 bg-qsis/5 border border-qsis/20 rounded-xl p-3">
                 <div className="flex items-center gap-1.5">
@@ -776,7 +807,7 @@ export default function DashboardView() {
                 </div>
                 <button
                   className="text-[0.68rem] text-dark-text2 hover:text-qsis bg-transparent border-none cursor-pointer underline"
-                  onClick={() => { setPatInput(''); document.getElementById('pat-replace-input')?.focus(); }}
+                  onClick={() => { setPatInput(''); setPatValid(null); }}
                 >
                   Replace
                 </button>
