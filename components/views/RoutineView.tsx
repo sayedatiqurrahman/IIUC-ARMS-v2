@@ -1166,6 +1166,26 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
                 ]}
               />
             </div>
+            {draft.draftGender === 'both' ? (
+              <>
+                <div className="routine-form-group">
+                  <label><i className="fas fa-mars text-blue-400 mr-1"></i>Male Room</label>
+                  <input value={draft.semesters[0]?.maleRoom || ''} onChange={e => {
+                    const updated = { ...draft };
+                    updated.semesters = updated.semesters.map(s => ({ ...s, maleRoom: e.target.value }));
+                    setDraft(updated);
+                  }} placeholder="e.g. Room 301" />
+                </div>
+                <div className="routine-form-group">
+                  <label><i className="fas fa-venus text-pink-400 mr-1"></i>Female Room</label>
+                  <input value={draft.semesters[0]?.femaleRoom || ''} onChange={e => {
+                    const updated = { ...draft };
+                    updated.semesters = updated.semesters.map(s => ({ ...s, femaleRoom: e.target.value }));
+                    setDraft(updated);
+                  }} placeholder="e.g. Room 202" />
+                </div>
+              </>
+            ) : null}
             <div className="routine-form-group routine-form-full">
               <label>Class Days</label>
               <div className="routine-day-selector">
