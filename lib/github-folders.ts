@@ -28,6 +28,78 @@ async function api(method: string, urlPath: string, body: any, token: string) {
   return { s: res.status, d: data };
 }
 
+function parseCourseFolder(name: string): { code: string; title: string } | null {
+  const match = name.match(/^([A-Z]{2,5}-?\d{3,5}[A-Z]?)\s*[-–]\s*(.+)$/i);
+  if (!match) return null;
+  return { code: match[1].toUpperCase(), title: match[2].trim() };
+}
+
+export async function fetchCoursesFromGitHub(deptId: string, semester: string): Promise<{ code: string; title: string }[]> {
+  const appId = process.env.GITHUB_ID;
+  const privateKey = (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/^"/, '').replace(/"$/, '');
+  if (!appId || !privateKey) return [];
+
+  try {
+    const jwt = makeJwt(appId, privateKey);
+    const inst = await api('GET', `/repos/${config.owner}/${config.repo}/installation`, null, jwt);
+    if (inst.s !== 200) return [];
+    const tok = (await api('POST', `/app/installations/${inst.d.id}/access_tokens`, null, jwt)).d.token;
+
+    const folderPath = `${config.uploadPath}/${deptId}/${semester}`;
+    const treeRes = await api('GET', `/repos/${config.owner}/${config.repo}/contents/${folderPath}`, null, tok);
+    if (treeRes.s !== 200 || !Array.isArray(treeRes.d)) return [];
+
+    const courses: { code: string; title: string }[] = [];
+    for (const item of treeRes.d) {
+      if (item.type !== 'dir') continue;
+      const parsed = parseCourseFolder(item.name);
+      if (parsed) courses.push(parsed);
+    }
+    return courses;
+  } catch {
+    return [];
+  }
+}
+
+export async function createCourseFolder(deptId: string, semester: string, courseCode: string, courseTitle: string): Promise<{ success: boolean; error?: string }> {
+  const appId = process.env.GITHUB_ID;
+  const privateKey = (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/^"/, '').replace(/"$/, '');
+  if (!appId || !privateKey) return { success: false, error: 'GitHub App not configured' };
+
+  try {
+    const jwt = makeJwt(appId, privateKey);
+    const inst = await api('GET', `/repos/${config.owner}/${config.repo}/installation`, null, jwt);
+    if (inst.s !== 200) return { success: false, error: 'Failed to get installation' };
+    const tok = (await api('POST', `/app/installations/${inst.d.id}/access_tokens`, null, jwt)).d.token;
+
+    const refRes = await api('GET', `/repos/${config.owner}/${config.repo}/git/refs/heads/main`, null, tok);
+    if (refRes.s !== 200) return { success: false, error: 'Failed to get ref' };
+    let currentSha = refRes.d.object.sha;
+
+    const folderName = `${courseCode} - ${courseTitle}`;
+    const subfolders = ['Mid/NOTES', 'Mid/Previous Questions', 'Final/NOTES', 'Final/Previous Questions', 'sheet', 'Syllabus', 'Other'];
+    const paths = subfolders.map(sf => `${config.uploadPath}/${deptId}/${semester}/${folderName}/${sf}/.gitkeep`);
+
+    const treeRes = await api('POST', `/repos/${config.owner}/${config.repo}/git/trees`, {
+      base_tree: currentSha,
+      tree: paths.map(p => ({ path: p, mode: '100644', type: 'blob', sha: 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391' })),
+    }, tok);
+    if (treeRes.s !== 201) return { success: false, error: 'Failed to create tree' };
+
+    const commitRes = await api('POST', `/repos/${config.owner}/${config.repo}/git/commits`, {
+      message: `Add course folder: ${folderName} in ${deptId}/${semester}`,
+      tree: treeRes.d.sha,
+      parents: [currentSha],
+    }, tok);
+    if (commitRes.s !== 201) return { success: false, error: 'Failed to commit' };
+
+    await api('PATCH', `/repos/${config.owner}/${config.repo}/git/refs/heads/main`, { sha: commitRes.d.sha, force: true }, tok);
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
 export async function createDepartmentFolders(deptId: string): Promise<{ success: boolean; created: number; error?: string }> {
   const appId = process.env.GITHUB_ID;
   const privateKey = (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/^"/, '').replace(/"$/, '');

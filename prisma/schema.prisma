@@ -168,3 +168,25 @@ model FacultyRequest {
   @@index([status])
   @@index([department])
 }
+
+model PublishedExamRoutine {
+  id            String   @id @default(cuid())
+  examId        String
+  semester      String
+  session       String?
+  department    String?
+  examType      String?
+  rows          Json
+  slots         Json
+  status        String   @default("published")
+  publishedBy   String?
+  publishedByEmail String?
+  publishedAt   DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([examId])
+  @@index([semester])
+  @@index([department])
+  @@index([status])
+  @@index([expiresAt])
+}

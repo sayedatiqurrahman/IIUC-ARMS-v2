@@ -11,7 +11,34 @@ export async function GET(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     const where: any = {};
     if (semester) where.semester = semester;
-    const courses = await prisma.semesterCourse.findMany({ where, orderBy: [{ semester: 'asc' }, { code: 'asc' }] });
+
+    const [semesterCourses, courseCourses] = await Promise.all([
+      prisma.semesterCourse.findMany({ where, orderBy: [{ semester: 'asc' }, { code: 'asc' }] }),
+      prisma.course.findMany({ where, orderBy: [{ semester: 'asc' }, { code: 'asc' }] }),
+    ]);
+
+    const merged = new Map<string, any>();
+    for (const c of courseCourses) {
+      const key = `${c.semester}:${c.code}`;
+      merged.set(key, { id: c.id, semester: c.semester, code: c.code, title: c.title, teacher: null, room: null, source: 'course' });
+    }
+    for (const c of semesterCourses) {
+      const key = `${c.semester}:${c.code}`;
+      if (merged.has(key)) {
+        const existing = merged.get(key);
+        existing.teacher = c.teacher || existing.teacher;
+        existing.room = c.room || existing.room;
+      } else {
+        merged.set(key, { id: c.id, semester: c.semester, code: c.code, title: c.title, teacher: c.teacher, room: c.room, source: 'semesterCourse' });
+      }
+    }
+
+    const courses = Array.from(merged.values()).sort((a, b) => {
+      if (a.semester < b.semester) return -1;
+      if (a.semester > b.semester) return 1;
+      return a.code.localeCompare(b.code);
+    });
+
     return NextResponse.json({ success: true, courses });
   } catch {
     return NextResponse.json({ success: false, error: 'Failed to load courses' }, { status: 500 });
@@ -48,7 +75,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch {
-    return NextResponse.json({ error: 'Failed to save courses' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to save' }, { status: 500 });
   }
 }
 

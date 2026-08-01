@@ -357,6 +357,7 @@ export default function RoutineView() {
   const [publishedRoutines, setPublishedRoutines] = useState<RoutineItem[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [exportMode, setExportMode] = useState<'themed' | 'plain'>('themed');
 
   const email = session?.user?.email || profile.email || '';
   const isOwner = config.ownerEmails.includes(email);
@@ -657,7 +658,15 @@ export default function RoutineView() {
           <div className="routine-page-header no-print">
             <div>
               <h3 className="routine-page-title"><i className="fas fa-calendar-alt"></i> Class Routine</h3>
-              <p className="routine-page-sub">Manage and view your class schedules</p>
+              {profile?.department && (
+                <p className="routine-page-sub" style={{ color: '#22c55e' }}>
+                  <i className="fas fa-building mr-1"></i>{profile.department}
+                  {profile.semester && <><span className="mx-1">&bull;</span><i className="fas fa-graduation-cap mr-1"></i>{config.semesters.find(s => s.id === profile.semester)?.label || profile.semester}</>}
+                </p>
+              )}
+              {!profile?.department && (
+                <p className="routine-page-sub">Manage and view your class schedules</p>
+              )}
             </div>
             <div className="routine-page-actions">
               <button className="routine-btn routine-btn-primary" onClick={() => {
@@ -763,7 +772,7 @@ export default function RoutineView() {
                   <h4 className="routine-manager-section-title"><i className="fas fa-user-edit"></i> My Routines</h4>
                   <div className="routine-manager-grid">
                     {myRoutines.map(r => (
-                      <RoutineCard key={r.id} routine={r} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} onDuplicate={handleDuplicate} onPublish={canPublish ? handlePublish : undefined} />
+                      <RoutineCard key={r.id} routine={r} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} onDuplicate={handleDuplicate} onPublish={canPublish ? handlePublish : undefined} currentUserEmail={email} isAdmin={isOwner} />
                     ))}
                   </div>
                 </div>
@@ -774,7 +783,7 @@ export default function RoutineView() {
                   <h4 className="routine-manager-section-title"><i className="fas fa-globe"></i> Published Routines</h4>
                   <div className="routine-manager-grid">
                     {allVisibleRoutines.map(r => (
-                      <RoutineCard key={r.id} routine={r} isPublished onView={handleView} onEdit={canEditPublished(r) ? handleEditPublished : undefined} onUnpublish={canPublish ? handleUnpublish : undefined} />
+                      <RoutineCard key={r.id} routine={r} isPublished onView={handleView} onEdit={canEditPublished(r) ? handleEditPublished : undefined} onUnpublish={canPublish ? handleUnpublish : undefined} onDelete={canPublish ? handleUnpublish : undefined} currentUserEmail={email} isAdmin={isOwner} />
                     ))}
                   </div>
                 </div>
@@ -813,11 +822,16 @@ export default function RoutineView() {
               {exporting && <span className="routine-exporting"><i className="fas fa-spinner fa-spin"></i> Exporting...</span>}
               <button disabled={exporting} className="routine-btn routine-btn-outline" onClick={() => handleExport('pdf')}><i className="fas fa-file-pdf"></i> PDF</button>
               <button disabled={exporting} className="routine-btn routine-btn-outline" onClick={() => handleExport('png')}><i className="fas fa-image"></i> PNG</button>
+              <button onClick={() => setExportMode(exportMode === 'themed' ? 'plain' : 'themed')} className="routine-btn routine-btn-outline"><i className="fas fa-file-alt"></i> {exportMode === 'themed' ? 'Plain Table' : 'Themed View'}</button>
               <button className="routine-btn routine-btn-ghost" onClick={() => setViewMode('manager')}><i className="fas fa-arrow-left"></i> Back</button>
             </div>
           </div>
           <div className="routine-preview-scroll">
-            <RoutinePrintView ref={printRef} routine={currentPreview} />
+            {exportMode === 'themed' ? (
+              <RoutinePrintView ref={printRef} routine={currentPreview} />
+            ) : (
+              <RoutinePlainTable routine={currentPreview} />
+            )}
           </div>
         </>
       )}
@@ -1634,7 +1648,7 @@ function PeriodEditor({ periods, onChange }: { periods: RoutinePeriod[]; onChang
 /* ═══════════════════════════════════════════════════════
    ROUTINE CARD — Manager Grid Card
    ═══════════════════════════════════════════════════════ */
-function RoutineCard({ routine, isPublished, onView, onEdit, onDelete, onDuplicate, onPublish, onUnpublish }: {
+function RoutineCard({ routine, isPublished, onView, onEdit, onDelete, onDuplicate, onPublish, onUnpublish, currentUserEmail, isAdmin }: {
   routine: RoutineItem;
   isPublished?: boolean;
   onView: (id: string) => void;
@@ -1643,11 +1657,15 @@ function RoutineCard({ routine, isPublished, onView, onEdit, onDelete, onDuplica
   onDuplicate?: (r: RoutineItem) => void;
   onPublish?: (r: RoutineItem) => void;
   onUnpublish?: (id: string) => void;
+  currentUserEmail?: string;
+  isAdmin?: boolean;
 }) {
   const slotCount = routine.slots.length;
   const daysCount = routine.days.length;
   const courseCount = routine.courses.length;
   const dateStr = routine.createdAt ? new Date(routine.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const isCreator = !!currentUserEmail && !!routine.publishedBy?.email && routine.publishedBy.email === currentUserEmail;
+  const canDelete = !isPublished || isCreator || isAdmin;
 
   return (
     <div className={`routine-card ${isPublished ? 'routine-card-published' : ''}`}>
@@ -1682,7 +1700,7 @@ function RoutineCard({ routine, isPublished, onView, onEdit, onDelete, onDuplica
         {onDuplicate && <button className="routine-card-btn routine-card-btn-dup" onClick={() => onDuplicate(routine)}><i className="fas fa-copy"></i> Duplicate</button>}
         {onPublish && !isPublished && <button className="routine-card-btn routine-card-btn-publish" onClick={() => onPublish(routine)}><i className="fas fa-share-alt"></i> Publish</button>}
         {onUnpublish && isPublished && <button className="routine-card-btn routine-card-btn-unpublish" onClick={() => onUnpublish(routine.id)}><i className="fas fa-eye-slash"></i> Unpublish</button>}
-        {onDelete && <button className="routine-card-btn routine-card-btn-delete" onClick={() => onDelete(routine.id)}><i className="fas fa-trash"></i></button>}
+        {canDelete && onDelete && <button className="routine-card-btn routine-card-btn-delete" onClick={() => onDelete(routine.id)}><i className="fas fa-trash"></i></button>}
       </div>
     </div>
   );
@@ -1786,6 +1804,130 @@ function RoutineTable({ periods, slots, days, courses, label }: { periods: Routi
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/* ═══════ PLAIN ACADEMIC TABLE — Black & White for printing ═══════ */
+function RoutinePlainTable({ routine }: { routine: RoutineItem }) {
+  const classPeriods = routine.periods.filter(p => !p.isBreak);
+  const isOffDay = (day: string) => classPeriods.every((_, i) => !routine.slots.find(s => s.day === day && s.period === i));
+  const isBoth = routine.gender === 'both';
+  const hasMaleData = isBoth && routine.malePeriods && routine.malePeriods.length > 0;
+
+  function renderTable(periods: RoutinePeriod[], slots: RoutineSlot[], label?: string) {
+    const classPds = periods.filter(p => !p.isBreak);
+    const isOff = (day: string) => classPds.every((_, i) => !slots.find(s => s.day === day && s.period === i));
+    return (
+      <div style={{ marginBottom: label ? '12px' : '0' }}>
+        {label && <div style={{ textAlign: 'center', padding: '6px', fontWeight: 700, fontSize: '0.8rem', border: '1px solid #000', borderBottom: 'none', textTransform: 'uppercase' }}>{label} Section</div>}
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #000', fontFamily: 'Times New Roman, serif', fontSize: '0.72rem' }}>
+          <thead>
+            <tr>
+              <th style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'left', fontWeight: 700, width: '110px' }}>Time</th>
+              {routine.days.map(day => <th key={day} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'center', fontWeight: 700 }}>{day}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {periods.map((period, pIdx) => {
+              if (period.isBreak) {
+                const nonOff = routine.days.filter(d => !isOff(d));
+                const mid = Math.floor(nonOff.length / 2);
+                return (
+                  <tr key={pIdx}>
+                    <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 700, verticalAlign: 'middle' }}>
+                      <div>{period.start}</div><div style={{ fontSize: '0.65rem' }}>{period.end}</div>
+                    </td>
+                    {routine.days.map(day => {
+                      if (isOff(day)) return null;
+                      const show = nonOff.indexOf(day) === mid;
+                      return <td key={day} style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontStyle: 'italic' }}>{show ? period.name : ''}</td>;
+                    })}
+                  </tr>
+                );
+              }
+              const cpIdx = classPds.findIndex((_, i) => {
+                let c = 0;
+                for (let j = 0; j <= pIdx; j++) { if (!periods[j].isBreak) c++; }
+                return c - 1 === i;
+              });
+              return (
+                <tr key={pIdx}>
+                  <td style={{ border: '1px solid #000', padding: '4px 8px', verticalAlign: 'middle' }}>
+                    <div style={{ fontWeight: 700 }}>{period.name}</div>
+                    <div>{period.start}</div>
+                    <div style={{ fontSize: '0.65rem' }}>{period.end}</div>
+                  </td>
+                  {routine.days.map(day => {
+                    if (isOff(day)) {
+                      if (pIdx === 0) return <td key={day} style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', verticalAlign: 'middle', fontWeight: 700, fontStyle: 'italic' }} rowSpan={periods.length}>OFF DAY</td>;
+                      return null;
+                    }
+                    const slot = slots.find(s => s.day === day && s.period === cpIdx) || null;
+                    const course = slot ? routine.courses.find(c => c.code === slot.course) || null : null;
+                    return (
+                      <td key={day} style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top' }}>
+                        {course ? (
+                          <div>
+                            <div style={{ fontWeight: 700 }}>{course.code}</div>
+                            <div style={{ fontSize: '0.68rem' }}>{course.title}</div>
+                            <div style={{ fontSize: '0.65rem' }}>{course.teacher}</div>
+                          </div>
+                        ) : <span style={{ color: '#999' }}>—</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: '#fff', padding: '24px', fontFamily: 'Times New Roman, serif', color: '#000' }}>
+      <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+        <h2 style={{ fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 4px' }}>{routine.university || 'International Islamic University Chittagong'}</h2>
+        <h3 style={{ fontSize: '0.85rem', fontWeight: 600, margin: '0 0 4px' }}>{routine.department}</h3>
+        <h4 style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 4px' }}>Class Routine</h4>
+        <p style={{ fontSize: '0.72rem', margin: 0 }}>Session: {routine.session} | Semester: {routine.semester}</p>
+      </div>
+      {isBoth && hasMaleData ? (
+        <>
+          {renderTable(routine.malePeriods!, routine.maleSlots || [], 'Male')}
+          {renderTable(routine.femalePeriods!, routine.femaleSlots || [], 'Female')}
+        </>
+      ) : (
+        renderTable(routine.periods, routine.slots)
+      )}
+      {routine.courses.length > 0 && (
+        <div style={{ marginTop: '16px' }}>
+          <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '6px' }}>Course Information</h4>
+          <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000', fontSize: '0.72rem' }}>
+            <thead>
+              <tr>
+                <th style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'left' }}>Code</th>
+                <th style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'left' }}>Course Title</th>
+                <th style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'left' }}>Instructor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {routine.courses.map(c => (
+                <tr key={c.code}>
+                  <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 700 }}>{c.code}</td>
+                  <td style={{ border: '1px solid #000', padding: '4px 8px' }}>{c.title}</td>
+                  <td style={{ border: '1px solid #000', padding: '4px 8px' }}>{c.teacher}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p style={{ fontSize: '0.65rem', marginTop: '12px', textAlign: 'center', color: '#666' }}>
+        Last Updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+      </p>
     </div>
   );
 }
@@ -1941,6 +2083,20 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
   const [femaleSlots, setFemaleSlots] = useState<RoutineSlot[]>(existing?.femaleSlots || []);
   const [periodTab, setPeriodTab] = useState<'male' | 'female'>('male');
   const [draftSaved, setDraftSaved] = useState(false);
+  const [semesterCourses, setSemesterCourses] = useState<{ code: string; title: string; teacher: string; room: string }[]>([]);
+  const [codeSuggestions, setCodeSuggestions] = useState<{ idx: number; matches: { code: string; title: string; teacher: string; room: string }[] } | null>(null);
+
+  useEffect(() => {
+    if (!semester) { setSemesterCourses([]); return; }
+    fetch(`/api/semester-courses?semester=${encodeURIComponent(semester)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.courses)) {
+          setSemesterCourses(data.courses.map((c: any) => ({ code: c.code, title: c.title, teacher: c.teacher || '', room: c.room || '' })));
+        }
+      })
+      .catch(() => {});
+  }, [semester]);
 
   useEffect(() => {
     if (existing) return;
@@ -1965,6 +2121,11 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
       showToast('Draft restored from previous session', 'success');
     }
   }, []);
+
+  useEffect(() => {
+    if (!semester || semesterCourses.length === 0 || existing || courses.length > 0) return;
+    setCourses(semesterCourses.map(c => ({ code: c.code, title: c.title, teacher: c.teacher, room: c.room })));
+  }, [semesterCourses, existing, courses.length]);
 
   useEffect(() => {
     if (existing) return;
@@ -2051,6 +2212,20 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
       if (!old.room || old.room === oldInitials) {
         c[idx].room = shortForm || toInitials(value);
       }
+    }
+    if (field === 'code' && value.trim()) {
+      const matches = semesterCourses.filter(sc => sc.code.toLowerCase().includes(value.toLowerCase()));
+      if (matches.length > 0 && !(matches.length === 1 && matches[0].code.toLowerCase() === value.toLowerCase())) {
+        setCodeSuggestions({ idx, matches: matches.slice(0, 5) });
+      } else {
+        setCodeSuggestions(null);
+        if (matches.length === 1 && matches[0].code.toLowerCase() === value.toLowerCase()) {
+          c[idx].title = matches[0].title;
+          if (!c[idx].teacher && matches[0].teacher) c[idx].teacher = matches[0].teacher;
+        }
+      }
+    } else if (field === 'code') {
+      setCodeSuggestions(null);
     }
     setCourses(c);
   };
@@ -2179,8 +2354,28 @@ function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem 
               {courses.map((c, idx) => (
                 <div key={idx} className="routine-course-item">
                   <div className="routine-course-num">{idx + 1}</div>
-                  <div className="routine-course-fields">
-                    <input className="routine-input-sm" placeholder="Code (e.g. QSM-3601)" value={c.code} onChange={e => updateCourse(idx, 'code', e.target.value)} />
+                  <div className="routine-course-fields" style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }}>
+                      <input className="routine-input-sm" placeholder="Code (e.g. QSM-3601)" value={c.code} onChange={e => updateCourse(idx, 'code', e.target.value)} onBlur={() => setTimeout(() => setCodeSuggestions(null), 200)} />
+                      {codeSuggestions?.idx === idx && codeSuggestions.matches.length > 0 && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, maxHeight: 160, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
+                          {codeSuggestions.matches.map((m, mi) => (
+                            <div key={mi} onClick={() => {
+                              const c2 = [...courses];
+                              c2[idx] = { ...c2[idx], code: m.code, title: m.title, teacher: m.teacher || c2[idx].teacher, room: m.room || c2[idx].room };
+                              setCourses(c2);
+                              setCodeSuggestions(null);
+                            }} style={{ padding: '6px 10px', cursor: 'pointer', fontSize: '0.78rem', borderBottom: mi < codeSuggestions.matches.length - 1 ? '1px solid var(--border)' : 'none' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg3)')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                              <span style={{ fontWeight: 600, color: 'var(--text)' }}>{m.code}</span>
+                              <span style={{ marginLeft: 6, color: 'var(--text3, #94a3b8)', fontSize: '0.7rem' }}>{m.title}</span>
+                              {m.teacher && <span style={{ marginLeft: 6, color: 'var(--text3, #94a3b8)', fontSize: '0.65rem' }}>({m.teacher})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <input placeholder="Course Title (e.g. Tafsir Bir Rayi)" value={c.title} onChange={e => updateCourse(idx, 'title', e.target.value)} />
                     <div className="routine-course-row-2">
                       <TeacherAutocomplete value={c.teacher} onChange={(val, sf) => updateCourse(idx, 'teacher', val, sf)} placeholder="Type name or short form (e.g. MER)" />

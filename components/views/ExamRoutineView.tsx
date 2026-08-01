@@ -21,6 +21,9 @@ interface ExamCourse {
   code: string;
   title: string;
   teacher: string;
+  room?: string;
+  rollRange?: string;
+  fromGithub?: boolean;
 }
 
 interface ExamRow {
@@ -40,6 +43,7 @@ interface ExamRoutineItem {
   createdAt?: number;
   published?: boolean;
   isDraft?: boolean;
+  status?: string;
   publishedBy?: { name: string; title?: string; email?: string };
   publishedAt?: number;
 }
@@ -48,6 +52,37 @@ const LS_EXAM_DRAFTS = 'qsis-exam-draft-routines';
 const LS_EXAM_PUBLISHED = 'qsis-exam-published-routines';
 const DAYS = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const EXAM_TYPES = ['Midterm', 'Final', 'Quiz', 'Makeup', 'Practical'];
+
+function expandRollRange(range: string): string[] {
+  if (!range.trim()) return [];
+  const parts = range.split('-').map(s => s.trim());
+  if (parts.length !== 2) return [range.trim()];
+  const [start, end] = parts;
+  const prefix = start.replace(/\d+$/, '');
+  const suffix = end.replace(/\d+$/, '');
+  if (prefix !== suffix || prefix === start) return [range.trim()];
+  const startNum = parseInt(start.replace(/^\D+/, ''));
+  const endNum = parseInt(end.replace(/^\D+/, ''));
+  if (isNaN(startNum) || isNaN(endNum) || endNum < startNum) return [range.trim()];
+  const rolls: string[] = [];
+  const numWidth = start.replace(/^\D+/, '').length;
+  for (let i = startNum; i <= endNum; i++) {
+    rolls.push(`${prefix}${String(i).padStart(numWidth, '0')}`);
+  }
+  return rolls;
+}
+
+function formatRollCount(rollStr: string): string {
+  if (!rollStr || rollStr === '-') return '';
+  if (rollStr.includes(',')) {
+    const ids = rollStr.split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length <= 1) return rollStr;
+    return `${ids.length} students`;
+  }
+  const rolls = expandRollRange(rollStr);
+  if (rolls.length <= 1) return rollStr;
+  return `${rolls.length} students (${rolls[0]}–${rolls[rolls.length - 1]})`;
+}
 
 function getDefaultRow(slots: ExamSlot[]): ExamRow {
   const courses: Record<string, ExamCourse> = {};
@@ -74,6 +109,7 @@ export default function ExamRoutineView() {
   const email = session?.user?.email || profile.email || '';
   const isOwner = config.ownerEmails.includes(email);
   const [canPublish, setCanPublish] = useState(false);
+  const [canAllSemester, setCanAllSemester] = useState(false);
 
   useEffect(() => {
     fetch('/api/settings/permissions')
@@ -85,28 +121,37 @@ export default function ExamRoutineView() {
         const roleKey = profile.isCR ? 'cr' : role;
         const allowed = perms.publishRoutine || ['admin', 'manager', 'teacher', 'cr'];
         setCanPublish(isOwner || allowed.includes(roleKey));
+        setCanAllSemester(isOwner || ['admin', 'manager', 'teacher'].includes(role));
       })
       .catch(() => {});
   }, [email, profile.role, profile.isCR, isOwner]);
 
-  useEffect(() => {
-    setExamSlots(loadExamSlots());
+  const loadDrafts = useCallback(() => {
     try {
       const drafts = JSON.parse(localStorage.getItem(LS_EXAM_DRAFTS) || '[]');
-      const published = JSON.parse(localStorage.getItem(LS_EXAM_PUBLISHED) || '[]');
       setExamRoutines(drafts);
-      setPublishedRoutines(published);
     } catch {}
   }, []);
+
+  const loadPublishedFromDB = useCallback(async () => {
+    try {
+      const res = await fetch('/api/published-exam-routines');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.routines)) {
+        setPublishedRoutines(data.routines);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    setExamSlots(loadExamSlots());
+    loadDrafts();
+    loadPublishedFromDB();
+  }, [loadDrafts, loadPublishedFromDB]);
 
   const persistDrafts = useCallback((r: ExamRoutineItem[]) => {
     setExamRoutines(r);
     localStorage.setItem(LS_EXAM_DRAFTS, JSON.stringify(r));
-  }, []);
-
-  const persistPublished = useCallback((r: ExamRoutineItem[]) => {
-    setPublishedRoutines(r);
-    localStorage.setItem(LS_EXAM_PUBLISHED, JSON.stringify(r));
   }, []);
 
   const enabledSlots = getEnabledSlots(examSlots);
@@ -131,7 +176,7 @@ export default function ExamRoutineView() {
     setViewMode('builder');
   }
 
-  function saveDraft() {
+  async function saveDraft() {
     const id = editingId || `exam-${Date.now()}`;
     const routine: ExamRoutineItem = {
       id, semester, session: sessionVal, department, examType, rows, slots: examSlots,
@@ -139,9 +184,22 @@ export default function ExamRoutineView() {
     };
     const isPublishedEdit = editingId && publishedRoutines.some(r => r.id === editingId);
     if (isPublishedEdit) {
-      const updated = publishedRoutines.map(r => r.id === editingId ? { ...routine, published: true, isDraft: false, publishedBy: r.publishedBy, publishedAt: r.publishedAt } : r);
-      persistPublished(updated);
-      showToast('Published routine updated!', 'success');
+      const existing = publishedRoutines.find(r => r.id === editingId);
+      const updatedPub: ExamRoutineItem = { ...routine, published: true, isDraft: false, publishedBy: existing?.publishedBy, publishedAt: existing?.publishedAt };
+      try {
+        const res = await fetch('/api/published-exam-routines', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routines: [updatedPub] }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          await loadPublishedFromDB();
+          showToast('Published routine updated!', 'success');
+        }
+      } catch {
+        showToast('Failed to update', 'error');
+      }
     } else {
       const updated = examRoutines.filter(r => r.id !== id);
       updated.push(routine);
@@ -151,23 +209,43 @@ export default function ExamRoutineView() {
     setViewMode('manager');
   }
 
-  function publishRoutine(r: ExamRoutineItem) {
+  async function publishRoutine(r: ExamRoutineItem) {
     const publisherName = profile.name || email.split('@')[0];
     const published: ExamRoutineItem = {
       ...r, published: true, isDraft: false,
-      publishedBy: { name: publisherName, title: profile.title || undefined },
+      publishedBy: { name: publisherName, title: profile.title || undefined, email },
       publishedAt: Date.now(),
     };
-    const updated = publishedRoutines.filter(p => !(p.semester === r.semester && p.department === r.department && p.examType === r.examType));
-    updated.push(published);
-    persistPublished(updated);
-    persistDrafts(examRoutines.filter(d => d.id !== r.id));
-    showToast('Exam routine published!', 'success');
+    try {
+      const res = await fetch('/api/published-exam-routines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routines: [published] }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        persistDrafts(examRoutines.filter(d => d.id !== r.id));
+        await loadPublishedFromDB();
+        showToast('Exam routine published!', 'success');
+      } else {
+        showToast(data.error || 'Failed to publish', 'error');
+      }
+    } catch {
+      showToast('Failed to publish', 'error');
+    }
   }
 
-  function unpublishRoutine(id: string) {
-    persistPublished(publishedRoutines.filter(r => r.id !== id));
-    showToast('Exam routine unpublished', 'success');
+  async function unpublishRoutine(id: string) {
+    try {
+      const res = await fetch(`/api/published-exam-routines?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        await loadPublishedFromDB();
+        showToast('Exam routine unpublished', 'success');
+      }
+    } catch {
+      showToast('Failed to unpublish', 'error');
+    }
   }
 
   function deleteRoutine(id: string) {
@@ -251,9 +329,17 @@ export default function ExamRoutineView() {
           <h2 className="text-[1.3rem] font-bold text-dark-text">
             <i className="fas fa-file-alt text-qsis mr-2"></i>Exam Routine
           </h2>
-          <p className="text-[0.78rem] text-dark-text2 mt-0.5">
-            {deptInfo ? `${deptInfo.department.shortName} — ${deptInfo.faculty.shortName}` : 'Create and manage exam routines'}
-          </p>
+          {profile?.department && (
+            <p className="text-[0.72rem] text-qsis mt-0.5">
+              <i className="fas fa-building mr-1"></i>{findDepartment(profile.department)?.department.shortName || profile.department}
+              {profile.semester && <><span className="mx-1">&bull;</span><i className="fas fa-graduation-cap mr-1"></i>{config.semesters.find(s => s.id === profile.semester)?.label || profile.semester}</>}
+            </p>
+          )}
+          {!profile?.department && (
+            <p className="text-[0.78rem] text-dark-text2 mt-0.5">
+              {deptInfo ? `${deptInfo.department.shortName} — ${deptInfo.faculty.shortName}` : 'Create and manage exam routines'}
+            </p>
+          )}
         </div>
         {viewMode === 'manager' && (
           <div className="flex gap-2">
@@ -262,7 +348,7 @@ export default function ExamRoutineView() {
                 <i className="fas fa-cog mr-1"></i>Exam Slots
               </button>
             )}
-            {canPublish && (
+            {canAllSemester && (
               <button onClick={() => setViewMode('allBranch')} className="routine-btn routine-btn-accent">
                 <i className="fas fa-layer-group mr-1"></i>All Semester
               </button>
@@ -324,11 +410,11 @@ export default function ExamRoutineView() {
           {publishedRoutines.map(r => {
             const canEditPub = isOwner || (r.publishedBy?.email && r.publishedBy.email === email);
             return (
-              <ExamRoutineCard key={r.id} routine={r} slots={r.slots || examSlots} onView={() => { setEditingId(r.id); setRows(r.rows); setExamSlots(r.slots || examSlots); setSemester(r.semester); setSessionVal(r.session); setDepartment(r.department); setExamType(r.examType); setViewMode('preview'); }} onEdit={canEditPub ? () => editRoutine(r) : undefined} onUnpublish={() => unpublishRoutine(r.id)} canManage={canPublish} isPublished />
+              <ExamRoutineCard key={r.id} routine={r} slots={r.slots || examSlots} onView={() => { setEditingId(r.id); setRows(r.rows); setExamSlots(r.slots || examSlots); setSemester(r.semester); setSessionVal(r.session); setDepartment(r.department); setExamType(r.examType); setViewMode('preview'); }} onEdit={canEditPub ? () => editRoutine(r) : undefined} onUnpublish={() => unpublishRoutine(r.id)} canManage={canPublish} isPublished currentUserEmail={email} isAdmin={isOwner} />
             );
           })}
           {examRoutines.map(r => (
-            <ExamRoutineCard key={r.id} routine={r} slots={r.slots || examSlots} onView={() => editRoutine(r)} onPublish={() => publishRoutine(r)} onDelete={() => deleteRoutine(r.id)} canManage={canPublish} />
+            <ExamRoutineCard key={r.id} routine={r} slots={r.slots || examSlots} onView={() => editRoutine(r)} onPublish={() => publishRoutine(r)} onDelete={() => deleteRoutine(r.id)} canManage={canPublish} currentUserEmail={email} isAdmin={isOwner} />
           ))}
         </div>
       )}
@@ -414,7 +500,9 @@ export default function ExamRoutineView() {
                         <div className="flex flex-col gap-1">
                           <input placeholder="Code" value={row.courses[slot.id]?.code || ''} onChange={e => updateRowCourse(idx, slot.id, 'code', e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
                           <input placeholder="Title" value={row.courses[slot.id]?.title || ''} onChange={e => updateRowCourse(idx, slot.id, 'title', e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
-                          <TeacherAutocomplete value={row.courses[slot.id]?.teacher || ''} onChange={val => updateRowCourse(idx, slot.id, 'teacher', val)} placeholder="Teacher" />
+                          <input placeholder="Room (e.g. 301-A)" value={row.courses[slot.id]?.room || ''} onChange={e => updateRowCourse(idx, slot.id, 'room', e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
+                          <input placeholder="Teachers (comma separated)" value={row.courses[slot.id]?.teacher || ''} onChange={e => updateRowCourse(idx, slot.id, 'teacher', e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
+                          <input placeholder="Roll: Q233099-Q233115" value={row.courses[slot.id]?.rollRange || ''} onChange={e => updateRowCourse(idx, slot.id, 'rollRange' as any, e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
                         </div>
                       </td>
                     ))}
@@ -434,7 +522,7 @@ export default function ExamRoutineView() {
             <div className="flex gap-2">
               <button onClick={saveDraft} className="routine-btn"><i className="fas fa-save mr-1"></i>Save Draft</button>
               {canPublish && (
-                <button onClick={() => {
+                <button onClick={async () => {
                   const id = editingId || `exam-${Date.now()}`;
                   const routine: ExamRoutineItem = {
                     id, semester, session: sessionVal, department, examType, rows, slots: examSlots,
@@ -442,12 +530,22 @@ export default function ExamRoutineView() {
                     publishedBy: { name: profile.name || email.split('@')[0], title: profile.title || undefined, email },
                     publishedAt: Date.now(),
                   };
-                  const updated = publishedRoutines.filter(p => !(p.semester === routine.semester && p.department === routine.department && p.examType === routine.examType));
-                  updated.push(routine);
-                  persistPublished(updated);
-                  persistDrafts(examRoutines.filter(d => d.id !== id));
-                  showToast('Published!', 'success');
-                  setViewMode('manager');
+                  try {
+                    const res = await fetch('/api/published-exam-routines', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ routines: [routine] }),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      persistDrafts(examRoutines.filter(d => d.id !== id));
+                      await loadPublishedFromDB();
+                      showToast('Published!', 'success');
+                      setViewMode('manager');
+                    }
+                  } catch {
+                    showToast('Failed to publish', 'error');
+                  }
                 }} className="routine-btn routine-btn-primary"><i className="fas fa-globe mr-1"></i>Publish</button>
               )}
             </div>
@@ -473,20 +571,53 @@ export default function ExamRoutineView() {
           canPublish={canPublish}
           profile={profile}
           email={email}
-          onPublish={(items) => {
+          onPublish={async (items) => {
             const publisherName = profile.name || email.split('@')[0];
             const published = items.map(r => ({
               ...r, published: true, isDraft: false,
       publishedBy: { name: publisherName, title: profile.title || undefined, email },
               publishedAt: Date.now(),
             }));
-            let updated = [...publishedRoutines];
-            for (const pub of published) {
-              updated = updated.filter(p => !(p.semester === pub.semester && p.department === pub.department && p.examType === pub.examType));
-              updated.push(pub);
+            try {
+              const res = await fetch('/api/published-exam-routines', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ routines: published, status: 'published' }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                await loadPublishedFromDB();
+                showToast(`${published.length} exam routines published!`, 'success');
+              }
+            } catch {
+              showToast('Failed to publish', 'error');
             }
-            persistPublished(updated);
-            showToast(`${published.length} exam routines published!`, 'success');
+          }}
+          onSaveToCloud={async (items) => {
+            const publisherName = profile.name || email.split('@')[0];
+            const saved = items.map(r => ({
+              ...r, published: false, isDraft: false,
+      publishedBy: { name: publisherName, title: profile.title || undefined, email },
+              publishedAt: Date.now(),
+            }));
+            try {
+              const res = await fetch('/api/published-exam-routines', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ routines: saved, status: 'saved' }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                await loadPublishedFromDB();
+                showToast(`${saved.length} exam routines saved to cloud!`, 'success');
+              }
+            } catch {
+              showToast('Failed to save to cloud', 'error');
+            }
+          }}
+          onSaveDraft={(items) => {
+            const drafts = items.map(r => ({ ...r, isDraft: true, published: false, createdAt: Date.now() }));
+            persistDrafts([...examRoutines, ...drafts]);
           }}
           onBack={() => setViewMode('manager')}
         />
@@ -495,7 +626,7 @@ export default function ExamRoutineView() {
   );
 }
 
-function ExamRoutineCard({ routine, slots, onView, onEdit, onPublish, onUnpublish, onDelete, canManage, isPublished }: {
+function ExamRoutineCard({ routine, slots, onView, onEdit, onPublish, onUnpublish, onDelete, canManage, isPublished, currentUserEmail, isAdmin }: {
   routine: ExamRoutineItem;
   slots: ExamSlot[];
   onView: () => void;
@@ -505,8 +636,13 @@ function ExamRoutineCard({ routine, slots, onView, onEdit, onPublish, onUnpublis
   onDelete?: () => void;
   canManage: boolean;
   isPublished?: boolean;
+  currentUserEmail?: string;
+  isAdmin?: boolean;
 }) {
   const deptInfo = findDepartment(routine.department);
+  const isCreator = !!currentUserEmail && !!routine.publishedBy?.email && routine.publishedBy.email === currentUserEmail;
+  const canDelete = isCreator || isAdmin || canManage;
+
   return (
     <div className={`bg-dark-bg2 border rounded-xl p-4 ${isPublished ? 'border-green-500/30' : 'border-dark-border'}`}>
       <div className="flex items-center justify-between">
@@ -514,6 +650,7 @@ function ExamRoutineCard({ routine, slots, onView, onEdit, onPublish, onUnpublis
           <div className="flex items-center gap-2">
             <h4 className="text-[0.9rem] font-bold text-dark-text">{routine.examType} Exam</h4>
             {isPublished && <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[0.65rem] font-semibold"><i className="fas fa-globe mr-0.5"></i>Published</span>}
+            {!isPublished && routine.status === 'saved' && <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[0.65rem] font-semibold"><i className="fas fa-cloud mr-0.5"></i>Saved to Cloud</span>}
             {routine.isDraft && <span className="px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 text-[0.65rem] font-semibold">Draft</span>}
           </div>
           <p className="text-[0.75rem] text-dark-text2 mt-0.5">
@@ -521,7 +658,7 @@ function ExamRoutineCard({ routine, slots, onView, onEdit, onPublish, onUnpublis
           </p>
           {routine.publishedBy && (
             <p className="text-[0.68rem] text-dark-text3 mt-0.5">
-              <i className="fas fa-user-check mr-1"></i>Published by {routine.publishedBy.name}{routine.publishedBy.title ? ` (${routine.publishedBy.title})` : ''}
+              <i className="fas fa-user-check mr-1"></i>{isPublished ? 'Published by' : 'Saved by'} {routine.publishedBy.name}{routine.publishedBy.title ? ` (${routine.publishedBy.title})` : ''}
             </p>
           )}
         </div>
@@ -530,7 +667,7 @@ function ExamRoutineCard({ routine, slots, onView, onEdit, onPublish, onUnpublis
           {onEdit && <button onClick={onEdit} className="routine-btn routine-btn-edit"><i className="fas fa-edit mr-1"></i>Edit</button>}
           {canManage && !isPublished && onPublish && <button onClick={onPublish} className="routine-btn routine-btn-primary"><i className="fas fa-globe mr-1"></i>Publish</button>}
           {canManage && isPublished && onUnpublish && <button onClick={onUnpublish} className="routine-btn text-yellow-400"><i className="fas fa-eye-slash mr-1"></i>Unpublish</button>}
-          {canManage && !isPublished && onDelete && <button onClick={onDelete} className="routine-btn text-red-400"><i className="fas fa-trash"></i></button>}
+          {canDelete && !isPublished && onDelete && <button onClick={onDelete} className="routine-btn text-red-400"><i className="fas fa-trash"></i></button>}
         </div>
       </div>
     </div>
@@ -544,6 +681,7 @@ function ExamRoutinePrintView({ semester, session, department, examType, rows, s
 }) {
   const deptInfo = findDepartment(department);
   const semesterLabel = config.semesters.find(s => s.id === semester)?.label || semester;
+  const [exportMode, setExportMode] = useState<'themed' | 'plain'>('themed');
 
   function handleExport() {
     import('dom-to-image-more').then(({ toPng }) => {
@@ -556,17 +694,83 @@ function ExamRoutinePrintView({ semester, session, department, examType, rows, s
         el.style.width = origWidth;
         el.style.minWidth = '';
         const link = document.createElement('a');
-        link.download = `exam-routine-${department}-${examType}.png`;
+        link.download = `exam-routine-${department}-${examType}${exportMode === 'plain' ? '-plain' : ''}.png`;
         link.href = dataUrl;
         link.click();
       });
     });
   }
 
+  if (exportMode === 'plain') {
+    return (
+      <div>
+        <div className="flex justify-end gap-2 mb-3">
+          <button onClick={handleExport} className="routine-btn routine-btn-primary"><i className="fas fa-download mr-1"></i>Export Plain</button>
+          <button onClick={() => setExportMode('themed')} className="routine-btn"><i className="fas fa-palette mr-1"></i>Switch to Themed</button>
+        </div>
+        <div id="exam-routine-export" className="bg-white rounded p-6 text-black" style={{ width: '100%', fontFamily: 'Times New Roman, serif' }}>
+          <div className="text-center mb-4">
+            <h2 className="text-[1rem] font-bold uppercase tracking-wide">International Islamic University Chittagong</h2>
+            <h3 className="text-[0.85rem] font-semibold">{deptInfo?.department.name || department}</h3>
+            <h4 className="text-[0.8rem] font-bold mt-2 uppercase">{examType} Examination Routine</h4>
+            <p className="text-[0.72rem]">{semesterLabel} | {session}</p>
+          </div>
+          <div className="mb-3 flex flex-wrap gap-2 justify-center">
+            {slots.map(slot => (
+              <div key={slot.id} className="px-3 py-1 border border-black text-center">
+                <div className="text-[0.72rem] font-bold">{slot.name}</div>
+                <div className="text-[0.65rem]">Time: {slot.startTime} – {slot.endTime}</div>
+              </div>
+            ))}
+          </div>
+          <table className="w-full border-collapse border border-black text-[0.72rem]">
+            <thead>
+              <tr>
+                <th className="border border-black px-2 py-1.5 text-left font-bold">Date</th>
+                <th className="border border-black px-2 py-1.5 text-left font-bold">Day</th>
+                {slots.map(slot => (
+                  <th key={slot.id} className="border border-black px-2 py-1.5 text-left font-bold">
+                    {slot.name}
+                    <div className="text-[0.58rem] font-normal">{slot.startTime} – {slot.endTime}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, idx) => (
+                <tr key={idx}>
+                  <td className="border border-black px-2 py-1.5 font-medium">{row.date ? new Date(row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</td>
+                  <td className="border border-black px-2 py-1.5 font-medium">{row.day || '—'}</td>
+                  {slots.map(slot => {
+                    const course = row.courses[slot.id];
+                    return (
+                      <td key={slot.id} className="border border-black px-2 py-1.5">
+                        {course?.code && <div className="font-bold">{course.code}</div>}
+                        {course?.title && <div className="text-[0.65rem]">{course.title}</div>}
+                        {course?.teacher && <div className="text-[0.6rem]">Teacher: {course.teacher}</div>}
+                        {course?.room && <div className="text-[0.62rem]">Room: {course.room}</div>}
+                        {course?.rollRange && <div className="text-[0.6rem]">Roll: {course.rollRange}</div>}
+                        {!course?.code && !course?.title && !course?.room && !course?.teacher && <span className="text-gray-400">—</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {publishedBy && (
+            <p className="text-[0.65rem] mt-3 text-right">Published by: {publishedBy.name}{publishedBy.title ? `, ${publishedBy.title}` : ''}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <div className="flex justify-end mb-3">
+      <div className="flex justify-end gap-2 mb-3">
         <button onClick={handleExport} className="routine-btn routine-btn-primary"><i className="fas fa-download mr-1"></i>Export PNG</button>
+        <button onClick={() => setExportMode('plain')} className="routine-btn"><i className="fas fa-file-alt mr-1"></i>Plain Academic Table</button>
       </div>
       <div id="exam-routine-export" className="bg-white rounded-xl p-6 text-gray-900" style={{ width: '100%' }}>
         <div className="text-center mb-4">
@@ -610,8 +814,10 @@ function ExamRoutinePrintView({ semester, session, department, examType, rows, s
                     <td key={slot.id} className="border border-gray-300 px-3 py-2">
                       {course?.code && <div className="font-bold">{course.code}</div>}
                       {course?.title && <div className="text-[0.7rem] text-gray-600">{course.title}</div>}
-                      {course?.teacher && <div className="text-[0.68rem] text-gray-500 italic">{course.teacher}</div>}
-                      {!course?.code && !course?.title && !course?.teacher && <span className="text-gray-300">—</span>}
+                      {course?.teacher && <div className="text-[0.65rem] text-gray-500"><i className="fas fa-chalkboard-teacher mr-1"></i>{course.teacher}</div>}
+                      {course?.room && <div className="text-[0.68rem] text-gray-500"><i className="fas fa-door-open mr-1"></i>Room {course.room}</div>}
+                      {course?.rollRange && <div className="text-[0.65rem] text-gray-400"><i className="fas fa-users mr-1"></i>{formatRollCount(course.rollRange)}</div>}
+                      {!course?.code && !course?.title && !course?.room && !course?.teacher && <span className="text-gray-300">—</span>}
                     </td>
                   );
                 })}
@@ -628,10 +834,11 @@ function ExamRoutinePrintView({ semester, session, department, examType, rows, s
   );
 }
 
-type ExamAllStep = 'info' | 'dates' | 'courses' | 'assign';
+type ExamAllStep = 'setup' | 'courses' | 'assign';
 
 interface ExamAllSemesterSem {
   name: string;
+  enabled: boolean;
   courses: ExamCourse[];
 }
 
@@ -643,49 +850,137 @@ interface TeacherConflictInfo {
   slotId: string;
 }
 
-function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPublish, profile, email, onPublish, onBack }: {
+function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPublish, profile, email, onPublish, onSaveToCloud, onSaveDraft, onBack }: {
   examSlots: ExamSlot[];
   publishedRoutines: ExamRoutineItem[];
   examRoutines: ExamRoutineItem[];
   canPublish: boolean;
-  profile: { name?: string; title?: string; role?: string; isCR?: boolean };
+  profile: { name: string; title?: string };
   email: string;
-  onPublish: (items: ExamRoutineItem[]) => void;
+  onPublish: (items: ExamRoutineItem[]) => Promise<void>;
+  onSaveToCloud: (items: ExamRoutineItem[]) => Promise<void>;
+  onSaveDraft: (items: ExamRoutineItem[]) => void;
   onBack: () => void;
 }) {
-  const [step, setStep] = useState<ExamAllStep>('info');
-  const [sessionVal, setSessionVal] = useState(getDefaultSession());
+  const [step, setStep] = useState<ExamAllStep>('setup');
+  const [sessionVal, setSessionVal] = useState('');
   const [department, setDepartment] = useState('qsis');
   const [examType, setExamType] = useState('Midterm');
+  const [draftGender, setDraftGender] = useState<'male' | 'female' | 'both'>('both');
   const [rows, setRows] = useState<ExamRow[]>([getDefaultRow(examSlots)]);
   const [semesters, setSemesters] = useState<ExamAllSemesterSem[]>(
-    config.semesters.map(s => ({ name: s.id, courses: [] }))
+    config.semesters.map(s => ({ name: s.id, enabled: true, courses: [] as ExamCourse[] }))
   );
   const [activeSemTab, setActiveSemTab] = useState(0);
   const [conflictMap, setConflictMap] = useState<Record<string, TeacherConflictInfo[]>>({});
+  const [showPublishMenu, setShowPublishMenu] = useState(false);
+
+  useEffect(() => {
+    if (!showPublishMenu) return;
+    const handler = () => setShowPublishMenu(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [showPublishMenu]);
 
   const enabledSlots = getEnabledSlots(examSlots);
   const semLabels = useMemo(() => config.semesters.reduce((acc, s) => { acc[s.id] = s.label; return acc; }, {} as Record<string, string>), []);
+  const enabledSemesters = useMemo(() => semesters.filter(s => s.enabled), [semesters]);
+
+  const loadSemesterCourses = useCallback(async (semName: string) => {
+    try {
+      const res = await fetch(`/api/semester-courses?semester=${encodeURIComponent(semName)}`);
+      const data = await res.json();
+      if (!data.success || !data.courses?.length) return;
+      const dbCourses: ExamCourse[] = data.courses.map((c: any) => ({ code: c.code, title: c.title, teacher: '', fromGithub: true }));
+      setSemesters(prev => prev.map(s => {
+        if (s.name !== semName) return s;
+        const existingCodes = new Set(s.courses.map(c => c.code));
+        const newCourses = dbCourses.filter(c => !existingCodes.has(c.code));
+        if (newCourses.length > 0) return { ...s, courses: [...s.courses, ...newCourses] };
+        return s;
+      }));
+    } catch {}
+  }, []);
+
+  const loadGithubCourses = useCallback(async (semName: string) => {
+    try {
+      const res = await fetch(`/api/github-courses?department=${department}&semester=${semName}`);
+      const data = await res.json();
+      if (!data.success || !data.courses?.length) return;
+      const ghCourses: ExamCourse[] = data.courses.map((c: any) => ({ code: c.code, title: c.title, teacher: '', fromGithub: true }));
+      setSemesters(prev => prev.map(s => {
+        if (s.name !== semName) return s;
+        const existingCodes = new Set(s.courses.map(c => c.code));
+        const newCourses = ghCourses.filter(c => !existingCodes.has(c.code));
+        if (newCourses.length > 0) return { ...s, courses: [...s.courses, ...newCourses] };
+        return s;
+      }));
+    } catch {}
+  }, [department]);
 
   useEffect(() => {
-    fetch('/api/semester-courses')
-      .then(r => r.json())
-      .then(data => {
-        if (!data.success || !data.courses?.length) return;
-        const courseMap: Record<string, ExamCourse[]> = {};
-        for (const c of data.courses) {
-          if (!courseMap[c.semester]) courseMap[c.semester] = [];
-          courseMap[c.semester].push({ code: c.code, title: c.title, teacher: c.teacher || '' });
-        }
-        setSemesters(prev => prev.map(s => {
-          if (s.courses.length === 0 && courseMap[s.name]) {
-            return { ...s, courses: courseMap[s.name] };
-          }
-          return s;
-        }));
-      })
-      .catch(() => {});
-  }, []);
+    for (const sem of enabledSemesters) {
+      loadSemesterCourses(sem.name);
+      loadGithubCourses(sem.name);
+    }
+  }, [department]);
+
+  const updateRow = (idx: number, field: keyof ExamRow, value: string) => {
+    setRows(prev => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const updated = { ...r, [field]: value };
+      if (field === 'date' && value) {
+        const d = new Date(value + 'T00:00:00');
+        updated.day = DAYS[(d.getDay() + 1) % 7];
+      }
+      return updated;
+    }));
+  };
+  const addRow = () => setRows(prev => [...prev, getDefaultRow(examSlots)]);
+  const removeRow = (idx: number) => setRows(prev => prev.filter((_, i) => i !== idx));
+
+  const updateSemCourse = (semName: string, cIdx: number, field: keyof ExamCourse, value: string) => {
+    setSemesters(prev => prev.map(s => {
+      if (s.name !== semName) return s;
+      const courses = [...s.courses];
+      courses[cIdx] = { ...courses[cIdx], [field]: value };
+      return { ...s, courses };
+    }));
+  };
+  const addSemCourse = (semName: string) => {
+    setSemesters(prev => prev.map(s => {
+      if (s.name !== semName) return s;
+      return { ...s, courses: [...s.courses, { code: '', title: '', teacher: '' }] };
+    }));
+  };
+  const removeSemCourse = (semName: string, cIdx: number) => {
+    setSemesters(prev => prev.map(s => {
+      if (s.name !== semName) return s;
+      return { ...s, courses: s.courses.filter((_, j) => j !== cIdx) };
+    }));
+  };
+  const saveCourseToGitHub = useCallback(async (semName: string, code: string, title: string) => {
+    if (!code || !title || !department) return;
+    try {
+      await fetch('/api/github-courses/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ department, semester: semName, code, title }),
+      });
+    } catch {}
+  }, [department]);
+
+  const toggleSemester = (semIdx: number) => {
+    setSemesters(prev => prev.map((s, i) => i === semIdx ? { ...s, enabled: !s.enabled } : s));
+  };
+  const updateRowCourse = (rowIdx: number, slotId: string, semName: string, field: keyof ExamCourse, value: string) => {
+    setRows(prev => prev.map((r, i) => {
+      if (i !== rowIdx) return r;
+      const cellKey = `${r.date}:${slotId}:${semName}`;
+      const existing = r.courses[cellKey] || { code: '', title: '', teacher: '' };
+      return { ...r, courses: { ...r.courses, [cellKey]: { ...existing, [field]: value } } };
+    }));
+  };
 
   useEffect(() => {
     const newConflicts: Record<string, TeacherConflictInfo[]> = {};
@@ -693,96 +988,44 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
       if (!row.date) continue;
       for (const slot of enabledSlots) {
         const teacherMap: Record<string, { semester: string; courseCode: string }> = {};
-        for (const sem of semesters) {
-          const course = row.courses[slot.id];
-          if (!course?.teacher || !course?.code) continue;
-          const key = course.teacher.trim().toLowerCase();
-          if (teacherMap[key]) {
-            const existing = teacherMap[key];
-            const conflictKey = `${row.date}:${slot.id}`;
-            if (!newConflicts[conflictKey]) newConflicts[conflictKey] = [];
-            newConflicts[conflictKey].push(
-              { semester: semLabels[existing.semester] || existing.semester, courseCode: existing.courseCode, teacher: course.teacher, date: row.date, slotId: slot.id },
-              { semester: semLabels[sem.name] || sem.name, courseCode: course.code, teacher: course.teacher, date: row.date, slotId: slot.id }
-            );
-          } else {
-            teacherMap[key] = { semester: sem.name, courseCode: course.code };
+        const conflictKey = `${row.date}:${slot.id}`;
+        for (const sem of enabledSemesters) {
+          if (sem.courses.length === 0) continue;
+          const cellKey = `${row.date}:${slot.id}:${sem.name}`;
+          const cellCourse = row.courses[cellKey];
+          if (!cellCourse?.code) continue;
+          const teachers = (cellCourse.teacher || '').split(',').map(t => t.trim()).filter(Boolean);
+          for (const t of teachers) {
+            if (teacherMap[t]) {
+              if (!newConflicts[conflictKey]) newConflicts[conflictKey] = [];
+              newConflicts[conflictKey].push(
+                { semester: semLabels[teacherMap[t].semester] || teacherMap[t].semester, courseCode: teacherMap[t].courseCode, teacher: t, date: row.date, slotId: slot.id },
+                { semester: semLabels[sem.name] || sem.name, courseCode: cellCourse.code, teacher: t, date: row.date, slotId: slot.id }
+              );
+            } else {
+              teacherMap[t] = { semester: sem.name, courseCode: cellCourse.code };
+            }
           }
         }
       }
     }
     setConflictMap(newConflicts);
-  }, [rows, semesters, enabledSlots, semLabels]);
+  }, [rows, enabledSemesters, enabledSlots, semLabels]);
 
-  const addRow = () => {
-    const courses: Record<string, ExamCourse> = {};
-    enabledSlots.forEach(s => { courses[s.id] = { code: '', title: '', teacher: '' }; });
-    setRows([...rows, { date: '', day: '', courses }]);
-  };
-
-  const removeRow = (idx: number) => {
-    if (rows.length <= 1) return;
-    setRows(rows.filter((_, i) => i !== idx));
-  };
-
-  const updateRow = (idx: number, field: string, value: string) => {
-    const r = [...rows];
-    if (field === 'date') {
-      const d = new Date(value);
-      r[idx] = { ...r[idx], date: value, day: DAYS[(d.getDay() + 1) % 7] || '' };
-    } else {
-      r[idx] = { ...r[idx], [field]: value };
-    }
-    setRows(r);
-  };
-
-  const updateRowCourse = (rowIdx: number, slotId: string, field: keyof ExamCourse, value: string) => {
-    const r = [...rows];
-    const courses = { ...r[rowIdx].courses };
-    courses[slotId] = { ...courses[slotId], [field]: value };
-    r[rowIdx] = { ...r[rowIdx], courses };
-    setRows(r);
-  };
-
-  const updateSemCourse = (semIdx: number, cIdx: number, field: keyof ExamCourse, value: string) => {
-    setSemesters(prev => prev.map((s, i) => {
-      if (i !== semIdx) return s;
-      const courses = [...s.courses];
-      courses[cIdx] = { ...courses[cIdx], [field]: value };
-      return { ...s, courses };
-    }));
-  };
-
-  const addSemCourse = (semIdx: number) => {
-    setSemesters(prev => prev.map((s, i) => {
-      if (i !== semIdx) return s;
-      return { ...s, courses: [...s.courses, { code: '', title: '', teacher: '' }] };
-    }));
-  };
-
-  const removeSemCourse = (semIdx: number, cIdx: number) => {
-    setSemesters(prev => prev.map((s, i) => {
-      if (i !== semIdx) return s;
-      return { ...s, courses: s.courses.filter((_, j) => j !== cIdx) };
-    }));
-  };
-
-  const handlePublishAll = () => {
-    if (rows.every(r => !r.date)) { showToast('Add at least one exam date', 'error'); return; }
-    if (Object.keys(conflictMap).length > 0) { showToast('Fix teacher conflicts before publishing', 'error'); return; }
-
+  const buildAllItems = (): ExamRoutineItem[] | null => {
+    if (rows.every(r => !r.date)) { showToast('Add at least one exam date', 'error'); return null; }
+    if (Object.keys(conflictMap).length > 0) { showToast('Fix teacher conflicts before publishing', 'error'); return null; }
     const items: ExamRoutineItem[] = [];
-    for (const sem of semesters) {
+    for (const sem of enabledSemesters) {
       if (sem.courses.length === 0) continue;
+      const genderLabel = draftGender === 'both' ? '' : draftGender === 'male' ? ' (Male)' : ' (Female)';
       const semRows = rows.map(row => {
         const courses: Record<string, ExamCourse> = {};
         for (const slot of enabledSlots) {
-          const cellCourse = row.courses[slot.id];
-          const semCourse = sem.courses.find(c => c.code === cellCourse?.code);
-          if (semCourse) {
-            courses[slot.id] = { code: semCourse.code, title: semCourse.title, teacher: semCourse.teacher };
-          } else if (cellCourse?.code) {
-            courses[slot.id] = cellCourse;
+          const cellKey = `${row.date}:${slot.id}:${sem.name}`;
+          const cellCourse = row.courses[cellKey];
+          if (cellCourse?.code) {
+            courses[slot.id] = { code: cellCourse.code, title: cellCourse.title, teacher: cellCourse.teacher || '' };
           } else {
             courses[slot.id] = { code: '', title: '', teacher: '' };
           }
@@ -791,21 +1034,43 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
       });
       items.push({
         id: `exam-all-${Date.now()}-${sem.name}`,
-        semester: sem.name, session: sessionVal, department, examType,
-        rows: semRows, slots: examSlots,
-        createdAt: Date.now(),
+        semester: `${semLabels[sem.name] || sem.name}${genderLabel}`, session: sessionVal, department, examType,
+        rows: semRows, slots: examSlots, createdAt: Date.now(),
       });
     }
-    if (items.length === 0) { showToast('Add courses to at least one semester', 'error'); return; }
-    if (!confirm(`Publish ${items.length} exam routines?`)) return;
-    onPublish(items);
+    if (items.length === 0) { showToast('Add courses to at least one semester', 'error'); return null; }
+    return items;
   };
 
+  const handleSaveDraftAll = () => {
+    const items = buildAllItems();
+    if (!items) return;
+    if (!confirm(`Save ${items.length} exam routines as draft?`)) return;
+    onSaveDraft(items);
+    showToast(`${items.length} exam routines saved as draft!`, 'success');
+    setShowPublishMenu(false);
+  };
+  const handleSaveToCloudAll = async () => {
+    const items = buildAllItems();
+    if (!items) return;
+    if (!confirm(`Save ${items.length} exam routines to cloud? (Private)`)) return;
+    await onSaveToCloud(items);
+    setShowPublishMenu(false);
+  };
+  const handlePublishAll = async () => {
+    const items = buildAllItems();
+    if (!items) return;
+    if (!confirm(`Publish ${items.length} exam routines? (Visible to all students)`)) return;
+    await onPublish(items);
+    setShowPublishMenu(false);
+  };
+
+  const totalSections = enabledSemesters.filter(s => s.courses.length > 0).length;
+
   const steps: { key: ExamAllStep; label: string; icon: string; num: number }[] = [
-    { key: 'info', label: 'Basic Info', icon: 'info-circle', num: 1 },
-    { key: 'dates', label: 'Exam Dates', icon: 'calendar', num: 2 },
-    { key: 'courses', label: 'Courses', icon: 'book', num: 3 },
-    { key: 'assign', label: 'Assign & Review', icon: 'table', num: 4 },
+    { key: 'setup', label: 'Setup', icon: 'cog', num: 1 },
+    { key: 'courses', label: 'Courses', icon: 'book', num: 2 },
+    { key: 'assign', label: 'Assign & Publish', icon: 'table', num: 3 },
   ];
   const currentStepIdx = steps.findIndex(s => s.key === step);
 
@@ -814,11 +1079,30 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
       <div className="flex items-center justify-between mb-5">
         <div>
           <h3 className="text-[1.1rem] font-bold text-dark-text"><i className="fas fa-layer-group text-qsis mr-2"></i>All Semester Exam Routine</h3>
-          <p className="text-[0.75rem] text-dark-text2 mt-0.5">Unified builder — create exam routines for all semesters at once</p>
+          <p className="text-[0.75rem] text-dark-text2 mt-0.5">3 simple steps — setup, courses, assign & publish</p>
         </div>
         <div className="flex gap-2">
           {canPublish && (
-            <button onClick={handlePublishAll} className="routine-btn routine-btn-primary"><i className="fas fa-share-alt mr-1"></i>Publish All</button>
+            <div className="relative">
+              <button onClick={(e) => { e.stopPropagation(); setShowPublishMenu(!showPublishMenu); }} className="routine-btn routine-btn-primary"><i className="fas fa-share-alt mr-1"></i>Publish All ({totalSections} semesters) <i className="fas fa-caret-down ml-1"></i></button>
+              {showPublishMenu && (
+                <div className="absolute right-0 top-full mt-1 bg-dark-bg2 border border-dark-border rounded-lg shadow-xl z-50 py-1 min-w-[220px]">
+                  <button onClick={(e) => { e.stopPropagation(); handleSaveDraftAll(); }} className="w-full text-left px-3 py-2 text-[0.8rem] text-dark-text hover:bg-dark-bg3 flex items-center gap-2">
+                    <i className="fas fa-file-alt text-yellow-400"></i>Save as Draft
+                    <span className="text-[0.65rem] text-dark-text3 ml-auto">Local only</span>
+                  </button>
+                  <div className="border-t border-dark-border my-0.5"></div>
+                  <button onClick={(e) => { e.stopPropagation(); handleSaveToCloudAll(); }} className="w-full text-left px-3 py-2 text-[0.8rem] text-dark-text hover:bg-dark-bg3 flex items-center gap-2">
+                    <i className="fas fa-cloud text-blue-400"></i>Save to Cloud
+                    <span className="text-[0.65rem] text-dark-text3 ml-auto">Private</span>
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); handlePublishAll(); }} className="w-full text-left px-3 py-2 text-[0.8rem] text-dark-text hover:bg-dark-bg3 flex items-center gap-2">
+                    <i className="fas fa-globe text-green-400"></i>Publish
+                    <span className="text-[0.65rem] text-dark-text3 ml-auto">Public</span>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           <button onClick={onBack} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
         </div>
@@ -834,171 +1118,209 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
         ))}
       </div>
 
-      {step === 'info' && (
+      {step === 'setup' && (
         <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5 mt-4">
-          <h4 className="text-[0.9rem] font-bold text-dark-text mb-3"><i className="fas fa-info-circle text-qsis mr-2"></i>Basic Information</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <h4 className="text-[0.9rem] font-bold text-dark-text mb-3"><i className="fas fa-cog text-qsis mr-2"></i>Exam Setup</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div>
-              <label className="text-[0.7rem] text-dark-text2 block mb-1">Session</label>
-              <input value={sessionVal} onChange={e => setSessionVal(e.target.value)} placeholder="e.g. Autumn - 2026" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+              <label className="text-[0.72rem] text-dark-text2 mb-1 block">Session</label>
+              <input value={sessionVal} onChange={e => setSessionVal(e.target.value)} placeholder="e.g. Spring - 2026" className="w-full px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
             </div>
             <div>
-              <label className="text-[0.7rem] text-dark-text2 block mb-1">Department</label>
-              <CustomSelect value={department} onChange={setDepartment} placeholder="Select..." options={FACULTIES.flatMap(f => f.departments.map(d => ({ value: d.id, label: `${d.shortName} — ${d.name}`, icon: d.icon || 'fa-building', group: f.shortName })))} searchable size="md" />
+              <label className="text-[0.72rem] text-dark-text2 mb-1 block">Department</label>
+              <CustomSelect value={department} onChange={setDepartment} options={FACULTIES.map(f => ({ value: f.id, label: f.shortName, icon: 'fa-building' }))} placeholder="Department" />
             </div>
             <div>
-              <label className="text-[0.7rem] text-dark-text2 block mb-1">Exam Type</label>
-              <CustomSelect value={examType} onChange={setExamType} placeholder="Select..." options={EXAM_TYPES.map(t => ({ value: t, label: t, icon: t === 'Midterm' ? 'fa-file-alt' : t === 'Final' ? 'fa-graduation-cap' : 'fa-question-circle' }))} size="md" />
+              <label className="text-[0.72rem] text-dark-text2 mb-1 block">Exam Type</label>
+              <CustomSelect value={examType} onChange={setExamType} options={EXAM_TYPES.map(t => ({ value: t, label: t, icon: 'fa-graduation-cap' }))} placeholder="Type" />
+            </div>
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 mb-1 block">Gender</label>
+              <CustomSelect value={draftGender} onChange={v => setDraftGender(v as any)} options={[{ value: 'both', label: 'Both', icon: 'fa-venus-mars' }, { value: 'male', label: 'Male', icon: 'fa-mars' }, { value: 'female', label: 'Female', icon: 'fa-venus' }]} placeholder="Gender" />
             </div>
           </div>
-          <div className="flex justify-end mt-4">
-            <button onClick={() => setStep('dates')} className="routine-btn routine-btn-primary"><i className="fas fa-arrow-right mr-1"></i>Next: Exam Dates</button>
-          </div>
-        </div>
-      )}
 
-      {step === 'dates' && (
-        <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5 mt-4">
-          <h4 className="text-[0.9rem] font-bold text-dark-text mb-3"><i className="fas fa-calendar text-qsis mr-2"></i>Exam Dates (shared across all semesters)</h4>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+          <h5 className="text-[0.82rem] font-semibold text-dark-text mb-2"><i className="fas fa-calendar-alt text-qsis mr-1"></i>Exam Dates</h5>
+          <div className="bg-dark-bg border border-dark-border rounded-lg p-3 mb-4">
+            <table className="w-full">
               <thead>
                 <tr>
-                  <th className="px-3 py-2 text-left text-[0.72rem] font-semibold text-dark-text2 border-b border-dark-border w-16">#</th>
-                  <th className="px-3 py-2 text-left text-[0.72rem] font-semibold text-dark-text2 border-b border-dark-border w-36">Date</th>
-                  <th className="px-3 py-2 text-left text-[0.72rem] font-semibold text-dark-text2 border-b border-dark-border w-32">Day</th>
-                  <th className="px-3 py-2 border-b border-dark-border w-10"></th>
+                  <th className="px-2 py-1.5 text-left text-[0.7rem] font-semibold text-dark-text2 border-b border-dark-border w-10">#</th>
+                  <th className="px-2 py-1.5 text-left text-[0.7rem] font-semibold text-dark-text2 border-b border-dark-border">Date</th>
+                  <th className="px-2 py-1.5 text-left text-[0.7rem] font-semibold text-dark-text2 border-b border-dark-border w-32">Day</th>
+                  <th className="px-2 py-1.5 border-b border-dark-border w-8"></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, idx) => (
                   <tr key={idx} className="border-b border-dark-border">
-                    <td className="px-3 py-2 text-[0.72rem] text-dark-text3">{idx + 1}</td>
-                    <td className="px-3 py-2">
-                      <input type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)} className="w-full px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
+                    <td className="px-2 py-1.5 text-[0.7rem] text-dark-text3">{idx + 1}</td>
+                    <td className="px-2 py-1.5">
+                      <input type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-2 py-1.5">
                       <CustomSelect value={row.day} onChange={val => updateRow(idx, 'day', val)} placeholder="Day" options={DAYS.map(d => ({ value: d, label: d, icon: 'fa-calendar-day' }))} />
                     </td>
-                    <td className="px-2 py-2">
-                      <button onClick={() => removeRow(idx)} disabled={rows.length <= 1} className="text-red-400 hover:text-red-300 disabled:opacity-30 bg-transparent border-none cursor-pointer text-[0.7rem]"><i className="fas fa-trash"></i></button>
+                    <td className="px-2 py-1.5">
+                      <button onClick={() => removeRow(idx)} disabled={rows.length <= 1} className="text-red-400 hover:text-red-300 disabled:opacity-30 bg-transparent border-none cursor-pointer text-[0.68rem]"><i className="fas fa-trash"></i></button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <button onClick={addRow} className="routine-btn mt-2"><i className="fas fa-plus mr-1"></i>Add Date</button>
           </div>
-          <div className="flex items-center justify-between mt-3">
-            <button onClick={addRow} className="routine-btn"><i className="fas fa-plus mr-1"></i>Add Date</button>
-            <div className="flex gap-2">
-              <button onClick={() => setStep('info')} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
-              <button onClick={() => setStep('courses')} className="routine-btn routine-btn-primary"><i className="fas fa-arrow-right mr-1"></i>Next: Courses</button>
-            </div>
+
+          <h5 className="text-[0.82rem] font-semibold text-dark-text mb-2"><i className="fas fa-graduation-cap text-qsis mr-1"></i>Semesters</h5>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+            {config.semesters.map((cfgSem) => {
+              const sem = semesters.find(s => s.name === cfgSem.id);
+              if (!sem) return null;
+              const semIdx = semesters.indexOf(sem);
+              return (
+                <button key={cfgSem.id} onClick={() => toggleSemester(semIdx)} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all ${sem.enabled ? 'bg-qsis/10 border-qsis text-dark-text' : 'bg-dark-bg border-dark-border text-dark-text3 opacity-60'}`}>
+                  <span className={`w-4 h-4 rounded border flex items-center justify-center text-[0.6rem] ${sem.enabled ? 'bg-qsis border-qsis text-white' : 'border-dark-border'}`}>{sem.enabled && <i className="fas fa-check"></i>}</span>
+                  <span className="text-[0.78rem] font-semibold">{cfgSem.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end">
+            <button onClick={() => setStep('courses')} className="routine-btn routine-btn-primary"><i className="fas fa-arrow-right mr-1"></i>Next: Courses</button>
           </div>
         </div>
       )}
 
       {step === 'courses' && (
         <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5 mt-4">
-          <h4 className="text-[0.9rem] font-bold text-dark-text mb-3"><i className="fas fa-book text-qsis mr-2"></i>Courses per Semester</h4>
+          <h4 className="text-[0.9rem] font-bold text-dark-text mb-1"><i className="fas fa-book text-qsis mr-2"></i>Courses</h4>
+          <p className="text-[0.72rem] text-dark-text3 mb-3">Courses auto-load from DB &amp; GitHub. Add or edit courses per semester.</p>
           <div className="flex gap-1 mb-4 overflow-x-auto pb-1">
-            {semesters.map((sem, idx) => (
+            {enabledSemesters.map((sem, idx) => (
               <button key={sem.name} onClick={() => setActiveSemTab(idx)} className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold whitespace-nowrap border transition-colors ${activeSemTab === idx ? 'bg-qsis text-white border-qsis' : 'bg-dark-bg border-dark-border text-dark-text2 hover:border-qsis/50'}`}>
                 {semLabels[sem.name] || sem.name}
-                {sem.courses.length > 0 && <span className="ml-1 opacity-70">({sem.courses.length})</span>}
+                <span className="ml-1 opacity-70">({sem.courses.length})</span>
               </button>
             ))}
           </div>
-          {semesters.map((sem, idx) => idx !== activeSemTab ? null : (
+          {enabledSemesters.map((sem, idx) => idx !== activeSemTab ? null : (
             <div key={sem.name}>
-              <div className="space-y-2 mb-3">
+              <div className="space-y-1.5 mb-3">
+                {sem.courses.length === 0 && <p className="text-[0.72rem] text-dark-text3 p-3 rounded bg-dark-bg border border-dark-border"><i className="fas fa-spinner fa-spin mr-1"></i>Loading courses...</p>}
                 {sem.courses.map((c, cIdx) => (
-                  <div key={cIdx} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border">
-                    <input value={c.code} onChange={e => updateSemCourse(idx, cIdx, 'code', e.target.value)} placeholder="Code" className="w-28 px-2 py-1.5 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
-                    <input value={c.title} onChange={e => updateSemCourse(idx, cIdx, 'title', e.target.value)} placeholder="Title" className="flex-1 px-2 py-1.5 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
-                    <div className="w-44"><TeacherAutocomplete value={c.teacher} onChange={val => updateSemCourse(idx, cIdx, 'teacher', val)} placeholder="Teacher" /></div>
-                    <button onClick={() => removeSemCourse(idx, cIdx)} className="text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer text-[0.7rem]"><i className="fas fa-trash"></i></button>
+                  <div key={cIdx} className={`flex items-center gap-2 p-2 rounded-lg border ${c.fromGithub ? 'bg-dark-bg border-dark-border' : 'bg-yellow-500/5 border-yellow-500/30'}`}>
+                    <input value={c.code} onChange={e => updateSemCourse(sem.name, cIdx, 'code', e.target.value)} placeholder="Code (e.g. QSM-3602)" className="w-32 px-2 py-1 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
+                    <input value={c.title} onChange={e => updateSemCourse(sem.name, cIdx, 'title', e.target.value)} placeholder="Title" className="flex-1 px-2 py-1 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
+                    <input value={c.teacher} onChange={e => updateSemCourse(sem.name, cIdx, 'teacher', e.target.value)} placeholder="Teacher" className="w-32 px-2 py-1 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
+                    {c.fromGithub ? <i className="fas fa-check-circle text-green-400 text-[0.68rem]"></i> : <i className="fas fa-cloud-upload-alt text-yellow-400 text-[0.68rem]"></i>}
+                    <button onClick={() => removeSemCourse(sem.name, cIdx)} className="text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer text-[0.68rem]"><i className="fas fa-trash"></i></button>
                   </div>
                 ))}
               </div>
-              <button onClick={() => addSemCourse(idx)} className="routine-btn"><i className="fas fa-plus mr-1"></i>Add Course</button>
+              <div className="flex gap-2 mb-2">
+                <button onClick={() => addSemCourse(sem.name)} className="routine-btn"><i className="fas fa-plus mr-1"></i>Add Course</button>
+                {sem.courses.some(c => c.code && c.title && !c.fromGithub) && (
+                  <button onClick={() => { sem.courses.filter(c => c.code && c.title && !c.fromGithub).forEach(c => saveCourseToGitHub(sem.name, c.code, c.title)); setSemesters(prev => prev.map(s => s.name !== sem.name ? s : { ...s, courses: s.courses.map(c => (c.code && c.title && !c.fromGithub) ? { ...c, fromGithub: true } : c) })); showToast('Courses saved to GitHub', 'success'); }} className="routine-btn routine-btn-accent"><i className="fab fa-github mr-1"></i>Save to GitHub</button>
+                )}
+              </div>
             </div>
           ))}
-          <div className="flex justify-end gap-2 mt-4">
-            <button onClick={() => setStep('dates')} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
-            <button onClick={() => setStep('assign')} className="routine-btn routine-btn-primary"><i className="fas fa-arrow-right mr-1"></i>Next: Assign Grid</button>
+          <div className="flex justify-between mt-4">
+            <button onClick={() => setStep('setup')} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
+            <button onClick={() => setStep('assign')} className="routine-btn routine-btn-primary"><i className="fas fa-arrow-right mr-1"></i>Next: Assign & Publish</button>
           </div>
         </div>
       )}
 
       {step === 'assign' && (
         <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5 mt-4">
-          <h4 className="text-[0.9rem] font-bold text-dark-text mb-1"><i className="fas fa-table text-qsis mr-2"></i>Assignment Grid</h4>
-          <p className="text-[0.72rem] text-dark-text3 mb-3">For each exam date &amp; slot, select which course is being examined. Teacher conflicts are highlighted automatically.</p>
+          <h4 className="text-[0.9rem] font-bold text-dark-text mb-1"><i className="fas fa-table text-qsis mr-2"></i>Assign Courses to Schedule</h4>
+          <p className="text-[0.72rem] text-dark-text3 mb-3">Select a course for each semester in each time slot. Teacher conflicts are auto-detected.</p>
 
           {Object.keys(conflictMap).length > 0 && (
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
               <p className="text-[0.78rem] font-semibold text-red-400 mb-1"><i className="fas fa-exclamation-triangle mr-1"></i>Teacher Conflicts Detected</p>
+              <p className="text-[0.7rem] text-red-300 mb-2">Same teacher assigned to different semesters at the same time slot:</p>
               {Object.entries(conflictMap).map(([key, conflicts]) => (
-                <p key={key} className="text-[0.7rem] text-red-300 ml-4">• Teacher <strong>{conflicts[0]?.teacher}</strong> assigned to {conflicts.map(c => `${c.courseCode} (${c.semester})`).join(' & ')} on the same slot</p>
+                <p key={key} className="text-[0.7rem] text-red-300 ml-4">• <strong>{conflicts[0]?.teacher}</strong> — {conflicts.map(c => `${c.courseCode} (${c.semester})`).join(' & ')}</p>
               ))}
             </div>
           )}
 
           {rows.map((row, rowIdx) => (
-            <div key={rowIdx} className="mb-4 p-3 rounded-lg bg-dark-bg border border-dark-border">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[0.8rem] font-bold text-dark-text">{row.date ? new Date(row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No date'}</span>
-                <span className="text-[0.7rem] text-dark-text3">{row.day}</span>
+            <div key={rowIdx} className="mb-5 p-4 rounded-xl bg-dark-bg border border-dark-border">
+              <div className="flex items-center gap-3 mb-3 pb-2 border-b border-dark-border">
+                <i className="fas fa-calendar-day text-qsis"></i>
+                <span className="text-[0.9rem] font-bold text-dark-text">{row.date ? new Date(row.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'No date'}</span>
+                <span className="text-[0.72rem] text-dark-text3">{row.day}</span>
               </div>
-              <div className="grid gap-2" style={{ gridTemplateColumns: `140px repeat(${enabledSlots.length}, 1fr)` }}>
-                <div className="text-[0.65rem] font-semibold text-dark-text3"></div>
-                {enabledSlots.map(slot => (
-                  <div key={slot.id} className="text-[0.65rem] font-semibold text-dark-text2 text-center">{slot.name}</div>
-                ))}
-                {semesters.map((sem, semIdx) => (
-                  <>
-                    <div key={`label-${semIdx}`} className="text-[0.7rem] text-dark-text2 flex items-center">{semLabels[sem.name] || sem.name}</div>
-                    {enabledSlots.map(slot => {
-                      const cellCourse = row.courses[slot.id];
-                      const semCourse = sem.courses.find(c => c.code === cellCourse?.code);
-                      const hasConflict = !!conflictMap[`${row.date}:${slot.id}`]?.find(c => c.teacher === (semCourse?.teacher || cellCourse?.teacher));
+              {enabledSlots.map(slot => (
+                <div key={slot.id} className="mb-3 last:mb-0">
+                  <div className="text-[0.72rem] font-semibold text-dark-text2 mb-2 flex items-center gap-2">
+                    <i className="fas fa-clock text-qsis"></i> {slot.name}
+                    <span className="text-dark-text3 font-normal">({slot.startTime} – {slot.endTime})</span>
+                  </div>
+                  <div className="space-y-1">
+                    {enabledSemesters.map((sem) => {
+                      if (sem.courses.length === 0) return null;
+                      const cellKey = `${row.date}:${slot.id}:${sem.name}`;
+                      const cellCourse = row.courses[cellKey];
+                      const slotConflicts = conflictMap[`${row.date}:${slot.id}`] || [];
+                      const cellTeachers = (cellCourse?.teacher || '').split(',').map(t => t.trim()).filter(Boolean);
+                      const hasTeacherConflict = cellTeachers.some(t => slotConflicts.some(c => c.teacher === t));
                       return (
-                        <div key={`${semIdx}-${slot.id}`}>
-                          <select
-                            value={cellCourse?.code || ''}
-                            onChange={e => {
-                              const course = sem.courses.find(c => c.code === e.target.value);
-                              updateRowCourse(rowIdx, slot.id, 'code', e.target.value);
-                              if (course) {
-                                updateRowCourse(rowIdx, slot.id, 'title', course.title);
-                                updateRowCourse(rowIdx, slot.id, 'teacher', course.teacher);
-                              }
-                            }}
-                            className={`w-full px-1.5 py-1 rounded border text-[0.7rem] outline-none ${hasConflict ? 'border-red-500 bg-red-500/10 text-red-300' : 'border-dark-border bg-dark-bg text-dark-text'}`}
-                          >
-                            <option value="">—</option>
-                            {sem.courses.map(c => (
-                              <option key={c.code} value={c.code}>{c.code}{c.teacher ? ` (${c.teacher})` : ''}</option>
-                            ))}
+                        <div key={sem.name} className={`flex items-center gap-2 p-2 rounded-lg border ${hasTeacherConflict ? 'border-red-500 bg-red-500/5' : 'border-dark-border bg-dark-bg2'}`}>
+                          <span className="text-[0.72rem] font-semibold text-dark-text2 w-36 flex-shrink-0 whitespace-nowrap">{semLabels[sem.name] || sem.name}</span>
+                          <select value={cellCourse?.code || ''} onChange={e => { const course = sem.courses.find(c => c.code === e.target.value); updateRowCourse(rowIdx, slot.id, sem.name, 'code', e.target.value); if (course) { updateRowCourse(rowIdx, slot.id, sem.name, 'title', course.title); updateRowCourse(rowIdx, slot.id, sem.name, 'teacher', course.teacher || ''); } }} className="w-44 px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis flex-shrink-0">
+                            <option value="">— Select —</option>
+                            {sem.courses.map(c => <option key={c.code} value={c.code}>{c.code} - {c.title}</option>)}
                           </select>
+                          <div className={`flex items-center gap-1 px-2 py-1.5 rounded border text-[0.75rem] flex-1 ${hasTeacherConflict ? 'border-red-500 bg-red-500/10 text-red-300' : 'border-dark-border bg-dark-bg text-dark-text2'}`}>
+                            <i className="fas fa-chalkboard-teacher text-[0.65rem] flex-shrink-0"></i>
+                            <input value={cellCourse?.teacher || ''} onChange={e => updateRowCourse(rowIdx, slot.id, sem.name, 'teacher', e.target.value)} placeholder="Teacher" className="w-full bg-transparent border-none outline-none text-[0.75rem] text-dark-text" />
+                          </div>
+                          {hasTeacherConflict && (() => {
+                            const conflictTeachers = cellTeachers.filter(t => slotConflicts.some(c => c.teacher === t));
+                            return <p className="text-[0.6rem] text-red-400 leading-tight flex-shrink-0"><i className="fas fa-exclamation-circle mr-0.5"></i>{conflictTeachers.map(t => { const c = slotConflicts.find(x => x.teacher === t); return c ? `${c.courseCode} (${c.semester})` : t; }).join(', ')}</p>;
+                          })()}
                         </div>
                       );
                     })}
-                  </>
-                ))}
-              </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
 
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="flex justify-between mt-4">
             <button onClick={() => setStep('courses')} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
-            <button onClick={handlePublishAll} className="routine-btn routine-btn-primary" disabled={Object.keys(conflictMap).length > 0}>
-              <i className="fas fa-share-alt mr-1"></i>Publish All ({semesters.filter(s => s.courses.length > 0).length} semesters)
-            </button>
+            <div className="relative">
+              <button onClick={(e) => { e.stopPropagation(); setShowPublishMenu(!showPublishMenu); }} className="routine-btn routine-btn-primary" disabled={Object.keys(conflictMap).length > 0}>
+                <i className="fas fa-share-alt mr-1"></i>Publish ({totalSections} semesters) <i className="fas fa-caret-down ml-1"></i>
+              </button>
+              {showPublishMenu && (
+                <div className="absolute right-0 bottom-full mb-1 bg-dark-bg2 border border-dark-border rounded-lg shadow-xl z-50 py-1 min-w-[220px]">
+                  <button onClick={(e) => { e.stopPropagation(); handleSaveDraftAll(); }} className="w-full text-left px-3 py-2 text-[0.8rem] text-dark-text hover:bg-dark-bg3 flex items-center gap-2">
+                    <i className="fas fa-file-alt text-yellow-400"></i>Save as Draft
+                    <span className="text-[0.65rem] text-dark-text3 ml-auto">Local only</span>
+                  </button>
+                  <div className="border-t border-dark-border my-0.5"></div>
+                  <button onClick={(e) => { e.stopPropagation(); handleSaveToCloudAll(); }} className="w-full text-left px-3 py-2 text-[0.8rem] text-dark-text hover:bg-dark-bg3 flex items-center gap-2">
+                    <i className="fas fa-cloud text-blue-400"></i>Save to Cloud
+                    <span className="text-[0.65rem] text-dark-text3 ml-auto">Private</span>
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); handlePublishAll(); }} className="w-full text-left px-3 py-2 text-[0.8rem] text-dark-text hover:bg-dark-bg3 flex items-center gap-2">
+                    <i className="fas fa-globe text-green-400"></i>Publish
+                    <span className="text-[0.65rem] text-dark-text3 ml-auto">Public</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
     </>
   );
 }
+
