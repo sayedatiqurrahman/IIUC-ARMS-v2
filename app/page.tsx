@@ -171,28 +171,48 @@ export default function BrowsePage() {
       navigateToDepartment(dept);
       if (sem) {
         setTimeout(() => {
-          navigateToSemester(sem);
+          const { navigateToSemester: navSem } = useAppStore.getState();
+          navSem(sem);
           if (course) {
             setTimeout(() => {
-              const { getSemesterCourses } = useAppStore.getState();
-              const courses = getSemesterCourses(sem, dept);
+              const { getSemesterCourses: getCourses, navigateToCourse: navCourse } = useAppStore.getState();
+              const courses = getCourses(sem, dept);
               const found = courses.find(c => c.code.toUpperCase() === course.toUpperCase());
-              if (found) navigateToCourse(found.code, found.title);
-              if (mf) {
+              if (found) {
+                navCourse(found.code, found.title);
+                if (mf) {
+                  setTimeout(() => {
+                    const { navigateToMidFinal } = useAppStore.getState();
+                    navigateToMidFinal(mf);
+                  }, 200);
+                }
+                if (cat) {
+                  setTimeout(() => {
+                    const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
+                    if (catKey) navigateToCategory(catKey);
+                  }, mf ? 300 : 200);
+                }
+              } else {
                 setTimeout(() => {
-                  const { navigateToMidFinal } = useAppStore.getState();
-                  navigateToMidFinal(mf);
-                }, 150);
+                  const retryCourses = useAppStore.getState().getSemesterCourses(sem, dept);
+                  const retryFound = retryCourses.find(c => c.code.toUpperCase() === course.toUpperCase());
+                  if (retryFound) {
+                    useAppStore.getState().navigateToCourse(retryFound.code, retryFound.title);
+                    if (mf) {
+                      setTimeout(() => useAppStore.getState().navigateToMidFinal(mf), 200);
+                    }
+                    if (cat) {
+                      setTimeout(() => {
+                        const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
+                        if (catKey) useAppStore.getState().navigateToCategory(catKey);
+                      }, mf ? 300 : 200);
+                    }
+                  }
+                }, 500);
               }
-              if (cat) {
-                setTimeout(() => {
-                  const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
-                  if (catKey) navigateToCategory(catKey);
-                }, mf ? 250 : 150);
-              }
-            }, 200);
+            }, 300);
           }
-        }, 200);
+        }, 300);
       }
     }
   }, [mounted, loading]);
