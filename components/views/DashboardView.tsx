@@ -59,6 +59,7 @@ export default function DashboardView() {
   const [patInput, setPatInput] = useState('');
   const [patLoading, setPatLoading] = useState(false);
   const [patValid, setPatValid] = useState<boolean | null>(null);
+  const [patReplacing, setPatReplacing] = useState(false);
 
   const [totpEnabled, setTotpEnabled] = useState(false);
   const [totpLoading, setTotpLoading] = useState(false);
@@ -255,6 +256,7 @@ export default function DashboardView() {
         githubToken: token,
       }));
       setPatValid(true);
+      setPatReplacing(false);
       setGhUser({ login: ghUser.login, name: ghUser.name || ghUser.login, avatar_url: ghUser.avatar_url });
       setShowTokenModal(false);
       setPatInput('');
@@ -800,18 +802,54 @@ export default function DashboardView() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-2 text-[0.72rem] text-qsis mb-3 bg-qsis/5 border border-qsis/20 rounded-xl p-3">
-                <div className="flex items-center gap-1.5">
-                  <i className="fas fa-check-circle"></i>
-                  <span className="font-semibold">PAT saved — visible in Contributors list</span>
+              patReplacing ? (
+                <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-3">
+                  <div className="flex items-center gap-1.5 text-[0.72rem] text-qsis font-semibold mb-2">
+                    <i className="fas fa-key"></i>
+                    <span>Paste your new Personal Access Token</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="password"
+                      className="flex-1 px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-[0.72rem] font-mono focus:outline-none focus:border-qsis"
+                      placeholder="ghp_xxxxxxxxxxxx"
+                      value={patInput}
+                      onChange={e => setPatInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handlePastePAT()}
+                      autoFocus
+                    />
+                    <button
+                      className="px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 whitespace-nowrap"
+                      onClick={handlePastePAT}
+                      disabled={!patInput.trim() || patLoading}
+                    >
+                      {patLoading ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-1"></i>Confirm</>}
+                    </button>
+                    <button
+                      className="px-3 py-1.5 rounded-lg bg-dark-border text-dark-text2 text-[0.72rem] font-semibold cursor-pointer hover:text-dark-text transition-colors whitespace-nowrap"
+                      onClick={() => { setPatReplacing(false); setPatInput(''); }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <a href="https://github.com/settings/tokens/new?scopes=repo&description=IIUC-ARMS" target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text2 hover:text-qsis mt-2 inline-block no-underline">
+                    <i className="fas fa-external-link-alt mr-1"></i>Create new token (No expiry, repo scope)
+                  </a>
                 </div>
-                <button
-                  className="text-[0.68rem] text-dark-text2 hover:text-qsis bg-transparent border-none cursor-pointer underline"
-                  onClick={() => { setPatInput(''); setPatValid(null); }}
-                >
-                  Replace
-                </button>
-              </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2 text-[0.72rem] text-qsis mb-3 bg-qsis/5 border border-qsis/20 rounded-xl p-3">
+                  <div className="flex items-center gap-1.5">
+                    <i className="fas fa-check-circle"></i>
+                    <span className="font-semibold">PAT saved — visible in Contributors list</span>
+                  </div>
+                  <button
+                    className="text-[0.68rem] text-dark-text2 hover:text-qsis bg-transparent border-none cursor-pointer underline"
+                    onClick={() => { setPatReplacing(true); setPatInput(''); }}
+                  >
+                    Replace
+                  </button>
+                </div>
+              )
             )}
 
             <div className="flex gap-2 flex-wrap">
