@@ -273,14 +273,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <a href="https://whatsapp.com/channel/0029VbD78MI3gvWcocoFdR1g" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 rounded-xl bg-dark-bg3 border border-dark-border hover:border-green-500/30 transition-colors">
                     <div className="w-7 h-7 rounded-md bg-green-500/20 flex items-center justify-center"><i className="fab fa-whatsapp text-green-400 text-sm"></i></div>
                     <div>
-                      <span className="text-[0.78rem] text-dark-text block">WhatsApp Channel</span>
+                      <span suppressHydrationWarning className="text-[0.78rem] text-dark-text block">WhatsApp Channel</span>
                       <span className="text-[0.6rem] text-dark-text3">Follow for updates & announcements</span>
                     </div>
                   </a>
                   <a href="https://chat.whatsapp.com/JQbkkwbDTvj9G0Xly9N771" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 rounded-xl bg-dark-bg3 border border-dark-border hover:border-green-500/30 transition-colors">
                     <div className="w-7 h-7 rounded-md bg-green-500/20 flex items-center justify-center"><i className="fab fa-whatsapp text-green-400 text-sm"></i></div>
                     <div>
-                      <span className="text-[0.78rem] text-dark-text block">WhatsApp Community</span>
+                      <span suppressHydrationWarning className="text-[0.78rem] text-dark-text block">WhatsApp Community</span>
                       <span className="text-[0.6rem] text-dark-text3">Join groups & stay connected</span>
                     </div>
                   </a>
@@ -354,11 +354,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div className="flex flex-col gap-2.5">
                 <a href="https://whatsapp.com/channel/0029VbD78MI3gvWcocoFdR1g" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
                   <div className="w-7 h-7 rounded-md bg-green-500/20 flex items-center justify-center"><i className="fab fa-whatsapp text-green-400 text-sm"></i></div>
-                  <span className="text-[0.78rem] text-dark-text2 group-hover:text-green-400 transition-colors">WhatsApp Channel</span>
+                  <span suppressHydrationWarning className="text-[0.78rem] text-dark-text2 group-hover:text-green-400 transition-colors">WhatsApp Channel</span>
                 </a>
                 <a href="https://chat.whatsapp.com/JQbkkwbDTvj9G0Xly9N771" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 group">
                   <div className="w-7 h-7 rounded-md bg-green-500/20 flex items-center justify-center"><i className="fab fa-whatsapp text-green-400 text-sm"></i></div>
-                  <span className="text-[0.78rem] text-dark-text2 group-hover:text-green-400 transition-colors">WhatsApp Community</span>
+                  <span suppressHydrationWarning className="text-[0.78rem] text-dark-text2 group-hover:text-green-400 transition-colors">WhatsApp Community</span>
                 </a>
                 <p className="text-[0.62rem] text-dark-text3 mt-0.5 ml-9.5">
                   <i className="fas fa-info-circle mr-1 text-green-400/60"></i>Your info stays hidden until you join a group
