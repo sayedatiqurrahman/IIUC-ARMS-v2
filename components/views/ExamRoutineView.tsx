@@ -51,6 +51,7 @@ interface ExamRoutineItem {
 }
 
 const LS_EXAM_DRAFTS = 'qsis-exam-draft-routines';
+const LS_EXAM_ALL_DRAFTS = 'qsis-exam-all-drafts';
 const LS_EXAM_PUBLISHED = 'qsis-exam-published-routines';
 const DAYS = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const EXAM_TYPES = ['Midterm', 'Final', 'Quiz', 'Makeup', 'Practical'];
@@ -114,6 +115,9 @@ export default function ExamRoutineView() {
   const [canPublish, setCanPublish] = useState(false);
   const [canAllSemester, setCanAllSemester] = useState(false);
   const [canSaveToGithub, setCanSaveToGithub] = useState(false);
+  const [allSemDrafts, setAllSemDrafts] = useState<any[]>([]);
+  const [allSemEditId, setAllSemEditId] = useState<string | null>(null);
+  const [allSemDraftData, setAllSemDraftData] = useState<any>(null);
 
   useEffect(() => {
     fetch('/api/settings/permissions')
@@ -160,6 +164,20 @@ export default function ExamRoutineView() {
     setExamRoutines(r);
     localStorage.setItem(LS_EXAM_DRAFTS, JSON.stringify(r));
   }, []);
+
+  const loadAllSemDrafts = useCallback(() => {
+    try {
+      const drafts = JSON.parse(localStorage.getItem(LS_EXAM_ALL_DRAFTS) || '[]');
+      setAllSemDrafts(drafts);
+    } catch {}
+  }, []);
+
+  const persistAllSemDrafts = useCallback((drafts: any[]) => {
+    setAllSemDrafts(drafts);
+    localStorage.setItem(LS_EXAM_ALL_DRAFTS, JSON.stringify(drafts));
+  }, []);
+
+  useEffect(() => { loadAllSemDrafts(); }, [loadAllSemDrafts]);
 
   // Auto-save single routine draft every 3 seconds of inactivity
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -427,7 +445,7 @@ export default function ExamRoutineView() {
       {/* ═══════ MANAGER ═══════ */}
       {viewMode === 'manager' && (
         <div className="space-y-3">
-          {publishedRoutines.length === 0 && examRoutines.length === 0 && (
+          {publishedRoutines.length === 0 && examRoutines.length === 0 && allSemDrafts.length === 0 && (
             <div className="text-center py-10">
               <i className="fas fa-file-alt text-3xl text-dark-text3 mb-3 block"></i>
               <p className="text-[0.9rem] text-dark-text2">No exam routines yet</p>
@@ -442,6 +460,32 @@ export default function ExamRoutineView() {
           })}
           {examRoutines.map(r => (
             <ExamRoutineCard key={r.id} routine={r} slots={r.slots || examSlots} onView={() => editRoutine(r)} onPublish={() => publishRoutine(r)} onDelete={() => deleteRoutine(r.id)} canManage={canPublish} currentUserEmail={email} isAdmin={isOwner} />
+          ))}
+          {allSemDrafts.map(d => (
+            <div key={d.id} className="bg-dark-bg2 border border-yellow-500/20 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-[0.9rem] font-bold text-dark-text">{d.examType || 'Exam'} Routine</h4>
+                    <span className="text-[0.65rem] px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/20"><i className="fas fa-file-alt mr-0.5"></i>Draft</span>
+                    <span className="text-[0.65rem] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/20"><i className="fas fa-layer-group mr-0.5"></i>All Semester</span>
+                  </div>
+                  <p className="text-[0.75rem] text-dark-text2 mt-0.5">{d.session} &bull; {d.department?.toUpperCase()} &bull; {(d.semesters || []).filter((s: any) => s.enabled).length} semesters</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => {
+                    setAllSemEditId(d.id);
+                    setAllSemDraftData(d);
+                    setViewMode('allBranch');
+                  }} className="routine-btn text-[0.72rem]"><i className="fas fa-edit mr-1"></i>Edit</button>
+                  <button onClick={() => {
+                    const updated = allSemDrafts.filter((x: any) => x.id !== d.id);
+                    persistAllSemDrafts(updated);
+                    showToast('Deleted', 'success');
+                  }} className="routine-btn text-[0.72rem] text-red-400 hover:text-red-300"><i className="fas fa-trash mr-1"></i>Delete</button>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -647,7 +691,15 @@ export default function ExamRoutineView() {
             persistDrafts([...examRoutines, ...drafts]);
           }}
           canSaveToGithub={canSaveToGithub}
-          onBack={() => setViewMode('manager')}
+          onAutoSaveDraft={(draft: any) => {
+            const updated = allSemDrafts.filter((d: any) => d.id !== draft.id);
+            updated.push(draft);
+            persistAllSemDrafts(updated);
+          }}
+          editDraftId={allSemEditId}
+          editDraftData={allSemDraftData}
+          onClearEditDraft={() => { setAllSemEditId(null); setAllSemDraftData(null); }}
+          onBack={() => { setViewMode('manager'); setAllSemEditId(null); setAllSemDraftData(null); }}
         />
       )}
     </section>
@@ -871,7 +923,7 @@ interface ExamAllSemesterSem {
 }
 
 
-function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPublish, profile, email, onPublish, onSaveToCloud, onSaveDraft, canSaveToGithub, onBack }: {
+function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPublish, profile, email, onPublish, onSaveToCloud, onSaveDraft, canSaveToGithub, onAutoSaveDraft, editDraftId, editDraftData, onClearEditDraft, onBack }: {
   examSlots: ExamSlot[];
   publishedRoutines: ExamRoutineItem[];
   examRoutines: ExamRoutineItem[];
@@ -882,6 +934,10 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   onSaveToCloud: (items: ExamRoutineItem[]) => Promise<void>;
   onSaveDraft: (items: ExamRoutineItem[]) => void;
   canSaveToGithub: boolean;
+  onAutoSaveDraft: (draft: any) => void;
+  editDraftId: string | null;
+  editDraftData: any;
+  onClearEditDraft: () => void;
   onBack: () => void;
 }) {
   const { confirm, confirmDialog } = useConfirm();
@@ -899,6 +955,45 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   const [courseSuggestionsIdx, setCourseSuggestionsIdx] = useState<string | null>(null);
   const [courseSearch, setCourseSearch] = useState('');
   const courseInputRef = useRef<HTMLDivElement>(null);
+
+  // Auto-save draft every 3 seconds of inactivity
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      const hasData = sessionVal || department !== 'qsis' || examType !== 'Midterm' || rows.some(r => r.date) || semesters.some(s => s.courses.length > 0);
+      if (!hasData) return;
+      const draft = {
+        id: editDraftId || `exam-all-draft-${Date.now()}`,
+        session: sessionVal, department, examType, draftGender,
+        rows, semesters: semesters.map(s => ({ name: s.name, enabled: s.enabled, courses: s.courses })),
+        step, createdAt: Date.now(), isDraft: true,
+      };
+      onAutoSaveDraft(draft);
+    }, 3000);
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+  }, [sessionVal, department, examType, draftGender, rows, semesters, step, editDraftId, onAutoSaveDraft]);
+
+  // Restore from draft
+  useEffect(() => {
+    if (!editDraftData) return;
+    if (editDraftData.session) setSessionVal(editDraftData.session);
+    if (editDraftData.department) setDepartment(editDraftData.department);
+    if (editDraftData.examType) setExamType(editDraftData.examType);
+    if (editDraftData.draftGender) setDraftGender(editDraftData.draftGender);
+    if (editDraftData.rows?.length) setRows(editDraftData.rows);
+    if (editDraftData.semesters?.length) {
+      setSemesters(prev => {
+        const restored = editDraftData.semesters.map((s: any) => ({
+          name: s.name, enabled: s.enabled,
+          courses: (s.courses || []).map((c: any) => ({ code: c.code, title: c.title, teacher: c.teacher || '', fromGithub: c.fromGithub ?? true })),
+        }));
+        return prev.map(p => restored.find((r: any) => r.name === p.name) || p);
+      });
+    }
+    if (editDraftData.step) setStep(editDraftData.step);
+    onClearEditDraft();
+  }, [editDraftData]);
 
   useEffect(() => {
     if (!showPublishMenu) return;

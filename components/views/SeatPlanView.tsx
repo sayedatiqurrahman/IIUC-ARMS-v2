@@ -7,7 +7,7 @@ import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
 import { ExamSlot, loadExamSlots, getEnabledSlots } from '@/lib/exam-routine-config';
 import CustomSelect from '@/components/CustomSelect';
-import TeacherAutocomplete from '@/components/TeacherAutocomplete';
+import TeacherTagInput from '@/components/TeacherTagInput';
 import { FACULTIES, findDepartment } from '@/lib/departments';
 import { useConfirm } from '@/components/ConfirmModal';
 
@@ -463,6 +463,18 @@ export default function SeatPlanView() {
       }
     }
     return conflicting;
+  }, [entries]);
+
+  const roomsByGender = useMemo(() => {
+    const maleRooms = new Set<string>();
+    const femaleRooms = new Set<string>();
+    for (const e of entries) {
+      if (!e.room) continue;
+      if (e.gender === 'male') maleRooms.add(e.room);
+      else if (e.gender === 'female') femaleRooms.add(e.room);
+      else { maleRooms.add(e.room); femaleRooms.add(e.room); }
+    }
+    return { male: Array.from(maleRooms).sort(), female: Array.from(femaleRooms).sort() };
   }, [entries]);
 
   const rollConflicts = useMemo(() => {
@@ -987,8 +999,13 @@ export default function SeatPlanView() {
                                         const rollCount = getRollCount(entry.rollFrom, entry.rollTo);
                                         return (
                                           <div key={idx} className={`flex items-center gap-1 p-1.5 rounded border ${isConflict ? 'border-red-500/40 bg-red-500/5' : 'border-dark-border bg-dark-bg'}`}>
-                                            <input value={entry.room} onChange={e => updateEntry(idx, 'room', e.target.value)} placeholder="Room" className="w-16 px-1.5 py-0.5 rounded border border-blue-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-blue-400" />
-                                            <TeacherAutocomplete value={entry.teacher} onChange={val => updateEntry(idx, 'teacher', val)} department={department} placeholder="Teacher" />
+                                            <div className="relative">
+                                              <input value={entry.room} onChange={e => updateEntry(idx, 'room', e.target.value)} onFocus={e => (e.target as HTMLInputElement).select()} placeholder="Room" className="w-16 px-1.5 py-0.5 rounded border border-blue-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-blue-400" list={`maz-rooms-${idx}`} autoComplete="off" />
+                                              <datalist id={`maz-rooms-${idx}`}>
+                                                {roomsByGender.male.filter(r => r !== entry.room).map(r => <option key={r} value={r} />)}
+                                              </datalist>
+                                            </div>
+                                            <TeacherTagInput value={entry.teacher} onChange={val => updateEntry(idx, 'teacher', val)} department={department} placeholder="Teacher" className="flex-1 min-w-0" />
                                             <input value={entry.rollFrom} onChange={e => updateEntry(idx, 'rollFrom', e.target.value)} placeholder="From" className="w-16 px-1.5 py-0.5 rounded border border-blue-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-blue-400" />
                                             <span className="text-dark-text3 text-[0.6rem]">–</span>
                                             <input value={entry.rollTo} onChange={e => updateEntry(idx, 'rollTo', e.target.value)} placeholder="To" className="w-16 px-1.5 py-0.5 rounded border border-blue-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-blue-400" />
@@ -1011,8 +1028,13 @@ export default function SeatPlanView() {
                                         const rollCount = getRollCount(entry.rollFrom, entry.rollTo);
                                         return (
                                           <div key={idx} className={`flex items-center gap-1 p-1.5 rounded border ${isConflict ? 'border-red-500/40 bg-red-500/5' : 'border-dark-border bg-dark-bg'}`}>
-                                            <input value={entry.room} onChange={e => updateEntry(idx, 'room', e.target.value)} placeholder="Room" className="w-16 px-1.5 py-0.5 rounded border border-pink-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-pink-400" />
-                                            <TeacherAutocomplete value={entry.teacher} onChange={val => updateEntry(idx, 'teacher', val)} department={department} placeholder="Teacher" />
+                                            <div className="relative">
+                                              <input value={entry.room} onChange={e => updateEntry(idx, 'room', e.target.value)} onFocus={e => (e.target as HTMLInputElement).select()} placeholder="Room" className="w-16 px-1.5 py-0.5 rounded border border-pink-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-pink-400" list={`faz-rooms-${idx}`} autoComplete="off" />
+                                              <datalist id={`faz-rooms-${idx}`}>
+                                                {roomsByGender.female.filter(r => r !== entry.room).map(r => <option key={r} value={r} />)}
+                                              </datalist>
+                                            </div>
+                                            <TeacherTagInput value={entry.teacher} onChange={val => updateEntry(idx, 'teacher', val)} department={department} placeholder="Teacher" className="flex-1 min-w-0" />
                                             <input value={entry.rollFrom} onChange={e => updateEntry(idx, 'rollFrom', e.target.value)} placeholder="From" className="w-16 px-1.5 py-0.5 rounded border border-pink-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-pink-400" />
                                             <span className="text-dark-text3 text-[0.6rem]">–</span>
                                             <input value={entry.rollTo} onChange={e => updateEntry(idx, 'rollTo', e.target.value)} placeholder="To" className="w-16 px-1.5 py-0.5 rounded border border-pink-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-pink-400" />
