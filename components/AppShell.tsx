@@ -411,7 +411,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* FOOTER — hidden on mobile (use More tab) */}
+      {/* FOOTER — hidden on mobile + admin/dashboard pages */}
+      {!pathname?.startsWith('/dashboard') && !pathname?.startsWith('/admin') && (
       <footer className="hidden md:block bg-dark-bg2 border-t border-dark-border mt-8">
         <div className="max-w-[1200px] mx-auto px-5 py-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -509,6 +510,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </footer>
+      )}
 
       {/* UPLOAD MODAL */}
       {uploadOpen && <UploadModal
