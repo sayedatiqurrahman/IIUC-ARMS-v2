@@ -9,9 +9,10 @@ import { config } from '@/lib/config';
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  preRenderedTurnstileContainer?: string;
 }
 
-export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
+export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContainer }: LoginModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,12 +38,17 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
   useEffect(() => {
     if (isOpen) {
-      const timer = setTimeout(() => {
-        renderWidget(turnstileContainerId, 'LOGIN').then(() => setTurnstileReady(true));
-      }, 500);
-      return () => clearTimeout(timer);
+      if (preRenderedTurnstileContainer) {
+        // Token already available from AppShell pre-render — skip rendering
+        setTurnstileReady(true);
+      } else {
+        const timer = setTimeout(() => {
+          renderWidget(turnstileContainerId, 'LOGIN').then(() => setTurnstileReady(true));
+        }, 500);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [isOpen, renderWidget]);
+  }, [isOpen, renderWidget, preRenderedTurnstileContainer]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -74,7 +80,8 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
   async function verifyTurnstileToken(): Promise<boolean> {
     if (isDev) return true;
-    const token = getToken(turnstileContainerId);
+    // Try pre-rendered container first, then modal's own container
+    const token = (preRenderedTurnstileContainer ? getToken(preRenderedTurnstileContainer) : null) || getToken(turnstileContainerId);
     if (!token) { setError('Please complete the captcha verification'); return false; }
     try {
       const res = await fetch('/api/auth/turnstile/verify', {
@@ -205,16 +212,27 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         redirect: false,
       });
       if (result?.error) {
-        setError('Only IIUC departmental emails are allowed. Please use your university email (e.g. your_id@ugrad.iiuc.ac.bd or name@iiuc.ac.bd).');
+        const email = user.email || '';
+        if (email.endsWith('@ugrad.iiuc.ac.bd') || email.endsWith('@iiuc.ac.bd')) {
+          setError('Sign-in failed. Your email may not be verified. Please check your inbox and verify your email first.');
+        } else {
+          setError(`Only IIUC emails allowed. You signed in as ${email} — use your university email instead.`);
+        }
         setLoading(false);
       } else if (result?.ok) {
         onClose();
       }
     } catch (err: any) {
       if (err.code === 'auth/popup-closed-by-user') {
-        setError('Sign-in cancelled');
+        setError('Sign-in cancelled — you closed the popup');
+      } else if (err.code === 'auth/popup-blocked') {
+        setError('Popup was blocked by browser. Allow popups for this site and try again.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setError('Network error. Check your connection and try again.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError('This domain is not authorized for Google sign-in. If on localhost, add it in Firebase Console → Authentication → Settings → Authorized domains.');
       } else {
-        setError('Google sign-in failed. Please try again.');
+        setError(`Google sign-in failed (${err.code || 'unknown'}). Please try again.`);
       }
       setLoading(false);
     }

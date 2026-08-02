@@ -14,6 +14,7 @@ import { signOut } from 'next-auth/react';
 import { config } from '@/lib/config';
 import { checkAndBustCache, forceResetApp } from '@/lib/cache';
 import { useConfirm } from '@/components/ConfirmModal';
+import { useTurnstile } from '@/lib/useTurnstile';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -28,6 +29,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { confirm, confirmDialog } = useConfirm();
   const confirmRef = useRef(confirm);
   confirmRef.current = confirm;
+
+  // Pre-render Turnstile when Sign In is clicked
+  const turnstileContainerId = 'pre-login-turnstile-container';
+  const { renderWidget: renderTurnstile, getToken: getTurnstileToken, remove: removeTurnstile } = useTurnstile();
+  const [preRenderedTurnstile, setPreRenderedTurnstile] = useState(false);
+
+  const handleOpenLogin = useCallback(() => {
+    setLoginModalOpen(true);
+    if (!preRenderedTurnstile) {
+      setTimeout(() => {
+        renderTurnstile(turnstileContainerId, 'LOGIN').then(() => setPreRenderedTurnstile(true));
+      }, 100);
+    }
+  }, [preRenderedTurnstile, renderTurnstile]);
 
   const goHome = useAppStore(s => s.goHome);
   const setUploadOpen = useAppStore(s => s.setUploadOpen);
@@ -220,7 +235,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 )}
               </div>
             ) : (
-              <button className="px-3 py-1.5 rounded-lg text-[0.78rem] font-medium bg-qsis text-white border-none cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setLoginModalOpen(true)}>
+              <button className="px-3 py-1.5 rounded-lg text-[0.78rem] font-medium bg-qsis text-white border-none cursor-pointer hover:opacity-90 transition-opacity" onClick={handleOpenLogin}>
                 <i className="fas fa-sign-in-alt mr-1.5"></i> Sign In
               </button>
             )}
@@ -487,7 +502,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         session={session}
         status={status}
         profile={profile}
-        onLogin={() => { setUploadOpen(false); setLoginModalOpen(true); }}
+        onLogin={() => { setUploadOpen(false); handleOpenLogin(); }}
         onClose={() => setUploadOpen(false)}
       />}
 
@@ -538,8 +553,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
+      {/* Pre-rendered Turnstile (hidden, starts verifying immediately) */}
+      <div className="fixed top-0 left-0 w-0 h-0 overflow-hidden opacity-0 pointer-events-none" aria-hidden="true">
+        <div id={turnstileContainerId}></div>
+      </div>
+
       {/* LOGIN MODAL */}
-      <LoginModal isOpen={loginModalOpen} onClose={() => setLoginModalOpen(false)} />
+      <LoginModal isOpen={loginModalOpen} onClose={() => setLoginModalOpen(false)} preRenderedTurnstileContainer={preRenderedTurnstile ? turnstileContainerId : undefined} />
       {confirmDialog}
     </div>
   );
