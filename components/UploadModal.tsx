@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { config } from '@/lib/config';
 import { FACULTIES, getFacultyIdForDepartment } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
@@ -8,6 +8,7 @@ import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
 import { installGitHubApp } from '@/lib/github-install';
 import CustomSelect from '@/components/CustomSelect';
+import { jsPDF } from 'jspdf';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
@@ -190,6 +191,13 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
+  // Merge images into PDF state
+  const [mergeDialogCourseId, setMergeDialogCourseId] = useState<number | null>(null);
+  const [mergeImages, setMergeImages] = useState<FileWithMeta[]>([]);
+  const [mergeSession, setMergeSession] = useState('');
+  const [mergeYear, setMergeYear] = useState('');
+  const [mergeMerging, setMergeMerging] = useState(false);
+
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!githubToken || !!profile.githubToken;
 
   // PAT prompt skip tracking
@@ -355,11 +363,18 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const currentCourseFiles = course?.files.length || 0;
     const isNotes = category === config.categories.notes.folder;
     const isQuestions = category === config.categories.questions.folder;
-    const isLimitedCategory = isNotes || isQuestions;
-    const maxFiles = isLimitedCategory ? 1 : 5;
+
+    let maxFiles = 5;
+    if (isNotes) maxFiles = 1;
+    else if (isQuestions) {
+      const hasPdf = (course?.files || []).some(f => isPdf(f.file.name)) || selected.some(f => isPdf(f.name));
+      maxFiles = hasPdf ? 1 : 5;
+    }
 
     if (currentCourseFiles + selected.length > maxFiles) {
-      alert(isLimitedCategory ? 'Only 1 file allowed for Previous Questions / Notes.' : `Max 5 files per course.`);
+      if (isNotes) alert('Only 1 file allowed for Notes.');
+      else if (isQuestions && maxFiles === 1) alert('PDF already selected. Only 1 file allowed for Previous Questions with PDF.');
+      else alert(`Max ${maxFiles} files per course.`);
       return;
     }
 
@@ -412,12 +427,113 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     }
     updateCourse(courseId, patch);
     if (fileInputRefs.current[courseId]) fileInputRefs.current[courseId]!.value = '';
+
+    if (isQuestions && valid.some(f => isImage(f.name))) {
+      setTimeout(() => checkForMergeableImages(courseId, newFiles), 100);
+    }
   }
 
   function removeFileFromCourse(courseId: number, fileIndex: number) {
     const course = courses.find(c => c.id === courseId);
     if (!course) return;
     updateCourse(courseId, { files: course.files.filter((_, i) => i !== fileIndex) });
+  }
+
+  // Detect same-session+year images and offer merge
+  function checkForMergeableImages(courseId: number, newFiles: FileWithMeta[]) {
+    const course = courses.find(c => c.id === courseId);
+    if (!course) return;
+    const isQuestions = category === config.categories.questions.folder;
+    if (!isQuestions) return;
+
+    const allFiles = [...course.files, ...newFiles];
+    const images = allFiles.filter(f => isImage(f.file.name) && f.year);
+    if (images.length < 2) return;
+
+    const groups = new Map<string, FileWithMeta[]>();
+    for (const img of images) {
+      const session = course.examSession || CURRENT_SEASON;
+      const key = `${session}-${img.year}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(img);
+    }
+
+    for (const entry of Array.from(groups.entries())) {
+      const [key, group] = entry;
+      if (group.length >= 2) {
+        const [session, year] = key.split('-');
+        setMergeSession(session);
+        setMergeYear(year);
+        setMergeImages(group);
+        setMergeDialogCourseId(courseId);
+        return;
+      }
+    }
+  }
+
+  async function handleMergeImages(courseId: number) {
+    if (mergeImages.length < 2) return;
+    setMergeMerging(true);
+    try {
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      for (let i = 0; i < mergeImages.length; i++) {
+        const imgFile = mergeImages[i].file;
+        const dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(imgFile);
+        });
+
+        const img = await new Promise<HTMLImageElement>((resolve) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.src = dataUrl;
+        });
+
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const margin = 5;
+        const availW = pageW - margin * 2;
+        const availH = pageH - margin * 2;
+        const ratio = Math.min(availW / img.width, availH / img.height);
+        const w = img.width * ratio;
+        const h = img.height * ratio;
+        const x = (pageW - w) / 2;
+        const y = (pageH - h) / 2;
+
+        if (i > 0) pdf.addPage();
+        pdf.addImage(dataUrl, 'JPEG', x, y, w, h);
+      }
+
+      const authorName = profile?.name || email.split('@')[0] || 'Unknown';
+      const mergedName = `${mergeSession} ${mergeYear} - ${authorName}.pdf`;
+      const blob = pdf.output('blob');
+      const mergedFile = new File([blob], mergedName, { type: 'application/pdf' });
+
+      const course = courses.find(c => c.id === courseId);
+      if (!course) return;
+
+      const nonImageFiles = course.files.filter(f => !mergeImages.some(m => m.file === f.file));
+      const mergedMeta: FileWithMeta = { file: mergedFile, year: '', yearRange: `${mergeYear}-${mergeYear}` };
+
+      updateCourse(courseId, {
+        files: [...nonImageFiles, mergedMeta],
+        examSession: mergeSession || course.examSession,
+      });
+
+      showToast(`Merged ${mergeImages.length} images into ${mergedName}`, 'success');
+    } catch (err: any) {
+      showToast('Failed to merge images: ' + (err.message || 'Unknown error'), 'error');
+    } finally {
+      setMergeMerging(false);
+      setMergeDialogCourseId(null);
+      setMergeImages([]);
+    }
+  }
+
+  function dismissMerge() {
+    setMergeDialogCourseId(null);
+    setMergeImages([]);
   }
 
   function formatSize(bytes: number) {
@@ -1022,6 +1138,40 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {/* Merge images dialog */}
+                  {mergeDialogCourseId === course.id && mergeImages.length >= 2 && (
+                    <div className="mt-2 p-3 rounded-xl bg-blue-500/10 border border-blue-500/30">
+                      <div className="flex items-start gap-2 mb-2">
+                        <i className="fas fa-images text-blue-400 mt-0.5"></i>
+                        <div className="flex-1">
+                          <p className="text-[0.78rem] font-semibold text-blue-300">Merge {mergeImages.length} images into one PDF?</p>
+                          <p className="text-[0.68rem] text-dark-text3 mt-0.5">
+                            These images appear to be parts of the same question paper ({mergeSession} {mergeYear}).
+                          </p>
+                          <p className="text-[0.65rem] text-dark-text3 mt-0.5">
+                            Will be saved as: <span className="text-blue-300 font-semibold">{mergeSession} {mergeYear} - {profile?.name || email.split('@')[0] || 'Unknown'}.pdf</span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 ml-5">
+                        <button
+                          className="px-3 py-1 rounded-lg bg-blue-500 text-white text-[0.72rem] font-semibold border-none cursor-pointer hover:bg-blue-600 transition-colors disabled:opacity-50"
+                          onClick={() => handleMergeImages(course.id)}
+                          disabled={mergeMerging}
+                        >
+                          {mergeMerging ? <><i className="fas fa-spinner fa-spin mr-1"></i>Merging...</> : <><i className="fas fa-compress-alt mr-1"></i>Merge into PDF</>}
+                        </button>
+                        <button
+                          className="px-3 py-1 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.72rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2 transition-colors"
+                          onClick={dismissMerge}
+                          disabled={mergeMerging}
+                        >
+                          Keep Separate
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
