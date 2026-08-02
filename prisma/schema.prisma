@@ -19,11 +19,14 @@ model Profile {
   isACR           Boolean  @default(false)
   universityId    String?
   whatsapp        String?
+  phone           String?
+  telegramId      String?
   semester        String?
   image           String?
   role            String?  @default("user")
+  batchId         String?
   isBanned        Boolean  @default(false)
-  banReason        String?
+  banReason       String?
   bannedBy        String?
   githubLogin     String?
   githubToken     String?
@@ -39,9 +42,9 @@ model Profile {
   company         String?
   companyUrl      String?
   publicEmail     String?
-  hideWhatsapp    Boolean  @default(false)
+  hideWhatsapp    Boolean @default(false)
   hideUniversityId Boolean @default(false)
-  hideSemester    Boolean  @default(false)
+  hideSemester    Boolean @default(false)
   hideEmail       Boolean @default(false)
   hideCompany     Boolean @default(false)
   customPermissions Json?  @default("{}")
@@ -50,6 +53,7 @@ model Profile {
 
   @@index([githubLogin])
   @@index([email])
+  @@index([batchId])
 }
 
 model ActivityLog {
@@ -192,4 +196,67 @@ model PublishedExamRoutine {
   @@index([status])
   @@index([type])
   @@index([expiresAt])
+}
+
+model Room {
+  id          String   @id @default(cuid())
+  department  String
+  name        String
+  capacity    Int      @default(40)
+  gender      String   @default("both")
+  building    String?
+  floor       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([department])
+  @@unique([department, name])
+}
+
+model Batch {
+  id              String   @id @default(cuid())
+  department      String
+  name            String
+  session         String
+  startSemester   String   @default("1st-semister")
+  currentSemester String   @default("1st-semister")
+  startDate       DateTime @default(now())
+  targetEndDate   DateTime
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([department])
+  @@index([isActive])
+}
+
+model BatchStudent {
+  id            String   @id @default(cuid())
+  batchId       String
+  email         String
+  universityId  String
+  originalId    String?
+  name          String?
+  isReAdmission Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([batchId])
+  @@index([email])
+  @@unique([batchId, universityId])
+}
+
+model TelegramNotification {
+  id            String   @id @default(cuid())
+  department    String
+  type          String
+  title         String
+  message       String
+  sentBy        String?
+  sentAt        DateTime @default(now())
+  recipientCount Int     @default(0)
+
+  @@index([department])
+  @@index([type])
 }

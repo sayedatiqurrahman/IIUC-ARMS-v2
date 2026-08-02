@@ -35,7 +35,7 @@ export default function DashboardView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
-    universityId: '', name: '', whatsapp: '', semester: '', section: '', department: '',
+    universityId: '', name: '', whatsapp: '', phone: '', telegramId: '', semester: '', section: '', department: '',
     facebook: '', twitter: '', linkedin: '', website: '',
     company: '', companyUrl: '', publicEmail: '',
     hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false,
@@ -444,6 +444,8 @@ export default function DashboardView() {
                 universityId: autoId,
                 name: profile.name || '',
                 whatsapp: profile.whatsapp,
+                phone: profile.phone || '',
+                telegramId: profile.telegramId || '',
                 semester: profile.semester,
                 section: profile.section || '',
                 department: profile.department || '',
@@ -515,6 +517,20 @@ export default function DashboardView() {
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">WhatsApp</label>
                 <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
               </div>
+              {isStudent && (
+                <>
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1">Phone Number <span className="text-qsis text-[0.65rem]">(for notifications)</span></label>
+                    <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.phone} onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} />
+                    <p className="text-[0.65rem] text-dark-text3 mt-0.5">Receive department routines & room updates via Telegram</p>
+                  </div>
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1">Telegram ID / Username</label>
+                    <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or 123456789" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
+                    <p className="text-[0.65rem] text-dark-text3 mt-0.5">We&apos;ll send you your department&apos;s class/exam routines and your room number personally</p>
+                  </div>
+                </>
+              )}
               {/* Semester */}
               <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">Current Semester</label>
@@ -635,6 +651,23 @@ export default function DashboardView() {
                   {profile.whatsapp || 'Not set'}
                 </span>
               </div>
+              {isStudent && (
+                <>
+                  <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                    <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-phone mr-1 text-qsis"></i>Phone</span>
+                    <span className={`text-[0.85rem] font-semibold ${profile.phone ? '' : 'text-dark-text2'}`}>
+                      {profile.phone || 'Not set'}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                    <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1 text-blue-400"></i>Telegram ID</span>
+                    <span className={`text-[0.85rem] font-semibold ${profile.telegramId ? '' : 'text-dark-text2'}`}>
+                      {profile.telegramId || 'Not set'}
+                    </span>
+                    {profile.telegramId && <p className="text-[0.6rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>You&apos;ll receive department routines & room updates</p>}
+                  </div>
+                </>
+              )}
               {profile.semester && (
                 <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                   <span className="text-[0.7rem] text-dark-text2 block mb-1">Semester</span>

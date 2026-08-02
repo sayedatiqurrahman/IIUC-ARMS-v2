@@ -1,4 +1,4 @@
-const CACHE_NAME = 'iiuc-arms-v9';
+const CACHE_NAME = 'iiuc-arms-v10';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',

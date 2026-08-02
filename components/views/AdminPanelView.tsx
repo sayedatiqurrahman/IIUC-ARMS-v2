@@ -52,7 +52,7 @@ interface AdminStats {
   banned: number;
 }
 
-type Tab = 'overview' | 'admins' | 'managers' | 'teachers' | 'students' | 'users' | 'activity' | 'faculty' | 'courses' | 'permissions' | 'telegram' | 'contributors';
+type Tab = 'overview' | 'admins' | 'managers' | 'teachers' | 'students' | 'users' | 'activity' | 'faculty' | 'courses' | 'permissions' | 'rooms' | 'batches' | 'telegram' | 'contributors';
 
 const ALL_ROLES = [
   { key: 'admin', label: 'Admin', icon: 'fa-crown', color: 'text-red-400' },
@@ -79,6 +79,7 @@ const PERMISSION_ACTIONS = [
   { key: 'manageUsers', label: 'Manage Users', desc: 'Ban, promote, or change user roles', icon: 'fa-users-cog', color: 'text-orange-400' },
   { key: 'manageSettings', label: 'Manage Settings', desc: 'Change site settings and permissions', icon: 'fa-cog', color: 'text-yellow-400' },
   { key: 'saveCourseToGitHub', label: 'Save to GitHub', desc: 'Save courses to GitHub repository from exam routine', icon: 'fab fa-github', color: 'text-purple-400' },
+  { key: 'manageRooms', label: 'Manage Rooms', desc: 'Add/edit/delete exam rooms per department', icon: 'fa-door-open', color: 'text-cyan-400' },
 ];
 
 interface ContributorSettings {
@@ -350,6 +351,300 @@ function ContributorsTab() {
 
       {filtered.length === 0 && (
         <p className="text-dark-text3 text-sm text-center py-8">No contributors found</p>
+      )}
+    </div>
+  );
+}
+
+function RoomsTab({ effectiveRole }: { effectiveRole: string }) {
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dept, setDept] = useState('qsis');
+  const [name, setName] = useState('');
+  const [capacity, setCapacity] = useState('40');
+  const [gender, setGender] = useState('both');
+  const [building, setBuilding] = useState('');
+  const [floor, setFloor] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const loadRooms = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/rooms?department=${dept}`);
+      const data = await res.json();
+      if (data.success) setRooms(data.rooms);
+    } catch {}
+    setLoading(false);
+  }, [dept]);
+
+  useEffect(() => { loadRooms(); }, [loadRooms]);
+
+  const addRoom = async () => {
+    if (!name.trim()) { setError('Enter room name'); return; }
+    setError(''); setSuccess('');
+    try {
+      const res = await fetch('/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ department: dept, name: name.trim(), capacity: parseInt(capacity) || 40, gender, building: building.trim() || undefined, floor: floor.trim() || undefined }) });
+      const data = await res.json();
+      if (data.success) { setSuccess('Room added'); setName(''); setCapacity('40'); setBuilding(''); setFloor(''); loadRooms(); setTimeout(() => setSuccess(''), 2000); }
+      else setError(data.error || 'Failed');
+    } catch { setError('Network error'); }
+  };
+
+  const deleteRoom = async (id: string) => {
+    try {
+      await fetch(`/api/rooms?id=${id}`, { method: 'DELETE' });
+      loadRooms();
+    } catch {}
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-door-open text-cyan-400 mr-2"></i>Room Management</h3>
+      <p className="text-[0.72rem] text-dark-text3">Manage exam rooms per department. Rooms are used in seat plan auto-suggestions.</p>
+      {success && <div className="px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-xs"><i className="fas fa-check mr-1"></i>{success}</div>}
+      {error && <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs"><i className="fas fa-exclamation-triangle mr-1"></i>{error}</div>}
+
+      <div className="p-3 bg-dark-bg2 border border-dark-border rounded-xl">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 mb-3">
+          <select value={dept} onChange={e => setDept(e.target.value)} className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis">
+            <option value="qsis">QSIS</option>
+            <option value="eng">Engineering</option>
+            <option value="engg">ENGG</option>
+            <option value="bst">BST</option>
+            <option value="bba">BBA</option>
+            <option value="ell">ELL</option>
+            <option value="isl">ISL</option>
+            <option value="qst">QST</option>
+            <option value="soc">SOC</option>
+          </select>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Room name (e.g. 301-A)" className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
+          <input value={capacity} onChange={e => setCapacity(e.target.value)} placeholder="Capacity" type="number" className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
+          <select value={gender} onChange={e => setGender(e.target.value)} className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis">
+            <option value="both">Both</option>
+            <option value="male">MAZ Only</option>
+            <option value="female">FAZ Only</option>
+          </select>
+          <input value={building} onChange={e => setBuilding(e.target.value)} placeholder="Building" className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
+          <input value={floor} onChange={e => setFloor(e.target.value)} placeholder="Floor" className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
+        </div>
+        <button onClick={addRoom} className="routine-btn routine-btn-primary text-[0.72rem]"><i className="fas fa-plus mr-1"></i>Add Room</button>
+      </div>
+
+      {loading ? <div className="text-center py-6"><i className="fas fa-spinner fa-spin text-qsis text-xl"></i></div> : (
+        <div className="space-y-1.5">
+          {rooms.length === 0 && <p className="text-dark-text3 text-xs text-center py-4">No rooms for this department</p>}
+          {rooms.map(r => (
+            <div key={r.id} className="flex items-center gap-3 p-2.5 bg-dark-bg2 border border-dark-border rounded-lg">
+              <i className={`fas fa-door-open ${r.gender === 'male' ? 'text-blue-400' : r.gender === 'female' ? 'text-pink-400' : 'text-dark-text3'}`}></i>
+              <div className="flex-1 min-w-0">
+                <span className="text-[0.78rem] font-semibold text-dark-text">{r.name}</span>
+                <span className="text-[0.65rem] text-dark-text3 ml-2">{r.capacity} seats</span>
+                {r.building && <span className="text-[0.65rem] text-dark-text3 ml-1">&middot; {r.building}</span>}
+                {r.floor && <span className="text-[0.65rem] text-dark-text3 ml-1">Floor {r.floor}</span>}
+              </div>
+              <span className={`text-[0.6rem] px-1.5 py-0.5 rounded ${r.gender === 'male' ? 'bg-blue-500/15 text-blue-400' : r.gender === 'female' ? 'bg-pink-500/15 text-pink-400' : 'bg-dark-bg border border-dark-border text-dark-text3'}`}>{r.gender === 'both' ? 'ALL' : r.gender === 'male' ? 'MAZ' : 'FAZ'}</span>
+              {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                <button onClick={() => deleteRoom(r.id)} className="text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer text-[0.68rem]"><i className="fas fa-trash"></i></button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BatchesTab({ effectiveRole, profile }: { effectiveRole: string; profile: any }) {
+  const [batches, setBatches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dept, setDept] = useState('qsis');
+  const [batchName, setBatchName] = useState('');
+  const [session, setSession] = useState('');
+  const [startSem, setStartSem] = useState('1st-semister');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
+  const [studentEmail, setStudentEmail] = useState('');
+  const [studentId, setStudentId] = useState('');
+  const [studentName, setStudentName] = useState('');
+  const [isReAdmission, setIsReAdmission] = useState(false);
+  const [editStudentId, setEditStudentId] = useState<string | null>(null);
+  const [editUniId, setEditUniId] = useState('');
+  const [editOrigId, setEditOrigId] = useState('');
+  const [canManage, setCanManage] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/settings/permissions').then(r => r.json()).then(data => {
+      if (!data.success) return;
+      const perms = data.permissions || {};
+      const roleKey = profile?.isCR ? 'cr' : effectiveRole;
+      const customPerms = profile?.customPermissions || {};
+      const allowed = perms.manageBatches || ['admin', 'manager', 'teacher', 'cr', 'acr'];
+      setCanManage(customPerms.manageBatches === true || allowed.includes(roleKey));
+    }).catch(() => {});
+  }, [effectiveRole, profile]);
+
+  const loadBatches = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/batches?department=${dept}`);
+      const data = await res.json();
+      if (data.success) setBatches(data.batches);
+    } catch {}
+    setLoading(false);
+  }, [dept]);
+
+  useEffect(() => { loadBatches(); }, [loadBatches]);
+
+  const createBatch = async () => {
+    if (!batchName.trim() || !session.trim()) { setError('Enter batch name and session'); return; }
+    setError(''); setSuccess('');
+    try {
+      const res = await fetch('/api/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createBatch', department: dept, name: batchName.trim(), session: session.trim(), startSemester: startSem }) });
+      const data = await res.json();
+      if (data.success) { setSuccess('Batch created'); setBatchName(''); setSession(''); loadBatches(); setTimeout(() => setSuccess(''), 2000); }
+      else setError(data.error || 'Failed');
+    } catch { setError('Network error'); }
+  };
+
+  const deleteBatch = async (batchId: string) => {
+    try {
+      await fetch('/api/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deleteBatch', batchId }) });
+      loadBatches();
+    } catch {}
+  };
+
+  const addStudent = async (batchId: string) => {
+    if (!studentEmail.trim() || !studentId.trim()) { setError('Enter student email and ID'); return; }
+    setError('');
+    try {
+      const res = await fetch('/api/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addStudent', batchId, email: studentEmail.trim(), universityId: studentId.trim(), name: studentName.trim() || undefined, isReAdmission }) });
+      const data = await res.json();
+      if (data.success) { setStudentEmail(''); setStudentId(''); setStudentName(''); setIsReAdmission(false); loadBatches(); }
+      else setError(data.error || 'Failed');
+    } catch { setError('Network error'); }
+  };
+
+  const removeStudent = async (studentId: string) => {
+    try {
+      await fetch('/api/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'removeStudent', studentId }) });
+      loadBatches();
+    } catch {}
+  };
+
+  const startEditStudent = (s: any) => {
+    setEditStudentId(s.id);
+    setEditUniId(s.universityId);
+    setEditOrigId(s.originalId || '');
+  };
+
+  const saveEditStudent = async () => {
+    if (!editStudentId) return;
+    try {
+      await fetch('/api/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateStudent', studentId: editStudentId, universityId: editUniId, originalId: editOrigId || undefined }) });
+      setEditStudentId(null);
+      loadBatches();
+    } catch {}
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-layer-group text-purple-400 mr-2"></i>Batch Management</h3>
+      <p className="text-[0.72rem] text-dark-text3">Manage student batches. Semesters auto-progress every 6 months. Batches auto-close after 4.5 years.</p>
+      {success && <div className="px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-xs"><i className="fas fa-check mr-1"></i>{success}</div>}
+      {error && <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs"><i className="fas fa-exclamation-triangle mr-1"></i>{error}</div>}
+
+      {canManage && (
+        <div className="p-3 bg-dark-bg2 border border-dark-border rounded-xl">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <select value={dept} onChange={e => setDept(e.target.value)} className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis">
+              <option value="qsis">QSIS</option><option value="eng">Engineering</option><option value="engg">ENGG</option><option value="bst">BST</option><option value="bba">BBA</option><option value="ell">ELL</option><option value="isl">ISL</option><option value="qst">QST</option><option value="soc">SOC</option>
+            </select>
+            <input value={batchName} onChange={e => setBatchName(e.target.value)} placeholder="Batch name (e.g. Q23)" className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
+            <input value={session} onChange={e => setSession(e.target.value)} placeholder="Session (e.g. 2023-24)" className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
+            <select value={startSem} onChange={e => setStartSem(e.target.value)} className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis">
+              {config.semesters.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </div>
+          <button onClick={createBatch} className="routine-btn routine-btn-primary text-[0.72rem]"><i className="fas fa-plus mr-1"></i>Create Batch</button>
+        </div>
+      )}
+
+      {loading ? <div className="text-center py-6"><i className="fas fa-spinner fa-spin text-qsis text-xl"></i></div> : (
+        <div className="space-y-3">
+          {batches.length === 0 && <p className="text-dark-text3 text-xs text-center py-4">No batches for this department</p>}
+          {batches.map(b => {
+            const isExpanded = expandedBatch === b.id;
+            const semLabel = config.semesters.find(s => s.id === b.currentSemester)?.label || b.currentSemester;
+            return (
+              <div key={b.id} className="bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden">
+                <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-dark-bg3/50" onClick={() => setExpandedBatch(isExpanded ? null : b.id)}>
+                  <i className={`fas fa-layer-group ${b.isActive ? 'text-purple-400' : 'text-dark-text3'}`}></i>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[0.82rem] font-bold text-dark-text">{b.name}</span>
+                      <span className="text-[0.65rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3">{b.session}</span>
+                      {b.isActive ? <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">Active</span> : <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3">Closed</span>}
+                    </div>
+                    <div className="text-[0.68rem] text-dark-text3 mt-0.5">
+                      Current: {semLabel} &middot; {b.studentCount || 0} students &middot; Target: {new Date(b.targetEndDate).toLocaleDateString()}
+                    </div>
+                  </div>
+                  {canManage && <button onClick={(e) => { e.stopPropagation(); deleteBatch(b.id); }} className="text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer text-[0.68rem]"><i className="fas fa-trash"></i></button>}
+                  <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} text-dark-text3 text-[0.65rem]`}></i>
+                </div>
+
+                {isExpanded && (
+                  <div className="border-t border-dark-border p-3 space-y-3">
+                    {canManage && (
+                      <div className="flex flex-wrap gap-2">
+                        <input value={studentEmail} onChange={e => setStudentEmail(e.target.value)} placeholder="student@ugrad.iiuc.ac.bd" className="flex-1 min-w-[180px] px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
+                        <input value={studentId} onChange={e => setStudentId(e.target.value)} placeholder="University ID (e.g. Q233099)" className="w-28 px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
+                        <input value={studentName} onChange={e => setStudentName(e.target.value)} placeholder="Name (optional)" className="w-32 px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
+                        <label className="flex items-center gap-1 text-[0.68rem] text-dark-text3 cursor-pointer">
+                          <input type="checkbox" checked={isReAdmission} onChange={e => setIsReAdmission(e.target.checked)} className="rounded" />
+                          Re-admission
+                        </label>
+                        <button onClick={() => addStudent(b.id)} className="px-3 py-1.5 bg-qsis text-white rounded text-[0.72rem] font-semibold hover:bg-qsis/90"><i className="fas fa-user-plus mr-1"></i>Add</button>
+                      </div>
+                    )}
+
+                    {b.students && b.students.length > 0 ? (
+                      <div className="space-y-1">
+                        {b.students.map((s: any) => (
+                          <div key={s.id} className="flex items-center gap-2 p-2 rounded bg-dark-bg border border-dark-border text-[0.72rem]">
+                            {editStudentId === s.id ? (
+                              <>
+                                <input value={editUniId} onChange={e => setEditUniId(e.target.value)} className="w-24 px-1.5 py-0.5 rounded border border-qsis bg-dark-bg2 text-dark-text text-[0.7rem] outline-none" />
+                                <input value={editOrigId} onChange={e => setEditOrigId(e.target.value)} placeholder="Orig ID" className="w-24 px-1.5 py-0.5 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.7rem] outline-none" />
+                                <button onClick={saveEditStudent} className="text-green-400 hover:text-green-300 bg-transparent border-none cursor-pointer text-[0.65rem]"><i className="fas fa-check"></i></button>
+                                <button onClick={() => setEditStudentId(null)} className="text-dark-text3 hover:text-dark-text bg-transparent border-none cursor-pointer text-[0.65rem]"><i className="fas fa-times"></i></button>
+                              </>
+                            ) : (
+                              <>
+                                <span className="font-mono font-semibold text-dark-text w-24">{s.universityId}</span>
+                                {s.originalId && <span className="text-[0.6rem] px-1 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">Orig: {s.originalId}</span>}
+                                {s.isReAdmission && <span className="text-[0.6rem] px-1 py-0.5 rounded bg-orange-500/10 text-orange-400">Re-admission</span>}
+                                <span className="flex-1 text-dark-text2 truncate">{s.name || s.email}</span>
+                                {canManage && (
+                                  <>
+                                    <button onClick={() => startEditStudent(s)} className="text-qsis hover:text-qsis/80 bg-transparent border-none cursor-pointer text-[0.65rem]"><i className="fas fa-edit"></i></button>
+                                    <button onClick={() => removeStudent(s.id)} className="text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer text-[0.65rem]"><i className="fas fa-trash"></i></button>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="text-dark-text3 text-[0.7rem] text-center py-2">No students in this batch</p>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -1576,6 +1871,8 @@ export default function AdminPanelView() {
     { key: 'users', label: 'All Users', icon: 'fa-users', color: 'text-dark-text2', show: isAdmin || isManager },
     { key: 'faculty', label: 'Faculty', icon: 'fa-building', color: 'text-teal-400', show: isAdmin || isManager || effectiveRole === 'teacher' },
     { key: 'courses', label: 'Courses', icon: 'fa-book', color: 'text-indigo-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR },
+    { key: 'rooms', label: 'Rooms', icon: 'fa-door-open', color: 'text-cyan-400', show: isAdmin || isManager || effectiveRole === 'teacher' },
+    { key: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR },
     { key: 'permissions', label: 'Permissions', icon: 'fa-key', color: 'text-amber-400', show: isAdmin },
     { key: 'contributors', label: 'Contributors', icon: 'fa-users', color: 'text-teal-400', show: isAdmin },
     { key: 'telegram', label: 'Telegram', icon: 'fa-paper-plane', color: 'text-cyan-400', show: isOwner },
@@ -2105,6 +2402,12 @@ export default function AdminPanelView() {
 
       {/* Courses Tab */}
       {activeTab === 'courses' && <CoursesTab effectiveRole={effectiveRole} profile={profile} />}
+
+      {/* Rooms Tab */}
+      {activeTab === 'rooms' && <RoomsTab effectiveRole={effectiveRole} />}
+
+      {/* Batches Tab */}
+      {activeTab === 'batches' && <BatchesTab effectiveRole={effectiveRole} profile={profile} />}
 
       {/* Permissions Tab */}
       {activeTab === 'permissions' && <PermissionsTab />}

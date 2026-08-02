@@ -133,6 +133,8 @@ export interface Profile {
   isACR: boolean;
   email: string;
   whatsapp: string;
+  phone: string;
+  telegramId: string;
   semester: string;
   image: string;
   role: UserRole;
@@ -153,15 +155,19 @@ export interface Profile {
   hideSemester: boolean;
   hideEmail: boolean;
   hideCompany: boolean;
+  batchId: string;
+  customPermissions: Record<string, boolean>;
 }
 
 const defaultProfile: Profile = {
-  universityId: '', name: '', title: '', shortForm: '', department: '', section: '', isCR: false, isACR: false, email: '', whatsapp: '', semester: '', image: '',
+  universityId: '', name: '', title: '', shortForm: '', department: '', section: '', isCR: false, isACR: false, email: '', whatsapp: '', phone: '', telegramId: '', semester: '', image: '',
   role: 'user',
   isBanned: false,
   githubLogin: '', githubToken: '', githubInstallationId: '', githubAvatar: '',
   facebook: '', twitter: '', linkedin: '', website: '',
   company: '', companyUrl: '', publicEmail: '',
+  batchId: '',
+  customPermissions: {},
   hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false,
 };
 
