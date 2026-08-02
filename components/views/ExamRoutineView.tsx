@@ -20,7 +20,7 @@ function getDefaultSession(): string {
 interface ExamCourse {
   code: string;
   title: string;
-  teacher: string;
+  teacher?: string;
   room?: string;
   rollRange?: string;
   fromGithub?: boolean;
@@ -30,6 +30,7 @@ interface ExamRow {
   date: string;
   day: string;
   courses: Record<string, ExamCourse>;
+  semesterSlots: Record<string, string>;
 }
 
 interface ExamRoutineItem {
@@ -86,8 +87,9 @@ function formatRollCount(rollStr: string): string {
 
 function getDefaultRow(slots: ExamSlot[]): ExamRow {
   const courses: Record<string, ExamCourse> = {};
-  slots.filter(s => s.enabled).forEach(s => { courses[s.id] = { code: '', title: '', teacher: '' }; });
-  return { date: '', day: '', courses };
+  const semesterSlots: Record<string, string> = {};
+  slots.filter(s => s.enabled).forEach(s => { courses[s.id] = { code: '', title: '' }; semesterSlots[s.id] = ''; });
+  return { date: '', day: '', courses, semesterSlots };
 }
 
 export default function ExamRoutineView() {
@@ -842,13 +844,6 @@ interface ExamAllSemesterSem {
   courses: ExamCourse[];
 }
 
-interface TeacherConflictInfo {
-  semester: string;
-  courseCode: string;
-  teacher: string;
-  date: string;
-  slotId: string;
-}
 
 function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPublish, profile, email, onPublish, onSaveToCloud, onSaveDraft, onBack }: {
   examSlots: ExamSlot[];
@@ -872,7 +867,6 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
     config.semesters.map(s => ({ name: s.id, enabled: true, courses: [] as ExamCourse[] }))
   );
   const [activeSemTab, setActiveSemTab] = useState(0);
-  const [conflictMap, setConflictMap] = useState<Record<string, TeacherConflictInfo[]>>({});
   const [showPublishMenu, setShowPublishMenu] = useState(false);
 
   useEffect(() => {
@@ -950,7 +944,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   const addSemCourse = (semName: string) => {
     setSemesters(prev => prev.map(s => {
       if (s.name !== semName) return s;
-      return { ...s, courses: [...s.courses, { code: '', title: '', teacher: '' }] };
+      return { ...s, courses: [...s.courses, { code: '', title: '' }] };
     }));
   };
   const removeSemCourse = (semName: string, cIdx: number) => {
@@ -973,48 +967,10 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   const toggleSemester = (semIdx: number) => {
     setSemesters(prev => prev.map((s, i) => i === semIdx ? { ...s, enabled: !s.enabled } : s));
   };
-  const updateRowCourse = (rowIdx: number, slotId: string, semName: string, field: keyof ExamCourse, value: string) => {
-    setRows(prev => prev.map((r, i) => {
-      if (i !== rowIdx) return r;
-      const cellKey = `${r.date}:${slotId}:${semName}`;
-      const existing = r.courses[cellKey] || { code: '', title: '', teacher: '' };
-      return { ...r, courses: { ...r.courses, [cellKey]: { ...existing, [field]: value } } };
-    }));
-  };
 
-  useEffect(() => {
-    const newConflicts: Record<string, TeacherConflictInfo[]> = {};
-    for (const row of rows) {
-      if (!row.date) continue;
-      for (const slot of enabledSlots) {
-        const teacherMap: Record<string, { semester: string; courseCode: string }> = {};
-        const conflictKey = `${row.date}:${slot.id}`;
-        for (const sem of enabledSemesters) {
-          if (sem.courses.length === 0) continue;
-          const cellKey = `${row.date}:${slot.id}:${sem.name}`;
-          const cellCourse = row.courses[cellKey];
-          if (!cellCourse?.code) continue;
-          const teachers = (cellCourse.teacher || '').split(',').map(t => t.trim()).filter(Boolean);
-          for (const t of teachers) {
-            if (teacherMap[t]) {
-              if (!newConflicts[conflictKey]) newConflicts[conflictKey] = [];
-              newConflicts[conflictKey].push(
-                { semester: semLabels[teacherMap[t].semester] || teacherMap[t].semester, courseCode: teacherMap[t].courseCode, teacher: t, date: row.date, slotId: slot.id },
-                { semester: semLabels[sem.name] || sem.name, courseCode: cellCourse.code, teacher: t, date: row.date, slotId: slot.id }
-              );
-            } else {
-              teacherMap[t] = { semester: sem.name, courseCode: cellCourse.code };
-            }
-          }
-        }
-      }
-    }
-    setConflictMap(newConflicts);
-  }, [rows, enabledSemesters, enabledSlots, semLabels]);
 
   const buildAllItems = (): ExamRoutineItem[] | null => {
     if (rows.every(r => !r.date)) { showToast('Add at least one exam date', 'error'); return null; }
-    if (Object.keys(conflictMap).length > 0) { showToast('Fix teacher conflicts before publishing', 'error'); return null; }
     const items: ExamRoutineItem[] = [];
     for (const sem of enabledSemesters) {
       if (sem.courses.length === 0) continue;
@@ -1022,15 +978,18 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
       const semRows = rows.map(row => {
         const courses: Record<string, ExamCourse> = {};
         for (const slot of enabledSlots) {
-          const cellKey = `${row.date}:${slot.id}:${sem.name}`;
-          const cellCourse = row.courses[cellKey];
-          if (cellCourse?.code) {
-            courses[slot.id] = { code: cellCourse.code, title: cellCourse.title, teacher: cellCourse.teacher || '' };
+          const assignedSem = row.semesterSlots?.[slot.id] || '';
+          if (assignedSem === sem.name) {
+            const cellKey = `${row.date}:${slot.id}`;
+            const cellCourse = row.courses[cellKey];
+            if (cellCourse?.code) {
+              courses[slot.id] = { code: cellCourse.code, title: cellCourse.title };
+            }
           } else {
-            courses[slot.id] = { code: '', title: '', teacher: '' };
+            courses[slot.id] = { code: '', title: '' };
           }
         }
-        return { date: row.date, day: row.day, courses };
+        return { date: row.date, day: row.day, courses, semesterSlots: {} };
       });
       items.push({
         id: `exam-all-${Date.now()}-${sem.name}`,
@@ -1038,7 +997,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
         rows: semRows, slots: examSlots, createdAt: Date.now(),
       });
     }
-    if (items.length === 0) { showToast('Add courses to at least one semester', 'error'); return null; }
+    if (items.length === 0) { showToast('Assign at least one semester to a slot', 'error'); return null; }
     return items;
   };
 
@@ -1212,7 +1171,6 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
                   <div key={cIdx} className={`flex items-center gap-2 p-2 rounded-lg border ${c.fromGithub ? 'bg-dark-bg border-dark-border' : 'bg-yellow-500/5 border-yellow-500/30'}`}>
                     <input value={c.code} onChange={e => updateSemCourse(sem.name, cIdx, 'code', e.target.value)} placeholder="Code (e.g. QSM-3602)" className="w-32 px-2 py-1 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
                     <input value={c.title} onChange={e => updateSemCourse(sem.name, cIdx, 'title', e.target.value)} placeholder="Title" className="flex-1 px-2 py-1 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
-                    <input value={c.teacher} onChange={e => updateSemCourse(sem.name, cIdx, 'teacher', e.target.value)} placeholder="Teacher" className="w-32 px-2 py-1 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
                     {c.fromGithub ? <i className="fas fa-check-circle text-green-400 text-[0.68rem]"></i> : <i className="fas fa-cloud-upload-alt text-yellow-400 text-[0.68rem]"></i>}
                     <button onClick={() => removeSemCourse(sem.name, cIdx)} className="text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer text-[0.68rem]"><i className="fas fa-trash"></i></button>
                   </div>
@@ -1235,68 +1193,73 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
 
       {step === 'assign' && (
         <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5 mt-4">
-          <h4 className="text-[0.9rem] font-bold text-dark-text mb-1"><i className="fas fa-table text-qsis mr-2"></i>Assign Courses to Schedule</h4>
-          <p className="text-[0.72rem] text-dark-text3 mb-3">Select a course for each semester in each time slot. Teacher conflicts are auto-detected.</p>
-
-          {Object.keys(conflictMap).length > 0 && (
-            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
-              <p className="text-[0.78rem] font-semibold text-red-400 mb-1"><i className="fas fa-exclamation-triangle mr-1"></i>Teacher Conflicts Detected</p>
-              <p className="text-[0.7rem] text-red-300 mb-2">Same teacher assigned to different semesters at the same time slot:</p>
-              {Object.entries(conflictMap).map(([key, conflicts]) => (
-                <p key={key} className="text-[0.7rem] text-red-300 ml-4">• <strong>{conflicts[0]?.teacher}</strong> — {conflicts.map(c => `${c.courseCode} (${c.semester})`).join(' & ')}</p>
-              ))}
-            </div>
-          )}
+          <h4 className="text-[0.9rem] font-bold text-dark-text mb-1"><i className="fas fa-table text-qsis mr-2"></i>Assign Semesters to Schedule</h4>
+          <p className="text-[0.72rem] text-dark-text3 mb-3">For each date and time slot, select which semester has its exam. Courses auto-fill from Step 2.</p>
 
           {rows.map((row, rowIdx) => (
             <div key={rowIdx} className="mb-5 p-4 rounded-xl bg-dark-bg border border-dark-border">
-              <div className="flex items-center gap-3 mb-3 pb-2 border-b border-dark-border">
-                <i className="fas fa-calendar-day text-qsis"></i>
-                <span className="text-[0.9rem] font-bold text-dark-text">{row.date ? new Date(row.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'No date'}</span>
-                <span className="text-[0.72rem] text-dark-text3">{row.day}</span>
-              </div>
-              {enabledSlots.map(slot => (
-                <div key={slot.id} className="mb-3 last:mb-0">
-                  <div className="text-[0.72rem] font-semibold text-dark-text2 mb-2 flex items-center gap-2">
-                    <i className="fas fa-clock text-qsis"></i> {slot.name}
-                    <span className="text-dark-text3 font-normal">({slot.startTime} – {slot.endTime})</span>
-                  </div>
-                  <div className="space-y-1">
-                    {enabledSemesters.map((sem) => {
-                      if (sem.courses.length === 0) return null;
-                      const cellKey = `${row.date}:${slot.id}:${sem.name}`;
-                      const cellCourse = row.courses[cellKey];
-                      const slotConflicts = conflictMap[`${row.date}:${slot.id}`] || [];
-                      const cellTeachers = (cellCourse?.teacher || '').split(',').map(t => t.trim()).filter(Boolean);
-                      const hasTeacherConflict = cellTeachers.some(t => slotConflicts.some(c => c.teacher === t));
-                      return (
-                        <div key={sem.name} className={`flex items-center gap-2 p-2 rounded-lg border ${hasTeacherConflict ? 'border-red-500 bg-red-500/5' : 'border-dark-border bg-dark-bg2'}`}>
-                          <span className="text-[0.72rem] font-semibold text-dark-text2 w-36 flex-shrink-0 whitespace-nowrap">{semLabels[sem.name] || sem.name}</span>
-                          <select value={cellCourse?.code || ''} onChange={e => { const course = sem.courses.find(c => c.code === e.target.value); updateRowCourse(rowIdx, slot.id, sem.name, 'code', e.target.value); if (course) { updateRowCourse(rowIdx, slot.id, sem.name, 'title', course.title); updateRowCourse(rowIdx, slot.id, sem.name, 'teacher', course.teacher || ''); } }} className="w-44 px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis flex-shrink-0">
-                            <option value="">— Select —</option>
-                            {sem.courses.map(c => <option key={c.code} value={c.code}>{c.code} - {c.title}</option>)}
-                          </select>
-                          <div className={`flex items-center gap-1 px-2 py-1.5 rounded border text-[0.75rem] flex-1 ${hasTeacherConflict ? 'border-red-500 bg-red-500/10 text-red-300' : 'border-dark-border bg-dark-bg text-dark-text2'}`}>
-                            <i className="fas fa-chalkboard-teacher text-[0.65rem] flex-shrink-0"></i>
-                            <input value={cellCourse?.teacher || ''} onChange={e => updateRowCourse(rowIdx, slot.id, sem.name, 'teacher', e.target.value)} placeholder="Teacher" className="w-full bg-transparent border-none outline-none text-[0.75rem] text-dark-text" />
-                          </div>
-                          {hasTeacherConflict && (() => {
-                            const conflictTeachers = cellTeachers.filter(t => slotConflicts.some(c => c.teacher === t));
-                            return <p className="text-[0.6rem] text-red-400 leading-tight flex-shrink-0"><i className="fas fa-exclamation-circle mr-0.5"></i>{conflictTeachers.map(t => { const c = slotConflicts.find(x => x.teacher === t); return c ? `${c.courseCode} (${c.semester})` : t; }).join(', ')}</p>;
-                          })()}
-                        </div>
-                      );
-                    })}
-                  </div>
+              <div className="flex items-center justify-between mb-3 pb-2 border-b border-dark-border">
+                <div className="flex items-center gap-3">
+                  <i className="fas fa-calendar-day text-qsis"></i>
+                  <span className="text-[0.9rem] font-bold text-dark-text">{row.date ? new Date(row.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'No date'}</span>
+                  <span className="text-[0.72rem] text-dark-text3">{row.day}</span>
                 </div>
-              ))}
+              </div>
+              <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${enabledSlots.length}, 1fr)` }}>
+                {enabledSlots.map(slot => {
+                  const assignedSem = row.semesterSlots?.[slot.id] || '';
+                  const semData = enabledSemesters.find(s => s.name === assignedSem);
+                  return (
+                    <div key={slot.id} className="rounded-lg border border-dark-border bg-dark-bg2 p-3">
+                      <div className="text-[0.7rem] font-semibold text-dark-text2 mb-2 flex items-center gap-1">
+                        <i className="fas fa-clock text-qsis"></i> {slot.name}
+                      </div>
+                      <div className="text-[0.62rem] text-dark-text3 mb-2">({slot.startTime} – {slot.endTime})</div>
+                      <select value={assignedSem} onChange={e => {
+                        const semName = e.target.value;
+                        setRows(prev => prev.map((r, i) => {
+                          if (i !== rowIdx) return r;
+                          const newSemSlots = { ...r.semesterSlots, [slot.id]: semName };
+                          const newCourses = { ...r.courses };
+                          const cellKey = `${r.date}:${slot.id}`;
+                          if (semName) {
+                            const sem = enabledSemesters.find(s => s.name === semName);
+                            if (sem && sem.courses.length > 0) {
+                              newCourses[cellKey] = { code: sem.courses[0].code, title: sem.courses[0].title };
+                            }
+                          } else {
+                            newCourses[cellKey] = { code: '', title: '' };
+                          }
+                          return { ...r, semesterSlots: newSemSlots, courses: newCourses };
+                        }));
+                      }} className="w-full px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.75rem] outline-none focus:border-qsis mb-2">
+                        <option value="">— Free —</option>
+                        {enabledSemesters.map(sem => (
+                          <option key={sem.name} value={sem.name}>{semLabels[sem.name] || sem.name} ({sem.courses.length} courses)</option>
+                        ))}
+                      </select>
+                      {semData && semData.courses.length > 0 && (
+                        <div className="space-y-0.5">
+                          {semData.courses.map(c => (
+                            <div key={c.code} className="text-[0.65rem] text-dark-text2 flex items-center gap-1">
+                              <i className="fas fa-book text-qsis text-[0.55rem]"></i>
+                              <span className="font-semibold">{c.code}</span>
+                              <span className="text-dark-text3 truncate">{c.title}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ))}
 
           <div className="flex justify-between mt-4">
             <button onClick={() => setStep('courses')} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
             <div className="relative">
-              <button onClick={(e) => { e.stopPropagation(); setShowPublishMenu(!showPublishMenu); }} className="routine-btn routine-btn-primary" disabled={Object.keys(conflictMap).length > 0}>
+              <button onClick={(e) => { e.stopPropagation(); setShowPublishMenu(!showPublishMenu); }} className="routine-btn routine-btn-primary">
                 <i className="fas fa-share-alt mr-1"></i>Publish ({totalSections} semesters) <i className="fas fa-caret-down ml-1"></i>
               </button>
               {showPublishMenu && (

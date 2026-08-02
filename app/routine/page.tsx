@@ -3,15 +3,15 @@
 import { useState } from 'react';
 import RoutineView from '@/components/views/RoutineView';
 import ExamRoutineView from '@/components/views/ExamRoutineView';
+import SeatPlanView from '@/components/views/SeatPlanView';
 
-type RoutineTab = 'class' | 'exam';
+type RoutineTab = 'class' | 'exam' | 'seatplan';
 
 export default function RoutinePage() {
   const [tab, setTab] = useState<RoutineTab>('class');
 
   return (
     <div>
-      {/* Tab Switcher */}
       <div className="flex gap-1 mb-5 p-1 bg-dark-bg2 border border-dark-border rounded-xl">
         <button
           onClick={() => setTab('class')}
@@ -29,10 +29,19 @@ export default function RoutinePage() {
         >
           <i className="fas fa-file-alt"></i>Exam Routine
         </button>
+        <button
+          onClick={() => setTab('seatplan')}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[0.82rem] font-semibold transition-all cursor-pointer border-none ${
+            tab === 'seatplan' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+          }`}
+        >
+          <i className="fas fa-chair"></i>Seat Plan
+        </button>
       </div>
 
       {tab === 'class' && <RoutineView />}
       {tab === 'exam' && <ExamRoutineView />}
+      {tab === 'seatplan' && <SeatPlanView />}
     </div>
   );
 }

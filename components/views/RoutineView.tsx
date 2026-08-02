@@ -696,7 +696,7 @@ export default function RoutineView() {
               </button>
               {canPublish && (
                 <button className="routine-btn routine-btn-accent" onClick={() => setViewMode('allBranch')}>
-                  <i className="fas fa-layer-group"></i> All Semester Routine Routine
+                  <i className="fas fa-layer-group"></i> All Semester Routine
                 </button>
               )}
               <button className="routine-btn routine-btn-ghost" onClick={() => router.push('/')}><i className="fas fa-arrow-left"></i> Back</button>

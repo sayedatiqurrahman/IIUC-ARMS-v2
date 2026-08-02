@@ -176,6 +176,7 @@ model PublishedExamRoutine {
   session       String?
   department    String?
   examType      String?
+  type          String?
   rows          Json
   slots         Json
   status        String   @default("published")
@@ -188,5 +189,6 @@ model PublishedExamRoutine {
   @@index([semester])
   @@index([department])
   @@index([status])
+  @@index([type])
   @@index([expiresAt])
 }

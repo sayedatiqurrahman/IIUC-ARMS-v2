@@ -4,6 +4,7 @@ import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 const EXAM_ROUTINE_TTL_MONTHS = 3;
+const SEATPLAN_TTL_MONTHS = 1;
 
 async function cleanupOldExamRoutines(prisma: any) {
   const deleted = await prisma.publishedExamRoutine.deleteMany({
@@ -38,7 +39,9 @@ export async function GET(req: NextRequest) {
       session: r.session,
       department: r.department,
       examType: r.examType,
+      type: r.type || undefined,
       rows: JSON.parse(r.rows || '[]'),
+      entries: r.type === 'seatplan' ? JSON.parse(r.rows || '[]') : undefined,
       slots: JSON.parse(r.slots || '[]'),
       status: r.status || 'published',
       publishedBy: r.publishedBy ? { name: r.publishedBy, title: undefined, email: r.publishedByEmail || undefined } : undefined,
@@ -76,22 +79,25 @@ export async function POST(req: NextRequest) {
 
     const saveStatus = status === 'saved' ? 'saved' : 'published';
 
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + EXAM_ROUTINE_TTL_MONTHS);
-
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
     const publisherName = profile?.name || email.split('@')[0];
 
     for (const r of routines) {
       const examId = r.id || `exam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const isSeatPlan = r.type === 'seatplan';
 
       await prisma.publishedExamRoutine.deleteMany({
         where: {
           semester: r.semester,
           department: r.department || null,
           examType: r.examType || null,
+          type: isSeatPlan ? 'seatplan' : null,
         },
       });
+
+      const ttlMonths = isSeatPlan ? SEATPLAN_TTL_MONTHS : EXAM_ROUTINE_TTL_MONTHS;
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + ttlMonths);
 
       await prisma.publishedExamRoutine.create({
         data: {
@@ -100,7 +106,8 @@ export async function POST(req: NextRequest) {
           session: r.session || null,
           department: r.department || null,
           examType: r.examType || null,
-          rows: JSON.stringify(r.rows || []),
+          type: isSeatPlan ? 'seatplan' : null,
+          rows: JSON.stringify(isSeatPlan ? (r.entries || []) : (r.rows || [])),
           slots: JSON.stringify(r.slots || []),
           status: saveStatus,
           publishedBy: publisherName,
