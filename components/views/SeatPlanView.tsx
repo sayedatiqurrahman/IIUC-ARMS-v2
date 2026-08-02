@@ -23,6 +23,7 @@ interface SeatPlanEntry {
 
 interface SeatPlanDraft {
   id: string;
+  semester: string;
   session: string;
   department: string;
   examType: string;
@@ -145,6 +146,20 @@ export default function SeatPlanView() {
   useEffect(() => {
     try { localStorage.setItem('qsis-seatplan-gender', studentGender); } catch {}
   }, [studentGender]);
+
+  // Auto-save builder draft every 3 seconds of inactivity
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (viewMode !== 'builder') return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      const draft = buildDraft('draft');
+      const updated = localDrafts.filter(d => d.id !== draft.id);
+      updated.push(draft);
+      persistLocalDrafts(updated);
+    }, 3000);
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+  }, [entries, sessionVal, department, examType, viewMode]);
 
   const loadLocalDrafts = useCallback(() => {
     try {
@@ -448,8 +463,42 @@ export default function SeatPlanView() {
     return conflicting;
   }, [entries]);
 
+  const rollConflicts = useMemo(() => {
+    const conflicting = new Set<number>();
+    const rollMap: Record<string, { idx: number; from: string; to: string }[]> = {};
+    entries.forEach((e, idx) => {
+      if (!e.rollFrom) return;
+      const key = `${e.date}:${e.slotId}`;
+      if (!rollMap[key]) rollMap[key] = [];
+      rollMap[key].push({ idx, from: e.rollFrom, to: e.rollTo || e.rollFrom });
+    });
+    for (const group of Object.values(rollMap)) {
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const a = group[i], b = group[j];
+          if (a.from <= b.to && b.from <= a.to) {
+            conflicting.add(a.idx);
+            conflicting.add(b.idx);
+          }
+        }
+      }
+    }
+    return conflicting;
+  }, [entries]);
+
+  function getRollCount(from: string, to: string): number {
+    if (!from) return 0;
+    const matchFrom = from.match(/^(.*?)(\d+)$/);
+    const matchTo = (to || from).match(/^(.*?)(\d+)$/);
+    if (!matchFrom || !matchTo || matchFrom[1] !== matchTo[1]) return 1;
+    const start = parseInt(matchFrom[2]);
+    const end = parseInt(matchTo[2]);
+    return Math.max(1, end - start + 1);
+  }
+
   function buildDraft(status?: string): SeatPlanDraft {
-    return { id: editingId || `seatplan-${Date.now()}`, session: sessionVal, department, examType, entries, createdAt: Date.now(), published: false, status };
+    const semesters = Array.from(new Set(entries.map(e => e.semester)));
+    return { id: editingId || `seatplan-${Date.now()}`, semester: semesters.join(',') || 'all', session: sessionVal, department, examType, entries, createdAt: Date.now(), published: false, status };
   }
 
   function getMissingSemesters(): string[] {
@@ -889,6 +938,12 @@ export default function SeatPlanView() {
                   {teacherConflicts.size} teacher conflict(s) found — same teacher assigned to multiple rooms on the same date & slot.
                 </div>
               )}
+              {rollConflicts.size > 0 && (
+                <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-[0.78rem] text-red-400 font-medium">
+                  <i className="fas fa-exclamation-triangle mr-1.5"></i>
+                  {rollConflicts.size} roll range conflict(s) found — overlapping roll IDs assigned to multiple rooms on the same date & slot.
+                </div>
+              )}
               <button onClick={autoPopulateEntries} className="routine-btn routine-btn-accent mb-4"><i className="fas fa-magic mr-1"></i>Auto-fill All</button>
               {dateInputs.filter(d => d.trim()).map((dateVal, dateIdx) => {
                 const dayName = DAYS[(new Date(dateVal + 'T00:00:00').getDay() + 1) % 7] || '';
@@ -905,12 +960,12 @@ export default function SeatPlanView() {
                           <i className="fas fa-clock text-qsis"></i> {slot.name} <span className="text-dark-text3 font-normal">({slot.startTime} – {slot.endTime})</span>
                         </div>
                         <div className="space-y-1">
-                          {enabledSemesters.map(sem => {
+                          {enabledSemesters.filter(sem => !excludedSemesters.has(sem.id)).map(sem => {
                             const semMaleEntries = entries.filter(e => e.semester === sem.id && e.date === dateVal && e.slotId === slot.id && e.gender === 'male');
                             const semFemaleEntries = entries.filter(e => e.semester === sem.id && e.date === dateVal && e.slotId === slot.id && e.gender === 'female');
                             const hasConflict = [...semMaleEntries, ...semFemaleEntries].some((_, i, arr) => {
                               const idx = entries.indexOf(arr[i]);
-                              return teacherConflicts.has(idx);
+                              return teacherConflicts.has(idx) || rollConflicts.has(idx);
                             });
                             return (
                               <div key={sem.id} className={`p-2 rounded-lg border bg-dark-bg2 ${hasConflict ? 'border-red-500/50' : 'border-dark-border'}`}>
@@ -926,7 +981,8 @@ export default function SeatPlanView() {
                                     <div className="space-y-1.5">
                                       {semMaleEntries.map((entry) => {
                                         const idx = entries.indexOf(entry);
-                                        const isConflict = teacherConflicts.has(idx);
+                                        const isConflict = teacherConflicts.has(idx) || rollConflicts.has(idx);
+                                        const rollCount = getRollCount(entry.rollFrom, entry.rollTo);
                                         return (
                                           <div key={idx} className={`flex items-center gap-1 p-1.5 rounded border ${isConflict ? 'border-red-500/40 bg-red-500/5' : 'border-dark-border bg-dark-bg'}`}>
                                             <input value={entry.room} onChange={e => updateEntry(idx, 'room', e.target.value)} placeholder="Room" className="w-16 px-1.5 py-0.5 rounded border border-blue-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-blue-400" />
@@ -934,6 +990,7 @@ export default function SeatPlanView() {
                                             <input value={entry.rollFrom} onChange={e => updateEntry(idx, 'rollFrom', e.target.value)} placeholder="From" className="w-16 px-1.5 py-0.5 rounded border border-blue-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-blue-400" />
                                             <span className="text-dark-text3 text-[0.6rem]">–</span>
                                             <input value={entry.rollTo} onChange={e => updateEntry(idx, 'rollTo', e.target.value)} placeholder="To" className="w-16 px-1.5 py-0.5 rounded border border-blue-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-blue-400" />
+                                            {entry.rollFrom && <span className="text-[0.55rem] text-dark-text3 whitespace-nowrap">{rollCount}std</span>}
                                             <button onClick={() => removeEntry(idx)} className="text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer text-[0.6rem] flex-shrink-0"><i className="fas fa-times"></i></button>
                                           </div>
                                         );
@@ -948,7 +1005,8 @@ export default function SeatPlanView() {
                                     <div className="space-y-1.5">
                                       {semFemaleEntries.map((entry) => {
                                         const idx = entries.indexOf(entry);
-                                        const isConflict = teacherConflicts.has(idx);
+                                        const isConflict = teacherConflicts.has(idx) || rollConflicts.has(idx);
+                                        const rollCount = getRollCount(entry.rollFrom, entry.rollTo);
                                         return (
                                           <div key={idx} className={`flex items-center gap-1 p-1.5 rounded border ${isConflict ? 'border-red-500/40 bg-red-500/5' : 'border-dark-border bg-dark-bg'}`}>
                                             <input value={entry.room} onChange={e => updateEntry(idx, 'room', e.target.value)} placeholder="Room" className="w-16 px-1.5 py-0.5 rounded border border-pink-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-pink-400" />
@@ -956,6 +1014,7 @@ export default function SeatPlanView() {
                                             <input value={entry.rollFrom} onChange={e => updateEntry(idx, 'rollFrom', e.target.value)} placeholder="From" className="w-16 px-1.5 py-0.5 rounded border border-pink-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-pink-400" />
                                             <span className="text-dark-text3 text-[0.6rem]">–</span>
                                             <input value={entry.rollTo} onChange={e => updateEntry(idx, 'rollTo', e.target.value)} placeholder="To" className="w-16 px-1.5 py-0.5 rounded border border-pink-500/30 bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-pink-400" />
+                                            {entry.rollFrom && <span className="text-[0.55rem] text-dark-text3 whitespace-nowrap">{rollCount}std</span>}
                                             <button onClick={() => removeEntry(idx)} className="text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer text-[0.6rem] flex-shrink-0"><i className="fas fa-times"></i></button>
                                           </div>
                                         );

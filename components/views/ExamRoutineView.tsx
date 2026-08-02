@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
@@ -155,6 +155,26 @@ export default function ExamRoutineView() {
     setExamRoutines(r);
     localStorage.setItem(LS_EXAM_DRAFTS, JSON.stringify(r));
   }, []);
+
+  // Auto-save single routine draft every 3 seconds of inactivity
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (viewMode !== 'builder') return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (!semester && !sessionVal && rows.every(r => !r.date)) return;
+      const draft: ExamRoutineItem = {
+        id: editingId || `draft-${Date.now()}`,
+        semester, session: sessionVal, department, examType,
+        rows, slots: examSlots,
+        createdAt: Date.now(), isDraft: true, published: false,
+      };
+      const updated = examRoutines.filter(d => d.id !== draft.id);
+      updated.push(draft);
+      persistDrafts(updated);
+    }, 3000);
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+  }, [rows, semester, sessionVal, department, examType, examSlots, viewMode, editingId]);
 
   const enabledSlots = getEnabledSlots(examSlots);
 

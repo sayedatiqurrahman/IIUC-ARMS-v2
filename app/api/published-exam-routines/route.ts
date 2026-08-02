@@ -60,7 +60,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, routines: result, cleaned });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: 'Failed to load exam routines' }, { status: 500 });
+    console.error('Published exam routines GET error:', err?.message || err);
+    return NextResponse.json({ success: false, error: 'Failed to load exam routines', detail: err?.message || String(err) }, { status: 500 });
   }
 }
 
@@ -93,14 +94,26 @@ export async function POST(req: NextRequest) {
       const examId = r.id || `exam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const isSeatPlan = r.type === 'seatplan';
 
-      await prisma.publishedExamRoutine.deleteMany({
-        where: {
-          semester: r.semester,
-          department: r.department || null,
-          examType: r.examType || null,
-          type: isSeatPlan ? 'seatplan' : null,
-        },
-      });
+      // For seat plans: delete all existing seat plans for same dept+examType
+      // For exam routines: delete existing for same semester+dept+examType
+      if (isSeatPlan) {
+        await prisma.publishedExamRoutine.deleteMany({
+          where: {
+            type: 'seatplan',
+            department: r.department || null,
+            examType: r.examType || null,
+          },
+        });
+      } else {
+        await prisma.publishedExamRoutine.deleteMany({
+          where: {
+            semester: r.semester,
+            department: r.department || null,
+            examType: r.examType || null,
+            type: null,
+          },
+        });
+      }
 
       const ttlMonths = isSeatPlan ? SEATPLAN_TTL_MONTHS : EXAM_ROUTINE_TTL_MONTHS;
       const expiresAt = new Date();
@@ -138,7 +151,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, count: routines.length, status: saveStatus });
   } catch (err: any) {
-    return NextResponse.json({ error: 'Failed to save' }, { status: 500 });
+    console.error('Published exam routines POST error:', err?.message || err);
+    return NextResponse.json({ error: 'Failed to save', detail: err?.message || String(err) }, { status: 500 });
   }
 }
 
