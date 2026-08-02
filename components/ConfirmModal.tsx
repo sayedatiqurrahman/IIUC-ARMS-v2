@@ -44,7 +44,7 @@ export function useConfirm() {
       onConfirm={() => handleClose(true)}
       onCancel={() => handleClose(false)}
     />
-  ) : null;
+  ) : <></>;
 
   return { confirm, confirmDialog };
 }
