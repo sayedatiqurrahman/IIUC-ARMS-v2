@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { config } from '@/lib/config';
+import CustomSelect from '@/components/CustomSelect';
 
 export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boolean; effectiveRole?: string }) {
   const [broadcastMsg, setBroadcastMsg] = useState('');
@@ -25,8 +26,11 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
   const [examMsg, setExamMsg] = useState('');
   const [examLoading, setExamLoading] = useState(false);
   const [examResult, setExamResult] = useState('');
+  const [faculties, setFaculties] = useState<{ id: string; name: string; shortName: string; departments: { id: string; name: string; shortName: string }[] }[]>([]);
 
-  const allDepts = ['CSE', 'EEE', 'BBA', 'ENG', 'ARCH', 'LLB', 'PHARM'];
+  // Build all departments from faculties
+  const allDepts = faculties.flatMap(f => f.departments.map(d => d.shortName));
+  const allFacultyDeptIds = faculties.flatMap(f => f.departments.map(d => d.id));
 
   useEffect(() => {
     fetch('/api/telegram/broadcast')
@@ -43,6 +47,15 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
         if (data.success) {
           setConnectedCount(data.total || 0);
           setDeptCounts(data.byDept || {});
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/faculty-departments')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setFaculties([...(data.builtInFaculties || []), ...(data.customFaculties || [])]);
         }
       })
       .catch(() => {});
@@ -263,21 +276,22 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
           {!allDeptsSelected && notifyDepts.length === 1 && (
             <div className="mb-3">
               <label className="text-[0.72rem] text-dark-text2 block mb-1.5">Semester</label>
-              <select
+              <CustomSelect
+                options={[
+                  { value: '', label: 'All Semesters' },
+                  { value: '1', label: '1st Semester' },
+                  { value: '2', label: '2nd Semester' },
+                  { value: '3', label: '3rd Semester' },
+                  { value: '4', label: '4th Semester' },
+                  { value: '5', label: '5th Semester' },
+                  { value: '6', label: '6th Semester' },
+                  { value: '7', label: '7th Semester' },
+                  { value: '8', label: '8th Semester' },
+                ]}
                 value={notifySemester}
-                onChange={e => setNotifySemester(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
-              >
-                <option value="">All Semesters</option>
-                <option value="1">1st Semester</option>
-                <option value="2">2nd Semester</option>
-                <option value="3">3rd Semester</option>
-                <option value="4">4th Semester</option>
-                <option value="5">5th Semester</option>
-                <option value="6">6th Semester</option>
-                <option value="7">7th Semester</option>
-                <option value="8">8th Semester</option>
-              </select>
+                onChange={val => setNotifySemester(val)}
+                placeholder="All Semesters"
+              />
               <p className="text-[0.65rem] text-dark-text3 mt-0.5">
                 {notifySemester
                   ? `Sending to ${notifyDepts[0]} Semester ${notifySemester} students only`
@@ -379,34 +393,30 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1.5">Department *</label>
-              <select
+              <CustomSelect
+                options={allDepts.map(d => ({ value: d, label: d }))}
                 value={examDept}
-                onChange={e => setExamDept(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
-              >
-                <option value="">Select Department</option>
-                {allDepts.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
+                onChange={val => setExamDept(val)}
+                placeholder="Select Department"
+              />
             </div>
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1.5">Semester *</label>
-              <select
+              <CustomSelect
+                options={[
+                  { value: '1', label: '1st Semester' },
+                  { value: '2', label: '2nd Semester' },
+                  { value: '3', label: '3rd Semester' },
+                  { value: '4', label: '4th Semester' },
+                  { value: '5', label: '5th Semester' },
+                  { value: '6', label: '6th Semester' },
+                  { value: '7', label: '7th Semester' },
+                  { value: '8', label: '8th Semester' },
+                ]}
                 value={examSemester}
-                onChange={e => setExamSemester(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
-              >
-                <option value="">Select Semester</option>
-                <option value="1">1st Semester</option>
-                <option value="2">2nd Semester</option>
-                <option value="3">3rd Semester</option>
-                <option value="4">4th Semester</option>
-                <option value="5">5th Semester</option>
-                <option value="6">6th Semester</option>
-                <option value="7">7th Semester</option>
-                <option value="8">8th Semester</option>
-              </select>
+                onChange={val => setExamSemester(val)}
+                placeholder="Select Semester"
+              />
             </div>
           </div>
 

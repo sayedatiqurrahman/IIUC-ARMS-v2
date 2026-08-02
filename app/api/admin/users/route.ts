@@ -43,6 +43,14 @@ export async function GET(req: NextRequest) {
       profiles = await prisma.profile.findMany({
         where,
         orderBy: { createdAt: 'desc' },
+        select: {
+          userId: true, email: true, name: true, title: true, shortForm: true,
+          role: true, isBanned: true, banReason: true, bannedBy: true,
+          isCR: true, isACR: true, department: true, universityId: true,
+          githubLogin: true, githubAvatar: true, image: true, semester: true,
+          section: true, createdAt: true, customPermissions: true,
+          phone: true, telegramId: true, batchId: true,
+        },
       });
     } catch (e: any) {
       console.error('[Admin Users] Prisma profile query failed:', e?.message);
@@ -57,10 +65,9 @@ export async function GET(req: NextRequest) {
       if (auth) {
         const pageToken = url.searchParams.get('firebasePageToken') || undefined;
         const listResult = await auth.listUsers(1000, pageToken);
-        // Firebase Admin SDK v14 returns users as iterable
-        const usersArray = Array.isArray(listResult.users) ? listResult.users : [];
+        const usersArray = Array.isArray(listResult?.users) ? listResult.users : [];
         firebaseUsers = usersArray;
-        firebaseNextPageToken = listResult.pageToken || undefined;
+        firebaseNextPageToken = listResult?.pageToken || undefined;
       }
     } catch (err: any) {
       console.error('[Admin Users] Firebase listUsers failed:', err?.message, err?.code);
@@ -80,8 +87,8 @@ export async function GET(req: NextRequest) {
         title: profile?.title || null,
         role: profile?.role || config.detectRole(userEmail),
         isBanned: profile?.isBanned || false,
-        banReason: (profile as any).banReason || null,
-        bannedBy: (profile as any).bannedBy || null,
+        banReason: profile?.banReason || null,
+        bannedBy: profile?.bannedBy || null,
         isCR: profile?.isCR || false,
         isACR: profile?.isACR || false,
         department: profile?.department || null,
@@ -93,7 +100,7 @@ export async function GET(req: NextRequest) {
         section: profile?.section || null,
         hasProfile: !!profile,
         lastSignIn: fu.lastSignInTime || null,
-        createdAt: profile?.createdAt?.toISOString() || fu.metadata?.creationTime || null,
+        createdAt: profile?.createdAt?.toISOString?.() || fu.metadata?.creationTime || null,
         providers: fu.providerData?.map((p: any) => p.providerId) || [],
         customPermissions: profile?.customPermissions || {},
       });
@@ -108,8 +115,8 @@ export async function GET(req: NextRequest) {
           title: profile.title || null,
           role: profile.role || 'user',
           isBanned: profile.isBanned || false,
-          banReason: (profile as any).banReason || null,
-          bannedBy: (profile as any).bannedBy || null,
+          banReason: profile.banReason || null,
+          bannedBy: profile.bannedBy || null,
           isCR: profile.isCR || false,
           isACR: profile.isACR || false,
           department: profile.department || null,
@@ -121,7 +128,7 @@ export async function GET(req: NextRequest) {
           section: profile.section || null,
           hasProfile: true,
           lastSignIn: null,
-          createdAt: profile.createdAt?.toISOString() || null,
+          createdAt: profile.createdAt?.toISOString?.() || null,
           providers: [],
           customPermissions: profile.customPermissions || {},
         });
