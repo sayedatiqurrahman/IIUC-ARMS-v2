@@ -878,7 +878,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   onSaveDraft: (items: ExamRoutineItem[]) => void;
   onBack: () => void;
 }) {
-  const { confirm, ConfirmModal } = useConfirm();
+  const { confirm, confirmDialog } = useConfirm();
   const [step, setStep] = useState<ExamAllStep>('setup');
   const [sessionVal, setSessionVal] = useState('');
   const [department, setDepartment] = useState('qsis');
@@ -1305,7 +1305,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
           </div>
         </div>
       )}
-      {<ConfirmModal />}
+      {confirmDialog}
     </>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 interface ConfirmOptions {
   title?: string;
@@ -12,18 +12,17 @@ interface ConfirmOptions {
 
 interface ConfirmState extends ConfirmOptions {
   open: boolean;
-  resolve: ((value: boolean) => void) | null;
 }
 
 export function useConfirm() {
-  const [state, setState] = useState<ConfirmState>({ open: false, message: '', resolve: null });
+  const [state, setState] = useState<ConfirmState>({ open: false, message: '' });
   const resolveRef = useRef<((value: boolean) => void) | null>(null);
 
   const confirm = useCallback((options: ConfirmOptions | string): Promise<boolean> => {
     const opts = typeof options === 'string' ? { message: options } : options;
     return new Promise<boolean>((resolve) => {
       resolveRef.current = resolve;
-      setState({ ...opts, open: true, resolve });
+      setState({ ...opts, open: true });
     });
   }, []);
 
@@ -32,25 +31,22 @@ export function useConfirm() {
       resolveRef.current(result);
       resolveRef.current = null;
     }
-    setState(s => ({ ...s, open: false, resolve: null }));
+    setState(s => ({ ...s, open: false }));
   }, []);
 
-  function ConfirmModal() {
-    if (!state.open) return <></>;
-    return (
-      <ConfirmModalUI
-        title={state.title}
-        message={state.message}
-        confirmLabel={state.confirmLabel}
-        cancelLabel={state.cancelLabel}
-        danger={state.danger}
-        onConfirm={() => handleClose(true)}
-        onCancel={() => handleClose(false)}
-      />
-    );
-  }
+  const confirmDialog = state.open ? (
+    <ConfirmModalUI
+      title={state.title}
+      message={state.message}
+      confirmLabel={state.confirmLabel}
+      cancelLabel={state.cancelLabel}
+      danger={state.danger}
+      onConfirm={() => handleClose(true)}
+      onCancel={() => handleClose(false)}
+    />
+  ) : null;
 
-  return { confirm, ConfirmModal };
+  return { confirm, confirmDialog };
 }
 
 function ConfirmModalUI({ title, message, confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false, onConfirm, onCancel }: {

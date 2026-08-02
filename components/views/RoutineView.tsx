@@ -342,7 +342,7 @@ type ViewMode = 'manager' | 'preview' | 'builder' | 'allBranch';
 export default function RoutineView() {
   const router = useRouter();
   const { data: session } = useSession();
-  const { confirm, ConfirmModal } = useConfirm();
+  const { confirm, confirmDialog } = useConfirm();
   const routineData = useAppStore(s => s.routineData);
   const routineLoading = useAppStore(s => s.routineLoading);
   const loadRoutine = useAppStore(s => s.loadRoutine);
@@ -866,7 +866,7 @@ export default function RoutineView() {
           onBack={() => setViewMode('manager')}
         />
       )}
-      {<ConfirmModal />}
+      {confirmDialog}
     </section>
   );
 }
@@ -882,7 +882,7 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
   onPublish: (routines: RoutineItem[]) => void;
   onBack: () => void;
 }) {
-  const { confirm, ConfirmModal } = useConfirm();
+  const { confirm, confirmDialog } = useConfirm();
   const [draft, setDraft] = useState<AllSemesterDraft>(() => {
     const existing = loadAllSemDraft();
     if (existing) {
@@ -1598,7 +1598,7 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
           )}
         </div>
       </div>
-      {<ConfirmModal />}
+      {confirmDialog}
     </>
   );
 }

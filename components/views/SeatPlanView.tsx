@@ -68,7 +68,7 @@ function getDefaultSession(): string {
 
 export default function SeatPlanView() {
   const { data: session } = useSession();
-  const { confirm, ConfirmModal } = useConfirm();
+  const { confirm, confirmDialog } = useConfirm();
   const profile = useAppStore(s => s.profile);
 
   const email = session?.user?.email || profile.email || '';
@@ -1096,7 +1096,7 @@ export default function SeatPlanView() {
           )}
         </div>
       )}
-      {<ConfirmModal />}
+      {confirmDialog}
     </section>
   );
 }

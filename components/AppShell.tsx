@@ -25,7 +25,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [onboardingDone, setOnboardingDone] = useState(false);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { confirm, ConfirmModal } = useConfirm();
+  const { confirm, confirmDialog } = useConfirm();
   const confirmRef = useRef(confirm);
   confirmRef.current = confirm;
 
@@ -540,7 +540,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* LOGIN MODAL */}
       <LoginModal isOpen={loginModalOpen} onClose={() => setLoginModalOpen(false)} />
-      {<ConfirmModal />}
+      {confirmDialog}
     </div>
   );
 }

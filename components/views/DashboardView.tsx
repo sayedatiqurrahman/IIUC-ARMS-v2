@@ -21,7 +21,7 @@ function extractUniversityId(email: string): string {
 export default function DashboardView() {
   const router = useRouter();
   const { data: session } = useSession();
-  const { confirm, ConfirmModal } = useConfirm();
+  const { confirm, confirmDialog } = useConfirm();
   const profile = useAppStore(s => s.profile);
   const updateProfile = useAppStore(s => s.updateProfile);
   const recentReads = useAppStore(s => s.recentReads);
@@ -1272,14 +1272,14 @@ export default function DashboardView() {
           </div>
         </div>
       )}
-      {<ConfirmModal />}
+      {confirmDialog}
     </section>
   );
 }
 
 /* ─── Teacher Management Section (for admin/teacher/manager) ─── */
 function TeacherInfoSection({ email, profile }: { email: string; profile: any }) {
-  const { confirm, ConfirmModal } = useConfirm();
+  const { confirm, confirmDialog } = useConfirm();
   const effectiveRole = config.getEffectiveRole(email, profile.role);
   const isAdmin = effectiveRole === 'admin';
   const myDept = profile.department || '';
@@ -1554,7 +1554,7 @@ function TeacherInfoSection({ email, profile }: { email: string; profile: any })
           <i className="fas fa-plus-circle mr-2"></i>Add Your Teacher Info
         </button>
       )}
-      {<ConfirmModal />}
+      {confirmDialog}
     </div>
   );
 }

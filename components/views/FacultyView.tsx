@@ -24,7 +24,7 @@ interface FacultyMember {
 
 export default function FacultyView() {
   const { data: session } = useSession();
-  const { confirm, ConfirmModal } = useConfirm();
+  const { confirm, confirmDialog } = useConfirm();
   const profile = useAppStore(s => s.profile);
   const email = session?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
@@ -333,7 +333,7 @@ export default function FacultyView() {
           );
         })
       )}
-      {<ConfirmModal />}
+      {confirmDialog}
     </section>
   );
 }

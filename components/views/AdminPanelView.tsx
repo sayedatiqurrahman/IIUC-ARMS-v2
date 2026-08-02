@@ -911,7 +911,7 @@ function TelegramTab({ isOwner }: { isOwner: boolean }) {
 
 export default function AdminPanelView() {
   const { data: session } = useSession();
-  const { confirm, ConfirmModal } = useConfirm();
+  const { confirm, confirmDialog } = useConfirm();
   const router = useRouter();
   const profile = useAppStore(s => s.profile);
 
@@ -2039,7 +2039,7 @@ export default function AdminPanelView() {
           })}
         </div>
       )}
-      {<ConfirmModal />}
+      {confirmDialog}
     </section>
   );
 }
