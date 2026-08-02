@@ -9,6 +9,7 @@ import { ExamSlot, DEFAULT_EXAM_SLOTS, loadExamSlots, saveExamSlots, getEnabledS
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import CustomSelect from '@/components/CustomSelect';
 import { FACULTIES, findDepartment } from '@/lib/departments';
+import { useConfirm } from '@/components/ConfirmModal';
 
 function getDefaultSession(): string {
   const now = new Date();
@@ -877,6 +878,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   onSaveDraft: (items: ExamRoutineItem[]) => void;
   onBack: () => void;
 }) {
+  const { confirm, ConfirmModal } = useConfirm();
   const [step, setStep] = useState<ExamAllStep>('setup');
   const [sessionVal, setSessionVal] = useState('');
   const [department, setDepartment] = useState('qsis');
@@ -1021,10 +1023,10 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
     return items;
   };
 
-  const handleSaveDraftAll = () => {
+  const handleSaveDraftAll = async () => {
     const items = buildAllItems();
     if (!items) return;
-    if (!confirm(`Save ${items.length} exam routines as draft?`)) return;
+    if (!await confirm({ message: `Save ${items.length} exam routines as draft?`, title: 'Save Draft' })) return;
     onSaveDraft(items);
     showToast(`${items.length} exam routines saved as draft!`, 'success');
     setShowPublishMenu(false);
@@ -1032,14 +1034,14 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   const handleSaveToCloudAll = async () => {
     const items = buildAllItems();
     if (!items) return;
-    if (!confirm(`Save ${items.length} exam routines to cloud? (Private)`)) return;
+    if (!await confirm({ message: `Save ${items.length} exam routines to cloud? (Private)`, title: 'Save to Cloud' })) return;
     await onSaveToCloud(items);
     setShowPublishMenu(false);
   };
   const handlePublishAll = async () => {
     const items = buildAllItems();
     if (!items) return;
-    if (!confirm(`Publish ${items.length} exam routines? (Visible to all students)`)) return;
+    if (!await confirm({ message: `Publish ${items.length} exam routines? (Visible to all students)`, title: 'Publish Exam Routines' })) return;
     await onPublish(items);
     setShowPublishMenu(false);
   };
@@ -1303,6 +1305,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
           </div>
         </div>
       )}
+      {<ConfirmModal />}
     </>
   );
 }

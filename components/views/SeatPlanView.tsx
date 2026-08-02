@@ -9,6 +9,7 @@ import { ExamSlot, loadExamSlots, getEnabledSlots } from '@/lib/exam-routine-con
 import CustomSelect from '@/components/CustomSelect';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import { FACULTIES, findDepartment } from '@/lib/departments';
+import { useConfirm } from '@/components/ConfirmModal';
 
 interface SeatPlanEntry {
   semester: string;
@@ -67,6 +68,7 @@ function getDefaultSession(): string {
 
 export default function SeatPlanView() {
   const { data: session } = useSession();
+  const { confirm, ConfirmModal } = useConfirm();
   const profile = useAppStore(s => s.profile);
 
   const email = session?.user?.email || profile.email || '';
@@ -518,7 +520,7 @@ export default function SeatPlanView() {
   async function handleSaveToCloud() {
     const missing = getMissingSemesters();
     if (missing.length > 0) {
-      if (!confirm(`Warning: ${missing.length} semester(s) have no room assignments:\n${missing.join(', ')}\n\nSave anyway?`)) return;
+      if (!await confirm({ message: `Warning: ${missing.length} semester(s) have no room assignments:\n${missing.join(', ')}\n\nSave anyway?`, title: 'Missing Rooms' })) return;
     }
     const draft = buildDraft('saved');
     draft.publishedBy = { name: profile.name || email.split('@')[0], title: profile.title, email };
@@ -534,7 +536,7 @@ export default function SeatPlanView() {
   async function handlePublish() {
     const missing = getMissingSemesters();
     if (missing.length > 0) {
-      if (!confirm(`Warning: ${missing.length} semester(s) have no room assignments:\n${missing.join(', ')}\n\nPublish anyway? Students in these semesters won't see seat info.`)) return;
+      if (!await confirm({ message: `Warning: ${missing.length} semester(s) have no room assignments:\n${missing.join(', ')}\n\nPublish anyway? Students in these semesters won't see seat info.`, title: 'Missing Rooms' })) return;
     }
     const draft = buildDraft('published');
     draft.published = true;
@@ -1094,6 +1096,7 @@ export default function SeatPlanView() {
           )}
         </div>
       )}
+      {<ConfirmModal />}
     </section>
   );
 }

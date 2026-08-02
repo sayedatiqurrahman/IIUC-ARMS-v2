@@ -9,10 +9,11 @@ import LoginModal from '@/components/LoginModal';
 import UploadModal from '@/components/UploadModal';
 import PdfViewer from '@/components/PdfViewer';
 import OnboardingModal, { getOnboardingData, type OnboardingData } from '@/components/OnboardingModal';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import { config } from '@/lib/config';
 import { checkAndBustCache, forceResetApp } from '@/lib/cache';
+import { useConfirm } from '@/components/ConfirmModal';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -24,6 +25,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [onboardingDone, setOnboardingDone] = useState(false);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { confirm, ConfirmModal } = useConfirm();
+  const confirmRef = useRef(confirm);
+  confirmRef.current = confirm;
 
   const goHome = useAppStore(s => s.goHome);
   const setUploadOpen = useAppStore(s => s.setUploadOpen);
@@ -116,10 +120,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Ctrl+Shift+R for force reset
   useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
+    async function handleKey(e: KeyboardEvent) {
       if (e.ctrlKey && e.shiftKey && e.key === 'R') {
         e.preventDefault();
-        if (window.confirm('Reset App? This will clear all cached data and reload.')) {
+        if (await confirmRef.current({ message: 'Reset App? This will clear all cached data and reload.', danger: true, title: 'Force Reset' })) {
           forceResetApp();
         }
       }
@@ -369,7 +373,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </div>
               {/* Reset App */}
               <button
-                onClick={() => { if (window.confirm('Reset App? This will clear all cached data and reload.')) forceResetApp(); }}
+                onClick={async () => { if (await confirm({ message: 'Reset App? This will clear all cached data and reload.', danger: true, title: 'Force Reset' })) forceResetApp(); }}
                 className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer text-[0.8rem] font-medium"
               >
                 <i className="fas fa-trash-alt"></i> Reset App <span className="text-[0.62rem] opacity-60">(Ctrl+Shift+R)</span>
@@ -458,7 +462,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <p className="text-[0.72rem] text-dark-text2">&copy; {new Date().getFullYear()} IIUC-ARMS. All rights reserved.</p>
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
               <button
-                onClick={() => { if (window.confirm('Reset App? This will clear all cached data and reload.')) forceResetApp(); }}
+                onClick={async () => { if (await confirm({ message: 'Reset App? This will clear all cached data and reload.', danger: true, title: 'Force Reset' })) forceResetApp(); }}
                 className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-[0.65rem] sm:text-[0.72rem] text-red-400 hover:bg-red-500/20 transition-all cursor-pointer"
                 title="Force Reset App (Ctrl+Shift+R)"
               >
@@ -536,6 +540,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* LOGIN MODAL */}
       <LoginModal isOpen={loginModalOpen} onClose={() => setLoginModalOpen(false)} />
+      {<ConfirmModal />}
     </div>
   );
 }
