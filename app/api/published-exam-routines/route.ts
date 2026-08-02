@@ -33,23 +33,30 @@ export async function GET(req: NextRequest) {
       orderBy: { publishedAt: 'desc' },
     });
 
-    const result = routines.map((r: any) => ({
-      id: r.examId,
-      semester: r.semester,
-      session: r.session,
-      department: r.department,
-      examType: r.examType,
-      type: r.type || undefined,
-      rows: JSON.parse(r.rows || '[]'),
-      entries: r.type === 'seatplan' ? JSON.parse(r.rows || '[]') : undefined,
-      slots: JSON.parse(r.slots || '[]'),
-      status: r.status || 'published',
-      publishedBy: r.publishedBy ? { name: r.publishedBy, title: undefined, email: r.publishedByEmail || undefined } : undefined,
-      publishedAt: r.publishedAt.getTime(),
-      createdAt: r.publishedAt.getTime(),
-      published: (r.status || 'published') === 'published',
-      isDraft: false,
-    }));
+    const result = routines.map((r: any) => {
+      const parseJson = (val: any) => {
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'string') { try { return JSON.parse(val); } catch { return []; } }
+        return [];
+      };
+      return {
+        id: r.examId,
+        semester: r.semester,
+        session: r.session,
+        department: r.department,
+        examType: r.examType,
+        type: r.type || undefined,
+        rows: parseJson(r.rows),
+        entries: r.type === 'seatplan' ? parseJson(r.rows) : undefined,
+        slots: parseJson(r.slots),
+        status: r.status || 'published',
+        publishedBy: r.publishedBy ? { name: r.publishedBy, title: undefined, email: r.publishedByEmail || undefined } : undefined,
+        publishedAt: r.publishedAt.getTime(),
+        createdAt: r.publishedAt.getTime(),
+        published: (r.status || 'published') === 'published',
+        isDraft: false,
+      };
+    });
 
     return NextResponse.json({ success: true, routines: result, cleaned });
   } catch (err: any) {
@@ -107,8 +114,8 @@ export async function POST(req: NextRequest) {
           department: r.department || null,
           examType: r.examType || null,
           type: isSeatPlan ? 'seatplan' : null,
-          rows: JSON.stringify(isSeatPlan ? (r.entries || []) : (r.rows || [])),
-          slots: JSON.stringify(r.slots || []),
+          rows: isSeatPlan ? (r.entries || []) : (r.rows || []),
+          slots: r.slots || [],
           status: saveStatus,
           publishedBy: publisherName,
           publishedByEmail: email,

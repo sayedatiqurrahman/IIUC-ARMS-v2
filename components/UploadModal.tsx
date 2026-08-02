@@ -201,10 +201,6 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!githubToken || !!profile.githubToken;
 
   // PAT prompt skip tracking
-  const [patSkipCount, setPatSkipCount] = useState(() => {
-    if (typeof window === 'undefined') return 0;
-    return parseInt(localStorage.getItem('pat_skip_count') || '0');
-  });
   const [patDismissed, setPatDismissed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('pat_skip_dismissed') === '1';
@@ -312,13 +308,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   }
 
   function handleSkipPat() {
-    const next = patSkipCount + 1;
-    setPatSkipCount(next);
-    localStorage.setItem('pat_skip_count', String(next));
-    if (next >= 3) {
-      setPatDismissed(true);
-      localStorage.setItem('pat_skip_dismissed', '1');
-    }
+    setPatDismissed(true);
+    localStorage.setItem('pat_skip_dismissed', '1');
   }
 
   async function handleSavePat() {
@@ -791,7 +782,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                 </div>
                 <h3 className="text-[1rem] font-bold text-dark-text mb-1">Connect GitHub</h3>
                 <p className="text-[0.82rem] text-dark-text2 max-w-[360px] mx-auto">
-                  Add your <strong>Personal Access Token (PAT)</strong> so your name appears in the contributor list when you upload files.
+                  Add a <strong>Personal Access Token (PAT)</strong> to appear in the contributor list.
                 </p>
               </div>
 
@@ -812,31 +803,29 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                 >
                   {patSaving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : <><i className="fab fa-github mr-2"></i>Connect & Save</>}
                 </button>
-                <p className="text-[0.65rem] text-dark-text3 mt-2 text-center">
-                  <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline">Create a new PAT</a> with <strong>repo</strong> scope
-                </p>
-              </div>
 
-              <div className="flex gap-2">
-                <button
-                  className="flex-1 py-2.5 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.82rem] font-semibold cursor-pointer hover:bg-dark-bg2 transition-colors"
-                  onClick={handleSkipPat}
-                >
-                  {patSkipCount < 2 ? `Skip (${3 - patSkipCount - 1} left)` : 'Skip (1 left)'}
-                </button>
-                <button className="flex-1 py-2.5 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text3 text-[0.82rem] font-semibold cursor-pointer hover:bg-dark-bg2 transition-colors" onClick={onClose}>
-                  Cancel
-                </button>
-              </div>
-
-              {patSkipCount >= 2 && (
-                <div className="mt-3 px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
-                  <p className="text-[0.7rem] text-orange-400 text-center">
-                    <i className="fas fa-exclamation-triangle mr-1"></i>
-                    This is your last chance. After skipping, you won&apos;t see this prompt again. Your uploads won&apos;t show your identity.
-                  </p>
+                <div className="mt-3 p-2.5 rounded-lg bg-dark-bg border border-dark-border">
+                  <p className="text-[0.68rem] text-dark-text2 font-semibold mb-1.5"><i className="fas fa-info-circle text-qsis mr-1"></i>How to create a PAT:</p>
+                  <ol className="text-[0.62rem] text-dark-text3 space-y-1 list-decimal list-inside">
+                    <li>Go to <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline">github.com/settings/tokens/new</a></li>
+                    <li>Name it <strong className="text-dark-text2">iiuc-arms</strong> (or any name)</li>
+                    <li>Select <strong className="text-dark-text2">No expiration</strong> (or 90 days)</li>
+                    <li>Check <strong className="text-dark-text2">repo</strong> scope (full control)</li>
+                    <li>Click <strong className="text-dark-text2">Generate token</strong> and paste above</li>
+                  </ol>
                 </div>
-              )}
+              </div>
+
+              <button
+                className="w-full py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.82rem] font-semibold cursor-pointer hover:bg-dark-bg2 transition-colors"
+                onClick={handleSkipPat}
+              >
+                Continue without PAT
+              </button>
+              <p className="text-[0.62rem] text-dark-text3 mt-2 text-center">
+                <i className="fas fa-info-circle mr-1"></i>
+                You can still upload files, but your name won&apos;t appear in the contributor list.
+              </p>
             </div>
           ) : (
             <>
@@ -1243,9 +1232,29 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                     </button>
                   )}
                   {result?.needsPAT && (
-                    <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer" className="mt-3 block text-center py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white no-underline font-semibold text-[0.82rem]">
-                      <i className="fas fa-key mr-2"></i>Create Personal Access Token
-                    </a>
+                    <div className="mt-3">
+                      <p className="text-[0.7rem] text-dark-text2 mb-2">Paste your PAT to retry:</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          placeholder="ghp_xxxx or github_pat_xxxx"
+                          className="flex-1 px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] font-mono outline-none focus:border-qsis"
+                          value={patInputToken}
+                          onChange={e => setPatInputToken(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleSavePat()}
+                        />
+                        <button
+                          className="px-3 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
+                          onClick={handleSavePat}
+                          disabled={patSaving || !patInputToken.trim()}
+                        >
+                          {patSaving ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check"></i>}
+                        </button>
+                      </div>
+                      <p className="text-[0.6rem] text-dark-text3 mt-1.5">
+                        <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline">Create new PAT</a> → check <strong>repo</strong> scope → paste above
+                      </p>
+                    </div>
                   )}
                 </div>
               )}

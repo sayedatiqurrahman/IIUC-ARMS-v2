@@ -98,6 +98,7 @@ export default function SeatPlanView() {
   const [batchRollStart, setBatchRollStart] = useState('');
   const [batchRollEnd, setBatchRollEnd] = useState('');
   const [batchExcludeRolls, setBatchExcludeRolls] = useState('');
+  const [excludedSemesters, setExcludedSemesters] = useState<Set<string>>(new Set());
 
   const [studentSemester, setStudentSemester] = useState(profile.semester || '');
   const [studentDate, setStudentDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -394,6 +395,7 @@ export default function SeatPlanView() {
     const existing = new Set(entries.map(e => `${e.semester}:${e.date}:${e.slotId}:${e.gender}:${e.room}`));
     const newEntries: SeatPlanEntry[] = [];
     for (const sem of enabledSemesters) {
+      if (excludedSemesters.has(sem.id)) continue;
       for (const date of dates) {
         for (const slot of enabledSlots) {
           for (const g of ['male', 'female'] as const) {
@@ -450,6 +452,11 @@ export default function SeatPlanView() {
     return { id: editingId || `seatplan-${Date.now()}`, session: sessionVal, department, examType, entries, createdAt: Date.now(), published: false, status };
   }
 
+  function getMissingSemesters(): string[] {
+    const coveredSemesters = new Set(entries.filter(e => e.room).map(e => e.semester));
+    return enabledSemesters.filter(s => !excludedSemesters.has(s.id) && !coveredSemesters.has(s.id)).map(s => s.label);
+  }
+
   async function handleSaveDraft() {
     const draft = buildDraft('draft');
     const updated = localDrafts.filter(d => d.id !== draft.id);
@@ -460,6 +467,10 @@ export default function SeatPlanView() {
   }
 
   async function handleSaveToCloud() {
+    const missing = getMissingSemesters();
+    if (missing.length > 0) {
+      if (!confirm(`Warning: ${missing.length} semester(s) have no room assignments:\n${missing.join(', ')}\n\nSave anyway?`)) return;
+    }
     const draft = buildDraft('saved');
     draft.publishedBy = { name: profile.name || email.split('@')[0], title: profile.title, email };
     draft.publishedAt = Date.now();
@@ -472,6 +483,10 @@ export default function SeatPlanView() {
   }
 
   async function handlePublish() {
+    const missing = getMissingSemesters();
+    if (missing.length > 0) {
+      if (!confirm(`Warning: ${missing.length} semester(s) have no room assignments:\n${missing.join(', ')}\n\nPublish anyway? Students in these semesters won't see seat info.`)) return;
+    }
     const draft = buildDraft('published');
     draft.published = true;
     draft.publishedBy = { name: profile.name || email.split('@')[0], title: profile.title, email };
@@ -776,17 +791,32 @@ export default function SeatPlanView() {
                 <button onClick={addDateInput} className="routine-btn mt-2"><i className="fas fa-plus mr-1"></i>Add Date</button>
               </div>
               <h5 className="text-[0.82rem] font-semibold text-dark-text mb-2"><i className="fas fa-graduation-cap text-qsis mr-1"></i>Semesters</h5>
+              <p className="text-[0.68rem] text-dark-text3 mb-2">Uncheck to exclude from auto-fill. Manual entries still allowed.</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                {enabledSemesters.map(sem => (
-                  <div key={sem.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-qsis/10 border-qsis text-dark-text">
-                    <span className="w-4 h-4 rounded border bg-qsis border-qsis text-white flex items-center justify-center text-[0.6rem]"><i className="fas fa-check"></i></span>
-                    <span className="text-[0.78rem] font-semibold">{sem.label}</span>
-                    <span className="ml-auto flex gap-1">
-                      <span className="text-[0.5rem] px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold">MAZ</span>
-                      <span className="text-[0.5rem] px-1 py-0.5 rounded bg-pink-500/20 text-pink-400 font-bold">FAZ</span>
-                    </span>
-                  </div>
-                ))}
+                {enabledSemesters.map(sem => {
+                  const excluded = excludedSemesters.has(sem.id);
+                  return (
+                    <button
+                      key={sem.id}
+                      type="button"
+                      onClick={() => setExcludedSemesters(prev => {
+                        const next = new Set(prev);
+                        if (next.has(sem.id)) next.delete(sem.id); else next.add(sem.id);
+                        return next;
+                      })}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${excluded ? 'bg-dark-bg border-dark-border text-dark-text3' : 'bg-qsis/10 border-qsis text-dark-text'}`}
+                    >
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center text-[0.6rem] ${excluded ? 'border-dark-border bg-dark-bg' : 'bg-qsis border-qsis text-white'}`}>
+                        {!excluded && <i className="fas fa-check"></i>}
+                      </span>
+                      <span className="text-[0.78rem] font-semibold">{sem.label}</span>
+                      <span className="ml-auto flex gap-1">
+                        <span className="text-[0.5rem] px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold">MAZ</span>
+                        <span className="text-[0.5rem] px-1 py-0.5 rounded bg-pink-500/20 text-pink-400 font-bold">FAZ</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               <div className="flex items-center gap-3 mb-4">
                 <h5 className="text-[0.82rem] font-semibold text-dark-text"><i className="fas fa-users text-qsis mr-1"></i>Room Capacity</h5>

@@ -218,10 +218,17 @@ export async function POST(req: NextRequest) {
 
     // ── CONTRIBUTOR: Requires a PAT (installation tokens can't fork) ──
     if (token.startsWith('ghs_')) {
-      return NextResponse.json({
-        error: 'Contributors need a Personal Access Token to upload. Go to Dashboard → GitHub Connection → paste a PAT.',
-        code: 'NEEDS_PAT',
-      }, { status: 403 });
+      // Try bot token as fallback for non-owner contributors
+      const botToken = await getAppBotToken();
+      if (botToken) {
+        token = botToken;
+        // Bot upload — commit as bot, not as user
+      } else {
+        return NextResponse.json({
+          error: 'Contributors need a Personal Access Token to upload. Go to Dashboard → GitHub Connection → paste a PAT.',
+          code: 'NEEDS_PAT',
+        }, { status: 403 });
+      }
     }
 
     // Validate PAT by calling /user
