@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
     const perUserKey = `${action}File_users`;
     const allowedUsers = (perms[perUserKey] as string[]) || [];
     const hasUserGrant = allowedUsers.includes(email.toLowerCase());
-    const hasRoleGrant = await hasPermission(`${action}File`, effectiveRole, isCR);
+    const hasRoleGrant = await hasPermission(`${action}File`, effectiveRole, isCR, email);
 
     if (!hasUserGrant && !hasRoleGrant && !isOwner) {
       return NextResponse.json({ error: 'Permission denied. Ask admin to enable this action in Settings → Permissions.' }, { status: 403 });

@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
         lastSignIn: fu.lastSignInTime || null,
         createdAt: profile?.createdAt?.toISOString() || fu.metadata?.creationTime || null,
         providers: fu.providerData?.map((p: any) => p.providerId) || [],
+        customPermissions: profile?.customPermissions || {},
       });
     }
 
@@ -108,6 +109,7 @@ export async function GET(req: NextRequest) {
           lastSignIn: null,
           createdAt: profile.createdAt?.toISOString() || null,
           providers: [],
+          customPermissions: profile.customPermissions || {},
         });
       }
     });
@@ -146,7 +148,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { targetEmail, action } = body;
-    const validActions = ['ban', 'unban', 'setRole', 'toggleCR', 'toggleACR', 'grantPermission', 'revokePermission'];
+    const validActions = ['ban', 'unban', 'setRole', 'toggleCR', 'toggleACR', 'grantPermission', 'revokePermission', 'setCustomPermissions'];
     if (!targetEmail || !validActions.includes(action)) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
@@ -347,6 +349,20 @@ export async function POST(req: NextRequest) {
       });
       invalidatePermissionsCache();
       return NextResponse.json({ success: true, message: `Revoked "${permission}" from ${targetEmail}` });
+    }
+
+    // ─── SET CUSTOM PERMISSIONS (per-user scope) ───
+    if (action === 'setCustomPermissions') {
+      if (effectiveRole !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can set custom permissions' }, { status: 403 });
+      }
+      const { customPermissions } = body;
+      if (!customPermissions || typeof customPermissions !== 'object') {
+        return NextResponse.json({ error: 'customPermissions must be an object' }, { status: 400 });
+      }
+      const { setCustomPermissions } = await import('@/lib/permissions');
+      await setCustomPermissions(targetEmail, customPermissions);
+      return NextResponse.json({ success: true, message: `Updated custom permissions for ${targetEmail}` });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

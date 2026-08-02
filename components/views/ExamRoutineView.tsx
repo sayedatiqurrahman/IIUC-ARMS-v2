@@ -113,6 +113,7 @@ export default function ExamRoutineView() {
   const isOwner = config.ownerEmails.includes(email);
   const [canPublish, setCanPublish] = useState(false);
   const [canAllSemester, setCanAllSemester] = useState(false);
+  const [canSaveToGithub, setCanSaveToGithub] = useState(false);
 
   useEffect(() => {
     fetch('/api/settings/permissions')
@@ -122,9 +123,12 @@ export default function ExamRoutineView() {
         const perms = data.permissions || {};
         const role = config.getEffectiveRole(email, profile.role);
         const roleKey = profile.isCR ? 'cr' : role;
+        const customPerms = (profile as any).customPermissions || {};
         const allowed = perms.publishRoutine || ['admin', 'manager', 'teacher', 'cr'];
-        setCanPublish(isOwner || allowed.includes(roleKey));
+        setCanPublish(isOwner || customPerms.publishRoutine === true || allowed.includes(roleKey));
         setCanAllSemester(isOwner || ['admin', 'manager', 'teacher'].includes(role));
+        const ghAllowed = perms.saveCourseToGitHub || ['admin', 'manager', 'teacher', 'cr'];
+        setCanSaveToGithub(isOwner || customPerms.saveCourseToGitHub === true || ghAllowed.includes(roleKey));
       })
       .catch(() => {});
   }, [email, profile.role, profile.isCR, isOwner]);
@@ -365,7 +369,7 @@ export default function ExamRoutineView() {
           )}
         </div>
         {viewMode === 'manager' && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {canPublish && (
               <button onClick={() => setViewMode('slots')} className="routine-btn">
                 <i className="fas fa-cog mr-1"></i>Exam Slots
@@ -445,7 +449,7 @@ export default function ExamRoutineView() {
       {/* ═══════ BUILDER ═══════ */}
       {viewMode === 'builder' && (
         <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div>
               <label className="text-[0.7rem] text-dark-text2 block mb-1">Semester</label>
               <CustomSelect
@@ -540,9 +544,9 @@ export default function ExamRoutineView() {
             </table>
           </div>
 
-          <div className="flex items-center justify-between mt-4">
+          <div className="flex flex-wrap items-center gap-2 justify-between mt-4">
             <button onClick={addRow} className="routine-btn"><i className="fas fa-plus mr-1"></i>Add Date</button>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button onClick={saveDraft} className="routine-btn"><i className="fas fa-save mr-1"></i>Save Draft</button>
               {canPublish && (
                 <button onClick={async () => {
@@ -642,6 +646,7 @@ export default function ExamRoutineView() {
             const drafts = items.map(r => ({ ...r, isDraft: true, published: false, createdAt: Date.now() }));
             persistDrafts([...examRoutines, ...drafts]);
           }}
+          canSaveToGithub={canSaveToGithub}
           onBack={() => setViewMode('manager')}
         />
       )}
@@ -668,24 +673,24 @@ function ExamRoutineCard({ routine, slots, onView, onEdit, onPublish, onUnpublis
 
   return (
     <div className={`bg-dark-bg2 border rounded-xl p-4 ${isPublished ? 'border-green-500/30' : 'border-dark-border'}`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h4 className="text-[0.9rem] font-bold text-dark-text">{routine.examType} Exam</h4>
-            {isPublished && <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[0.65rem] font-semibold"><i className="fas fa-globe mr-0.5"></i>Published</span>}
-            {!isPublished && routine.status === 'saved' && <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[0.65rem] font-semibold"><i className="fas fa-cloud mr-0.5"></i>Saved to Cloud</span>}
-            {routine.isDraft && <span className="px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 text-[0.65rem] font-semibold">Draft</span>}
-          </div>
-          <p className="text-[0.75rem] text-dark-text2 mt-0.5">
-            {routine.semester} &bull; {routine.session} &bull; {deptInfo?.department.shortName || routine.department}
-          </p>
-          {routine.publishedBy && (
-            <p className="text-[0.68rem] text-dark-text3 mt-0.5">
-              <i className="fas fa-user-check mr-1"></i>{isPublished ? 'Published by' : 'Saved by'} {routine.publishedBy.name}{routine.publishedBy.title ? ` (${routine.publishedBy.title})` : ''}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-[0.9rem] font-bold text-dark-text">{routine.examType} Exam</h4>
+              {isPublished && <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[0.65rem] font-semibold"><i className="fas fa-globe mr-0.5"></i>Published</span>}
+              {!isPublished && routine.status === 'saved' && <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[0.65rem] font-semibold"><i className="fas fa-cloud mr-0.5"></i>Saved to Cloud</span>}
+              {routine.isDraft && <span className="px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 text-[0.65rem] font-semibold">Draft</span>}
+            </div>
+            <p className="text-[0.75rem] text-dark-text2 mt-0.5">
+              {routine.semester} &bull; {routine.session} &bull; {deptInfo?.department.shortName || routine.department}
             </p>
-          )}
-        </div>
-        <div className="flex gap-2">
+            {routine.publishedBy && (
+              <p className="text-[0.68rem] text-dark-text3 mt-0.5">
+                <i className="fas fa-user-check mr-1"></i>{isPublished ? 'Published by' : 'Saved by'} {routine.publishedBy.name}{routine.publishedBy.title ? ` (${routine.publishedBy.title})` : ''}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
           <button onClick={onView} className="routine-btn"><i className="fas fa-eye mr-1"></i>View</button>
           {onEdit && <button onClick={onEdit} className="routine-btn routine-btn-edit"><i className="fas fa-edit mr-1"></i>Edit</button>}
           {canManage && !isPublished && onPublish && <button onClick={onPublish} className="routine-btn routine-btn-primary"><i className="fas fa-globe mr-1"></i>Publish</button>}
@@ -866,7 +871,7 @@ interface ExamAllSemesterSem {
 }
 
 
-function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPublish, profile, email, onPublish, onSaveToCloud, onSaveDraft, onBack }: {
+function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPublish, profile, email, onPublish, onSaveToCloud, onSaveDraft, canSaveToGithub, onBack }: {
   examSlots: ExamSlot[];
   publishedRoutines: ExamRoutineItem[];
   examRoutines: ExamRoutineItem[];
@@ -876,6 +881,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   onPublish: (items: ExamRoutineItem[]) => Promise<void>;
   onSaveToCloud: (items: ExamRoutineItem[]) => Promise<void>;
   onSaveDraft: (items: ExamRoutineItem[]) => void;
+  canSaveToGithub: boolean;
   onBack: () => void;
 }) {
   const { confirm, confirmDialog } = useConfirm();
@@ -890,6 +896,9 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   );
   const [activeSemTab, setActiveSemTab] = useState(0);
   const [showPublishMenu, setShowPublishMenu] = useState(false);
+  const [courseSuggestionsIdx, setCourseSuggestionsIdx] = useState<string | null>(null);
+  const [courseSearch, setCourseSearch] = useState('');
+  const courseInputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!showPublishMenu) return;
@@ -898,9 +907,36 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
     return () => document.removeEventListener('click', handler);
   }, [showPublishMenu]);
 
+  useEffect(() => {
+    if (!courseSuggestionsIdx) return;
+    const handler = (e: MouseEvent) => {
+      if (courseInputRef.current && !courseInputRef.current.contains(e.target as Node)) {
+        setCourseSuggestionsIdx(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [courseSuggestionsIdx]);
+
   const enabledSlots = getEnabledSlots(examSlots);
   const semLabels = useMemo(() => config.semesters.reduce((acc, s) => { acc[s.id] = s.label; return acc; }, {} as Record<string, string>), []);
   const enabledSemesters = useMemo(() => semesters.filter(s => s.enabled), [semesters]);
+
+  const allCourses = useMemo(() => {
+    const map = new Map<string, { code: string; title: string }>();
+    for (const sem of semesters) {
+      for (const c of sem.courses) {
+        if (c.code && c.title && !map.has(c.code)) map.set(c.code, { code: c.code, title: c.title });
+      }
+    }
+    return Array.from(map.values());
+  }, [semesters]);
+
+  const filteredCourseSuggestions = useMemo(() => {
+    if (!courseSearch.trim()) return [];
+    const q = courseSearch.trim().toUpperCase();
+    return allCourses.filter(c => c.code.toUpperCase().includes(q) || c.title.toUpperCase().includes(q)).slice(0, 8);
+  }, [courseSearch, allCourses]);
 
   const loadSemesterCourses = useCallback(async (semName: string) => {
     try {
@@ -1057,12 +1093,12 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
 
   return (
     <>
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
         <div>
           <h3 className="text-[1.1rem] font-bold text-dark-text"><i className="fas fa-layer-group text-qsis mr-2"></i>All Semester Exam Routine</h3>
           <p className="text-[0.75rem] text-dark-text2 mt-0.5">3 simple steps — setup, courses, assign & publish</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {canPublish && (
             <div className="relative">
               <button onClick={(e) => { e.stopPropagation(); setShowPublishMenu(!showPublishMenu); }} className="routine-btn routine-btn-primary"><i className="fas fa-share-alt mr-1"></i>Publish All ({totalSections} semesters) <i className="fas fa-caret-down ml-1"></i></button>
@@ -1102,7 +1138,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
       {step === 'setup' && (
         <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5 mt-4">
           <h4 className="text-[0.9rem] font-bold text-dark-text mb-3"><i className="fas fa-cog text-qsis mr-2"></i>Exam Setup</h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div>
               <label className="text-[0.72rem] text-dark-text2 mb-1 block">Session</label>
               <input value={sessionVal} onChange={e => setSessionVal(e.target.value)} placeholder="e.g. Spring - 2026" className="w-full px-2 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
@@ -1123,7 +1159,8 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
 
           <h5 className="text-[0.82rem] font-semibold text-dark-text mb-2"><i className="fas fa-calendar-alt text-qsis mr-1"></i>Exam Dates</h5>
           <div className="bg-dark-bg border border-dark-border rounded-lg p-3 mb-4">
-            <table className="w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full">
               <thead>
                 <tr>
                   <th className="px-2 py-1.5 text-left text-[0.7rem] font-semibold text-dark-text2 border-b border-dark-border w-10">#</th>
@@ -1149,11 +1186,12 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
                 ))}
               </tbody>
             </table>
+            </div>
             <button onClick={addRow} className="routine-btn mt-2"><i className="fas fa-plus mr-1"></i>Add Date</button>
           </div>
 
           <h5 className="text-[0.82rem] font-semibold text-dark-text mb-2"><i className="fas fa-graduation-cap text-qsis mr-1"></i>Semesters</h5>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 mb-4">
             {config.semesters.map((cfgSem) => {
               const sem = semesters.find(s => s.name === cfgSem.id);
               if (!sem) return null;
@@ -1189,24 +1227,46 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
             <div key={sem.name}>
               <div className="space-y-1.5 mb-3">
                 {sem.courses.length === 0 && <p className="text-[0.72rem] text-dark-text3 p-3 rounded bg-dark-bg border border-dark-border"><i className="fas fa-spinner fa-spin mr-1"></i>Loading courses...</p>}
-                {sem.courses.map((c, cIdx) => (
-                  <div key={cIdx} className={`flex items-center gap-2 p-2 rounded-lg border ${c.fromGithub ? 'bg-dark-bg border-dark-border' : 'bg-yellow-500/5 border-yellow-500/30'}`}>
-                    <input value={c.code} onChange={e => updateSemCourse(sem.name, cIdx, 'code', e.target.value)} placeholder="Code (e.g. QSM-3602)" className="w-32 px-2 py-1 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
-                    <input value={c.title} onChange={e => updateSemCourse(sem.name, cIdx, 'title', e.target.value)} placeholder="Title" className="flex-1 px-2 py-1 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
-                    {c.fromGithub ? <i className="fas fa-check-circle text-green-400 text-[0.68rem]"></i> : <i className="fas fa-cloud-upload-alt text-yellow-400 text-[0.68rem]"></i>}
-                    <button onClick={() => removeSemCourse(sem.name, cIdx)} className="text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer text-[0.68rem]"><i className="fas fa-trash"></i></button>
-                  </div>
-                ))}
+                {sem.courses.map((c, cIdx) => {
+                  const suggestKey = `${sem.name}:${cIdx}`;
+                  const isActive = courseSuggestionsIdx === suggestKey;
+                  const hasExactMatch = isActive && c.code.trim() && allCourses.some(ac => ac.code.toUpperCase() === c.code.trim().toUpperCase());
+                  return (
+                    <div key={cIdx} className={`flex items-center gap-2 p-2 rounded-lg border ${c.fromGithub ? 'bg-dark-bg border-dark-border' : 'bg-yellow-500/5 border-yellow-500/30'}`} ref={isActive ? courseInputRef : undefined}>
+                      <div className="relative">
+                        <input value={c.code} placeholder="Code (e.g. QSM-3602)" className="w-32 px-2 py-1 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.75rem] outline-none focus:border-qsis"
+                          onFocus={() => { setCourseSuggestionsIdx(suggestKey); setCourseSearch(c.code); }}
+                          onChange={e => { updateSemCourse(sem.name, cIdx, 'code', e.target.value); setCourseSearch(e.target.value); setCourseSuggestionsIdx(suggestKey); }} />
+                        {isActive && courseSearch.trim() && filteredCourseSuggestions.length > 0 && (
+                          <div className="absolute z-50 top-full left-0 mt-1 w-64 bg-dark-bg2 border border-dark-border rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                            {filteredCourseSuggestions.map((sc, si) => (
+                              <button key={si} className="w-full text-left px-3 py-1.5 text-[0.72rem] hover:bg-qsis/10 text-dark-text flex justify-between items-center border-none bg-transparent cursor-pointer" onClick={() => { updateSemCourse(sem.name, cIdx, 'code', sc.code); updateSemCourse(sem.name, cIdx, 'title', sc.title); setCourseSuggestionsIdx(null); setCourseSearch(''); }}>
+                                <span className="font-mono font-semibold">{sc.code}</span>
+                                <span className="text-dark-text3 truncate ml-2">{sc.title}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <input value={c.title} onChange={e => updateSemCourse(sem.name, cIdx, 'title', e.target.value)} placeholder="Title" className="flex-1 px-2 py-1 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.75rem] outline-none focus:border-qsis" />
+                      {!c.fromGithub && c.code.trim() && !hasExactMatch && c.title.trim() && canSaveToGithub && (
+                        <button onClick={() => saveCourseToGitHub(sem.name, c.code, c.title).then(() => { setSemesters(prev => prev.map(s => s.name !== sem.name ? s : { ...s, courses: s.courses.map((cc, j) => j === cIdx ? { ...cc, fromGithub: true } : cc) })); showToast('Saved to GitHub', 'success'); })} className="text-green-400 hover:text-green-300 bg-transparent border-none cursor-pointer text-[0.68rem] whitespace-nowrap" title="Save to GitHub"><i className="fab fa-github mr-0.5"></i>Save</button>
+                      )}
+                      {c.fromGithub ? <i className="fas fa-check-circle text-green-400 text-[0.68rem]"></i> : <i className="fas fa-cloud-upload-alt text-yellow-400 text-[0.68rem]"></i>}
+                      <button onClick={() => removeSemCourse(sem.name, cIdx)} className="text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer text-[0.68rem]"><i className="fas fa-trash"></i></button>
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2 mb-2">
                 <button onClick={() => addSemCourse(sem.name)} className="routine-btn"><i className="fas fa-plus mr-1"></i>Add Course</button>
-                {sem.courses.some(c => c.code && c.title && !c.fromGithub) && (
+                {canSaveToGithub && sem.courses.some(c => c.code && c.title && !c.fromGithub) && (
                   <button onClick={() => { sem.courses.filter(c => c.code && c.title && !c.fromGithub).forEach(c => saveCourseToGitHub(sem.name, c.code, c.title)); setSemesters(prev => prev.map(s => s.name !== sem.name ? s : { ...s, courses: s.courses.map(c => (c.code && c.title && !c.fromGithub) ? { ...c, fromGithub: true } : c) })); showToast('Courses saved to GitHub', 'success'); }} className="routine-btn routine-btn-accent"><i className="fab fa-github mr-1"></i>Save to GitHub</button>
                 )}
               </div>
             </div>
           ))}
-          <div className="flex justify-between mt-4">
+          <div className="flex flex-wrap gap-2 justify-between mt-4">
             <button onClick={() => setStep('setup')} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
             <button onClick={() => setStep('assign')} className="routine-btn routine-btn-primary"><i className="fas fa-arrow-right mr-1"></i>Next: Assign & Publish</button>
           </div>
@@ -1227,7 +1287,8 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
                   <span className="text-[0.72rem] text-dark-text3">{row.day}</span>
                 </div>
               </div>
-              <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${enabledSlots.length}, 1fr)` }}>
+              <div className="overflow-x-auto">
+                <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${enabledSlots.length}, 1fr)` }}>
                 {enabledSlots.map(slot => {
                   const assignedSem = row.semesterSlots?.[slot.id] || '';
                   const semData = enabledSemesters.find(s => s.name === assignedSem);
@@ -1275,10 +1336,11 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
                   );
                 })}
               </div>
+              </div>
             </div>
           ))}
 
-          <div className="flex justify-between mt-4">
+          <div className="flex flex-wrap gap-2 justify-between mt-4">
             <button onClick={() => setStep('courses')} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
             <div className="relative">
               <button onClick={(e) => { e.stopPropagation(); setShowPublishMenu(!showPublishMenu); }} className="routine-btn routine-btn-primary">

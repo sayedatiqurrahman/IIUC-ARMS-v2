@@ -17,6 +17,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   renameFile: ['admin'],
   deleteFile: ['admin'],
   editLinks: ['admin', 'manager', 'teacher', 'cr'],
+  saveCourseToGitHub: ['admin', 'manager', 'teacher', 'cr'],
 };
 
 let cachedPermissions: Record<string, string[]> | null = null;
@@ -46,11 +47,40 @@ export function invalidatePermissionsCache() {
   lastFetch = 0;
 }
 
-export async function hasPermission(action: string, role: string, isCR: boolean = false): Promise<boolean> {
+export async function hasPermission(action: string, role: string, isCR: boolean = false, email?: string): Promise<boolean> {
   const perms = await getPermissions();
   const allowedRoles = perms[action] || DEFAULT_PERMISSIONS[action] || [];
   const roleKey = isCR ? 'cr' : role;
-  return allowedRoles.includes(roleKey);
+  if (allowedRoles.includes(roleKey)) return true;
+
+  if (email) {
+    const custom = await getCustomPermissions(email);
+    if (custom[action] === true) return true;
+
+    const perUserKey = `${action}_users`;
+    const allowedUsers = (perms[perUserKey] as string[]) || [];
+    if (allowedUsers.includes(email.toLowerCase())) return true;
+  }
+
+  return false;
+}
+
+export async function getCustomPermissions(email: string): Promise<Record<string, boolean>> {
+  try {
+    const profile = await prisma.profile.findUnique({ where: { userId: email } });
+    return (profile?.customPermissions as Record<string, boolean>) || {};
+  } catch {
+    return {};
+  }
+}
+
+export async function setCustomPermissions(email: string, permissions: Record<string, boolean>): Promise<void> {
+  await prisma.profile.upsert({
+    where: { userId: email },
+    create: { userId: email, email, customPermissions: permissions },
+    update: { customPermissions: permissions },
+  });
+  invalidatePermissionsCache();
 }
 
 function semesterIndex(semId: string): number {
@@ -74,7 +104,7 @@ export async function canAddCourseToSemester(
     return { allowed: true };
   }
 
-  if (!(await hasPermission('addCourse', role, isCR))) {
+  if (!(await hasPermission('addCourse', role, isCR, email))) {
     return { allowed: false, reason: 'You do not have permission to add courses.' };
   }
 

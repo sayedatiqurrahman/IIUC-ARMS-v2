@@ -554,12 +554,12 @@ export default function SeatPlanView() {
 
   return (
     <section className="mb-5">
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
         <div>
           <h2 className="text-[1.3rem] font-bold text-dark-text"><i className="fas fa-chair text-qsis mr-2"></i>Seat Plan</h2>
           <p className="text-[0.72rem] text-dark-text2 mt-0.5">Find your exam room or manage seat assignments</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {viewMode !== 'student' && (
             <button onClick={() => setViewMode('student')} className="routine-btn"><i className="fas fa-search mr-1"></i>Find My Seat</button>
           )}
@@ -775,7 +775,7 @@ export default function SeatPlanView() {
             const pDept = findDepartment(plan.department);
             return (
               <div key={plan.id} className={`bg-dark-bg2 border rounded-xl p-4 ${isPublished ? 'border-green-500/30' : isCloudSaved ? 'border-blue-500/30' : 'border-dark-border'}`}>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="text-[0.9rem] font-bold text-dark-text">{plan.examType} Seat Plan</h4>
@@ -786,7 +786,7 @@ export default function SeatPlanView() {
                     <p className="text-[0.75rem] text-dark-text2 mt-0.5">{plan.session} &bull; {pDept?.department.shortName || plan.department} &bull; {plan.entries.filter(e => e.room).length} assignments</p>
                     {plan.publishedBy && <p className="text-[0.68rem] text-dark-text3 mt-0.5"><i className="fas fa-user-check mr-1"></i>{plan.publishedBy.name}</p>}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {canEdit && <button onClick={() => editPlan(plan)} className="routine-btn" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6' }}><i className="fas fa-edit mr-1"></i>Edit</button>}
                     {canEdit && isPublished && <button onClick={() => unpublishPlan(plan.id)} className="routine-btn text-yellow-400"><i className="fas fa-eye-slash"></i></button>}
                     {canEdit && <button onClick={() => deleteLocalPlan(plan.id)} className="routine-btn text-red-400"><i className="fas fa-trash"></i></button>}
@@ -816,7 +816,7 @@ export default function SeatPlanView() {
           {builderStep === 1 && (
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5 mt-4">
               <h4 className="text-[0.9rem] font-bold text-dark-text mb-3"><i className="fas fa-cog text-qsis mr-2"></i>Setup</h4>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
                 <div>
                   <label className="text-[0.72rem] text-dark-text2 mb-1 block">Session</label>
                   <input value={sessionVal} onChange={e => setSessionVal(e.target.value)} placeholder="e.g. Spring - 2026" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
@@ -843,7 +843,7 @@ export default function SeatPlanView() {
               </div>
               <h5 className="text-[0.82rem] font-semibold text-dark-text mb-2"><i className="fas fa-graduation-cap text-qsis mr-1"></i>Semesters</h5>
               <p className="text-[0.68rem] text-dark-text3 mb-2">Uncheck to exclude from auto-fill. Manual entries still allowed.</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                 {enabledSemesters.map(sem => {
                   const excluded = excludedSemesters.has(sem.id);
                   return (
@@ -907,7 +907,7 @@ export default function SeatPlanView() {
               )}
               {showBatchForm ? (
                 <div className="p-3 rounded-lg bg-dark-bg border border-dark-border mb-3">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 mb-2">
                     <input value={batchName} onChange={e => setBatchName(e.target.value)} placeholder="Batch name (e.g. Q23)" className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
                     <input value={batchPrefix} onChange={e => setBatchPrefix(e.target.value)} placeholder="Prefix (e.g. Q23)" className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
                     <input value={batchRollStart} onChange={e => setBatchRollStart(e.target.value)} placeholder="Roll start (e.g. 1)" className="px-2 py-1.5 rounded border border-dark-border bg-dark-bg2 text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
@@ -1037,7 +1037,7 @@ export default function SeatPlanView() {
               {dateInputs.filter(d => d.trim()).length === 0 && (
                 <div className="text-center py-8 text-dark-text3"><i className="fas fa-calendar-plus text-2xl mb-2 block"></i><p className="text-[0.82rem]">Add dates in Step 1 first</p></div>
               )}
-              <div className="flex justify-between mt-4">
+              <div className="flex flex-wrap gap-2 justify-between mt-4">
                 <button onClick={() => setBuilderStep(1)} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
                 <button onClick={() => { if (summaryRows.length === 0) { showToast('Add room assignments', 'error'); return; } setBuilderStep(3); }} className="routine-btn routine-btn-primary"><i className="fas fa-arrow-right mr-1"></i>Next: Review</button>
               </div>
@@ -1076,7 +1076,7 @@ export default function SeatPlanView() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between mt-4">
+              <div className="flex flex-wrap items-center gap-2 justify-between mt-4">
                 <button onClick={() => setBuilderStep(2)} className="routine-btn"><i className="fas fa-arrow-left mr-1"></i>Back</button>
                 <div className="relative">
                   <button onClick={e => { e.stopPropagation(); setShowPublishMenu(!showPublishMenu); }} className="routine-btn routine-btn-primary" disabled={summaryRows.length === 0}>

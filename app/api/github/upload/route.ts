@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     if (!token && userEmail) {
       const role = config.getEffectiveRole(userEmail);
       const isCR = false; // simplified — CR check happens elsewhere
-      if (await hasPermission('uploadFile', role, isCR)) {
+      if (await hasPermission('uploadFile', role, isCR, userEmail)) {
         const botToken = await getAppBotToken();
         if (botToken) {
           token = botToken;

@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
     const isCR = profile?.isCR || false;
 
-    const hasUserGrant = await hasPermission('editLinks', effectiveRole, isCR);
+    const hasUserGrant = await hasPermission('editLinks', effectiveRole, isCR, email);
     if (!hasUserGrant && !isOwner) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }

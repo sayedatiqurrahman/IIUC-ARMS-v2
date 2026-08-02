@@ -42,8 +42,9 @@ model Profile {
   hideWhatsapp    Boolean  @default(false)
   hideUniversityId Boolean @default(false)
   hideSemester    Boolean  @default(false)
-  hideEmail       Boolean  @default(false)
-  hideCompany     Boolean  @default(false)
+  hideEmail       Boolean @default(false)
+  hideCompany     Boolean @default(false)
+  customPermissions Json?  @default("{}")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

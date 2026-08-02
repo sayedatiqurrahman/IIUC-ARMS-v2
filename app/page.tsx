@@ -100,7 +100,9 @@ export default function BrowsePage() {
         const data = await res.json();
         if (!data.success) return;
         const perms = data.permissions || {};
+        const customPerms = (profile as any).customPermissions || {};
         const check = (action: string) => {
+          if (customPerms[action] === true) return true;
           const perUserKey = `${action}_users`;
           const allowedUsers = perms[perUserKey] || [];
           if (allowedUsers.includes(email.toLowerCase())) return true;

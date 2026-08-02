@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     const isCR = profile?.isCR || false;
     const isACR = profile?.isACR || false;
 
-    if (!(await hasPermission('addCourse', role, isCR))) {
+    if (!(await hasPermission('addCourse', role, isCR, email))) {
       return NextResponse.json({ error: 'You do not have permission to add courses. Please contact your CR, ACR, teacher, manager, or admin.' }, { status: 403 });
     }
 
@@ -235,7 +235,7 @@ export async function PUT(req: NextRequest) {
     const role = config.getEffectiveRole(email, profile?.role);
     const isCR = profile?.isCR || false;
 
-    if (!await hasPermission('editCourse', role, isCR)) {
+    if (!await hasPermission('editCourse', role, isCR, email)) {
       return NextResponse.json({ error: 'You do not have permission to edit courses' }, { status: 403 });
     }
 

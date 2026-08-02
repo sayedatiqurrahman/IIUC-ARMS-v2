@@ -375,8 +375,9 @@ export default function RoutineView() {
         setPermissions(perms);
         const role = config.getEffectiveRole(email, profile.role);
         const roleKey = profile.isCR ? 'cr' : role;
+        const customPerms = (profile as any).customPermissions || {};
         const allowed = perms.publishRoutine || ['admin', 'manager', 'teacher', 'cr'];
-        setCanPublish(isOwner || allowed.includes(roleKey));
+        setCanPublish(isOwner || customPerms.publishRoutine === true || allowed.includes(roleKey));
       })
       .catch(() => {});
   }, [email, profile.role, profile.isCR, isOwner]);

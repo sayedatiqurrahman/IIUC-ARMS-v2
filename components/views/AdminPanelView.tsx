@@ -31,6 +31,7 @@ interface UserRecord {
   department?: string;
   providers?: string[];
   hasProfile?: boolean;
+  customPermissions?: Record<string, boolean>;
 }
 
 interface ActivityLog {
@@ -77,6 +78,7 @@ const PERMISSION_ACTIONS = [
   { key: 'manageBatches', label: 'Manage Batches', desc: 'Create/edit student batches for seat plan auto-allocation', icon: 'fa-layer-group', color: 'text-indigo-400' },
   { key: 'manageUsers', label: 'Manage Users', desc: 'Ban, promote, or change user roles', icon: 'fa-users-cog', color: 'text-orange-400' },
   { key: 'manageSettings', label: 'Manage Settings', desc: 'Change site settings and permissions', icon: 'fa-cog', color: 'text-yellow-400' },
+  { key: 'saveCourseToGitHub', label: 'Save to GitHub', desc: 'Save courses to GitHub repository from exam routine', icon: 'fab fa-github', color: 'text-purple-400' },
 ];
 
 interface ContributorSettings {
@@ -355,13 +357,15 @@ function ContributorsTab() {
 
 function PermissionsTab() {
   const [permissions, setPermissions] = useState<Record<string, string[] | boolean>>({});
-  const [userGrants, setUserGrants] = useState<{ email: string; name: string; action: string; grantedBy: string; grantedAt: string }[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [grantEmail, setGrantEmail] = useState('');
-  const [grantAction, setGrantAction] = useState('uploadFile');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [scopeUser, setScopeUser] = useState('');
+  const [scopeSearch, setScopeSearch] = useState('');
+  const [scopePerms, setScopePerms] = useState<Record<string, boolean>>({});
+  const [showScopeDropdown, setShowScopeDropdown] = useState(false);
 
   const loadPermissions = useCallback(async () => {
     try {
@@ -372,17 +376,7 @@ function PermissionsTab() {
     try {
       const res = await fetch('/api/admin/users?all=true');
       const data = await res.json();
-      if (data.users) {
-        const grants: typeof userGrants = [];
-        data.users.forEach((u: any) => {
-          if (u.permissions && typeof u.permissions === 'object') {
-            Object.entries(u.permissions).forEach(([action, granted]) => {
-              if (granted) grants.push({ email: u.email, name: u.name || u.email, action, grantedBy: 'admin', grantedAt: '' });
-            });
-          }
-        });
-        setUserGrants(grants);
-      }
+      if (data.users) setAllUsers(data.users);
     } catch {}
     setLoading(false);
   }, []);
@@ -403,19 +397,42 @@ function PermissionsTab() {
     setSaving(false);
   };
 
-  const grantUser = async () => {
-    if (!grantEmail.trim()) { setError('Enter an email'); return; }
-    setError(''); setSuccess('');
-    try {
-      const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'grantPermission', targetEmail: grantEmail, permission: grantAction }) });
-      const data = await res.json();
-      if (data.success) {
-        setSuccess(`Granted "${grantAction}" to ${grantEmail}`);
-        setGrantEmail('');
-        loadPermissions();
-      } else setError(data.error || 'Failed');
-    } catch { setError('Network error'); }
+  const filteredUsers = useMemo(() => {
+    if (!scopeSearch.trim()) return allUsers.slice(0, 20);
+    const q = scopeSearch.toLowerCase();
+    return allUsers.filter(u => u.email?.includes(q) || u.name?.toLowerCase().includes(q)).slice(0, 20);
+  }, [scopeSearch, allUsers]);
+
+  const selectScopeUser = (user: any) => {
+    setScopeUser(user.email);
+    setScopeSearch(`${user.name || user.email}`);
+    setShowScopeDropdown(false);
+    setScopePerms(user.customPermissions || {});
   };
+
+  const toggleScopePerm = async (permKey: string) => {
+    if (!scopeUser || permKey === '__clear__') return;
+    const updated = { ...scopePerms, [permKey]: !scopePerms[permKey] };
+    setScopePerms(updated);
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setCustomPermissions', targetEmail: scopeUser, customPermissions: updated }),
+      });
+      if (res.ok) {
+        setAllUsers(prev => prev.map(u => u.email === scopeUser ? { ...u, customPermissions: updated } : u));
+        setSuccess(`Updated permissions for ${scopeUser}`);
+        setTimeout(() => setSuccess(''), 2000);
+      } else setError('Failed to save');
+    } catch { setError('Network error'); }
+    setSaving(false);
+  };
+
+  const usersWithCustomPerms = useMemo(() => {
+    return allUsers.filter(u => u.customPermissions && Object.keys(u.customPermissions).length > 0);
+  }, [allUsers]);
 
   if (loading) return <div className="text-center py-10"><i className="fas fa-spinner fa-spin text-2xl text-qsis"></i></div>;
 
@@ -495,25 +512,100 @@ function PermissionsTab() {
         </div>
       </div>
 
-      {/* Per-user permission grants */}
+      {/* Per-user permission scopes */}
       <div className="border-t border-dark-border pt-5">
-        <h3 className="text-sm font-semibold text-dark-text mb-1"><i className="fas fa-user-plus text-blue-400 mr-2"></i>Grant Individual Permission</h3>
-        <p className="text-[0.72rem] text-dark-text3 mb-3">Give a specific user permission for one action (e.g. grant upload access to someone without GitHub).</p>
-        <div className="flex flex-wrap gap-2 p-3 bg-dark-bg2 border border-dark-border rounded-xl">
-          <input
-            value={grantEmail}
-            onChange={e => setGrantEmail(e.target.value)}
-            placeholder="user@ugrad.iiuc.ac.bd"
-            className="flex-1 min-w-[180px] px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-xs outline-none focus:border-qsis"
-          />
-          <CustomSelect
-            value={grantAction}
-            onChange={setGrantAction}
-            options={PERMISSION_ACTIONS.map(a => ({ value: a.key, label: a.label, icon: a.icon }))}
-          />
-          <button onClick={grantUser} className="px-4 py-2 bg-qsis text-white rounded-lg text-xs font-semibold hover:bg-qsis/90">
-            <i className="fas fa-plus mr-1"></i>Grant
-          </button>
+        <h3 className="text-sm font-semibold text-dark-text mb-1"><i className="fas fa-user-cog text-blue-400 mr-2"></i>Per-User Permission Scopes</h3>
+        <p className="text-[0.72rem] text-dark-text3 mb-3">Grant or revoke individual permissions for specific users. These override role-based defaults.</p>
+
+        <div className="p-4 bg-dark-bg2 border border-dark-border rounded-xl space-y-4">
+          <div className="relative">
+            <label className="text-[0.72rem] text-dark-text3 mb-1 block">Select User</label>
+            <input
+              value={scopeSearch}
+              onChange={e => { setScopeSearch(e.target.value); setShowScopeDropdown(true); if (!e.target.value) { setScopeUser(''); setScopePerms({}); } }}
+              onFocus={() => setShowScopeDropdown(true)}
+              placeholder="Search by name or email..."
+              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-xs outline-none focus:border-qsis"
+            />
+            {showScopeDropdown && filteredUsers.length > 0 && (
+              <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-dark-bg2 border border-dark-border rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                {filteredUsers.map((u, i) => (
+                  <button key={i} onClick={() => selectScopeUser(u)} className="w-full text-left px-3 py-2 text-[0.72rem] hover:bg-qsis/10 text-dark-text flex items-center gap-2 border-none bg-transparent cursor-pointer">
+                    {u.githubAvatar ? <img src={u.githubAvatar} className="w-5 h-5 rounded-full" alt="" /> : <i className="fas fa-user text-dark-text3 text-xs"></i>}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold truncate">{u.name || u.email}</div>
+                      <div className="text-dark-text3 truncate">{u.email}</div>
+                    </div>
+                    <span className="text-[0.65rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3">{u.role || 'user'}</span>
+                    {u.customPermissions && Object.keys(u.customPermissions).length > 0 && (
+                      <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-qsis/15 text-qsis border border-qsis/30"><i className="fas fa-key mr-0.5"></i>{Object.values(u.customPermissions).filter(Boolean).length}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {scopeUser && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs text-dark-text3">
+                  Permissions for <span className="font-semibold text-dark-text">{scopeUser}</span>
+                </div>
+                {Object.values(scopePerms).some(Boolean) && (
+                  <button onClick={async () => { setScopePerms({}); setSaving(true); try { await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setCustomPermissions', targetEmail: scopeUser, customPermissions: {} }) }); setAllUsers(prev => prev.map(u => u.email === scopeUser ? { ...u, customPermissions: {} } : u)); setSuccess('Cleared all custom permissions'); setTimeout(() => setSuccess(''), 2000); } catch { setError('Network error'); } setSaving(false); }} className="text-[0.68rem] text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer"><i className="fas fa-times mr-0.5"></i>Clear all</button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {PERMISSION_ACTIONS.map(action => {
+                  const enabled = !!scopePerms[action.key];
+                  return (
+                    <button
+                      key={action.key}
+                      onClick={() => toggleScopePerm(action.key)}
+                      className={`flex items-center gap-2 p-2.5 rounded-lg border text-left cursor-pointer transition-all ${
+                        enabled
+                          ? 'bg-qsis/10 border-qsis/40 text-dark-text'
+                          : 'bg-dark-bg border-dark-border text-dark-text3 hover:border-dark-text3'
+                      }`}
+                    >
+                      <i className={`fas ${action.icon} ${enabled ? action.color : 'text-dark-text3'} text-xs`}></i>
+                      <span className="text-[0.72rem] font-medium flex-1">{action.label}</span>
+                      {enabled ? <i className="fas fa-check-circle text-green-400 text-[0.65rem]"></i> : <i className="fas fa-circle text-dark-border text-[0.65rem]"></i>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {usersWithCustomPerms.length > 0 && (
+            <div className="border-t border-dark-border pt-3">
+              <div className="text-[0.72rem] text-dark-text3 mb-2"><i className="fas fa-list mr-1"></i>Users with custom scopes ({usersWithCustomPerms.length})</div>
+              <div className="space-y-1.5">
+                {usersWithCustomPerms.map((u, i) => {
+                  const granted = Object.entries(u.customPermissions || {}).filter(([, v]) => v).map(([k]) => k);
+                  return (
+                    <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border">
+                      {u.githubAvatar ? <img src={u.githubAvatar} className="w-5 h-5 rounded-full" alt="" /> : <i className="fas fa-user text-dark-text3 text-xs"></i>}
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[0.72rem] font-semibold text-dark-text">{u.name || u.email}</span>
+                        <span className="text-[0.65rem] text-dark-text3 ml-1">{u.email}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {granted.slice(0, 4).map(pk => {
+                          const pa = PERMISSION_ACTIONS.find(a => a.key === pk);
+                          return pa ? <span key={pk} className="text-[0.6rem] px-1.5 py-0.5 rounded bg-qsis/10 text-qsis border border-qsis/20">{pa.label}</span> : null;
+                        })}
+                        {granted.length > 4 && <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3">+{granted.length - 4}</span>}
+                      </div>
+                      <button onClick={() => selectScopeUser(u)} className="text-qsis hover:text-qsis/80 bg-transparent border-none cursor-pointer text-[0.68rem]"><i className="fas fa-edit"></i></button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -573,8 +665,10 @@ function CoursesTab({ effectiveRole, profile }: { effectiveRole: string; profile
         const perms = data.permissions || {};
         const isCR = profile?.isCR || false;
         const roleKey = isCR ? 'cr' : effectiveRole;
+        const customPerms = (profile as any).customPermissions || {};
         const perUserKey = (action: string) => `${action}_users`;
         const check = (action: string) => {
+          if (customPerms[action] === true) return true;
           const allowedUsers = perms[perUserKey(action)] || [];
           if (allowedUsers.includes((profile?.email || '').toLowerCase())) return true;
           const allowedRoles = perms[action] || [];
