@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { config } from '@/lib/config';
 import { FACULTIES, getFacultyIdForDepartment } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
@@ -47,8 +47,8 @@ interface UploadModalProps {
 }
 
 const SESSION_OPTIONS = [
-  { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
-  { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
+  { value: 'Autumn', label: `Autumn ${CURRENT_YEAR}`, icon: 'fa-leaf' },
+  { value: 'Spring', label: `Spring ${CURRENT_YEAR}`, icon: 'fa-seedling' },
 ];
 
 function extractYearFromTitle(title: string): number {
@@ -228,6 +228,35 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     }
     return Array.from(map.entries()).map(([code, title]) => ({ code, title }));
   }, [department, getSemesterCourses, treeLength]);
+
+  // Auto-fill from deep link params (dept, sem, course, mf, cat)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const p = new URLSearchParams(window.location.search);
+    const dept = p.get('dept');
+    const sem = p.get('sem');
+    const course = p.get('course');
+    const mf = p.get('mf');
+    const cat = p.get('cat');
+    if (dept) setDepartment(dept);
+    if (sem) setSemester(sem);
+    if (cat) {
+      const catKey = Object.keys(config.categories).find(
+        k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat
+      );
+      if (catKey) setCategory(catKey);
+    }
+    if (course) {
+      const code = course.toUpperCase();
+      const found = allKnownCourses.find(c => c.code.toUpperCase() === code);
+      setCourses(prev => [{
+        ...prev[0],
+        selectedCourseCode: code,
+        selectedCourseTitle: found?.title || '',
+        midFinal: mf || '',
+      }]);
+    }
+  }, [allKnownCourses]);
 
   const totalFiles = courses.reduce((sum, c) => sum + c.files.length, 0);
   const totalSizeMB = courses.reduce((sum, c) => sum + c.files.reduce((s, f) => s + f.file.size, 0), 0) / (1024 * 1024);
@@ -499,6 +528,9 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           let filePath: string;
           const isExamSpecific = category === config.categories.notes.folder || category === config.categories.questions.folder;
           const midFinalPart = (isExamSpecific && course.midFinal) ? `/${course.midFinal}` : '';
+          const authorName = profile?.name || email.split('@')[0] || 'Unknown';
+          const ext = fileMeta.file.name.split('.').pop() || 'pdf';
+
           if (semester === config.relatedKitabsFolder) {
             const folderName = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
             filePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${folderName}/${fileMeta.file.name}`;
@@ -508,9 +540,10 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             filePath = `${facId}/${config.relatedSourcesFolder}/${folderName}/${fileMeta.file.name}`;
           } else if (isExamSpecific && course.examSession) {
             const yearPart = isPdf(fileMeta.file.name) ? (fileMeta.yearRange || '') : (fileMeta.year || '');
+            const renamedFile = `${course.examSession} ${CURRENT_YEAR} - ${authorName}.${ext}`;
             filePath = yearPart
-              ? `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${yearPart}/${fileMeta.file.name}`
-              : `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${fileMeta.file.name}`;
+              ? `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${yearPart}/${renamedFile}`
+              : `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${renamedFile}`;
           } else {
             filePath = `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${fileMeta.file.name}`;
           }
@@ -855,15 +888,15 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
                         <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
                         {category === config.categories.questions.folder ? (
                           <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} options={[
-                            { value: 'Both', label: 'Both (Autumn + Spring)', icon: 'fa-layer-group' },
-                            { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
-                            { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
+                            { value: 'Both', label: `Both (Autumn + Spring ${CURRENT_YEAR})`, icon: 'fa-layer-group' },
+                            { value: 'Autumn', label: `Autumn ${CURRENT_YEAR}`, icon: 'fa-leaf' },
+                            { value: 'Spring', label: `Spring ${CURRENT_YEAR}`, icon: 'fa-seedling' },
                           ]} />
                         ) : (
                           <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} placeholder="Select..." options={[
                             { value: '', label: 'Select...' },
-                            { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
-                            { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
+                            { value: 'Autumn', label: `Autumn ${CURRENT_YEAR}`, icon: 'fa-leaf' },
+                            { value: 'Spring', label: `Spring ${CURRENT_YEAR}`, icon: 'fa-seedling' },
                           ]} />
                         )}
                       </div>

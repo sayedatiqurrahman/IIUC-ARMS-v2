@@ -43,14 +43,16 @@ function getSemesterLabelFromFolder(folder: string): string {
   return '';
 }
 
+const CURRENT_YEAR = new Date().getFullYear();
+
 const YEAR_OPTIONS = Array.from({ length: 6 }, (_, i) => {
   const year = new Date().getFullYear() - i;
   return { value: String(year), label: String(year), icon: 'fa-calendar' };
 });
 
 const SESSION_OPTIONS = [
-  { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
-  { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
+  { value: 'Autumn', label: `Autumn ${CURRENT_YEAR}`, icon: 'fa-leaf' },
+  { value: 'Spring', label: `Spring ${CURRENT_YEAR}`, icon: 'fa-seedling' },
 ];
 
 function extractYearFromTitle(title: string): number {
