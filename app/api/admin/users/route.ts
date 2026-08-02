@@ -20,7 +20,6 @@ export async function GET(req: NextRequest) {
     const callerProfile = await prisma.profile.findUnique({ where: { userId: email } });
     const callerDept = callerProfile?.department || null;
 
-    const { adminAuth } = await import('@/lib/firebase-admin');
     const url = new URL(req.url);
     const filterRole = url.searchParams.get('role');
     const search = url.searchParams.get('search') || '';
@@ -29,7 +28,6 @@ export async function GET(req: NextRequest) {
     if (filterRole && filterRole !== 'all') {
       where.role = filterRole;
     }
-    // Manager department boundary
     if (effectiveRole === 'manager' && callerDept) {
       where.department = callerDept;
     }
@@ -40,16 +38,17 @@ export async function GET(req: NextRequest) {
         where,
         orderBy: { createdAt: 'desc' },
       });
-    } catch {
+    } catch (e) {
       profiles = [];
     }
 
     let firebaseUsers: any[] = [];
     try {
+      const { adminAuth } = await import('@/lib/firebase-admin');
       const listResult = await adminAuth.listUsers(1000);
       firebaseUsers = listResult.users || [];
     } catch {
-      // Continue with profiles only
+      // Firebase not configured — profiles-only mode
     }
 
     const profileMap = new Map(profiles.map(p => [p.email?.toLowerCase(), p]));
