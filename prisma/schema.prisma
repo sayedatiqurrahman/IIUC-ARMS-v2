@@ -21,6 +21,7 @@ model Profile {
   whatsapp        String?
   phone           String?
   telegramId      String?
+  telegramChatId  String?
   semester        String?
   image           String?
   role            String?  @default("user")

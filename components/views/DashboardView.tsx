@@ -90,7 +90,7 @@ export default function DashboardView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
-    universityId: '', name: '', whatsapp: '', phone: '', telegramId: '', semester: '', section: '', department: '', batchId: '',
+    universityId: '', name: '', whatsapp: '', telegramId: '', semester: '', section: '', department: '', batchId: '',
     facebook: '', twitter: '', linkedin: '', website: '',
     company: '', companyUrl: '', publicEmail: '',
     hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false,
@@ -499,7 +499,6 @@ export default function DashboardView() {
                 universityId: autoId,
                 name: profile.name || '',
                 whatsapp: profile.whatsapp,
-                phone: profile.phone || '',
                 telegramId: profile.telegramId || '',
                 semester: profile.semester,
                 section: profile.section || '',
@@ -598,13 +597,19 @@ export default function DashboardView() {
                 <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
               </div>
               <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-phone mr-1"></i>Phone Number <span className="text-qsis text-[0.65rem]">(for notifications)</span></label>
-                <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.phone} onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} />
-              </div>
-              <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1"></i>Telegram ID / Username</label>
                 <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or 123456789" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
-                <p className="text-[0.65rem] text-dark-text3 mt-0.5">Receive department routines & room updates via Telegram</p>
+                {profile.telegramId && profile.telegramChatId ? (
+                  <p className="text-[0.65rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected — you&apos;ll receive routine & notification updates via Telegram</p>
+                ) : profile.telegramId ? (
+                  <p className="text-[0.65rem] text-yellow-400 mt-0.5">
+                    <i className="fas fa-link mr-0.5"></i>Set! Now open{' '}
+                    <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="underline text-qsis">@iiuc_arms_bot</a>{' '}
+                    and send <code className="bg-dark-bg px-0.5 rounded text-qsis">/start</code> to connect
+                  </p>
+                ) : (
+                  <p className="text-[0.65rem] text-dark-text3 mt-0.5">Receive department routines & notifications via Telegram DM</p>
+                )}
               </div>
               {isStudent && (
                 <div>
@@ -715,17 +720,20 @@ export default function DashboardView() {
               {isStudent && (
                 <>
                   <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-                    <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-phone mr-1 text-qsis"></i>Phone</span>
-                    <span className={`text-[0.85rem] font-semibold ${profile.phone ? '' : 'text-dark-text2'}`}>
-                      {profile.phone || 'Not set'}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-                    <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1 text-blue-400"></i>Telegram ID</span>
+                    <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1 text-blue-400"></i>Telegram</span>
                     <span className={`text-[0.85rem] font-semibold ${profile.telegramId ? '' : 'text-dark-text2'}`}>
                       {profile.telegramId || 'Not set'}
                     </span>
-                    {profile.telegramId && <p className="text-[0.6rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>You&apos;ll receive department routines & room updates</p>}
+                    {profile.telegramId && profile.telegramChatId ? (
+                      <p className="text-[0.6rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected! You&apos;ll receive routine updates</p>
+                    ) : profile.telegramId ? (
+                      <div className="mt-1">
+                        <p className="text-[0.6rem] text-yellow-400"><i className="fas fa-link mr-0.5"></i>Pending connection</p>
+                        <p className="text-[0.6rem] text-dark-text3 mt-0.5">
+                          Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline">@iiuc_arms_bot</a> and send <code className="bg-dark-bg px-1 rounded text-qsis text-[0.6rem]">/start</code> to connect
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                 </>
               )}

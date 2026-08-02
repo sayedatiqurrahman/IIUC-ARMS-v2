@@ -803,3 +803,119 @@ export function parseCallbackData(data: string): { type: string; args: string[] 
   if (data === 'start_help') return { type: 'start_help', args: [] };
   return null;
 }
+
+// ─── Department-wise Notification Helpers ─────────────────────────
+
+export interface NotificationLogEntry {
+  department: string;
+  type: string;
+  title: string;
+  message: string;
+  sentBy?: string;
+  recipientCount: number;
+}
+
+export async function sendDepartmentNotifications(
+  departments: string[],
+  message: string,
+  options?: { type?: string; title?: string; sentBy?: string; delayMs?: number; semester?: string }
+): Promise<{ sent: number; failed: number; skipped: number }> {
+  const { prisma } = await import('@/lib/prisma');
+  const type = options?.type || 'routine_update';
+  const title = options?.title || 'Notification';
+  const delayMs = options?.delayMs ?? 100;
+
+  const where: any = { telegramChatId: { not: null } };
+
+  if (!departments.includes('ALL')) {
+    where.department = { in: departments };
+  }
+
+  if (options?.semester) {
+    where.semester = options.semester;
+  }
+
+  const profiles = await prisma.profile.findMany({
+    where,
+    select: { telegramChatId: true, name: true, department: true, userId: true },
+  });
+
+  if (profiles.length === 0) return { sent: 0, failed: 0, skipped: 0 };
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const p of profiles) {
+    if (!p.telegramChatId) continue;
+    try {
+      const chatId = Number(p.telegramChatId);
+      if (isNaN(chatId)) continue;
+      await sendMessage(chatId, message, { disable_web_page_preview: true });
+      sent++;
+    } catch {
+      failed++;
+    }
+    // Rate limit: 100ms between sends to avoid Telegram API limits
+    if (delayMs > 0) {
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+
+  // Log to database
+  try {
+    await prisma.telegramNotification.create({
+      data: {
+        department: departments.join(','),
+        type,
+        title,
+        message: message.substring(0, 2000),
+        sentBy: options?.sentBy || null,
+        recipientCount: sent,
+      },
+    });
+  } catch (err: any) {
+    console.error('[TG] Failed to log notification:', err?.message);
+  }
+
+  return { sent, failed, skipped: profiles.length - sent - failed };
+}
+
+export async function getNotificationHistory(options?: { department?: string; type?: string; limit?: number }) {
+  const { prisma } = await import('@/lib/prisma');
+  const where: any = {};
+  if (options?.department) where.department = options.department;
+  if (options?.type) where.type = options.type;
+
+  return prisma.telegramNotification.findMany({
+    where,
+    orderBy: { sentAt: 'desc' },
+    take: options?.limit || 50,
+  });
+}
+
+export async function getConnectedUsersCount(): Promise<number> {
+  const { prisma } = await import('@/lib/prisma');
+  return prisma.profile.count({
+    where: { telegramChatId: { not: null } },
+  });
+}
+
+export async function getDepartmentConnectedUsersCount(departments: string[]): Promise<Record<string, number>> {
+  const { prisma } = await import('@/lib/prisma');
+  const profiles = await prisma.profile.findMany({
+    where: {
+      department: { in: departments },
+      telegramChatId: { not: null },
+    },
+    select: { department: true },
+  });
+
+  const counts: Record<string, number> = {};
+  for (const dept of departments) counts[dept] = 0;
+  for (const p of profiles) {
+    if (p.department && counts[p.department] !== undefined) {
+      counts[p.department]++;
+    }
+  }
+  return counts;
+}

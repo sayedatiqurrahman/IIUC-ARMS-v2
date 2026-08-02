@@ -2,7 +2,7 @@
 
 import { signIn } from 'next-auth/react';
 import { useState, useEffect } from 'react';
-import { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, sendMagicLink } from '@/lib/firebase';
+import { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, sendMagicLink, handleGoogleRedirectResult } from '@/lib/firebase';
 import { useTurnstile } from '@/lib/useTurnstile';
 import { config } from '@/lib/config';
 

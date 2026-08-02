@@ -165,6 +165,34 @@ async function handleMessage(msg: any) {
   try {
     // ─── /start ───
     if (cleanText === '/start') {
+      // Link Telegram chat_id to IIUC-ARMS profile if user has telegramId set
+      try {
+        const username = msg.from?.username;
+        if (username) {
+          const { prisma } = await import('@/lib/prisma');
+          const profile = await prisma.profile.findFirst({
+            where: { telegramId: { in: [`@${username}`, username] } },
+          });
+          if (profile && !profile.telegramChatId) {
+            await prisma.profile.update({
+              where: { userId: profile.userId },
+              data: { telegramChatId: String(chatId) },
+            });
+            console.log(`[TG] Linked @${username} -> chat_id ${chatId} (user: ${profile.userId})`);
+          } else if (profile) {
+            // Already linked — update if chat_id changed
+            if (profile.telegramChatId !== String(chatId)) {
+              await prisma.profile.update({
+                where: { userId: profile.userId },
+                data: { telegramChatId: String(chatId) },
+              });
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error('[TG] Failed to link chat_id:', err?.message);
+      }
+
       await sendMessage(chatId, buildWelcomeMessage(), {
         reply_markup: {
           inline_keyboard: [

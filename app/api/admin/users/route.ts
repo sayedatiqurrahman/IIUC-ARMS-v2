@@ -17,8 +17,14 @@ export async function GET(req: NextRequest) {
     }
 
     const { prisma } = await import('@/lib/prisma');
-    const callerProfile = await prisma.profile.findUnique({ where: { userId: email } });
-    const callerDept = callerProfile?.department || null;
+
+    let callerDept: string | null = null;
+    try {
+      const callerProfile = await prisma.profile.findUnique({ where: { userId: email } });
+      callerDept = callerProfile?.department || null;
+    } catch (e: any) {
+      console.error('[Admin Users] Caller profile fetch failed:', e?.message);
+    }
 
     const url = new URL(req.url);
     const filterRole = url.searchParams.get('role');
@@ -38,20 +44,26 @@ export async function GET(req: NextRequest) {
         where,
         orderBy: { createdAt: 'desc' },
       });
-    } catch (e) {
+    } catch (e: any) {
+      console.error('[Admin Users] Prisma profile query failed:', e?.message);
       profiles = [];
     }
 
     let firebaseUsers: any[] = [];
+    let firebaseNextPageToken: string | undefined = undefined;
     try {
       const { getAdminAuth } = await import('@/lib/firebase-admin');
       const auth = getAdminAuth();
       if (auth) {
-        const listResult = await auth.listUsers(1000);
-        firebaseUsers = listResult.users || [];
+        const pageToken = url.searchParams.get('firebasePageToken') || undefined;
+        const listResult = await auth.listUsers(1000, pageToken);
+        // Firebase Admin SDK v14 returns users as iterable
+        const usersArray = Array.isArray(listResult.users) ? listResult.users : [];
+        firebaseUsers = usersArray;
+        firebaseNextPageToken = listResult.pageToken || undefined;
       }
-    } catch {
-      // Firebase not configured — profiles-only mode
+    } catch (err: any) {
+      console.error('[Admin Users] Firebase listUsers failed:', err?.message, err?.code);
     }
 
     const profileMap = new Map(profiles.map(p => [p.email?.toLowerCase(), p]));
@@ -129,9 +141,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ users: result });
-  } catch {
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    return NextResponse.json({ users: result, firebaseNextPageToken: firebaseNextPageToken || null });
+  } catch (err: any) {
+    console.error('[Admin Users] GET error:', err?.message, err?.stack);
+    return NextResponse.json({ error: 'Failed to fetch users', detail: err?.message }, { status: 500 });
   }
 }
 

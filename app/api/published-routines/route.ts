@@ -165,35 +165,23 @@ export async function POST(req: NextRequest) {
       });
     } catch {}
 
-    // Send Telegram notifications to students in affected departments
+    // Send Telegram notifications to users in affected departments
     try {
       const affectedDepts = Array.from(new Set(routines.map(r => r.department).filter(Boolean)));
       if (affectedDepts.length > 0) {
-        const students = await prisma.profile.findMany({
-          where: { department: { in: affectedDepts }, telegramId: { not: null } },
-          select: { telegramId: true, name: true, department: true },
+        const { sendDepartmentNotifications, getDeptName } = await import('@/lib/telegram');
+        const deptNames = affectedDepts.map(d => getDeptName(d || '')).join(', ');
+        const msg = `📢 <b>${routines.length > 1 ? 'Routines' : 'Routine'} Updated!\n\n</b>` +
+          `🏢 Department: <b>${deptNames}</b>\n` +
+          `📅 Semester: <b>${routines[0]?.semester || ''}</b>\n` +
+          (routines[0]?.session ? `📆 Session: ${routines[0].session}\n` : '') +
+          `\n🔗 View now: <a href="https://iiuc-arms.eu.cc/?tab=routine">Open IIUC-ARMS</a>`;
+        const result = await sendDepartmentNotifications(affectedDepts, msg, {
+          type: 'routine_publish',
+          title: `Routine: ${deptNames}`,
+          sentBy: email,
         });
-        const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-        if (TOKEN && students.length > 0) {
-          const { getDeptName } = await import('@/lib/telegram');
-          for (const student of students) {
-            if (!student.telegramId) continue;
-            const chatId = student.telegramId.startsWith('@') ? student.telegramId : student.telegramId;
-            const deptName = getDeptName(student.department || '');
-            const msg = `📢 <b>New ${routines.length > 1 ? 'Routines' : 'Routine'} Published!\n\n</b>` +
-              `🏢 Department: <b>${deptName}</b>\n` +
-              `📅 Semester: <b>${routines[0]?.semester || ''}</b>\n` +
-              (routines[0]?.session ? `📆 Session: ${routines[0].session}\n` : '') +
-              `\n🔗 View now: https://iiuc-arms.eu.cc/?tab=routine`;
-            try {
-              await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'HTML', disable_web_page_preview: true }),
-              });
-            } catch {}
-          }
-        }
+        console.log(`[Routine] Telegram notifications sent: ${result.sent}, failed: ${result.failed}`);
       }
     } catch {}
 

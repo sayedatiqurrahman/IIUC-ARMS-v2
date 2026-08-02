@@ -5,9 +5,10 @@
   "author": "s.atiqurrahman2003@gmail.com",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && node scripts/fix-profile-columns.js && next build",
     "start": "next start",
-    "postinstall": "prisma generate && node -e \"const fs=require('fs');const p='node_modules/@pdftron/pdfjs-express/public';if(fs.existsSync(p)){fs.cpSync(p,'public/webviewer/lib',{recursive:true,force:true})}\""
+    "postinstall": "prisma generate && node -e \"const fs=require('fs');const p='node_modules/@pdftron/pdfjs-express/public';if(fs.existsSync(p)){fs.cpSync(p,'public/webviewer/lib',{recursive:true,force:true})}\"",
+    "db:migrate": "node scripts/fix-profile-columns.js"
   },
   "dependencies": {
     "@pdftron/pdfjs-express": "^8.7.5",
