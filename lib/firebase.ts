@@ -1,5 +1,5 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, updateProfile as firebaseUpdateProfile, type Auth, type User } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, updateProfile as firebaseUpdateProfile, type Auth, type User } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -50,10 +50,40 @@ async function saveTokensToCookies(user: User) {
 
 export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
-  const result = await signInWithPopup(getFirebaseAuth(), provider);
-  const idToken = await result.user.getIdToken();
-  await saveTokensToCookies(result.user);
-  return { idToken, user: result.user };
+  const auth = getFirebaseAuth();
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const idToken = await result.user.getIdToken();
+    await saveTokensToCookies(result.user);
+    return { idToken, user: result.user };
+  } catch (err: any) {
+    // Brave/browser blocks popup due to Trusted Types — fall back to redirect
+    if (
+      err.code === 'auth/popup-blocked' ||
+      err.code === 'auth/popup-closed-by-user' ||
+      err.code === 'auth/cancelled-popup-request' ||
+      err.message?.includes('TrustedHTML') ||
+      err.message?.includes('trustedTypes')
+    ) {
+      await signInWithRedirect(auth, provider);
+      // Page will redirect — this line won't execute
+      return { idToken: '', user: null as any };
+    }
+    throw err;
+  }
+}
+
+export async function handleGoogleRedirectResult(): Promise<{ idToken: string; user: User } | null> {
+  try {
+    const auth = getFirebaseAuth();
+    const result = await getRedirectResult(auth);
+    if (result?.user) {
+      const idToken = await result.user.getIdToken();
+      await saveTokensToCookies(result.user);
+      return { idToken, user: result.user };
+    }
+  } catch {}
+  return null;
 }
 
 export async function signInWithEmail(email: string, password: string) {

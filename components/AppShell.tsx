@@ -10,11 +10,12 @@ import UploadModal from '@/components/UploadModal';
 import PdfViewer from '@/components/PdfViewer';
 import OnboardingModal, { getOnboardingData, type OnboardingData } from '@/components/OnboardingModal';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { signOut } from 'next-auth/react';
+import { signOut, signIn } from 'next-auth/react';
 import { config } from '@/lib/config';
 import { checkAndBustCache, forceResetApp } from '@/lib/cache';
 import { useConfirm } from '@/components/ConfirmModal';
 import { useTurnstile } from '@/lib/useTurnstile';
+import { handleGoogleRedirectResult } from '@/lib/firebase';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -43,6 +44,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       }, 100);
     }
   }, [preRenderedTurnstile, renderTurnstile]);
+
+  // Handle Google redirect result (for Brave/browsers that block popup)
+  useEffect(() => {
+    handleGoogleRedirectResult().then(async (result) => {
+      if (result?.idToken) {
+        const res = await signIn('credentials', { idToken: result.idToken, redirect: false });
+        if (res?.ok) {
+          window.location.reload();
+        }
+      }
+    }).catch(() => {});
+  }, []);
 
   const goHome = useAppStore(s => s.goHome);
   const setUploadOpen = useAppStore(s => s.setUploadOpen);
