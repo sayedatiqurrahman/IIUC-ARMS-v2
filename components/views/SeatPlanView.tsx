@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
@@ -105,6 +105,14 @@ export default function SeatPlanView() {
   const [studentRoll, setStudentRoll] = useState('');
   const [studentDept, setStudentDept] = useState(profile.department || 'qsis');
   const [findTriggered, setFindTriggered] = useState(false);
+  const rollIdRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus Roll ID when switching to student view
+  useEffect(() => {
+    if (viewMode === 'student' && rollIdRef.current) {
+      setTimeout(() => rollIdRef.current?.focus(), 200);
+    }
+  }, [viewMode]);
 
   const enabledSlots = useMemo(() => getEnabledSlots(examSlots), [examSlots]);
   const enabledSemesters = useMemo(() => config.semesters, []);
@@ -502,10 +510,10 @@ export default function SeatPlanView() {
       </div>
 
       {viewMode === 'student' && (
-        <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5">
-          <h4 className="text-[0.9rem] font-bold text-dark-text mb-3"><i className="fas fa-search text-qsis mr-2"></i>Find My Exam Room</h4>
-          <p className="text-[0.72rem] text-dark-text3 mb-4">Select your details to see which room your exam is held in.</p>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+        <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4 sm:p-5">
+          <h4 className="text-[0.9rem] font-bold text-dark-text mb-3 text-center sm:text-left"><i className="fas fa-search text-qsis mr-2"></i>Find My Exam Room</h4>
+          <p className="text-[0.72rem] text-dark-text3 mb-4 text-center sm:text-left">Select your details to see which room your exam is held in.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 mb-5">
             <div>
               <label className="text-[0.72rem] text-dark-text2 mb-1 block"><i className="fas fa-building mr-1"></i>Department</label>
               <CustomSelect value={studentDept} onChange={setStudentDept} options={FACULTIES.flatMap(f => f.departments.map(d => ({ value: d.id, label: `${d.shortName} — ${d.name}`, icon: 'fa-building', group: f.shortName })))} placeholder="Department" />
@@ -524,7 +532,7 @@ export default function SeatPlanView() {
             </div>
             <div>
               <label className="text-[0.72rem] text-dark-text2 mb-1 block"><i className="fas fa-id-card mr-1"></i>Roll ID (optional)</label>
-              <input value={studentRoll} onChange={e => setStudentRoll(e.target.value)} onKeyDown={e => e.key === 'Enter' && studentDate && setFindTriggered(true)} placeholder="e.g. Q233099" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+              <input ref={rollIdRef} value={studentRoll} onChange={e => setStudentRoll(e.target.value)} onKeyDown={e => e.key === 'Enter' && studentDate && setFindTriggered(true)} placeholder="e.g. Q233099" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
             </div>
           </div>
           <div className="flex justify-center mb-4">

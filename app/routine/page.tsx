@@ -15,27 +15,27 @@ export default function RoutinePage() {
       <div className="flex gap-1 mb-5 p-1 bg-dark-bg2 border border-dark-border rounded-xl">
         <button
           onClick={() => setTab('class')}
-          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[0.82rem] font-semibold transition-all cursor-pointer border-none ${
+          className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-lg text-[0.75rem] sm:text-[0.82rem] font-semibold transition-all cursor-pointer border-none ${
             tab === 'class' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
           }`}
         >
-          <i className="fas fa-calendar-alt"></i>Class Routine
+          <i className="fas fa-calendar-alt text-[0.7rem] sm:text-[0.82rem]"></i><span className="hidden xs:inline">Class </span>Routine
         </button>
         <button
           onClick={() => setTab('exam')}
-          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[0.82rem] font-semibold transition-all cursor-pointer border-none ${
+          className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-lg text-[0.75rem] sm:text-[0.82rem] font-semibold transition-all cursor-pointer border-none ${
             tab === 'exam' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
           }`}
         >
-          <i className="fas fa-file-alt"></i>Exam Routine
+          <i className="fas fa-file-alt text-[0.7rem] sm:text-[0.82rem]"></i><span className="hidden xs:inline">Exam </span>Routine
         </button>
         <button
           onClick={() => setTab('seatplan')}
-          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[0.82rem] font-semibold transition-all cursor-pointer border-none ${
+          className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-lg text-[0.75rem] sm:text-[0.82rem] font-semibold transition-all cursor-pointer border-none ${
             tab === 'seatplan' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
           }`}
         >
-          <i className="fas fa-chair"></i>Seat Plan
+          <i className="fas fa-chair text-[0.7rem] sm:text-[0.82rem]"></i><span className="hidden xs:inline">Seat </span>Plan
         </button>
       </div>
 
