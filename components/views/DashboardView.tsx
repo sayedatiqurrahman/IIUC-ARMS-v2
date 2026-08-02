@@ -18,6 +18,61 @@ function extractUniversityId(email: string): string {
   return match ? match[1].toUpperCase() : '';
 }
 
+/* ═══════ BATCH SELECTOR ═══════ */
+function BatchSelector({ department, value, onChange }: { department: string; value: string; onChange: (v: string) => void }) {
+  const [batches, setBatches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!department) return;
+    setLoading(true);
+    fetch(`/api/batches?department=${department}`).then(r => r.json()).then(data => {
+      setBatches(data.batches || []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [department]);
+
+  if (loading) {
+    return (
+      <div>
+        <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-layer-group mr-1"></i>Batch</label>
+        <div className="px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text3 text-[0.82rem]"><i className="fas fa-spinner fa-spin mr-1"></i>Loading...</div>
+      </div>
+    );
+  }
+
+  if (batches.length === 0) {
+    return (
+      <div>
+        <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-layer-group mr-1"></i>Batch</label>
+        <div className="px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-[0.78rem]">
+          <p className="text-dark-text3">No batches for this department.</p>
+          <p className="text-[0.65rem] text-dark-text3 mt-0.5">Contact your <span className="text-qsis font-semibold">manager</span> or <span className="text-qsis font-semibold">teacher</span> (who can make a CR) to create a batch.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-layer-group mr-1"></i>Batch</label>
+      <CustomSelect
+        value={value}
+        onChange={onChange}
+        placeholder="Select batch..."
+        options={[
+          { value: '', label: 'None', icon: 'fa-times' },
+          ...batches.map(b => ({
+            value: b.id,
+            label: `${b.name} — ${b.session}`,
+            icon: b.isActive ? 'fa-check-circle' : 'fa-times-circle',
+          })),
+        ]}
+      />
+    </div>
+  );
+}
+
 export default function DashboardView() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -35,7 +90,7 @@ export default function DashboardView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
-    universityId: '', name: '', whatsapp: '', phone: '', telegramId: '', semester: '', section: '', department: '',
+    universityId: '', name: '', whatsapp: '', phone: '', telegramId: '', semester: '', section: '', department: '', batchId: '',
     facebook: '', twitter: '', linkedin: '', website: '',
     company: '', companyUrl: '', publicEmail: '',
     hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false,
@@ -449,6 +504,7 @@ export default function DashboardView() {
                 semester: profile.semester,
                 section: profile.section || '',
                 department: profile.department || '',
+                batchId: (profile as any).batchId || '',
                 facebook: profile.facebook,
                 twitter: profile.twitter,
                 linkedin: profile.linkedin,
@@ -493,8 +549,9 @@ export default function DashboardView() {
           <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
             <h5 className="text-[0.85rem] font-semibold mb-3"><i className="fas fa-user-edit text-qsis mr-2"></i>Edit Profile</h5>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              {/* Academic Info — First */}
               <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Department</label>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-building mr-1"></i>Department</label>
                 <CustomSelect
                   value={profileForm.department}
                   onChange={value => setProfileForm(p => ({ ...p, department: value }))}
@@ -503,37 +560,7 @@ export default function DashboardView() {
                 />
               </div>
               <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
-                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Sayed Atiqur Rahman" value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} />
-              </div>
-              {/* University ID — students only */}
-              {isStudent && (
-                <div>
-                  <label className="text-[0.72rem] text-dark-text2 block mb-1">University ID</label>
-                  <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Q233099" value={profileForm.universityId} onChange={e => setProfileForm(p => ({ ...p, universityId: e.target.value }))} />
-                </div>
-              )}
-              <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">WhatsApp</label>
-                <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
-              </div>
-              {isStudent && (
-                <>
-                  <div>
-                    <label className="text-[0.72rem] text-dark-text2 block mb-1">Phone Number <span className="text-qsis text-[0.65rem]">(for notifications)</span></label>
-                    <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.phone} onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} />
-                    <p className="text-[0.65rem] text-dark-text3 mt-0.5">Receive department routines & room updates via Telegram</p>
-                  </div>
-                  <div>
-                    <label className="text-[0.72rem] text-dark-text2 block mb-1">Telegram ID / Username</label>
-                    <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or 123456789" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
-                    <p className="text-[0.65rem] text-dark-text3 mt-0.5">We&apos;ll send you your department&apos;s class/exam routines and your room number personally</p>
-                  </div>
-                </>
-              )}
-              {/* Semester */}
-              <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Current Semester</label>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-calendar mr-1"></i>Current Semester</label>
                 <CustomSelect
                   value={profileForm.semester}
                   onChange={value => setProfileForm(p => ({ ...p, semester: value }))}
@@ -544,7 +571,46 @@ export default function DashboardView() {
                   ]}
                 />
               </div>
-              {/* Section — students only */}
+              {/* Batch — students only */}
+              {isStudent && profileForm.department && (
+                <BatchSelector
+                  department={profileForm.department}
+                  value={profileForm.batchId}
+                  onChange={batchId => setProfileForm(p => ({ ...p, batchId }))}
+                />
+              )}
+
+              {/* Personal Info */}
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
+                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Sayed Atiqur Rahman" value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} />
+              </div>
+              {isStudent && (
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">University ID</label>
+                  <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Q233099" value={profileForm.universityId} onChange={e => setProfileForm(p => ({ ...p, universityId: e.target.value }))} />
+                </div>
+              )}
+
+              {/* Contact Info */}
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-whatsapp mr-1"></i>WhatsApp</label>
+                <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
+              </div>
+              {isStudent && (
+                <>
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-phone mr-1"></i>Phone Number <span className="text-qsis text-[0.65rem]">(for notifications)</span></label>
+                    <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.phone} onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} />
+                    <p className="text-[0.65rem] text-dark-text3 mt-0.5">Receive department routines & room updates via Telegram</p>
+                  </div>
+                  <div>
+                    <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1"></i>Telegram ID / Username</label>
+                    <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or 123456789" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
+                    <p className="text-[0.65rem] text-dark-text3 mt-0.5">We&apos;ll send you your department&apos;s class/exam routines and your room number personally</p>
+                  </div>
+                </>
+              )}
               {isStudent && (
                 <div>
                   <label className="text-[0.72rem] text-dark-text2 block mb-1">Section</label>

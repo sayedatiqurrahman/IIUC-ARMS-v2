@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { prisma } = await import('@/lib/prisma');
-    const { adminAuth } = await import('@/lib/firebase-admin');
+    const { getAdminAuth } = await import('@/lib/firebase-admin');
 
     const normalizedEmail = targetEmail.toLowerCase().trim();
 
@@ -40,19 +40,22 @@ export async function POST(req: NextRequest) {
 
     // Create Firebase Auth user (send password reset so they can set their own password)
     let firebaseUid = '';
-    try {
-      const firebaseUser = await adminAuth.createUser({
-        email: normalizedEmail,
-        displayName: name || normalizedEmail.split('@')[0],
-        emailVerified: true,
-      });
-      firebaseUid = firebaseUser.uid;
-      // Send password setup email
-      await adminAuth.generatePasswordResetLink(normalizedEmail);
-    } catch (firebaseErr: any) {
-      // If user already exists in Firebase, continue
-      if (firebaseErr.code !== 'auth/email-already-exists') {
-        console.error('[create-user] Firebase error:', firebaseErr.message);
+    const auth = getAdminAuth();
+    if (auth) {
+      try {
+        const firebaseUser = await auth.createUser({
+          email: normalizedEmail,
+          displayName: name || normalizedEmail.split('@')[0],
+          emailVerified: true,
+        });
+        firebaseUid = firebaseUser.uid;
+        // Send password setup email
+        await auth.generatePasswordResetLink(normalizedEmail);
+      } catch (firebaseErr: any) {
+        // If user already exists in Firebase, continue
+        if (firebaseErr.code !== 'auth/email-already-exists') {
+          console.error('[create-user] Firebase error:', firebaseErr.message);
+        }
       }
     }
 

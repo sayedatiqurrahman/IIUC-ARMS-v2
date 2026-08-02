@@ -44,9 +44,12 @@ export async function GET(req: NextRequest) {
 
     let firebaseUsers: any[] = [];
     try {
-      const { adminAuth } = await import('@/lib/firebase-admin');
-      const listResult = await adminAuth.listUsers(1000);
-      firebaseUsers = listResult.users || [];
+      const { getAdminAuth } = await import('@/lib/firebase-admin');
+      const auth = getAdminAuth();
+      if (auth) {
+        const listResult = await auth.listUsers(1000);
+        firebaseUsers = listResult.users || [];
+      }
     } catch {
       // Firebase not configured — profiles-only mode
     }
