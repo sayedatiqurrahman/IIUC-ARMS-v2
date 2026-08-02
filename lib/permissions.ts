@@ -9,6 +9,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   requireGithubForUpload: ['admin', 'manager', 'teacher', 'cr', 'student'],
   manageFaculty: ['admin', 'manager', 'teacher'],
   publishRoutine: ['admin', 'manager', 'teacher', 'cr'],
+  manageBatches: ['admin', 'manager', 'teacher', 'cr', 'acr'],
   manageUsers: ['admin', 'manager'],
   manageSettings: ['admin'],
   moveFile: ['admin'],

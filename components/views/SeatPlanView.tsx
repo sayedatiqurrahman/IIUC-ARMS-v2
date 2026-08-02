@@ -72,6 +72,7 @@ export default function SeatPlanView() {
   const isOwner = config.ownerEmails.includes(email);
   const effectiveRole = config.getEffectiveRole(email, profile.role);
   const showTeacher = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher' || profile.isCR;
+  const canManageBatches = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher' || profile.isCR || profile.isACR;
 
   const [viewMode, setViewMode] = useState<'student' | 'manager' | 'builder'>('student');
   const [builderStep, setBuilderStep] = useState<1 | 2 | 3>(1);
@@ -786,6 +787,8 @@ export default function SeatPlanView() {
                   <span className="text-[0.72rem] text-dark-text3">seats/room</span>
                 </div>
               </div>
+              {canManageBatches && (
+              <>
               <h5 className="text-[0.82rem] font-semibold text-dark-text mb-2"><i className="fas fa-layer-group text-qsis mr-1"></i>Student Batches (Auto-Allocate)</h5>
               <p className="text-[0.68rem] text-dark-text3 mb-2">Define batches by roll ID prefix and range. Use auto-allocate in Step 2 to distribute students into rooms.</p>
               {batchConfigs.length > 0 && (
@@ -829,6 +832,8 @@ export default function SeatPlanView() {
                 </div>
               ) : (
                 <button onClick={() => setShowBatchForm(true)} className="routine-btn mb-4"><i className="fas fa-plus mr-1"></i>Add Batch</button>
+              )}
+              </>
               )}
               <div className="flex justify-end">
                 <button onClick={() => { if (dateInputs.filter(d => d.trim()).length === 0) { showToast('Add dates first', 'error'); return; } setEntries([]); setBuilderStep(2); }} className="routine-btn routine-btn-primary"><i className="fas fa-arrow-right mr-1"></i>Next: Assign Rooms</button>

@@ -73,6 +73,7 @@ const PERMISSION_ACTIONS = [
   { key: 'deleteFile', label: 'Delete Files', desc: 'Delete files and folders permanently', icon: 'fa-times-circle', color: 'text-red-500' },
   { key: 'manageFaculty', label: 'Manage Faculty', desc: 'Add/edit/delete faculty & staff members', icon: 'fa-building', color: 'text-teal-400' },
   { key: 'publishRoutine', label: 'Publish Routine', desc: 'Publish class routines for departments', icon: 'fa-calendar-check', color: 'text-purple-400' },
+  { key: 'manageBatches', label: 'Manage Batches', desc: 'Create/edit student batches for seat plan auto-allocation', icon: 'fa-layer-group', color: 'text-indigo-400' },
   { key: 'manageUsers', label: 'Manage Users', desc: 'Ban, promote, or change user roles', icon: 'fa-users-cog', color: 'text-orange-400' },
   { key: 'manageSettings', label: 'Manage Settings', desc: 'Change site settings and permissions', icon: 'fa-cog', color: 'text-yellow-400' },
 ];
