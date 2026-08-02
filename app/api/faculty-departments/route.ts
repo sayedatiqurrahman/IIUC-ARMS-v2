@@ -20,7 +20,13 @@ export async function GET(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
     const custom = (settings as any)?.customFaculties || [];
-    return NextResponse.json({ success: true, customFaculties: custom, builtInFaculties: FACULTIES });
+    const extraDepts = (settings as any)?.extraDepartments || {};
+    // Merge extra departments into built-in faculties
+    const builtInWithExtras = FACULTIES.map(f => ({
+      ...f,
+      departments: [...f.departments, ...(extraDepts[f.id] || [])],
+    }));
+    return NextResponse.json({ success: true, customFaculties: custom, builtInFaculties: builtInWithExtras });
   } catch {
     return NextResponse.json({ success: true, customFaculties: [], builtInFaculties: FACULTIES });
   }
@@ -79,15 +85,33 @@ export async function POST(req: NextRequest) {
 
       const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
       const custom = ((settings as any)?.customFaculties || []) as CustomFaculty[];
+      const extraDepts = ((settings as any)?.extraDepartments || {}) as Record<string, { id: string; name: string; shortName: string; icon: string }[]>;
 
-      // Check built-in faculties too
-      const allDepts = [...FACULTIES.flatMap(f => f.departments.map(d => d.id)), ...custom.flatMap(f => f.departments.map(d => d.id))];
+      // Check all departments (built-in + custom + extra)
+      const allDepts = [
+        ...FACULTIES.flatMap(f => f.departments.map(d => d.id)),
+        ...custom.flatMap(f => f.departments.map(d => d.id)),
+        ...Object.values(extraDepts).flatMap(depts => depts.map(d => d.id)),
+      ];
       if (allDepts.includes(cleanId)) {
         return NextResponse.json({ error: 'Department ID already exists' }, { status: 409 });
       }
 
+      const deptData = { id: cleanId, name, shortName: shortName.toUpperCase(), icon: icon || 'fa-building' };
+
+      // Check if it's a custom faculty
       const faculty = custom.find(f => f.id === facultyId);
-      if (!faculty) return NextResponse.json({ error: 'Faculty not found' }, { status: 404 });
+      if (faculty) {
+        faculty.departments.push(deptData);
+        await prisma.siteSettings.update({ where: { id: 'site-settings' }, data: { customFaculties: custom as any } });
+      } else if (FACULTIES.some(f => f.id === facultyId)) {
+        // Built-in faculty — store in extraDepartments
+        if (!extraDepts[facultyId]) extraDepts[facultyId] = [];
+        extraDepts[facultyId].push(deptData);
+        await prisma.siteSettings.update({ where: { id: 'site-settings' }, data: { extraDepartments: extraDepts as any } });
+      } else {
+        return NextResponse.json({ error: 'Faculty not found' }, { status: 404 });
+      }
 
       // Create GitHub semester folders
       try {
@@ -101,10 +125,7 @@ export async function POST(req: NextRequest) {
         }
       } catch {}
 
-      faculty.departments.push({ id: cleanId, name, shortName: shortName.toUpperCase(), icon: icon || 'fa-building' });
-      await prisma.siteSettings.update({ where: { id: 'site-settings' }, data: { customFaculties: custom as any } });
-
-      return NextResponse.json({ success: true, department: { id: cleanId, name, shortName: shortName.toUpperCase() } });
+      return NextResponse.json({ success: true, department: deptData });
     }
 
     // ─── DELETE FACULTY ───
@@ -126,12 +147,26 @@ export async function POST(req: NextRequest) {
       const { facultyId, departmentId } = body;
       if (!facultyId || !departmentId) return NextResponse.json({ error: 'facultyId and departmentId required' }, { status: 400 });
       const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
+
+      // Try custom faculty first
       const custom = ((settings as any)?.customFaculties || []) as CustomFaculty[];
       const faculty = custom.find(f => f.id === facultyId);
-      if (!faculty) return NextResponse.json({ error: 'Faculty not found' }, { status: 404 });
-      faculty.departments = faculty.departments.filter(d => d.id !== departmentId);
-      await prisma.siteSettings.update({ where: { id: 'site-settings' }, data: { customFaculties: custom as any } });
-      return NextResponse.json({ success: true });
+      if (faculty) {
+        faculty.departments = faculty.departments.filter(d => d.id !== departmentId);
+        await prisma.siteSettings.update({ where: { id: 'site-settings' }, data: { customFaculties: custom as any } });
+        return NextResponse.json({ success: true });
+      }
+
+      // Try extra departments on built-in faculty
+      const extraDepts = ((settings as any)?.extraDepartments || {}) as Record<string, { id: string }[]>;
+      if (extraDepts[facultyId]) {
+        extraDepts[facultyId] = extraDepts[facultyId].filter(d => d.id !== departmentId);
+        if (extraDepts[facultyId].length === 0) delete extraDepts[facultyId];
+        await prisma.siteSettings.update({ where: { id: 'site-settings' }, data: { extraDepartments: extraDepts as any } });
+        return NextResponse.json({ success: true });
+      }
+
+      return NextResponse.json({ error: 'Faculty not found' }, { status: 404 });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

@@ -79,6 +79,12 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
   const [newFaculty, setNewFaculty] = useState({ id: '', name: '', shortName: '', icon: 'fa-university' });
   const [newDept, setNewDept] = useState({ id: '', name: '', shortName: '', icon: 'fa-building' });
 
+  // Check if a department is built-in (not deletable)
+  const isBuiltinDept = (facultyId: string, deptId: string) => {
+    const faculty = FACULTIES.find(f => f.id === facultyId);
+    return faculty ? faculty.departments.some(d => d.id === deptId) : false;
+  };
+
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/faculty-departments');
@@ -345,12 +351,23 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
                     {faculty.departments.length} departments: {faculty.departments.map(d => d.shortName).join(', ')}
                   </p>
                 </div>
-                <i className={`fas fa-chevron-${expandedFaculties.has(faculty.id) ? 'up' : 'down'} text-dark-text3 text-xs`}></i>
+                <div className="flex items-center gap-1">
+                  {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowNewDeptForm(faculty.id); setExpandedFaculties(prev => new Set(prev).add(faculty.id)); setNewDept({ id: '', name: '', shortName: '', icon: 'fa-building' }); }}
+                      className="p-1.5 text-qsis hover:bg-qsis/10 rounded cursor-pointer border-none bg-transparent"
+                      title="Add department"
+                    >
+                      <i className="fas fa-plus text-xs"></i>
+                    </button>
+                  )}
+                  <i className={`fas fa-chevron-${expandedFaculties.has(faculty.id) ? 'up' : 'down'} text-dark-text3 text-xs`}></i>
+                </div>
               </div>
 
               {expandedFaculties.has(faculty.id) && (
                 <div className="border-t border-dark-border bg-dark-bg3/50 p-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
                     {faculty.departments.map(dept => (
                       <div key={dept.id} className="flex items-center gap-2 p-2 bg-dark-bg2 border border-dark-border rounded-lg">
                         <i className={`fas ${dept.icon} text-qsis text-xs w-4 text-center`}></i>
@@ -358,10 +375,53 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
                           <span className="text-[0.75rem] text-dark-text font-medium">{dept.name}</span>
                           <span className="text-[0.6rem] text-dark-text3 ml-1.5 font-mono">({dept.shortName})</span>
                         </div>
-                        <span className="text-[0.6rem] px-1.5 py-0.5 bg-dark-bg3 text-dark-text3 rounded">{dept.id}</span>
+                        {!isBuiltinDept(faculty.id, dept.id) && (effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                          <button onClick={() => handleDeleteDept(faculty.id, dept.id, dept.name)} className="p-1 text-red-400 hover:bg-red-500/10 rounded cursor-pointer border-none bg-transparent" title="Delete department">
+                            <i className="fas fa-times text-[0.6rem]"></i>
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
+                  {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                    <>
+                      {showNewDeptForm === faculty.id ? (
+                        <div className="bg-dark-bg2 border border-dark-border rounded-lg p-3">
+                          <h5 className="text-[0.75rem] font-semibold text-dark-text mb-2">
+                            <i className="fas fa-plus text-qsis mr-1"></i>New Department in {faculty.shortName}
+                          </h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[0.6rem] text-dark-text3 block mb-0.5">ID *</label>
+                              <input type="text" value={newDept.id} onChange={e => setNewDept({ ...newDept, id: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '') })} placeholder="e.g. me" className="w-full px-2 py-1.5 bg-dark-bg3 border border-dark-border rounded text-dark-text text-[0.75rem]" />
+                            </div>
+                            <div>
+                              <label className="text-[0.6rem] text-dark-text3 block mb-0.5">Full Name *</label>
+                              <input type="text" value={newDept.name} onChange={e => { const name = e.target.value; const id = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10); const shortName = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 5); setNewDept({ ...newDept, name, id, shortName }); }} placeholder="e.g. Mechanical Engineering" className="w-full px-2 py-1.5 bg-dark-bg3 border border-dark-border rounded text-dark-text text-[0.75rem]" />
+                            </div>
+                            <div>
+                              <label className="text-[0.6rem] text-dark-text3 block mb-0.5">Short Name *</label>
+                              <input type="text" value={newDept.shortName} onChange={e => setNewDept({ ...newDept, shortName: e.target.value.toUpperCase() })} placeholder="e.g. ME" className="w-full px-2 py-1.5 bg-dark-bg3 border border-dark-border rounded text-dark-text text-[0.75rem]" />
+                            </div>
+                            <div>
+                              <label className="text-[0.6rem] text-dark-text3 block mb-0.5">Icon</label>
+                              <CustomSelect options={ICON_OPTIONS.map(o => ({ value: o.value, label: o.label }))} value={newDept.icon} onChange={val => setNewDept({ ...newDept, icon: val })} placeholder="Select icon" />
+                            </div>
+                          </div>
+                          <div className="flex gap-2 mt-2">
+                            <button onClick={() => handleCreateDept(faculty.id)} disabled={saving} className="px-3 py-1.5 bg-qsis text-white rounded text-[0.7rem] font-semibold hover:bg-qsis/90 cursor-pointer border-none disabled:opacity-50">
+                              {saving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Creating...</> : <><i className="fas fa-check mr-1"></i>Create</>}
+                            </button>
+                            <button onClick={() => { setShowNewDeptForm(null); setNewDept({ id: '', name: '', shortName: '', icon: 'fa-building' }); }} className="px-3 py-1.5 bg-dark-bg3 text-dark-text2 rounded text-[0.7rem] hover:bg-dark-border cursor-pointer border-none">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => { setShowNewDeptForm(faculty.id); setNewDept({ id: '', name: '', shortName: '', icon: 'fa-building' }); }} className="w-full p-2 border border-dashed border-dark-border rounded-lg text-[0.7rem] text-dark-text3 hover:text-qsis hover:border-qsis/50 cursor-pointer bg-transparent transition-colors">
+                          <i className="fas fa-plus mr-1"></i>Add Department
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -407,6 +467,15 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
                         title="Delete faculty"
                       >
                         <i className="fas fa-trash text-xs"></i>
+                      </button>
+                    )}
+                    {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowNewDeptForm(faculty.id); setExpandedFaculties(prev => new Set(prev).add(faculty.id)); setNewDept({ id: '', name: '', shortName: '', icon: 'fa-building' }); }}
+                        className="p-1.5 text-qsis hover:bg-qsis/10 rounded cursor-pointer border-none bg-transparent"
+                        title="Add department"
+                      >
+                        <i className="fas fa-plus text-xs"></i>
                       </button>
                     )}
                     <i className={`fas fa-chevron-${expandedFaculties.has(faculty.id) ? 'up' : 'down'} text-dark-text3 text-xs`}></i>

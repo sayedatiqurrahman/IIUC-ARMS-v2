@@ -110,6 +110,7 @@ model SiteSettings {
   permissions         Json     @default("{}")
   contributorSettings Json     @default("{}")
   customFaculties     Json     @default("[]")
+  extraDepartments    Json     @default("{}")
   updatedAt           DateTime @updatedAt
 }
 

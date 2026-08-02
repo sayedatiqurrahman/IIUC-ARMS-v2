@@ -30,6 +30,19 @@ async function main() {
     }
   }
 
+  const settingsColumns = [
+    { name: 'extraDepartments', table: 'SiteSettings', type: "JSONB DEFAULT '{}'" },
+  ];
+
+  for (const col of settingsColumns) {
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "${col.table}" ADD COLUMN IF NOT EXISTS "${col.name}" ${col.type}`);
+      console.log(`✅ ${col.table}.${col.name}`);
+    } catch (e) {
+      console.log(`⏭ ${col.table}.${col.name}: ${e.message?.substring(0, 60)}`);
+    }
+  }
+
   const count = await prisma.profile.count();
   console.log(`\nTotal profiles: ${count}`);
   await prisma.$disconnect();
