@@ -11,6 +11,7 @@ import { updateUserProfile } from '@/lib/firebase';
 import { installGitHubApp } from '@/lib/github-install';
 import { FACULTIES, TEACHER_TITLES } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
+import { useConfirm } from '@/components/ConfirmModal';
 
 function extractUniversityId(email: string): string {
   const match = email.match(/^(q\d+)/i);
@@ -20,6 +21,7 @@ function extractUniversityId(email: string): string {
 export default function DashboardView() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { confirm, confirmDialog } = useConfirm();
   const profile = useAppStore(s => s.profile);
   const updateProfile = useAppStore(s => s.updateProfile);
   const recentReads = useAppStore(s => s.recentReads);
@@ -173,7 +175,7 @@ export default function DashboardView() {
   }, [profile.githubToken, profile.githubLogin, profile.githubAvatar, hasGitHub]);
 
   async function handleDisconnect() {
-    if (!confirm('Disconnect this GitHub account? You can reconnect later.')) return;
+    if (!await confirm({ message: 'Disconnect this GitHub account? You can reconnect later.', danger: true, title: 'Disconnect GitHub' })) return;
     try {
       const res = await fetch('/api/profile', {
         method: 'POST',
@@ -1128,7 +1130,7 @@ export default function DashboardView() {
                       </div>
                       <button
                         onClick={async () => {
-                          if (!confirm(`Transfer CR role to ${p.name || p.userId}? You will lose CR privileges.`)) return;
+                          if (!await confirm({ message: `Transfer CR role to ${p.name || p.userId}? You will lose CR privileges.`, danger: true, title: 'Transfer CR Role' })) return;
                           setSwitchCRLoading(true);
                           setSwitchCRMsg('');
                           setSwitchCRErr('');
@@ -1270,12 +1272,14 @@ export default function DashboardView() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </section>
   );
 }
 
 /* ─── Teacher Management Section (for admin/teacher/manager) ─── */
 function TeacherInfoSection({ email, profile }: { email: string; profile: any }) {
+  const { confirm, confirmDialog } = useConfirm();
   const effectiveRole = config.getEffectiveRole(email, profile.role);
   const isAdmin = effectiveRole === 'admin';
   const myDept = profile.department || '';
@@ -1353,7 +1357,7 @@ function TeacherInfoSection({ email, profile }: { email: string; profile: any })
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Remove ${name} from faculty directory?`)) return;
+    if (!await confirm({ message: `Remove ${name} from faculty directory?`, danger: true, title: 'Remove Faculty' })) return;
     try {
       const res = await fetch(`/api/faculty?id=${id}`, { method: 'DELETE' });
       const data = await res.json();
@@ -1550,6 +1554,7 @@ function TeacherInfoSection({ email, profile }: { email: string; profile: any })
           <i className="fas fa-plus-circle mr-2"></i>Add Your Teacher Info
         </button>
       )}
+      {confirmDialog}
     </div>
   );
 }

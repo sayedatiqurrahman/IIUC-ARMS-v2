@@ -8,6 +8,7 @@ import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import CustomSelect from '@/components/CustomSelect';
+import { useConfirm } from '@/components/ConfirmModal';
 
 interface RoutinePeriod {
   name: string;
@@ -341,6 +342,7 @@ type ViewMode = 'manager' | 'preview' | 'builder' | 'allBranch';
 export default function RoutineView() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { confirm, confirmDialog } = useConfirm();
   const routineData = useAppStore(s => s.routineData);
   const routineLoading = useAppStore(s => s.routineLoading);
   const loadRoutine = useAppStore(s => s.loadRoutine);
@@ -439,8 +441,8 @@ export default function RoutineView() {
     setViewMode('builder');
   }, []);
 
-  const handleDelete = useCallback((id: string) => {
-    if (!confirm('Delete this routine?')) return;
+  const handleDelete = useCallback(async (id: string) => {
+    if (!await confirm({ message: 'Delete this routine?', danger: true, title: 'Delete Routine' })) return;
     const updated = myRoutines.filter(r => r.id !== id);
     persistMyRoutines(updated);
     showToast('Routine deleted', 'success');
@@ -458,12 +460,12 @@ export default function RoutineView() {
     showToast('Routine duplicated', 'success');
   }, [myRoutines, persistMyRoutines]);
 
-  const handlePublish = useCallback((routine: RoutineItem) => {
+  const handlePublish = useCallback(async (routine: RoutineItem) => {
     if (!canPublish) {
       showToast('Permission denied: Only Admin, Manager, or Teacher can publish routines.', 'error');
       return;
     }
-    if (!confirm(`Publish "${routine.semester}" for all users?`)) return;
+    if (!await confirm({ message: `Publish "${routine.semester}" for all users?`, title: 'Publish Routine' })) return;
     const publisherName = session?.user?.name || profile.name || 'Unknown';
     const published = {
       ...routine,
@@ -751,8 +753,8 @@ export default function RoutineView() {
                         <button className="routine-card-btn routine-card-btn-view" onClick={() => setViewMode('allBranch')}>
                           <i className="fas fa-edit"></i> Continue Editing
                         </button>
-                        <button className="routine-card-btn routine-card-btn-delete" onClick={() => {
-                          if (confirm('Delete all-semester draft?')) {
+                        <button className="routine-card-btn routine-card-btn-delete" onClick={async () => {
+                          if (await confirm({ message: 'Delete all-semester draft?', danger: true, title: 'Delete Draft' })) {
                             clearAllSemDraft();
                             setHasAllSemDraft(false);
                             setAllSemDraftData(null);
@@ -864,6 +866,7 @@ export default function RoutineView() {
           onBack={() => setViewMode('manager')}
         />
       )}
+      {confirmDialog}
     </section>
   );
 }
@@ -879,6 +882,7 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
   onPublish: (routines: RoutineItem[]) => void;
   onBack: () => void;
 }) {
+  const { confirm, confirmDialog } = useConfirm();
   const [draft, setDraft] = useState<AllSemesterDraft>(() => {
     const existing = loadAllSemDraft();
     if (existing) {
@@ -1020,8 +1024,8 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
     setNewSemName(''); setAddingSem(false);
   };
 
-  const removeSemester = (idx: number) => {
-    if (!confirm(`Delete "${draft.semesters[idx].name}"?`)) return;
+  const removeSemester = async (idx: number) => {
+    if (!await confirm({ message: `Delete "${draft.semesters[idx].name}"?`, danger: true, title: 'Delete Semester' })) return;
     updateDraft({ semesters: draft.semesters.filter((_, i) => i !== idx) });
   };
 
@@ -1037,8 +1041,8 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
     setDraft(updated);
   };
 
-  const removeSectionFromSem = (semIdx: number, sectionIdx: number) => {
-    if (!confirm('Delete this section?')) return;
+  const removeSectionFromSem = async (semIdx: number, sectionIdx: number) => {
+    if (!await confirm({ message: 'Delete this section?', danger: true, title: 'Delete Section' })) return;
     const updated = { ...draft };
     updated.semesters = [...updated.semesters];
     updated.semesters[semIdx] = { ...updated.semesters[semIdx], sections: updated.semesters[semIdx].sections.filter((_, i) => i !== sectionIdx) };
@@ -1096,7 +1100,7 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
     updateDraft(gender === 'male' ? { malePeriods: periods } : { femalePeriods: periods });
   };
 
-  const handlePublishAll = () => {
+  const handlePublishAll = async () => {
     if (Object.keys(conflictMap).length > 0) {
       showToast('Cannot publish — teacher conflicts detected! Fix all conflicts first.', 'error');
       return;
@@ -1148,7 +1152,7 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
       }
     }
     if (routines.length === 0) { showToast('No sections to publish', 'error'); return; }
-    if (!confirm(`Publish ${routines.length} routine(s)?`)) return;
+    if (!await confirm({ message: `Publish ${routines.length} routine(s)?`, title: 'Publish Routines' })) return;
     onPublish(routines);
     showToast(`${routines.length} routines published!`, 'success');
   };
@@ -1594,6 +1598,7 @@ function AllSemesterView({ publishedRoutines, onView, onPublish, onBack }: {
           )}
         </div>
       </div>
+      {confirmDialog}
     </>
   );
 }

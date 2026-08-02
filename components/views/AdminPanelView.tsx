@@ -9,6 +9,7 @@ import { showToast } from '@/lib/utils';
 import { useAppStore } from '@/lib/store';
 import { FACULTIES, TEACHER_TITLES, STAFF_DESIGNATIONS } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
+import { useConfirm } from '@/components/ConfirmModal';
 
 interface UserRecord {
   email: string;
@@ -910,6 +911,7 @@ function TelegramTab({ isOwner }: { isOwner: boolean }) {
 
 export default function AdminPanelView() {
   const { data: session } = useSession();
+  const { confirm, confirmDialog } = useConfirm();
   const router = useRouter();
   const profile = useAppStore(s => s.profile);
 
@@ -1003,7 +1005,7 @@ export default function AdminPanelView() {
       if (reason === null) return;
       banReason = reason;
     } else {
-      if (!confirm(`Unban user ${targetEmail}?`)) return;
+      if (!await confirm({ message: `Unban user ${targetEmail}?`, title: 'Unban User' })) return;
     }
     setActionLoading(targetEmail + action);
     try {
@@ -1027,7 +1029,7 @@ export default function AdminPanelView() {
   };
 
   const handleSetRole = async (targetEmail: string, newRole: string) => {
-    if (!confirm(`Change ${targetEmail}'s role to ${newRole}?`)) return;
+    if (!await confirm({ message: `Change ${targetEmail}'s role to ${newRole}?`, title: 'Change Role' })) return;
     setActionLoading(targetEmail + 'role');
     try {
       const res = await fetch('/api/admin/users', {
@@ -1105,7 +1107,7 @@ export default function AdminPanelView() {
       await handleSetRole(targetEmail, 'student');
       return;
     }
-    if (!confirm(`Promote ${targetEmail} to Manager? You will remain admin.`)) return;
+    if (!await confirm({ message: `Promote ${targetEmail} to Manager? You will remain admin.`, title: 'Promote to Manager' })) return;
     setActionLoading(targetEmail + 'manager');
     try {
       const res = await fetch('/api/admin/users', {
@@ -1198,7 +1200,7 @@ export default function AdminPanelView() {
   };
 
   const handleDeleteFaculty = async (id: string, name: string) => {
-    if (!confirm(`Remove ${name} from faculty?`)) return;
+    if (!await confirm({ message: `Remove ${name} from faculty?`, danger: true, title: 'Remove Faculty' })) return;
     try {
       const res = await fetch(`/api/faculty?id=${id}`, { method: 'DELETE' });
       const data = await res.json();
@@ -1291,7 +1293,7 @@ export default function AdminPanelView() {
   };
 
   const handleBulkVisibility = async (department: string, visible: boolean) => {
-    if (!confirm(`${visible ? 'Show' : 'Hide'} ALL faculty in this department publicly?`)) return;
+    if (!await confirm({ message: `${visible ? 'Show' : 'Hide'} ALL faculty in this department publicly?`, title: 'Bulk Visibility' })) return;
     try {
       const res = await fetch('/api/faculty', {
         method: 'PATCH',
@@ -2037,6 +2039,7 @@ export default function AdminPanelView() {
           })}
         </div>
       )}
+      {confirmDialog}
     </section>
   );
 }

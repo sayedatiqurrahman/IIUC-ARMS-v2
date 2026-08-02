@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
@@ -9,6 +9,7 @@ import { ExamSlot, DEFAULT_EXAM_SLOTS, loadExamSlots, saveExamSlots, getEnabledS
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import CustomSelect from '@/components/CustomSelect';
 import { FACULTIES, findDepartment } from '@/lib/departments';
+import { useConfirm } from '@/components/ConfirmModal';
 
 function getDefaultSession(): string {
   const now = new Date();
@@ -155,6 +156,26 @@ export default function ExamRoutineView() {
     setExamRoutines(r);
     localStorage.setItem(LS_EXAM_DRAFTS, JSON.stringify(r));
   }, []);
+
+  // Auto-save single routine draft every 3 seconds of inactivity
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (viewMode !== 'builder') return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (!semester && !sessionVal && rows.every(r => !r.date)) return;
+      const draft: ExamRoutineItem = {
+        id: editingId || `draft-${Date.now()}`,
+        semester, session: sessionVal, department, examType,
+        rows, slots: examSlots,
+        createdAt: Date.now(), isDraft: true, published: false,
+      };
+      const updated = examRoutines.filter(d => d.id !== draft.id);
+      updated.push(draft);
+      persistDrafts(updated);
+    }, 3000);
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+  }, [rows, semester, sessionVal, department, examType, examSlots, viewMode, editingId]);
 
   const enabledSlots = getEnabledSlots(examSlots);
 
@@ -857,6 +878,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   onSaveDraft: (items: ExamRoutineItem[]) => void;
   onBack: () => void;
 }) {
+  const { confirm, confirmDialog } = useConfirm();
   const [step, setStep] = useState<ExamAllStep>('setup');
   const [sessionVal, setSessionVal] = useState('');
   const [department, setDepartment] = useState('qsis');
@@ -1001,10 +1023,10 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
     return items;
   };
 
-  const handleSaveDraftAll = () => {
+  const handleSaveDraftAll = async () => {
     const items = buildAllItems();
     if (!items) return;
-    if (!confirm(`Save ${items.length} exam routines as draft?`)) return;
+    if (!await confirm({ message: `Save ${items.length} exam routines as draft?`, title: 'Save Draft' })) return;
     onSaveDraft(items);
     showToast(`${items.length} exam routines saved as draft!`, 'success');
     setShowPublishMenu(false);
@@ -1012,14 +1034,14 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
   const handleSaveToCloudAll = async () => {
     const items = buildAllItems();
     if (!items) return;
-    if (!confirm(`Save ${items.length} exam routines to cloud? (Private)`)) return;
+    if (!await confirm({ message: `Save ${items.length} exam routines to cloud? (Private)`, title: 'Save to Cloud' })) return;
     await onSaveToCloud(items);
     setShowPublishMenu(false);
   };
   const handlePublishAll = async () => {
     const items = buildAllItems();
     if (!items) return;
-    if (!confirm(`Publish ${items.length} exam routines? (Visible to all students)`)) return;
+    if (!await confirm({ message: `Publish ${items.length} exam routines? (Visible to all students)`, title: 'Publish Exam Routines' })) return;
     await onPublish(items);
     setShowPublishMenu(false);
   };
@@ -1283,6 +1305,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
           </div>
         </div>
       )}
+      {confirmDialog}
     </>
   );
 }

@@ -7,6 +7,7 @@ import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
 import CustomSelect from '@/components/CustomSelect';
+import { useConfirm } from '@/components/ConfirmModal';
 
 interface FacultyMember {
   id: string;
@@ -23,6 +24,7 @@ interface FacultyMember {
 
 export default function FacultyView() {
   const { data: session } = useSession();
+  const { confirm, confirmDialog } = useConfirm();
   const profile = useAppStore(s => s.profile);
   const email = session?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
@@ -166,7 +168,7 @@ export default function FacultyView() {
                 <i className="fas fa-pen"></i>
               </button>
               <button onClick={async () => {
-                if (!confirm(`Remove ${m.name} from directory?`)) return;
+                if (!await confirm({ message: `Remove ${m.name} from directory?`, danger: true, title: 'Remove Member' })) return;
                 const res = await fetch(`/api/faculty?id=${m.id}`, { method: 'DELETE' });
                 const data = await res.json();
                 if (data.success) { showToast(`${m.name} removed`, 'success'); fetchMembers(); }
@@ -331,6 +333,7 @@ export default function FacultyView() {
           );
         })
       )}
+      {confirmDialog}
     </section>
   );
 }

@@ -23,10 +23,11 @@ export default function TeacherAutocomplete({ value, onChange, department, place
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [prevValue, setPrevValue] = useState(value);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setQuery(value); }, [value]);
+  useEffect(() => { setQuery(value); setPrevValue(value); }, [value]);
 
   useEffect(() => {
     if (query.length < 1) { setSuggestions([]); return; }
@@ -82,7 +83,8 @@ export default function TeacherAutocomplete({ value, onChange, department, place
         type="text"
         value={query}
         onChange={e => { setQuery(e.target.value); setShowDropdown(true); setHighlightIdx(-1); onChange(e.target.value); }}
-        onFocus={() => { if (suggestions.length > 0) setShowDropdown(true); }}
+        onFocus={() => { setPrevValue(value); setQuery(''); setShowDropdown(true); }}
+        onBlur={() => { setTimeout(() => { if (!query) { setQuery(prevValue); onChange(prevValue); } setShowDropdown(false); }, 200); }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder || 'Type name or short form...'}
         className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
