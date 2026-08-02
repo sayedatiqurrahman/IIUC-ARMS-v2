@@ -87,7 +87,7 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 p-4">
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative max-h-[90vh] flex flex-col">
         {/* Close button */}
         <button onClick={handleClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-dark-bg3/80 hover:bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-dark-text border-none cursor-pointer z-10 transition-colors" title="Close">
