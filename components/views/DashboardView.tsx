@@ -596,20 +596,27 @@ export default function DashboardView() {
                 <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-whatsapp mr-1"></i>WhatsApp</label>
                 <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
               </div>
-              <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1"></i>Telegram ID / Username</label>
-                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or 123456789" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
-                {profile.telegramId && profile.telegramChatId ? (
-                  <p className="text-[0.65rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected — you&apos;ll receive routine & notification updates via Telegram</p>
-                ) : profile.telegramId ? (
-                  <p className="text-[0.65rem] text-yellow-400 mt-0.5">
-                    <i className="fas fa-link mr-0.5"></i>Set! Now open{' '}
-                    <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="underline text-qsis">@iiuc_arms_bot</a>{' '}
-                    and send <code className="bg-dark-bg px-0.5 rounded text-qsis">/start</code> to connect
-                  </p>
-                ) : (
-                  <p className="text-[0.65rem] text-dark-text3 mt-0.5">Receive department routines & notifications via Telegram DM</p>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1"></i>Telegram ID / Username</label>
+                  <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or 123456789" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
+                  {profile.telegramId && profile.telegramChatId ? (
+                    <p className="text-[0.65rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected — you&apos;ll receive routine & notification updates via Telegram</p>
+                  ) : profile.telegramId ? (
+                    <p className="text-[0.65rem] text-yellow-400 mt-0.5">
+                      <i className="fas fa-link mr-0.5"></i>Set! Now open{' '}
+                      <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="underline text-qsis">@iiuc_arms_bot</a>{' '}
+                      and send <code className="bg-dark-bg px-0.5 rounded text-qsis">/start</code> to connect
+                    </p>
+                  ) : (
+                    <p className="text-[0.65rem] text-dark-text3 mt-0.5">Receive department routines & notifications via Telegram DM</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-envelope mr-1"></i>Public Email <span className="text-dark-text3">(shown on profile)</span></label>
+                  <input type="email" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. yourmail@gmail.com" value={profileForm.publicEmail} onChange={e => setProfileForm(p => ({ ...p, publicEmail: e.target.value }))} />
+                  <p className="text-[0.65rem] text-dark-text3 mt-0.5">Leave empty to use login email</p>
+                </div>
               </div>
               {isStudent && (
                 <div>
@@ -629,13 +636,6 @@ export default function DashboardView() {
                 <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-link mr-1"></i>Company URL</label>
                 <input type="url" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="https://..." value={profileForm.companyUrl} onChange={e => setProfileForm(p => ({ ...p, companyUrl: e.target.value }))} />
               </div>
-            </div>
-
-            {/* Public Email */}
-            <div className="mb-3">
-              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-envelope mr-1"></i>Public Email <span className="text-dark-text3">(shown on your public profile)</span></label>
-              <input type="email" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. yourmail@gmail.com" value={profileForm.publicEmail} onChange={e => setProfileForm(p => ({ ...p, publicEmail: e.target.value }))} />
-              <p className="text-[0.65rem] text-dark-text3 mt-1">Leave empty to use your login email. Set a custom email to control what the public sees.</p>
             </div>
 
             {/* Privacy Toggles */}
