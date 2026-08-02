@@ -108,6 +108,7 @@ model SiteSettings {
   id                  String   @id @default("site-settings")
   permissions         Json     @default("{}")
   contributorSettings Json     @default("{}")
+  customFaculties     Json     @default("[]")
   updatedAt           DateTime @updatedAt
 }
 

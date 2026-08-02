@@ -10,6 +10,7 @@ import { useAppStore } from '@/lib/store';
 import { FACULTIES, TEACHER_TITLES, STAFF_DESIGNATIONS } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
 import { useConfirm } from '@/components/ConfirmModal';
+import FacultyDeptTab from './FacultyDeptTab';
 
 interface UserRecord {
   email: string;
@@ -52,7 +53,7 @@ interface AdminStats {
   banned: number;
 }
 
-type Tab = 'overview' | 'users' | 'activity' | 'faculty' | 'courses' | 'permissions' | 'rooms' | 'batches' | 'telegram' | 'contributors';
+type Tab = 'overview' | 'users' | 'activity' | 'faculty' | 'facultyDept' | 'courses' | 'permissions' | 'rooms' | 'batches' | 'telegram' | 'contributors';
 type UserSubTab = 'all' | 'admin' | 'manager' | 'teacher' | 'student';
 
 const ALL_ROLES = [
@@ -2148,7 +2149,8 @@ export default function AdminPanelView() {
   const TABS: { key: Tab; label: string; icon: string; color: string; show: boolean }[] = [
     { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', color: 'text-qsis', show: isAdmin || isManager },
     { key: 'users', label: 'All Users', icon: 'fa-users', color: 'text-dark-text2', show: isAdmin || isManager },
-    { key: 'faculty', label: 'Faculty', icon: 'fa-building', color: 'text-teal-400', show: isAdmin || isManager || effectiveRole === 'teacher' },
+    { key: 'faculty', label: 'Faculty Members', icon: 'fa-chalkboard-teacher', color: 'text-teal-400', show: isAdmin || isManager || effectiveRole === 'teacher' },
+    { key: 'facultyDept', label: 'Faculties & Depts', icon: 'fa-building', color: 'text-purple-400', show: isAdmin || isManager },
     { key: 'courses', label: 'Courses', icon: 'fa-book', color: 'text-indigo-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR },
     { key: 'rooms', label: 'Rooms', icon: 'fa-door-open', color: 'text-cyan-400', show: isAdmin || isManager || effectiveRole === 'teacher' },
     { key: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR },
@@ -2183,21 +2185,171 @@ export default function AdminPanelView() {
         </div>
       )}
 
-      {/* Tab Navigation */}
-      <div className="flex gap-1 mb-5 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto">
-        {TABS.filter(t => t.show).map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none whitespace-nowrap ${
-              activeTab === tab.key ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
-            }`}
-          >
-            <i className={`fas ${tab.icon} ${activeTab === tab.key ? 'text-white' : tab.color}`}></i>
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Tab Navigation - Sidebar + Content */}
+      <div className="flex gap-4 mb-5">
+        {/* Sidebar */}
+        <div className="w-48 flex-shrink-0 hidden md:block">
+          <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sticky top-20">
+            {/* Overview */}
+            {(isAdmin || isManager) && (
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                  activeTab === 'overview' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                }`}
+              >
+                <i className={`fas fa-chart-pie w-4 text-center ${activeTab === 'overview' ? 'text-white' : 'text-qsis'}`}></i>
+                Overview
+              </button>
+            )}
+
+            {/* Users */}
+            {(isAdmin || isManager) && (
+              <div className="mt-2">
+                <p className="text-[0.6rem] uppercase tracking-wider text-dark-text3 px-3 mb-1">Users</p>
+                <button
+                  onClick={() => setActiveTab('users')}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                    activeTab === 'users' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                  }`}
+                >
+                  <i className={`fas fa-users w-4 text-center ${activeTab === 'users' ? 'text-white' : 'text-dark-text2'}`}></i>
+                  All Users
+                </button>
+              </div>
+            )}
+
+            {/* Academic */}
+            {(isAdmin || isManager || effectiveRole === 'teacher') && (
+              <div className="mt-2">
+                <p className="text-[0.6rem] uppercase tracking-wider text-dark-text3 px-3 mb-1">Academic</p>
+                <button
+                  onClick={() => setActiveTab('faculty')}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                    activeTab === 'faculty' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                  }`}
+                >
+                  <i className={`fas fa-chalkboard-teacher w-4 text-center ${activeTab === 'faculty' ? 'text-white' : 'text-teal-400'}`}></i>
+                  Faculty Members
+                </button>
+                {(isAdmin || isManager) && (
+                  <button
+                    onClick={() => setActiveTab('facultyDept')}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                      activeTab === 'facultyDept' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                    }`}
+                  >
+                    <i className={`fas fa-building w-4 text-center ${activeTab === 'facultyDept' ? 'text-white' : 'text-purple-400'}`}></i>
+                    Faculties &amp; Depts
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Content */}
+            {(isAdmin || isManager || effectiveRole === 'teacher' || !!profile?.isCR) && (
+              <div className="mt-2">
+                <p className="text-[0.6rem] uppercase tracking-wider text-dark-text3 px-3 mb-1">Content</p>
+                <button
+                  onClick={() => setActiveTab('courses')}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                    activeTab === 'courses' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                  }`}
+                >
+                  <i className={`fas fa-book w-4 text-center ${activeTab === 'courses' ? 'text-white' : 'text-indigo-400'}`}></i>
+                  Courses
+                </button>
+                <button
+                  onClick={() => setActiveTab('rooms')}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                    activeTab === 'rooms' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                  }`}
+                >
+                  <i className={`fas fa-door-open w-4 text-center ${activeTab === 'rooms' ? 'text-white' : 'text-cyan-400'}`}></i>
+                  Rooms
+                </button>
+                <button
+                  onClick={() => setActiveTab('batches')}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                    activeTab === 'batches' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                  }`}
+                >
+                  <i className={`fas fa-layer-group w-4 text-center ${activeTab === 'batches' ? 'text-white' : 'text-purple-400'}`}></i>
+                  Batches
+                </button>
+              </div>
+            )}
+
+            {/* System */}
+            {isAdmin && (
+              <div className="mt-2">
+                <p className="text-[0.6rem] uppercase tracking-wider text-dark-text3 px-3 mb-1">System</p>
+                <button
+                  onClick={() => setActiveTab('permissions')}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                    activeTab === 'permissions' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                  }`}
+                >
+                  <i className={`fas fa-key w-4 text-center ${activeTab === 'permissions' ? 'text-white' : 'text-amber-400'}`}></i>
+                  Permissions
+                </button>
+                <button
+                  onClick={() => setActiveTab('contributors')}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                    activeTab === 'contributors' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                  }`}
+                >
+                  <i className={`fas fa-users w-4 text-center ${activeTab === 'contributors' ? 'text-white' : 'text-teal-400'}`}></i>
+                  Contributors
+                </button>
+              </div>
+            )}
+
+            {/* Other */}
+            {(isOwner || isAdmin || isManager) && (
+              <div className="mt-2">
+                <p className="text-[0.6rem] uppercase tracking-wider text-dark-text3 px-3 mb-1">Other</p>
+                {isOwner && (
+                  <button
+                    onClick={() => setActiveTab('telegram')}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                      activeTab === 'telegram' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                    }`}
+                  >
+                    <i className={`fas fa-paper-plane w-4 text-center ${activeTab === 'telegram' ? 'text-white' : 'text-cyan-400'}`}></i>
+                    Telegram
+                  </button>
+                )}
+                <button
+                  onClick={() => setActiveTab('activity')}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none text-left ${
+                    activeTab === 'activity' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                  }`}
+                >
+                  <i className={`fas fa-history w-4 text-center ${activeTab === 'activity' ? 'text-white' : 'text-yellow-400'}`}></i>
+                  Activity Log
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mobile Tab Bar */}
+        <div className="flex-1 min-w-0">
+          <div className="flex gap-1 mb-4 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto md:hidden">
+            {TABS.filter(t => t.show).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none whitespace-nowrap ${
+                  activeTab === tab.key ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                }`}
+              >
+                <i className={`fas ${tab.icon} ${activeTab === tab.key ? 'text-white' : tab.color}`}></i>
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
       {/* Overview Tab */}
       {activeTab === 'overview' && stats && (
@@ -2686,6 +2838,9 @@ export default function AdminPanelView() {
         </div>
       )}
 
+      {/* Faculty & Departments Tab */}
+      {activeTab === 'facultyDept' && <FacultyDeptTab effectiveRole={effectiveRole} profile={profile} />}
+
       {/* Courses Tab */}
       {activeTab === 'courses' && <CoursesTab effectiveRole={effectiveRole} profile={profile} />}
 
@@ -2725,6 +2880,8 @@ export default function AdminPanelView() {
           })}
         </div>
       )}
+        </div>{/* end flex-1 min-w-0 */}
+      </div>{/* end flex gap-4 */}
       {confirmDialog}
     </section>
   );
