@@ -2,6 +2,8 @@ import { FACULTIES } from './departments';
 
 export type UserRole = 'admin' | 'manager' | 'teacher' | 'student' | 'user';
 
+export const APP_VERSION = '2.1.0';
+
 export const config = {
   owner: 'sayedatiqurrahman',
   repo: 'QSIS-ACADEMIC-FILES-MANAFGER',

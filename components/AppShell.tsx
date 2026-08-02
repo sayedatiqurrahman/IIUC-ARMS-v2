@@ -12,6 +12,7 @@ import OnboardingModal, { getOnboardingData, type OnboardingData } from '@/compo
 import { useState, useEffect, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { config } from '@/lib/config';
+import { checkAndBustCache, forceResetApp } from '@/lib/cache';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -60,6 +61,30 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Auto-cache-bust on version update
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+  useEffect(() => {
+    const updated = checkAndBustCache();
+    if (updated) {
+      window.location.reload();
+      return;
+    }
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                setShowUpdateBanner(true);
+              }
+            });
+          }
+        });
+      });
+    }
+  }, []);
+
   // Refresh tree when user returns to tab (visibility change) — no polling, saves API calls
   useEffect(() => {
     function onVisibilityChange() {
@@ -89,11 +114,37 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Ctrl+Shift+R for force reset
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+        e.preventDefault();
+        if (window.confirm('Reset App? This will clear all cached data and reload.')) {
+          forceResetApp();
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, []);
+
   const isBrowse = pathname === '/' || pathname.startsWith('/semester');
   const isActive = (path: string) => pathname === path;
 
   return (
     <div className="min-h-screen bg-dark-bg text-dark-text">
+      {showUpdateBanner && (
+        <div className="bg-gradient-to-r from-qsis to-accent text-white px-4 py-2 text-center text-[0.82rem] font-medium flex items-center justify-center gap-3 z-[200] relative">
+          <i className="fas fa-download"></i>
+          <span>New update available!</span>
+          <button onClick={() => window.location.reload()} className="px-3 py-1 rounded-lg bg-white/20 hover:bg-white/30 border-none cursor-pointer text-white text-[0.78rem] font-semibold transition-colors">
+            <i className="fas fa-sync-alt mr-1"></i>Update Now
+          </button>
+          <button onClick={() => setShowUpdateBanner(false)} className="px-2 py-1 rounded-lg bg-transparent hover:bg-white/10 border-none cursor-pointer text-white/70 text-[0.78rem] transition-colors">
+            <i className="fas fa-times"></i>
+          </button>
+        </div>
+      )}
       {/* NAVBAR */}
       <nav className="sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border">
         <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex items-center justify-between gap-4">
@@ -316,6 +367,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <p className="text-[0.65rem] text-dark-text3 leading-relaxed">A centralized platform for managing and sharing<br/>academic resources for QSIS, IIUC.</p>
                 <p className="text-[0.6rem] text-dark-text3 mt-2">&copy; {new Date().getFullYear()} IIUC-ARMS</p>
               </div>
+              {/* Reset App */}
+              <button
+                onClick={() => { if (window.confirm('Reset App? This will clear all cached data and reload.')) forceResetApp(); }}
+                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer text-[0.8rem] font-medium"
+              >
+                <i className="fas fa-trash-alt"></i> Reset App <span className="text-[0.62rem] opacity-60">(Ctrl+Shift+R)</span>
+              </button>
             </div>
           </div>
         </div>
@@ -399,6 +457,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="border-t border-dark-border mt-6 pt-5 pb-8  flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-[0.72rem] text-dark-text2">&copy; {new Date().getFullYear()} IIUC-ARMS. All rights reserved.</p>
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+              <button
+                onClick={() => { if (window.confirm('Reset App? This will clear all cached data and reload.')) forceResetApp(); }}
+                className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-[0.65rem] sm:text-[0.72rem] text-red-400 hover:bg-red-500/20 transition-all cursor-pointer"
+                title="Force Reset App (Ctrl+Shift+R)"
+              >
+                <i className="fas fa-trash-alt"></i> Reset App
+              </button>
               <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
                 <i className="fas fa-star text-yellow-500"></i> Star Files Repo
               </a>
