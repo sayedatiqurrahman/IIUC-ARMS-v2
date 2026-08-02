@@ -199,6 +199,7 @@ interface AppState {
 
   dbCourses: { id: string; department: string; semester: string; code: string; title: string; addedBy: string | null }[];
   loadCourses: () => Promise<void>;
+  invalidateCoursesCache: () => void;
   addCourse: (dept: string, sem: string, code: string, title: string) => Promise<{ success: boolean; error?: string }>;
   editCourse: (id: string, title: string) => Promise<{ success: boolean; error?: string }>;
   deleteCourse: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -213,6 +214,8 @@ interface AppState {
   setGithubToken: (token: string) => void;
 
   loadTree: (token?: string) => Promise<void>;
+  invalidateTreeCache: () => void;
+  isTreeCacheStale: () => boolean;
 
   navigateToDepartment: (deptId: string) => void;
   navigateToSemester: (semId: string) => void;
@@ -310,10 +313,35 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   dbCourses: [],
   loadCourses: async () => {
+    const COURSES_CACHE_KEY = 'qsis-courses-cache';
+    const COURSES_CACHE_TS = 'qsis-courses-cache-ts';
+    const COURSES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    try {
+      const cached = localStorage.getItem(COURSES_CACHE_KEY);
+      const cachedTs = parseInt(localStorage.getItem(COURSES_CACHE_TS) || '0', 10);
+      if (cached && cachedTs && Date.now() - cachedTs < COURSES_CACHE_TTL) {
+        set({ dbCourses: JSON.parse(cached) });
+        return;
+      }
+    } catch {}
+
     try {
       const res = await fetch('/api/courses');
       const data = await res.json();
-      if (data.success) set({ dbCourses: data.courses });
+      if (data.success) {
+        try {
+          localStorage.setItem(COURSES_CACHE_KEY, JSON.stringify(data.courses));
+          localStorage.setItem(COURSES_CACHE_TS, String(Date.now()));
+        } catch {}
+        set({ dbCourses: data.courses });
+      }
+    } catch {}
+  },
+  invalidateCoursesCache: () => {
+    try {
+      localStorage.removeItem('qsis-courses-cache');
+      localStorage.removeItem('qsis-courses-cache-ts');
     } catch {}
   },
   addCourse: async (dept, sem, code, title) => {
@@ -418,6 +446,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   setGithubToken: (token: string) => set({ githubToken: token }),
 
   loadTree: async (token?: string) => {
+    const TREE_CACHE_KEY = 'qsis-tree-cache';
+    const TREE_CACHE_TS = 'qsis-tree-cache-ts';
+    const TREE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    // Check cache first
+    try {
+      const cached = localStorage.getItem(TREE_CACHE_KEY);
+      const cachedTs = parseInt(localStorage.getItem(TREE_CACHE_TS) || '0', 10);
+      if (cached && cachedTs && Date.now() - cachedTs < TREE_CACHE_TTL) {
+        const filtered = JSON.parse(cached);
+        set({ tree: filtered, loading: false, error: '' });
+        return;
+      }
+    } catch {}
+
     set({ loading: true, error: '' });
     try {
       const headers: Record<string, string> = {};
@@ -436,11 +479,38 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
         return true;
       });
+      // Cache to localStorage
+      try {
+        localStorage.setItem(TREE_CACHE_KEY, JSON.stringify(filtered));
+        localStorage.setItem(TREE_CACHE_TS, String(Date.now()));
+      } catch {}
       set({ tree: filtered });
     } catch (err: any) {
+      // On error, try stale cache as fallback
+      try {
+        const cached = localStorage.getItem(TREE_CACHE_KEY);
+        if (cached) {
+          set({ tree: JSON.parse(cached), error: err.message || 'Failed to refresh files (showing cached)' });
+          return;
+        }
+      } catch {}
       set({ error: err.message || 'Failed to load files' });
     }
     set({ loading: false });
+  },
+
+  invalidateTreeCache: () => {
+    try {
+      localStorage.removeItem('qsis-tree-cache');
+      localStorage.removeItem('qsis-tree-cache-ts');
+    } catch {}
+  },
+
+  isTreeCacheStale: () => {
+    try {
+      const cachedTs = parseInt(localStorage.getItem('qsis-tree-cache-ts') || '0', 10);
+      return !cachedTs || Date.now() - cachedTs >= 5 * 60 * 1000;
+    } catch { return true; }
   },
 
   navigateToDepartment: (deptId) => {

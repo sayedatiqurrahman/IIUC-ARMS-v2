@@ -2,7 +2,7 @@ import { FACULTIES } from './departments';
 
 export type UserRole = 'admin' | 'manager' | 'teacher' | 'student' | 'user';
 
-export const APP_VERSION = '2.1.5';
+export const APP_VERSION = '2.1.6';
 
 export const config = {
   owner: 'sayedatiqurrahman',

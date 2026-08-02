@@ -89,10 +89,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Refresh tree when user returns to tab (visibility change) — no polling, saves API calls
+  // Refresh tree when user returns to tab — only if cache is stale (5min+)
   useEffect(() => {
     function onVisibilityChange() {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && useAppStore.getState().isTreeCacheStale()) {
         loadTree(session?.accessToken || '');
       }
     }

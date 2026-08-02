@@ -84,7 +84,6 @@ export default function BrowsePage() {
   const currentMidFinal = useAppStore(s => s.currentMidFinal);
 
   useEffect(() => {
-    loadTree(session?.accessToken || '');
     loadCourses();
     setShowWelcome(localStorage.getItem('qs-welcome-dismissed') !== 'true');
     setMounted(true);
@@ -141,6 +140,7 @@ export default function BrowsePage() {
         showToast(data.message || 'Delete request sent to owner for approval', 'info');
       } else {
         showToast(`${action.charAt(0).toUpperCase() + action.slice(1)} successful!`, 'success');
+        useAppStore.getState().invalidateTreeCache();
         loadTree(session?.accessToken || '');
       }
       return data;
@@ -1283,6 +1283,7 @@ export default function BrowsePage() {
                       setAddCourseSuccess(`Course ${addCourseCode.trim()} created! Folder structure created on GitHub.`);
                       setAddCourseCode('');
                       setAddCourseTitle('');
+                      useAppStore.getState().invalidateTreeCache();
                       loadTree();
                       setTimeout(() => { setShowAddCourse(false); setAddCourseSuccess(''); }, 2000);
                     } else {

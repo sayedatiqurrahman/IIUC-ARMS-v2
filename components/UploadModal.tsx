@@ -579,6 +579,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         setNewCourseTitle(prev => ({ ...prev, [courseId]: '' }));
         showToast(`Course ${code} created!`, 'success');
         // Refresh tree
+        useAppStore.getState().invalidateTreeCache();
         useAppStore.getState().loadTree(session?.accessToken || '');
       } else {
         showToast(data.error || 'Failed to create course', 'error');
@@ -694,6 +695,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       if (data.success) {
         setResult({ success: true, prUrl: data.pr?.url });
         setCourses([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
+        useAppStore.getState().invalidateTreeCache();
         useAppStore.getState().loadTree(session?.accessToken || '');
       } else {
         if (data.code === 'TOKEN_EXPIRED' || data.code === 'AUTH_REQUIRED') {

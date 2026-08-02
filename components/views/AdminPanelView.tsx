@@ -608,6 +608,7 @@ function CoursesTab({ effectiveRole, profile }: { effectiveRole: string; profile
       const data = await res.json();
       if (!res.ok && !data.success) throw new Error(data.error || 'Failed');
       setShowAdd(false); setAddCode(''); setAddTitle('');
+      useAppStore.getState().invalidateTreeCache();
       await loadTree();
     } catch (e: any) { setAddError(e.message); }
     finally { setAddLoading(false); }
@@ -625,6 +626,7 @@ function CoursesTab({ effectiveRole, profile }: { effectiveRole: string; profile
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       setEditCourse(null); setEditTitle('');
+      useAppStore.getState().invalidateTreeCache();
       await loadTree();
     } catch (e: any) { alert(e.message); }
     finally { setEditLoading(false); }
@@ -645,6 +647,7 @@ function CoursesTab({ effectiveRole, profile }: { effectiveRole: string; profile
         alert('Delete request sent to owner for approval.');
       }
       setDeleteCourse(null);
+      useAppStore.getState().invalidateTreeCache();
       await loadTree();
     } catch (e: any) { alert(e.message); }
     finally { setDeleteLoading(false); }
