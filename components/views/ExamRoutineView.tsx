@@ -1128,7 +1128,7 @@ function ExamAllSemesterView({ examSlots, publishedRoutines, examRoutines, canPu
             </div>
             <div>
               <label className="text-[0.72rem] text-dark-text2 mb-1 block">Department</label>
-              <CustomSelect value={department} onChange={setDepartment} options={FACULTIES.map(f => ({ value: f.id, label: f.shortName, icon: 'fa-building' }))} placeholder="Department" />
+              <CustomSelect value={department} onChange={setDepartment} options={FACULTIES.flatMap(f => f.departments.map(d => ({ value: d.id, label: `${d.shortName} — ${d.name}`, icon: 'fa-building', group: f.shortName })))} placeholder="Department" />
             </div>
             <div>
               <label className="text-[0.72rem] text-dark-text2 mb-1 block">Exam Type</label>
