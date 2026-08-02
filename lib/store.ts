@@ -261,6 +261,7 @@ interface AppState {
   getCategories: (semId: string, departmentId?: string | null) => Category[];
   getCourses: (semId: string, catKey: string, departmentId?: string | null) => [string, any[]][];
   getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string, departmentId?: string | null) => { files: any[]; folders: any[] };
+  getAvailableYears: () => string[];
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -1479,7 +1480,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         const matchCat = catLabel.toLowerCase().includes(q);
         const matchSem = semLabel.toLowerCase().includes(q);
         const matchCatFolder = catFolder.toLowerCase().includes(q);
-        if (!matchFileName && !matchCourse && !matchCat && !matchSem && !matchCatFolder) return;
+        const matchPath = item.path.toLowerCase().includes(q);
+        if (!matchFileName && !matchCourse && !matchCat && !matchSem && !matchCatFolder && !matchPath) return;
       }
 
       matchedFiles.push({ ...item, sem, catFolder, courseName, fileName });
@@ -1511,6 +1513,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
 
     return { files: matchedFiles, folders: Array.from(matchedFolders.values()) };
+  },
+
+  getAvailableYears: () => {
+    const uploadTree = get().getUploadTree();
+    const years = new Set<string>();
+    uploadTree.forEach((item: any) => {
+      if (item.type !== 'blob') return;
+      const fileName = (item.path.split('/').pop() || '').toLowerCase();
+      if (fileName === '.gitkeep') return;
+      const m = item.path.match(/(20\d{2})/);
+      if (m) years.add(m[1]);
+    });
+    return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a));
   },
 }));
 

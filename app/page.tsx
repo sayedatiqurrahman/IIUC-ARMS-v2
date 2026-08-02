@@ -340,6 +340,8 @@ export default function BrowsePage() {
 
   const isSearching = !!(searchQuery || fileTypeFilter || searchYear || searchSemester);
   const searchResults = isSearching ? getSearchResults(searchQuery, fileTypeFilter, searchYear, searchSemester, currentDept || userDeptId) : { files: [], folders: [] };
+  const getAvailableYears = useAppStore(s => s.getAvailableYears);
+  const availableYears = getAvailableYears();
 
   // Sync URL params on navigation
   useEffect(() => {
@@ -569,12 +571,10 @@ export default function BrowsePage() {
             value={searchYear}
             onChange={setSearchYear}
             placeholder="All Years"
+            searchable
             options={[
               { value: '', label: 'All Years' },
-              { value: '2026', label: '2026' },
-              { value: '2025', label: '2025' },
-              { value: '2024', label: '2024' },
-              { value: '2023', label: '2023' },
+              ...availableYears.map(y => ({ value: y, label: y, icon: 'fa-calendar' })),
             ]}
           />
         </div>
