@@ -199,16 +199,18 @@ model PublishedExamRoutine {
 }
 
 model Room {
-  id          String   @id @default(cuid())
-  department  String
-  name        String
-  capacity    Int      @default(40)
-  gender      String   @default("both")
-  building    String?
-  floor       String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(cuid())
+  department        String
+  name              String
+  capacity          Int      @default(40)
+  gender            String   @default("both")
+  building          String?
+  floor             String?
+  numberOfColumns   Int?
+  chairsPerColumn   Int?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([department])
   @@unique([department, name])
