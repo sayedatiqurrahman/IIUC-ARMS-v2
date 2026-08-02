@@ -19,7 +19,9 @@ export default function RoutinePage() {
             tab === 'class' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
           }`}
         >
-          <i className="fas fa-calendar-alt text-[0.7rem] sm:text-[0.82rem]"></i><span className="hidden xs:inline">Class </span>Routine
+          <i className="fas fa-calendar-alt"></i>
+          <span className="sm:hidden">Class</span>
+          <span className="hidden sm:inline">Class Routine</span>
         </button>
         <button
           onClick={() => setTab('exam')}
@@ -27,7 +29,9 @@ export default function RoutinePage() {
             tab === 'exam' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
           }`}
         >
-          <i className="fas fa-file-alt text-[0.7rem] sm:text-[0.82rem]"></i><span className="hidden xs:inline">Exam </span>Routine
+          <i className="fas fa-file-alt"></i>
+          <span className="sm:hidden">Exam</span>
+          <span className="hidden sm:inline">Exam Routine</span>
         </button>
         <button
           onClick={() => setTab('seatplan')}
@@ -35,7 +39,9 @@ export default function RoutinePage() {
             tab === 'seatplan' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
           }`}
         >
-          <i className="fas fa-chair text-[0.7rem] sm:text-[0.82rem]"></i><span className="hidden xs:inline">Seat </span>Plan
+          <i className="fas fa-chair"></i>
+          <span className="sm:hidden">Seat</span>
+          <span className="hidden sm:inline">Seat Plan</span>
         </button>
       </div>
 

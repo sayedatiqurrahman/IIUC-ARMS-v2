@@ -1769,8 +1769,8 @@ button { font-family: inherit; }
   }
 
   .routine-page-actions .routine-btn {
-    flex: 1 1 auto;
-    min-width: 0;
+    flex: 1 1 0;
+    min-width: 90px;
     justify-content: center;
     font-size: 0.72rem;
     padding: 8px 10px;
