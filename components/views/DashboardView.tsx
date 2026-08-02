@@ -597,20 +597,15 @@ export default function DashboardView() {
                 <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-whatsapp mr-1"></i>WhatsApp</label>
                 <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
               </div>
-              {isStudent && (
-                <>
-                  <div>
-                    <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-phone mr-1"></i>Phone Number <span className="text-qsis text-[0.65rem]">(for notifications)</span></label>
-                    <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.phone} onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} />
-                    <p className="text-[0.65rem] text-dark-text3 mt-0.5">Receive department routines & room updates via Telegram</p>
-                  </div>
-                  <div>
-                    <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1"></i>Telegram ID / Username</label>
-                    <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or 123456789" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
-                    <p className="text-[0.65rem] text-dark-text3 mt-0.5">We&apos;ll send you your department&apos;s class/exam routines and your room number personally</p>
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-phone mr-1"></i>Phone Number <span className="text-qsis text-[0.65rem]">(for notifications)</span></label>
+                <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.phone} onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1"></i>Telegram ID / Username</label>
+                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or 123456789" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
+                <p className="text-[0.65rem] text-dark-text3 mt-0.5">Receive department routines & room updates via Telegram</p>
+              </div>
               {isStudent && (
                 <div>
                   <label className="text-[0.72rem] text-dark-text2 block mb-1">Section</label>
