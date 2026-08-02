@@ -189,10 +189,9 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
     setSuccess('');
     setLoading(true);
     try {
-      const turnstileValid = await verifyTurnstileToken();
-      if (!turnstileValid) { setLoading(false); return; }
-
+      console.log('[Auth] Starting Google sign-in...');
       const { idToken, user } = await signInWithGoogle();
+      console.log('[Auth] Google popup succeeded, email:', user.email);
 
       const totpRes = await fetch('/api/auth/totp/check?method=google', {
         headers: { Authorization: `Bearer ${idToken}` },
@@ -207,10 +206,13 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         return;
       }
 
+      console.log('[Auth] Calling signIn credentials...');
       const result = await signIn('credentials', {
         idToken,
         redirect: false,
       });
+      console.log('[Auth] signIn result:', result);
+
       if (result?.error) {
         const email = user.email || '';
         if (email.endsWith('@ugrad.iiuc.ac.bd') || email.endsWith('@iiuc.ac.bd')) {
@@ -218,11 +220,15 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         } else {
           setError(`Only IIUC emails allowed. You signed in as ${email} — use your university email instead.`);
         }
-        setLoading(false);
       } else if (result?.ok) {
         onClose();
+        return;
+      } else {
+        // result is { ok: false, error: null } — signIn failed silently
+        setError('Sign-in failed. Your email may not be allowed. Use your IIUC university email.');
       }
     } catch (err: any) {
+      console.error('[Auth] Google login error:', err);
       if (err.code === 'auth/popup-closed-by-user') {
         setError('Sign-in cancelled — you closed the popup');
       } else if (err.code === 'auth/popup-blocked') {
@@ -232,8 +238,9 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       } else if (err.code === 'auth/unauthorized-domain') {
         setError('This domain is not authorized for Google sign-in. If on localhost, add it in Firebase Console → Authentication → Settings → Authorized domains.');
       } else {
-        setError(`Google sign-in failed (${err.code || 'unknown'}). Please try again.`);
+        setError(`Google sign-in failed (${err.code || err.message || 'unknown'}). Please try again.`);
       }
+    } finally {
       setLoading(false);
     }
   };
@@ -335,8 +342,12 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       if (result?.error) {
         setError('Login failed');
         reset();
-      } else {
+      } else if (result?.ok) {
         onClose();
+        return;
+      } else {
+        setError('Login failed. Please try again.');
+        reset();
       }
     } catch {
       setError('Verification failed');
@@ -521,7 +532,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
             <button
               className="flex items-center justify-center gap-3 w-full py-2.5 px-4 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text font-semibold text-[0.85rem] hover:bg-dark-bg hover:border-qsis transition-all cursor-pointer"
               onClick={handleGoogleLogin}
-              disabled={loading || !turnstileReady}
+              disabled={loading}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

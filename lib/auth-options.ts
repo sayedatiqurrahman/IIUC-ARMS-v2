@@ -52,7 +52,7 @@ export const authOptions: NextAuthOptions = {
         turnstileToken: { label: 'Turnstile Token', type: 'text' },
       },
       async authorize(credentials) {
-        if (!credentials?.idToken) return null;
+        if (!credentials?.idToken) { console.log('[Auth] authorize: no idToken'); return null; }
 
         // Verify Turnstile token (skip for TOTP step — already verified at login)
         if (credentials.turnstileToken) {
@@ -67,12 +67,14 @@ export const authOptions: NextAuthOptions = {
 
         // Try Firebase Admin verification first
         const decoded = await verifyFirebaseToken(credentials.idToken);
+        console.log('[Auth] authorize: Firebase token decoded =', !!decoded, decoded?.email);
         if (decoded) {
           const email = decoded.email || credentials.email;
-          if (!email) return null;
+          if (!email) { console.log('[Auth] authorize: no email from token'); return null; }
           const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
-          if (!allowed) return null;
-          if (decoded.email_verified === false) return null;
+          console.log('[Auth] authorize: email =', email, 'allowed =', allowed);
+          if (!allowed) { console.log('[Auth] authorize: NOT ALLOWED'); return null; }
+          if (decoded.email_verified === false) { console.log('[Auth] authorize: email not verified'); return null; }
           try {
             const { prisma } = await import('@/lib/prisma');
             const profile = await prisma.profile.findUnique({ where: { userId: email } });
@@ -116,11 +118,13 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }) {
       const email = user.email || (profile as any)?.email;
-      if (!email) return '/auth/error?error=invalid-email';
+      console.log('[Auth] signIn callback — email:', email, 'provider:', account?.provider);
+      if (!email) { console.log('[Auth] signIn: no email, rejecting'); return '/auth/error?error=invalid-email'; }
 
       // Allow if it's a standard IIUC email OR if user has an admin-created profile
       const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
-      if (!allowed) return '/auth/error?error=invalid-email';
+      console.log('[Auth] signIn: allowed =', allowed, 'isAllowed =', isAllowedEmail(email));
+      if (!allowed) { console.log('[Auth] signIn: NOT ALLOWED —', email); return '/auth/error?error=invalid-email'; }
 
       // Check if user is banned
       try {
