@@ -55,6 +55,15 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const patToken = githubToken || profile.githubToken || '';
   const hasPat = patToken.startsWith('ghp_') || patToken.startsWith('github_pat_');
   const [patPromptOpen, setPatPromptOpen] = useState(false);
+  const [patPromptWarn, setPatPromptWarn] = useState(false);
+  const [patAskCount, setPatAskCount] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    return Number(localStorage.getItem('patAskCount') || 0);
+  });
+  const [patSkipForever, setPatSkipForever] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('patSkipForever') === 'true';
+  });
 
   const isLoggedIn = !!(session as any)?.user;
   const treeLength = useAppStore(s => s.tree.length);
@@ -347,10 +356,22 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     if (validCourses.length === 0) { alert('At least one course must be selected with files.'); return; }
 
     if (!hasPat) {
+      if (patSkipForever) { await doUpload(); return; }
+      const nextCount = patAskCount + 1;
+      setPatAskCount(nextCount);
+      if (typeof window !== 'undefined') localStorage.setItem('patAskCount', String(nextCount));
+      setPatPromptWarn(nextCount >= 3);
       setPatPromptOpen(true);
       return;
     }
     await doUpload();
+  }
+
+  function handleSkipForever() {
+    setPatSkipForever(true);
+    if (typeof window !== 'undefined') localStorage.setItem('patSkipForever', 'true');
+    setPatPromptOpen(false);
+    doUpload();
   }
 
   async function doUpload(tokenOverride?: string) {
@@ -484,12 +505,21 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         <div className="bg-dark-bg2 w-full max-w-[420px] rounded-2xl border border-dark-border p-5" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[0.95rem] font-bold text-dark-text flex items-center gap-2">
-              <i className="fab fa-github text-purple-400"></i> Connect GitHub
+              {patPromptWarn
+                ? <><i className="fas fa-exclamation-triangle text-amber-400"></i> One Last Reminder</>
+                : <><i className="fab fa-github text-purple-400"></i> Connect GitHub</>}
             </h3>
             <button className="w-7 h-7 rounded-lg bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 cursor-pointer hover:text-dark-text" onClick={() => setPatPromptOpen(false)}>
               <i className="fas fa-times text-xs"></i>
             </button>
           </div>
+
+          {patPromptWarn && (
+            <p className="text-[0.72rem] text-amber-400 bg-amber-500/10 border border-amber-500/25 rounded-lg p-2.5 mb-3">
+              <i className="fas fa-exclamation-triangle mr-1"></i>
+              You&apos;ve skipped connecting GitHub a few times. This is the last time we&apos;ll ask — you can dismiss it forever below.
+            </p>
+          )}
 
           <p className="text-[0.75rem] text-dark-text2 mb-3">
             You&apos;re not connected to GitHub. Uploads via the shared account won&apos;t show your name on the <strong className="text-dark-text">Contributors list</strong>. Paste your <strong className="text-dark-text">Personal Access Token (PAT)</strong> to get credit, or continue anyway.
@@ -504,8 +534,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             onChange={e => setPatInputToken(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSavePatForUpload()}
           />
-          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-qsis hover:underline inline-block mb-3">
-            How to create a PAT
+          <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-qsis hover:underline inline-block mb-3">
+            How to create a PAT — give it a name and select the <code className="bg-dark-bg3 px-1 rounded">repo</code> scope
           </a>
 
           <button
@@ -521,6 +551,14 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           >
             Upload Anyway
           </button>
+          {patPromptWarn && (
+            <button
+              className="w-full mt-2 py-2.5 rounded-xl border border-amber-500/40 text-amber-400 text-[0.82rem] font-semibold cursor-pointer hover:bg-amber-500/10 transition-colors"
+              onClick={handleSkipForever}
+            >
+              <i className="fas fa-check-circle mr-2"></i>Skip Forever — Don&apos;t Ask Again
+            </button>
+          )}
         </div>
       </div>
     )}
