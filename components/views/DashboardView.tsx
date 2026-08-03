@@ -717,26 +717,22 @@ export default function DashboardView() {
                   {profile.whatsapp || 'Not set'}
                 </span>
               </div>
-              {isStudent && (
-                <>
-                  <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-                    <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1 text-blue-400"></i>Telegram</span>
-                    <span className={`text-[0.85rem] font-semibold ${profile.telegramId ? '' : 'text-dark-text2'}`}>
-                      {profile.telegramId || 'Not set'}
-                    </span>
-                    {profile.telegramId && profile.telegramChatId ? (
-                      <p className="text-[0.6rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected! You&apos;ll receive routine updates</p>
-                    ) : profile.telegramId ? (
-                      <div className="mt-1">
-                        <p className="text-[0.6rem] text-yellow-400"><i className="fas fa-link mr-0.5"></i>Pending connection</p>
-                        <p className="text-[0.6rem] text-dark-text3 mt-0.5">
-                          Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline">@iiuc_arms_bot</a> and send <code className="bg-dark-bg px-1 rounded text-qsis text-[0.6rem]">/start</code> to connect
-                        </p>
-                      </div>
-                    ) : null}
+              <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1 text-blue-400"></i>Telegram</span>
+                <span className={`text-[0.85rem] font-semibold ${profile.telegramId ? '' : 'text-dark-text2'}`}>
+                  {profile.telegramId || 'Not set'}
+                </span>
+                {profile.telegramId && profile.telegramChatId ? (
+                  <p className="text-[0.6rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected! You&apos;ll receive routine updates</p>
+                ) : profile.telegramId ? (
+                  <div className="mt-1">
+                    <p className="text-[0.6rem] text-yellow-400"><i className="fas fa-link mr-0.5"></i>Pending connection</p>
+                    <p className="text-[0.6rem] text-dark-text3 mt-0.5">
+                      Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline">@iiuc_arms_bot</a> and send <code className="bg-dark-bg px-1 rounded text-qsis text-[0.6rem]">/start</code> to connect
+                    </p>
                   </div>
-                </>
-              )}
+                ) : null}
+              </div>
               {profile.semester && (
                 <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                   <span className="text-[0.7rem] text-dark-text2 block mb-1">Semester</span>

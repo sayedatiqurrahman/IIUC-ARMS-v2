@@ -28,21 +28,43 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const filterRole = url.searchParams.get('role');
+    const filterSemester = url.searchParams.get('semester');
+    const filterDept = url.searchParams.get('department');
     const search = url.searchParams.get('search') || '';
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const offset = (page - 1) * limit;
 
     const where: any = {};
     if (filterRole && filterRole !== 'all') {
       where.role = filterRole;
     }
+    if (filterSemester && filterSemester !== 'all') {
+      where.semester = filterSemester;
+    }
+    if (filterDept && filterDept !== 'all') {
+      where.department = filterDept;
+    }
     if (effectiveRole === 'manager' && callerDept) {
       where.department = callerDept;
     }
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { userId: { contains: search, mode: 'insensitive' } },
+      ];
+    }
 
     let profiles: any[] = [];
+    let totalCount = 0;
     try {
+      totalCount = await prisma.profile.count({ where });
       profiles = await prisma.profile.findMany({
         where,
         orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
         select: {
           userId: true, email: true, name: true, title: true, shortForm: true,
           role: true, isBanned: true, banReason: true, bannedBy: true,
@@ -136,11 +158,9 @@ export async function GET(req: NextRequest) {
     });
 
     let result = Array.from(merged.values());
+    const total = result.length;
 
-    if (filterRole && filterRole !== 'all') {
-      result = result.filter(u => u.role === filterRole);
-    }
-
+    // Server-side search filter for Firebase users
     if (search) {
       const q = search.toLowerCase();
       result = result.filter(u =>
@@ -148,7 +168,24 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ users: result, firebaseNextPageToken: firebaseNextPageToken || null });
+    // Server-side semester filter for Firebase users
+    if (filterSemester && filterSemester !== 'all') {
+      result = result.filter(u => u.semester === filterSemester);
+    }
+
+    // Server-side department filter for Firebase users
+    if (filterDept && filterDept !== 'all') {
+      result = result.filter(u => u.department === filterDept);
+    }
+
+    return NextResponse.json({
+      users: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      firebaseNextPageToken: firebaseNextPageToken || null,
+    });
   } catch (err: any) {
     console.error('[Admin Users] GET error:', err?.message, err?.stack);
     return NextResponse.json({ error: 'Failed to fetch users', detail: err?.message }, { status: 500 });

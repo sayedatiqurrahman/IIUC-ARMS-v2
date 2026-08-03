@@ -43,6 +43,8 @@ model Profile {
   company         String?
   companyUrl      String?
   publicEmail     String?
+  linkedEmails    String[] @default([])
+  showInContributors Boolean @default(true)
   hideWhatsapp    Boolean @default(false)
   hideUniversityId Boolean @default(false)
   hideSemester    Boolean @default(false)

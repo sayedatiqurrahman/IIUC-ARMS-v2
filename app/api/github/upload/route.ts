@@ -7,6 +7,7 @@ import { getInstallationAccessToken, getAppInstallations } from '@/lib/github-ap
 import { decrypt, isEncrypted } from '@/lib/crypto';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission } from '@/lib/permissions';
+import { verifyTurnstileRequest } from '@/lib/verifyTurnstileRequest';
 
 export const maxDuration = 60;
 
@@ -39,6 +40,11 @@ async function getAppBotToken(): Promise<string | null> {
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.upload);
   if (!rl.success) return rl.response!;
+
+  // Bot protection
+  const turnstile = await verifyTurnstileRequest(req);
+  if (!turnstile.success) return turnstile.response!;
+
   try {
     let token = '';
     let installationId: number | null = null;

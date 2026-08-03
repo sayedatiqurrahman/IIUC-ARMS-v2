@@ -128,7 +128,7 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       const res = await fetch('/api/courses', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: deleteCourse.code, semester: selectedSem, department: selectedDept }),
+        body: JSON.stringify({ code: deleteCourse.code, semester: selectedSem, department: selectedDept, title: deleteCourse.title }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');

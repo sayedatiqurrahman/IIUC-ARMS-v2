@@ -578,33 +578,45 @@ async function handleCallbackQuery(cq: any) {
       if (!dept || !sem || !code) return;
 
       const { prisma } = await import('@/lib/prisma');
-      const course = await prisma.course.findFirst({ where: { code: code.toUpperCase(), semester: sem, department: dept } });
-      if (!course) {
-        await editMessageText(chatId, messageId, `⚠️ Course not found. It may have already been deleted.`);
-        return;
-      }
+
+      // Try DB first, but don't require it
+      let course: any = null;
+      try {
+        course = await prisma.course.findFirst({ where: { code: code.toUpperCase(), semester: sem, department: dept } });
+      } catch {}
+
+      const courseTitle = course?.title || code.toUpperCase();
+      const courseDept = course?.department || dept;
+      const courseSem = course?.semester || sem;
+      const courseCode = course?.code || code.toUpperCase();
+
+      // Build folder path
+      const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+      const folderPath = `${config.uploadPath}/${courseDept}/${courseSem}/${courseCode} - ${cleanTitle}`;
 
       let githubDeleted = 0;
       try {
         const botToken = await getAppBotToken();
         if (botToken) {
-          const cleanTitle = course.title.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-          const folderPath = `${config.uploadPath}/${course.department}/${course.semester}/${course.code} - ${cleanTitle}`;
           const allFiles = await getAllFilesInFolder(botToken, folderPath);
           githubDeleted = await batchDeleteFiles(botToken, allFiles);
         }
       } catch {}
 
-      await prisma.course.delete({ where: { id: course.id } });
+      // Delete from DB if exists
+      if (course) {
+        try { await prisma.course.delete({ where: { id: course.id } }); } catch {}
+      }
 
-      const semLabel = config.semesters.find(s => s.id === course.semester)?.label || course.semester;
-      const pageLink = buildBrowseLink({ dept: course.department, sem: course.semester });
+      const semLabel = config.semesters.find(s => s.id === courseSem)?.label || courseSem;
+      const pageLink = buildBrowseLink({ dept: courseDept, sem: courseSem });
       await editMessageText(chatId, messageId, [
         `✅ <b>Course Deleted</b>`, ``,
-        `<b>Code:</b> <code>${course.code}</code>`,
-        `<b>Title:</b> ${course.title}`,
+        `<b>Code:</b> <code>${courseCode}</code>`,
+        `<b>Title:</b> ${courseTitle}`,
+        `<b>Folder:</b> <code>${folderPath}</code>`,
         `<b>GitHub files removed:</b> ${githubDeleted}`, ``,
-        `<i>Approved by owner</i>`,
+        `<i>Approved by admin</i>`,
       ].join('\n'), {
         reply_markup: { inline_keyboard: [[{ text: `📂 View in ${semLabel}`, url: pageLink }]] },
       });
@@ -621,8 +633,9 @@ async function handleCallbackQuery(cq: any) {
 
       await editMessageText(chatId, messageId, [
         `❌ <b>Delete Rejected</b>`, ``,
-        code ? `<b>Code:</b> <code>${code}</code>` : '', ``,
-        `<i>Rejected by owner</i>`,
+        code ? `<b>Code:</b> <code>${code}</code>` : '',
+        semLabel ? `<b>Semester:</b> ${semLabel}` : '', ``,
+        `<i>Rejected by admin</i>`,
       ].join('\n'), {
         reply_markup: { inline_keyboard: pageLink ? [[{ text: `📂 View in ${semLabel}`, url: pageLink }]] : [] },
       });

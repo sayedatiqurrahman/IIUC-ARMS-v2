@@ -5,6 +5,7 @@ import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-ap
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
 import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, deleteConfirmData, deleteRejectData } from '@/lib/telegram';
+import { verifyTurnstileRequest } from '@/lib/verifyTurnstileRequest';
 
 const GITHUB_API = 'https://api.github.com';
 const OWNER_CHAT_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID || '0');
@@ -148,6 +149,10 @@ export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
 
+  // Bot protection
+  const turnstile = await verifyTurnstileRequest(req);
+  if (!turnstile.success) return turnstile.response!;
+
   try {
     const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized — please login' }, { status: 401 });
@@ -255,6 +260,10 @@ export async function DELETE(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
 
+  // Bot protection
+  const turnstile = await verifyTurnstileRequest(req);
+  if (!turnstile.success) return turnstile.response!;
+
   try {
     const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -263,83 +272,129 @@ export async function DELETE(req: NextRequest) {
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
     const role = config.getEffectiveRole(email, profile?.role);
     const isCR = profile?.isCR || false;
+    const isOwner = config.ownerEmails.includes(email.toLowerCase());
+    const canDeleteByRole = ['admin', 'manager', 'teacher'].includes(role) || isCR;
+
+    if (!isOwner && !canDeleteByRole) {
+      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => ({}));
-    const { code, semester, department } = body;
+    const { code, semester, department, folderPath: rawFolderPath, title } = body;
 
     if (!code || !semester || !department) {
       return NextResponse.json({ error: 'code, semester, department required' }, { status: 400 });
     }
 
-    const course = await prisma.course.findFirst({
-      where: { code: code.toUpperCase(), semester, department },
-    });
-    if (!course) return NextResponse.json({ error: 'Course not found in database' }, { status: 404 });
+    // Try DB first, but don't require it
+    let course: any = null;
+    try {
+      course = await prisma.course.findFirst({
+        where: { code: code.toUpperCase(), semester, department },
+      });
+    } catch {}
 
-    const isAdder = course.addedBy?.toLowerCase() === email.toLowerCase();
-    const canDeleteByRole = ['admin', 'manager', 'teacher'].includes(role) || isCR;
-    if (!isAdder && !canDeleteByRole) {
-      return NextResponse.json({ error: 'Only the person who added this course, or admin/manager/teacher/CR can delete it.' }, { status: 403 });
+    const courseTitle = course?.title || title || code;
+    const courseDept = course?.department || department;
+    const courseSem = course?.semester || semester;
+    const courseCode = course?.code || code.toUpperCase();
+
+    // Build folder path — try rawFolderPath first, then reconstruct
+    let folderPath = rawFolderPath;
+    if (!folderPath) {
+      const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+      folderPath = `${config.uploadPath}/${courseDept}/${courseSem}/${courseCode} - ${cleanTitle}`;
     }
 
-    const courseDept = course.department;
-    const courseSem = course.semester;
-    const courseCode = course.code;
-    const courseTitle = course.title;
-    const isOwner = config.ownerEmails.includes(email.toLowerCase());
-
-    if (isOwner) {
+    // Admin/owner → direct delete, no notification needed
+    if (isOwner || role === 'admin') {
       let githubDeleted = 0;
       try {
         const botToken = await getAppBotToken();
         if (botToken) {
-          const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-          const folderPath = `${config.uploadPath}/${courseDept}/${courseSem}/${courseCode} - ${cleanTitle}`;
           const allFiles = await getAllFilesInFolder(botToken, folderPath);
           githubDeleted = await batchDeleteFiles(botToken, allFiles);
         }
       } catch {}
-      await prisma.course.delete({ where: { id: course.id } });
 
-      try {
-        const semLabel = config.semesters.find(s => s.id === courseSem)?.label || courseSem;
-        const tgMsg = [
-          `🗑 <b>Course Deleted</b>`, ``,
-          `<b>Code:</b> <code>${courseCode}</code>`,
-          `<b>Title:</b> ${courseTitle}`,
-          `<b>Deleted by:</b> ${email} (owner)`,
-          `<b>GitHub files removed:</b> ${githubDeleted}`,
-        ].join('\n');
-        const pageLink = buildBrowseLink({ dept: courseDept, sem: courseSem });
-        await sendMessageWithButton(OWNER_CHAT_ID, tgMsg, `📂 View ${courseCode} in ${semLabel}`, pageLink);
-      } catch {}
-      return NextResponse.json({ success: true, githubDeleted });
+      // Delete from DB if exists
+      if (course) {
+        try { await prisma.course.delete({ where: { id: course.id } }); } catch {}
+      }
+
+      return NextResponse.json({ success: true, githubDeleted, directDelete: true });
     }
 
-    // NON-OWNER: Telegram confirm/reject
+    // NON-ADMIN: Get file list for notification, then send Telegram confirm
+    let fileList = '';
+    let fileCount = 0;
     try {
-      const semLabel = config.semesters.find(s => s.id === courseSem)?.label || courseSem;
-      const requesterName = profile?.name || email.split('@')[0];
-      const tgMsg = [
-        `⚠️ <b>Course Delete Request</b>`, ``,
-        `<b>Code:</b> <code>${courseCode}</code>`,
-        `<b>Title:</b> ${courseTitle}`,
-        `<b>Department:</b> ${getDeptFullName(courseDept)} (${courseDept})`,
-        `<b>Semester:</b> ${semLabel}`,
-        `<b>Requested by:</b> ${requesterName} (${email})`, ``,
-        `Do you want to delete this course?`,
-      ].join('\n');
-      const pageLink = buildBrowseLink({ dept: courseDept, sem: courseSem });
-      await sendMessageWithButtons(OWNER_CHAT_ID, tgMsg, [
-        [
-          { text: '✅ Confirm Delete', callback_data: deleteConfirmData(`${courseDept}/${courseSem}/${courseCode}`) },
-          { text: '❌ Reject', callback_data: deleteRejectData(`${courseDept}/${courseSem}/${courseCode}`) },
-        ],
-        [{ text: `📂 View ${courseCode}`, url: pageLink }],
-      ]);
+      const botToken = await getAppBotToken();
+      if (botToken) {
+        const allFiles = await getAllFilesInFolder(botToken, folderPath);
+        fileCount = allFiles.length;
+        const categories: Record<string, string[]> = {};
+        for (const f of allFiles) {
+          const parts = f.path.split('/');
+          const cat = parts[parts.length - 2] || 'Other';
+          if (!categories[cat]) categories[cat] = [];
+          categories[cat].push(parts[parts.length - 1]);
+        }
+        fileList = Object.entries(categories).map(([cat, files]) =>
+          `📁 <b>${cat}/</b>\n${files.map(f => `  · ${f}`).join('\n')}`
+        ).join('\n');
+      }
     } catch {}
 
-    return NextResponse.json({ success: false, pendingApproval: true, message: 'Delete request sent to owner for approval.' });
+    // Send to all configured approvers (owner + admins with telegramChatId)
+    const approverChatIds: number[] = [];
+    if (OWNER_CHAT_ID) approverChatIds.push(OWNER_CHAT_ID);
+
+    // Find admin users with telegramChatId set
+    try {
+      const adminProfiles = await prisma.profile.findMany({
+        where: { role: 'admin' },
+      });
+      for (const ap of adminProfiles) {
+        const chatId = (ap as any).telegramChatId;
+        if (chatId && !approverChatIds.includes(chatId)) {
+          approverChatIds.push(chatId);
+        }
+      }
+    } catch {}
+
+    const semLabel = config.semesters.find(s => s.id === courseSem)?.label || courseSem;
+    const requesterName = profile?.name || email.split('@')[0];
+    const pageLink = buildBrowseLink({ dept: courseDept, sem: courseSem });
+    const deleteKey = `${courseDept}/${courseSem}/${courseCode}`;
+
+    const tgMsg = [
+      `⚠️ <b>Course Delete Request</b>`, ``,
+      `<b>Code:</b> <code>${courseCode}</code>`,
+      `<b>Title:</b> ${courseTitle}`,
+      `<b>Department:</b> ${getDeptFullName(courseDept)} (${courseDept})`,
+      `<b>Semester:</b> ${semLabel}`,
+      `<b>Folder:</b> <code>${folderPath}</code>`,
+      `<b>Files:</b> ${fileCount} file(s)`,
+      `<b>Requested by:</b> ${requesterName} (${email})`,
+      fileCount > 0 ? `` : ``,
+      fileList ? `<b>File structure:</b>\n<pre>${fileList}</pre>` : ``,
+      `Approve or reject this deletion:`,
+    ].join('\n');
+
+    for (const chatId of approverChatIds) {
+      try {
+        await sendMessageWithButtons(chatId, tgMsg, [
+          [
+            { text: '✅ Confirm Delete', callback_data: deleteConfirmData(deleteKey) },
+            { text: '❌ Reject', callback_data: deleteRejectData(deleteKey) },
+          ],
+          [{ text: `📂 View ${courseCode}`, url: pageLink }],
+        ]);
+      } catch {}
+    }
+
+    return NextResponse.json({ success: false, pendingApproval: true, message: 'Delete request sent to admins for approval.' });
   } catch {
     return NextResponse.json({ error: 'Failed to delete course' }, { status: 500 });
   }
