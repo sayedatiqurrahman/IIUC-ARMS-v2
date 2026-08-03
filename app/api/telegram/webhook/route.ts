@@ -323,9 +323,48 @@ async function handleMessage(msg: any) {
       return;
     }
 
-    // ─── /start <email> (deep link from web app) ───
+    // ─── /start <payload> (deep link from web app) ───
     if (cleanText.startsWith('/start ')) {
       const payload = cleanText.replace('/start', '').trim();
+
+      // /start connect — trigger the connect flow
+      if (payload === 'connect') {
+        try {
+          const { prisma } = await import('@/lib/prisma');
+          const existing = await prisma.profile.findFirst({
+            where: { telegramChatId: String(chatId), telegramVerified: true },
+            select: { userId: true },
+          });
+          if (existing) {
+            await sendMessage(chatId,
+              `✅ <b>Already connected!</b>\n\n📧 Account: <code>${existing.userId}</code>\n\nUse <code>/disconnect</code> first to change.`,
+              { parse_mode: 'HTML' }
+            );
+          } else {
+            await sendMessage(chatId, buildConnectMessage(), {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: '✅ Yes, Connect My Account', callback_data: 'connect_confirm' }],
+                  [{ text: '❌ Cancel', callback_data: 'connect_cancel' }],
+                ],
+              },
+            });
+          }
+        } catch (err: any) {
+          console.error('[TG] /start connect error:', err?.message);
+          await sendMessage(chatId, buildConnectMessage(), {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '✅ Yes, Connect My Account', callback_data: 'connect_confirm' }],
+                [{ text: '❌ Cancel', callback_data: 'connect_cancel' }],
+              ],
+            },
+          });
+        }
+        return;
+      }
+
+      // /start <email> — direct email deep link
       if (payload && payload.includes('@')) {
         try {
           const { prisma } = await import('@/lib/prisma');

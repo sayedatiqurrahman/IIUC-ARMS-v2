@@ -7,7 +7,6 @@ import { config } from '@/lib/config';
 import CustomSelect from '@/components/CustomSelect';
 import BatchSelector from './BatchSelector';
 import SocialLinks from './SocialLinks';
-import TelegramVerify from './TelegramVerify';
 
 function extractUniversityId(email: string): string {
   const match = email.match(/^(q\d+)/i);
@@ -302,12 +301,6 @@ export default function ProfileCard({
                 {profile.whatsapp || 'Not set'}
               </span>
             </div>
-            <TelegramVerify
-              telegramChatId={profile.telegramChatId}
-              telegramVerified={(profile as any).telegramVerified}
-              telegramId={profile.telegramId}
-              email={profile.email || (session as any)?.user?.email || ''}
-            />
             <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
               <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-envelope mr-1 text-blue-400"></i>Public Email</span>
               <span className={`text-[0.85rem] font-semibold ${profile.publicEmail ? '' : 'text-dark-text2'}`}>
