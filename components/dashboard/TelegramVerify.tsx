@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAppStore } from '@/lib/store';
 
 interface Props {
   telegramChatId: string | null;
@@ -10,18 +11,39 @@ interface Props {
 }
 
 export default function TelegramVerify({ telegramChatId, telegramVerified, telegramId, email }: Props) {
+  const loadProfile = useAppStore(s => s.loadProfile);
   const [step, setStep] = useState<'idle' | 'pending' | 'otp' | 'sending'>('idle');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [errMsg, setErrMsg] = useState('');
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     if (telegramChatId && !telegramVerified) setStep('pending');
     else if (telegramChatId && telegramVerified) setStep('idle');
     else setStep('idle');
   }, [telegramChatId, telegramVerified]);
+
+  // Auto-refresh: if not connected yet, poll so the page flips to
+  // "Telegram linked — verify now" right after the user sends /connect in the bot.
+  useEffect(() => {
+    if (telegramChatId) return;
+    let alive = true;
+    const id = setInterval(async () => {
+      setChecking(true);
+      try {
+        await loadProfile();
+        if (useAppStore.getState().profile.telegramChatId) {
+          alive = false;
+          clearInterval(id);
+        }
+      } catch {}
+      if (alive) setChecking(false);
+    }, 4000);
+    return () => { alive = false; clearInterval(id); };
+  }, [telegramChatId, loadProfile]);
 
   const sendOtp = async () => {
     setLoading(true); setErrMsg(''); setMsg('');
@@ -179,6 +201,11 @@ export default function TelegramVerify({ telegramChatId, telegramVerified, teleg
           <li>Enter the OTP code from Telegram</li>
         </ol>
       </div>
+
+      <p className="text-[0.65rem] text-dark-text3 mb-2">
+        <i className={`fas fa-sync ${checking ? 'fa-spin' : ''} text-qsis mr-1`}></i>
+        Waiting for <code className="bg-dark-bg2 px-1 rounded text-qsis">/connect</code>... auto-detecting.
+      </p>
 
       <p className="text-[0.6rem] text-dark-text3"><i className="fas fa-shield-alt mr-0.5"></i>OTP verified in web app for security. Max 3 accounts per profile.</p>
     </div>

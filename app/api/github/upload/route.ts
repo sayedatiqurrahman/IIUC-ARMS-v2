@@ -7,7 +7,6 @@ import { getInstallationAccessToken, getAppInstallations } from '@/lib/github-ap
 import { decrypt, isEncrypted } from '@/lib/crypto';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission } from '@/lib/permissions';
-import { verifyTurnstileRequest } from '@/lib/verifyTurnstileRequest';
 
 export const maxDuration = 60;
 
@@ -41,9 +40,8 @@ export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.upload);
   if (!rl.success) return rl.response!;
 
-  // Bot protection
-  const turnstile = await verifyTurnstileRequest(req);
-  if (!turnstile.success) return turnstile.response!;
+  // Skip Turnstile for uploads — already authenticated via session/token.
+  // Uploads resolve tokens server-side (PAT → installation → bot token → GITHUB_TOKEN).
 
   try {
     let token = '';

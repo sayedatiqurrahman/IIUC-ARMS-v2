@@ -38,8 +38,8 @@ export interface UploadModalProps {
 }
 
 export const SESSION_OPTIONS = [
-  { value: 'Autumn', label: `Autumn ${CURRENT_YEAR}`, icon: 'fa-leaf' },
-  { value: 'Spring', label: `Spring ${CURRENT_YEAR}`, icon: 'fa-seedling' },
+  { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
+  { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
 ];
 
 export function extractYearFromTitle(title: string): number {

@@ -62,10 +62,6 @@ interface UploadFormProps {
   handleMergeImages: (courseId: number) => void;
   dismissMerge: () => void;
   isLoggedIn: boolean;
-  showPatPrompt: boolean;
-  handleSkipPat: () => void;
-  handleSkipForever: () => void;
-  patSkipCount: number;
   onLogin: () => void;
   onClose: () => void;
 }
@@ -88,7 +84,7 @@ export default function UploadForm({
   patInputToken, setPatInputToken, patSaving, handleSavePat,
   mergeDialogCourseId, mergeImages, mergeSession, mergeYear,
   mergeMerging, handleMergeImages, dismissMerge,
-  isLoggedIn, showPatPrompt, handleSkipPat, handleSkipForever, patSkipCount, onLogin, onClose,
+  isLoggedIn, onLogin, onClose,
 }: UploadFormProps) {
   const email = (session as any)?.user?.email || profile.email || '';
 
@@ -115,6 +111,7 @@ export default function UploadForm({
   const effectiveRole = config.getEffectiveRole(email, profile.role);
   const canUploadAnyDept = effectiveRole === 'admin';
   const isExamCategory = category === config.categories.notes.folder || category === config.categories.questions.folder;
+  const hasPat = !!(profile.githubToken?.startsWith('ghp_') || profile.githubToken?.startsWith('github_pat_') || githubToken?.startsWith('ghp_') || githubToken?.startsWith('github_pat_'));
 
   if (result?.success) {
     return (
@@ -124,6 +121,17 @@ export default function UploadForm({
         </div>
         <h3 className="text-[1rem] font-bold mb-2">PR Created Successfully!</h3>
         <p className="text-[0.82rem] text-dark-text2 mb-4">Your files are pending review.</p>
+        {!hasPat && (
+          <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-left">
+            <p className="text-[0.75rem] font-semibold text-blue-400 mb-1"><i className="fas fa-info-circle mr-1"></i>Want contribution credit?</p>
+            <p className="text-[0.7rem] text-dark-text2">
+              This upload used the shared uploader account, so it isn&apos;t credited to you. Add your GitHub <strong>Personal Access Token (PAT)</strong> to get your name on the <strong>Contributors list</strong>.
+            </p>
+            <p className="text-[0.68rem] text-blue-400 mt-1.5">
+              Go to <strong>Dashboard → Connections → GitHub</strong> and paste your PAT.
+            </p>
+          </div>
+        )}
         <a href={result.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-qsis text-white font-semibold text-[0.85rem] hover:opacity-90 transition-opacity">
           <i className="fab fa-github"></i> View Pull Request
         </a>
@@ -151,87 +159,6 @@ export default function UploadForm({
         <button className="block mx-auto mt-3 px-4 py-2 text-dark-text3 text-[0.78rem] font-semibold bg-transparent border-none cursor-pointer hover:text-dark-text2" onClick={onClose}>
           Cancel
         </button>
-      </div>
-    );
-  }
-
-  if (showPatPrompt) {
-    const skipsLeft = 3 - patSkipCount;
-    return (
-      <div className="py-6">
-        <div className="text-center mb-5">
-          <div className="mb-3">
-            <i className="fab fa-github text-3xl text-dark-text2"></i>
-          </div>
-          <h3 className="text-[1rem] font-bold text-dark-text mb-1">Connect GitHub</h3>
-          <p className="text-[0.82rem] text-dark-text2 max-w-[360px] mx-auto">
-            Add a <strong>Personal Access Token (PAT)</strong> to appear in the contributor list.
-          </p>
-          {skipsLeft > 0 && skipsLeft < 3 && (
-            <p className="text-[0.68rem] text-dark-text3 mt-1">
-              <i className="fas fa-info-circle mr-1"></i>
-              Skip {skipsLeft} more time{skipsLeft > 1 ? 's' : ''} to dismiss forever
-            </p>
-          )}
-        </div>
-
-        <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
-          <label className="text-[0.72rem] text-dark-text2 block mb-1.5">GitHub Personal Access Token</label>
-          <input
-            type="password"
-            placeholder="ghp_xxxxxxxxxxxx or github_pat_xxxx"
-            className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] font-mono outline-none focus:border-qsis mb-3"
-            value={patInputToken}
-            onChange={e => setPatInputToken(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSavePat()}
-          />
-          <button
-            className="w-full py-2.5 rounded-lg bg-qsis text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
-            onClick={handleSavePat}
-            disabled={patSaving || !patInputToken.trim()}
-          >
-            {patSaving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : <><i className="fab fa-github mr-2"></i>Connect & Save</>}
-          </button>
-
-          <div className="mt-3 p-2.5 rounded-lg bg-dark-bg border border-dark-border">
-            <p className="text-[0.68rem] text-dark-text2 font-semibold mb-1.5"><i className="fas fa-info-circle text-qsis mr-1"></i>How to create a PAT:</p>
-            <ol className="text-[0.62rem] text-dark-text3 space-y-1 list-decimal list-inside">
-              <li>Go to <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline">github.com/settings/tokens/new</a></li>
-              <li>Name it <strong className="text-dark-text2">iiuc-arms</strong> (or any name)</li>
-              <li>Select <strong className="text-dark-text2">No expiration</strong> (or 90 days)</li>
-              <li>Check <strong className="text-dark-text2">repo</strong> scope (full control)</li>
-              <li>Click <strong className="text-dark-text2">Generate token</strong> and paste above</li>
-            </ol>
-          </div>
-        </div>
-
-        {skipsLeft > 0 ? (
-          <button
-            className="w-full py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.82rem] font-semibold cursor-pointer hover:bg-dark-bg2 transition-colors"
-            onClick={handleSkipPat}
-          >
-            Upload Anyway
-          </button>
-        ) : (
-          <div className="flex gap-2">
-            <button
-              className="flex-1 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.82rem] font-semibold cursor-pointer hover:bg-dark-bg2 transition-colors"
-              onClick={handleSkipPat}
-            >
-              Upload Anyway
-            </button>
-            <button
-              className="flex-1 py-2.5 rounded-xl bg-dark-bg3 border border-qsis/30 text-qsis text-[0.82rem] font-semibold cursor-pointer hover:bg-qsis/5 transition-colors"
-              onClick={handleSkipForever}
-            >
-              Skip Forever
-            </button>
-          </div>
-        )}
-        <p className="text-[0.62rem] text-dark-text3 mt-2 text-center">
-          <i className="fas fa-info-circle mr-1"></i>
-          You can still upload files, but your name won&apos;t appear in the contributor list.
-        </p>
       </div>
     );
   }
@@ -402,15 +329,15 @@ export default function UploadForm({
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
                 {category === config.categories.questions.folder ? (
                   <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} options={[
-                    { value: 'Both', label: `Both (Autumn + Spring ${CURRENT_YEAR})`, icon: 'fa-layer-group' },
-                    { value: 'Autumn', label: `Autumn ${CURRENT_YEAR}`, icon: 'fa-leaf' },
-                    { value: 'Spring', label: `Spring ${CURRENT_YEAR}`, icon: 'fa-seedling' },
+                    { value: 'Both', label: 'Both (Autumn + Spring)', icon: 'fa-layer-group' },
+                    { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
+                    { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
                   ]} />
                 ) : (
                   <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} placeholder="Select..." options={[
                     { value: '', label: 'Select...' },
-                    { value: 'Autumn', label: `Autumn ${CURRENT_YEAR}`, icon: 'fa-leaf' },
-                    { value: 'Spring', label: `Spring ${CURRENT_YEAR}`, icon: 'fa-seedling' },
+                    { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
+                    { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
                   ]} />
                 )}
               </div>
@@ -456,7 +383,13 @@ export default function UploadForm({
           <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => fileInputRefs.current[course.id]?.click()}>
             <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
             <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
-            <p className="text-[0.65rem] text-dark-text2">{isExamCategory ? '1 file only' : `Max 5 files, ${config.maxUploadSizeMB}MB each`}</p>
+            <p className="text-[0.65rem] text-dark-text2">
+              {category === config.categories.questions.folder
+                ? 'Select 2-3 images together (auto-merged into one PDF) or 1 PDF file'
+                : isExamCategory
+                  ? '1 file only'
+                  : `Max 5 files, ${config.maxUploadSizeMB}MB each`}
+            </p>
           </div>
 
           <FilePreview

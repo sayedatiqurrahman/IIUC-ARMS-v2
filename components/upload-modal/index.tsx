@@ -50,16 +50,13 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [mergeMerging, setMergeMerging] = useState(false);
 
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!githubToken || !!profile.githubToken;
-  const [patSkipCount, setPatSkipCount] = useState(() => {
-    if (typeof window === 'undefined') return 0;
-    return parseInt(localStorage.getItem('pat_skip_count') || '0', 10);
-  });
   const [patInputToken, setPatInputToken] = useState('');
   const [patSaving, setPatSaving] = useState(false);
+  const patToken = githubToken || profile.githubToken || '';
+  const hasPat = patToken.startsWith('ghp_') || patToken.startsWith('github_pat_');
+  const [patPromptOpen, setPatPromptOpen] = useState(false);
 
   const isLoggedIn = !!(session as any)?.user;
-  const patSkipForever = patSkipCount >= 3;
-  const showPatPrompt = isLoggedIn && !hasGitHub && !patSkipForever;
   const treeLength = useAppStore(s => s.tree.length);
 
   const existingCourses = useMemo(() => {
@@ -142,17 +139,6 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     return links.map(l => `- [${l.title}](${l.url})`).join('\n') + '\n';
   }
 
-  function handleSkipPat() {
-    const next = patSkipCount + 1;
-    setPatSkipCount(next);
-    localStorage.setItem('pat_skip_count', String(next));
-  }
-
-  function handleSkipForever() {
-    setPatSkipCount(3);
-    localStorage.setItem('pat_skip_count', '3');
-  }
-
   async function handleSavePat() {
     if (!patInputToken.trim()) return;
     setPatSaving(true);
@@ -165,9 +151,29 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       const data = await res.json();
       if (data.success || res.ok) {
         showToast('GitHub connected!', 'success');
-        setPatSkipCount(3);
-        localStorage.setItem('pat_skip_count', '3');
         window.location.reload();
+      } else {
+        showToast(data.error || 'Invalid token', 'error');
+      }
+    } catch { showToast('Network error', 'error'); }
+    finally { setPatSaving(false); }
+  }
+
+  async function handleSavePatForUpload() {
+    if (!patInputToken.trim()) return;
+    setPatSaving(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubToken: patInputToken.trim() }),
+      });
+      const data = await res.json();
+      if (data.success || res.ok) {
+        showToast('GitHub connected!', 'success');
+        setGithubToken(patInputToken.trim());
+        setPatPromptOpen(false);
+        await doUpload(patInputToken.trim());
       } else {
         showToast(data.error || 'Invalid token', 'error');
       }
@@ -241,6 +247,10 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     updateCourse(courseId, patch);
     if (fileInputRefs.current[courseId]) fileInputRefs.current[courseId]!.value = '';
     if (isQuestions && valid.some(f => isImage(f.name))) setTimeout(() => checkForMergeableImages(courseId, newFiles), 100);
+    if (isQuestions && valid.length > 0 && !valid.some(f => isPdf(f.name))) {
+      const totalImgs = (course?.files || []).filter(f => isImage(f.file.name)).length + valid.filter(f => isImage(f.name)).length;
+      if (totalImgs === 1) showToast('Questions often have 2 parts — select 2-3 images together and they auto-merge into one PDF', 'info');
+    }
   }
 
   function checkForMergeableImages(courseId: number, newFiles: FileWithMeta[]) {
@@ -336,8 +346,19 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     });
     if (validCourses.length === 0) { alert('At least one course must be selected with files.'); return; }
 
-    const token = githubToken || profile.githubToken || (session as any)?.accessToken || '';
-    if (!token) { setResult({ success: false, error: 'GitHub not connected.', tokenExpired: true }); return; }
+    if (!hasPat) {
+      setPatPromptOpen(true);
+      return;
+    }
+    await doUpload();
+  }
+
+  async function doUpload(tokenOverride?: string) {
+    const token = tokenOverride || githubToken || profile.githubToken || (session as any)?.accessToken || '';
+    const validCourses = courses.filter(c => {
+      const hasCourse = c.selectedCourseCode || (showNewCourse[c.id] && newCourseCode[c.id]?.trim());
+      return hasCourse && (c.files.length > 0 || c.links.length > 0);
+    });
 
     setUploading(true); setResult(null);
     try {
@@ -419,6 +440,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const courseOptions = useMemo(() => existingCourses.map(c => ({ value: c.code, label: `${c.code} — ${c.title}`, icon: 'fa-book' })), [existingCourses]);
 
   return (
+    <>
     <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-dark-bg2 w-full max-w-[540px] max-h-[90vh] rounded-2xl border border-dark-border overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
@@ -434,25 +456,6 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {patSkipForever && !hasGitHub && (
-            <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <div className="flex items-center gap-2">
-                <i className="fas fa-info-circle text-amber-400"></i>
-                <p className="text-[0.78rem] text-amber-400">
-                  You skipped connecting GitHub. Your uploads won&apos;t appear in Contributors.
-                  <button
-                    onClick={() => {
-                      localStorage.removeItem('pat_skip_count');
-                      setPatSkipCount(0);
-                    }}
-                    className="ml-1 underline text-qsis hover:text-qsis/80 bg-transparent border-none cursor-pointer text-[0.78rem]"
-                  >
-                    Connect now
-                  </button>
-                </p>
-              </div>
-            </div>
-          )}
           <UploadForm
             session={session} profile={profile} githubToken={githubToken} setGithubToken={setGithubToken}
             department={department} setDepartment={setDepartment} semester={semester} setSemester={setSemester}
@@ -470,10 +473,57 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             patInputToken={patInputToken} setPatInputToken={setPatInputToken} patSaving={patSaving} handleSavePat={handleSavePat}
             mergeDialogCourseId={mergeDialogCourseId} mergeImages={mergeImages} mergeSession={mergeSession} mergeYear={mergeYear}
             mergeMerging={mergeMerging} handleMergeImages={handleMergeImages} dismissMerge={() => { setMergeDialogCourseId(null); setMergeImages([]); }}
-            isLoggedIn={isLoggedIn} showPatPrompt={showPatPrompt} handleSkipPat={handleSkipPat} handleSkipForever={handleSkipForever} patSkipCount={patSkipCount} onLogin={onLogin} onClose={onClose}
+            isLoggedIn={isLoggedIn} onLogin={onLogin} onClose={onClose}
           />
         </div>
       </div>
     </div>
+
+    {patPromptOpen && (
+      <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center p-4" onClick={() => setPatPromptOpen(false)}>
+        <div className="bg-dark-bg2 w-full max-w-[420px] rounded-2xl border border-dark-border p-5" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[0.95rem] font-bold text-dark-text flex items-center gap-2">
+              <i className="fab fa-github text-purple-400"></i> Connect GitHub
+            </h3>
+            <button className="w-7 h-7 rounded-lg bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 cursor-pointer hover:text-dark-text" onClick={() => setPatPromptOpen(false)}>
+              <i className="fas fa-times text-xs"></i>
+            </button>
+          </div>
+
+          <p className="text-[0.75rem] text-dark-text2 mb-3">
+            You&apos;re not connected to GitHub. Uploads via the shared account won&apos;t show your name on the <strong className="text-dark-text">Contributors list</strong>. Paste your <strong className="text-dark-text">Personal Access Token (PAT)</strong> to get credit, or continue anyway.
+          </p>
+
+          <label className="text-[0.7rem] text-dark-text2 block mb-1">GitHub Personal Access Token</label>
+          <input
+            type="password"
+            placeholder="ghp_xxxxxxxxxxxx or github_pat_xxxx"
+            className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] font-mono outline-none focus:border-qsis mb-2"
+            value={patInputToken}
+            onChange={e => setPatInputToken(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSavePatForUpload()}
+          />
+          <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-qsis hover:underline inline-block mb-3">
+            How to create a PAT
+          </a>
+
+          <button
+            className="w-full py-2.5 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50 mb-2"
+            onClick={handleSavePatForUpload}
+            disabled={patSaving || !patInputToken.trim()}
+          >
+            {patSaving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : <><i className="fab fa-github mr-2"></i>Connect & Upload</>}
+          </button>
+          <button
+            className="w-full py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.82rem] font-semibold cursor-pointer hover:bg-dark-bg2 transition-colors"
+            onClick={() => { setPatPromptOpen(false); doUpload(); }}
+          >
+            Upload Anyway
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

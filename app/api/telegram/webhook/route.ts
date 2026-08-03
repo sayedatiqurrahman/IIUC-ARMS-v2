@@ -232,7 +232,10 @@ async function handleMessage(msg: any) {
     if (!isCommand && !isMention && !COURSE_REGEX.test(text)) return;
   }
 
-  const cleanText = text.replace(/@\S+/g, '').trim();
+  const cleanText = text
+    .replace(/(\/\w+)@[A-Za-z]\w*/g, '$1')
+    .replace(/^@[A-Za-z]\w*\s+/, '')
+    .trim();
   const telegramUsername = msg.from?.username ? `@${msg.from.username}` : null;
 
   try {
@@ -351,6 +354,11 @@ async function handleMessage(msg: any) {
         );
         return;
       }
+      await sendMessage(chatId,
+        `⏳ <b>Processing...</b>\n\n` +
+        `Checking account <code>${esc(email)}</code> and linking this Telegram chat...`,
+        { parse_mode: 'HTML' }
+      );
       await processConnectEmail(chatId, email, telegramUsername);
       return;
     }
