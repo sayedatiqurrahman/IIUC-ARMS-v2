@@ -1,8 +1,8 @@
 import { FACULTIES } from './departments';
 
-export type UserRole = 'admin' | 'manager' | 'teacher' | 'student' | 'user';
+export type UserRole = 'admin' | 'manager' | 'teacher' | 'student' | 'user' | 'external';
 
-export const APP_VERSION = '2.2.0';
+export const APP_VERSION = '2.4.0';
 
 export const config = {
   owner: 'sayedatiqurrahman',
@@ -33,6 +33,8 @@ export const config = {
     if (config.adminEmails.includes(lower)) return 'admin';
     if (/@iiuc\.ac\.bd$/i.test(lower) && !/@ugrad\.iiuc\.ac\.bd$/i.test(lower)) return 'teacher';
     if (/@ugrad\.iiuc\.ac\.bd$/i.test(lower)) return 'student';
+    // Non-university emails (gmail, yahoo, etc.) are external users
+    if (!/@iiuc\.ac\.bd$/i.test(lower)) return 'external';
     return 'user';
   },
   getEffectiveRole: (email: string, profileRole?: string): UserRole => {

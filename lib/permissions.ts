@@ -19,6 +19,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   editLinks: ['admin', 'manager', 'teacher', 'cr'],
   saveCourseToGitHub: ['admin', 'manager', 'teacher', 'cr'],
   manageRooms: ['admin', 'manager', 'teacher'],
+  viewExternalUsers: ['admin', 'manager'],
 };
 
 let cachedPermissions: Record<string, string[]> | null = null;

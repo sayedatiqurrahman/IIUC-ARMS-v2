@@ -5,10 +5,17 @@ import { useRouter } from 'next/navigation';
 import { completeMagicLinkSignIn, isMagicLink } from '@/lib/firebase';
 import { signIn } from 'next-auth/react';
 
+const STEPS = [
+  'Verifying link...',
+  'Signing in with Firebase...',
+  'Setting up session...',
+  'Redirecting...',
+];
+
 export default function MagicLinkPage() {
   const router = useRouter();
-  const [status, setStatus] = useState('Verifying your link...');
   const [error, setError] = useState('');
+  const [step, setStep] = useState(0);
   const [totpRequired, setTotpRequired] = useState(false);
   const [totpCode, setTotpCode] = useState('');
   const [totpLoading, setTotpLoading] = useState(false);
@@ -20,8 +27,13 @@ export default function MagicLinkPage() {
       return;
     }
 
+    const timeout = setTimeout(() => {
+      setError('Verification is taking too long. This may be due to a slow connection or an expired link. Please try again.');
+    }, 30000);
+
     completeMagicLinkSignIn()
       .then(async ({ idToken, user }) => {
+        setStep(1);
         const email = user.email || '';
         const name = user.displayName || email.split('@')[0] || '';
         const image = user.photoURL || '';
@@ -34,11 +46,12 @@ export default function MagicLinkPage() {
         if (totpData.totpRequired && totpData.totpEnabled) {
           setPendingCreds({ idToken, email, name, image });
           setTotpRequired(true);
-          setStatus('');
+          setStep(-1);
+          clearTimeout(timeout);
           return;
         }
 
-        setStatus('Signing you in...');
+        setStep(2);
         const result = await signIn('credentials', {
           idToken,
           email,
@@ -47,15 +60,17 @@ export default function MagicLinkPage() {
           redirect: false,
         });
         if (result?.ok) {
-          setStatus('Success! Redirecting...');
+          setStep(3);
+          clearTimeout(timeout);
           setTimeout(() => router.push('/dashboard'), 1000);
         } else {
           setError('Sign-in failed. Please try again.');
         }
       })
       .catch((err: any) => {
+        clearTimeout(timeout);
         if (err.code === 'auth/invalid-action-code' || err.code === 'auth/expired-action-code') {
-          setError('This link has expired. Please request a new magic link.');
+          setError('This link has expired. Please request a new magic link. Check your spam/junk folder and "All Mail" if the email was missed.');
         } else if (err.code === 'auth/email-already-in-use') {
           setError('This email is already registered. Please sign in with your password.');
         } else {
@@ -90,6 +105,7 @@ export default function MagicLinkPage() {
         freshIdToken = await currentUser.getIdToken(true);
       }
 
+      setStep(2);
       const result = await signIn('credentials', {
         idToken: freshIdToken,
         email: pendingCreds.email,
@@ -98,7 +114,7 @@ export default function MagicLinkPage() {
         redirect: false,
       });
       if (result?.ok) {
-        setStatus('Success! Redirecting...');
+        setStep(3);
         setTotpRequired(false);
         setTimeout(() => router.push('/dashboard'), 1000);
       } else {
@@ -163,8 +179,22 @@ export default function MagicLinkPage() {
             <div className="w-16 h-16 rounded-full bg-qsis/10 flex items-center justify-center mx-auto mb-4">
               <i className="fas fa-spinner fa-spin text-2xl text-qsis"></i>
             </div>
-            <h1 className="text-lg font-bold text-dark-text mb-2">Verifying...</h1>
-            <p className="text-[0.85rem] text-dark-text2">{status}</p>
+            <h1 className="text-lg font-bold text-dark-text mb-2">{STEPS[Math.max(0, step)]}</h1>
+            <div className="mt-4 flex flex-col gap-2">
+              {STEPS.map((label, i) => (
+                <div key={i} className="flex items-center gap-2 text-[0.8rem]">
+                  {i < step ? (
+                    <i className="fas fa-check-circle text-green-500"></i>
+                  ) : i === step ? (
+                    <i className="fas fa-spinner fa-spin text-qsis"></i>
+                  ) : (
+                    <i className="fas fa-circle text-dark-border"></i>
+                  )}
+                  <span className={i <= step ? 'text-dark-text' : 'text-dark-text2'}>{label}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[0.75rem] text-dark-text2 mt-4">If this takes too long, close this tab and try the link again.</p>
           </>
         )}
       </div>

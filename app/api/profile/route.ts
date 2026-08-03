@@ -35,9 +35,7 @@ export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.profile);
   if (!rl.success) return rl.response!;
 
-  // Bot protection
-  const turnstile = await verifyTurnstileRequest(req);
-  if (!turnstile.success) return turnstile.response!;
+  // Skip Turnstile for profile updates — already authenticated via session/token
 
   try {
     const { prisma } = await import('@/lib/prisma');
@@ -57,6 +55,7 @@ export async function POST(req: NextRequest) {
       'name', 'title', 'shortForm', 'department', 'isCR', 'universityId', 'whatsapp', 'phone', 'telegramId', 'semester', 'section', 'image', 'batchId',
       'facebook', 'twitter', 'linkedin', 'website', 'company', 'companyUrl', 'publicEmail',
       'hideWhatsapp', 'hideUniversityId', 'hideSemester', 'hideEmail', 'hideCompany',
+      'showInContributors',
       'githubLogin', 'githubToken', 'githubInstallationId', 'githubAvatar',
     ];
 

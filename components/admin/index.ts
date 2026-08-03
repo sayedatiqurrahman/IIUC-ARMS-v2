@@ -1,0 +1,12 @@
+export { default as OverviewTab } from './OverviewTab';
+export { default as UsersTab } from './UsersTab';
+export { default as UserRow } from './UserRow';
+export { default as FacultyTab } from './FacultyTab';
+export { default as AdminSidebar } from './AdminSidebar';
+export { default as ActivityLogTab } from './ActivityLogTab';
+export { default as ContributorsTab } from './ContributorsTab';
+export { default as RoomsTab } from './RoomsTab';
+export { default as BatchesTab } from './BatchesTab';
+export { default as PermissionsTab } from './PermissionsTab';
+export { default as CoursesTab } from './CoursesTab';
+export { default as TelegramTab } from './TelegramTab';

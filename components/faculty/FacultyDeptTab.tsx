@@ -1,69 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { FACULTIES, TEACHER_TITLES, STAFF_DESIGNATIONS } from '@/lib/departments';
+import { FACULTIES } from '@/lib/departments';
 import { useConfirm } from '@/components/ConfirmModal';
 import { showToast } from '@/lib/utils';
 import CustomSelect from '@/components/CustomSelect';
-
-interface CustomDepartment {
-  id: string;
-  name: string;
-  shortName: string;
-  icon: string;
-}
-
-interface CustomFaculty {
-  id: string;
-  name: string;
-  shortName: string;
-  icon: string;
-  departments: CustomDepartment[];
-}
-
-interface FacultyDeptTabProps {
-  effectiveRole: string;
-  profile: any;
-}
-
-// All available icons
-const ICON_OPTIONS = [
-  { value: 'fa-university', label: 'University' },
-  { value: 'fa-book-quran', label: 'Quran' },
-  { value: 'fa-mosque', label: 'Mosque' },
-  { value: 'fa-microchip', label: 'Microchip' },
-  { value: 'fa-chart-line', label: 'Chart' },
-  { value: 'fa-pen-fancy', label: 'Pen' },
-  { value: 'fa-gavel', label: 'Gavel' },
-  { value: 'fa-graduation-cap', label: 'Graduation' },
-  { value: 'fa-building', label: 'Building' },
-  { value: 'fa-laptop-code', label: 'Laptop Code' },
-  { value: 'fa-bolt', label: 'Bolt' },
-  { value: 'fa-wifi', label: 'WiFi' },
-  { value: 'fa-tower-broadcast', label: 'Tower' },
-  { value: 'fa-pills', label: 'Pills' },
-  { value: 'fa-briefcase', label: 'Briefcase' },
-  { value: 'fa-coins', label: 'Coins' },
-  { value: 'fa-language', label: 'Language' },
-  { value: 'fa-font', label: 'Font' },
-  { value: 'fa-book-open', label: 'Book Open' },
-  { value: 'fa-heart', label: 'Heart' },
-  { value: 'fa-flask', label: 'Flask' },
-  { value: 'fa-atom', label: 'Atom' },
-  { value: 'fa-brain', label: 'Brain' },
-  { value: 'fa-dna', label: 'DNA' },
-  { value: 'fa-stethoscope', label: 'Stethoscope' },
-  { value: 'fa-heartbeat', label: 'Heartbeat' },
-  { value: 'fa-balance-scale', label: 'Balance Scale' },
-  { value: 'fa-landmark', label: 'Landmark' },
-  { value: 'fa-book', label: 'Book' },
-  { value: 'fa-users', label: 'Users' },
-  { value: 'fa-user-graduate', label: 'Graduate' },
-  { value: 'fa-chalkboard-teacher', label: 'Teacher' },
-  { value: 'fa-cogs', label: 'Cogs' },
-  { value: 'fa-network-wired', label: 'Network' },
-  { value: 'fa-database', label: 'Database' },
-];
+import { ICON_OPTIONS } from './constants';
+import type { CustomFaculty, CustomDepartment, FacultyDeptTabProps } from './types';
 
 export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTabProps) {
   const { confirm, confirmDialog } = useConfirm();
@@ -72,14 +15,11 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
   const [saving, setSaving] = useState(false);
   const [showNewFacultyForm, setShowNewFacultyForm] = useState(false);
   const [showNewDeptForm, setShowNewDeptForm] = useState<string | null>(null);
-  const [editingFaculty, setEditingFaculty] = useState<string | null>(null);
-  const [editingDept, setEditingDept] = useState<{ facultyId: string; deptId: string } | null>(null);
   const [expandedFaculties, setExpandedFaculties] = useState<Set<string>>(new Set());
 
   const [newFaculty, setNewFaculty] = useState({ id: '', name: '', shortName: '', icon: 'fa-university' });
   const [newDept, setNewDept] = useState({ id: '', name: '', shortName: '', icon: 'fa-building' });
 
-  // Check if a department is built-in (not deletable)
   const isBuiltinDept = (facultyId: string, deptId: string) => {
     const faculty = FACULTIES.find(f => f.id === facultyId);
     return faculty ? faculty.departments.some(d => d.id === deptId) : false;
@@ -125,7 +65,6 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
         setCustomFaculties(prev => [...prev, data.faculty]);
         setShowNewFacultyForm(false);
         setNewFaculty({ id: '', name: '', shortName: '', icon: 'fa-university' });
-        // Refresh tree cache
         try { (await import('@/lib/store')).useAppStore.getState().loadTree(); } catch {}
       } else {
         showToast(data.error || 'Failed', 'error');

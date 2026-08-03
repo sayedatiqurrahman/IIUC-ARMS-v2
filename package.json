@@ -11,6 +11,7 @@
     "db:migrate": "node scripts/fix-profile-columns.js"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.3.1",
     "@pdftron/pdfjs-express": "^8.7.5",
     "@prisma/adapter-pg": "^7.9.0",
     "@prisma/client": "^7.9.0",

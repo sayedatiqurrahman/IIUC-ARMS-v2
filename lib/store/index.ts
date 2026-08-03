@@ -1,0 +1,565 @@
+import { create } from 'zustand';
+import { config } from '../config';
+import { FACULTIES } from '../departments';
+import { safeJson, getRawUrl, getMimeFromExt } from '../utils';
+import { getOnboardingData, setOnboardingData as saveOnboarding, clearOnboardingData as clearOnboardingStorage } from '@/components/OnboardingModal';
+import { getPdfPageKey } from './helpers';
+import { defaultProfile } from './types';
+import type { AppState, Profile, ViewerItem } from './types';
+import { createTreeHelpers } from './tree-helpers';
+
+export type { View, Breadcrumb, ViewerItem, Semester, Category, Profile, AppState } from './types';
+
+export const useAppStore = create<AppState>((set, get) => {
+  const treeHelpers = createTreeHelpers(get as () => AppState);
+
+  return {
+    tree: [],
+    loading: true,
+    error: '',
+
+    view: 'departments',
+    currentDept: '',
+    currentSem: '',
+    currentCat: '',
+    currentCourseCode: '',
+    currentCourseTitle: '',
+    currentMidFinal: '',
+    breadcrumbs: [],
+
+    searchQuery: '',
+    fileTypeFilter: '',
+    searchSemester: '',
+    searchYear: '',
+
+    viewerOpen: false,
+    viewerItem: null,
+
+    uploadOpen: false,
+    recentReads: [],
+
+    onboardingData: typeof window !== 'undefined' ? getOnboardingData() : null,
+    setOnboardingData: (data) => {
+      saveOnboarding(data);
+      set({ onboardingData: data });
+    },
+    loadOnboarding: () => {
+      set({ onboardingData: getOnboardingData() });
+    },
+    clearOnboarding: () => {
+      clearOnboardingStorage();
+      set({ onboardingData: null });
+    },
+
+    imgZoom: 100,
+    imgRotation: 0,
+
+    contributors: [],
+    contributorsLoading: false,
+
+    dbCourses: [],
+    loadCourses: async () => {
+      const COURSES_CACHE_KEY = 'qsis-courses-cache';
+      const COURSES_CACHE_TS = 'qsis-courses-cache-ts';
+      const COURSES_CACHE_TTL = 5 * 60 * 1000;
+
+      try {
+        const cached = localStorage.getItem(COURSES_CACHE_KEY);
+        const cachedTs = parseInt(localStorage.getItem(COURSES_CACHE_TS) || '0', 10);
+        if (cached && cachedTs && Date.now() - cachedTs < COURSES_CACHE_TTL) {
+          set({ dbCourses: JSON.parse(cached) });
+          return;
+        }
+      } catch {}
+
+      try {
+        const res = await fetch('/api/courses');
+        const data = await res.json();
+        if (data.success) {
+          try {
+            localStorage.setItem(COURSES_CACHE_KEY, JSON.stringify(data.courses));
+            localStorage.setItem(COURSES_CACHE_TS, String(Date.now()));
+          } catch {}
+          set({ dbCourses: data.courses });
+        }
+      } catch {}
+    },
+    invalidateCoursesCache: () => {
+      try {
+        localStorage.removeItem('qsis-courses-cache');
+        localStorage.removeItem('qsis-courses-cache-ts');
+      } catch {}
+    },
+    addCourse: async (dept, sem, code, title) => {
+      try {
+        const res = await fetch('/api/courses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ department: dept, semester: sem, code, title }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          set(s => ({ dbCourses: [...s.dbCourses, data.course] }));
+          return { success: true };
+        }
+        return { success: false, error: data.error || 'Failed' };
+      } catch { return { success: false, error: 'Network error' }; }
+    },
+    editCourse: async (id, title) => {
+      try {
+        const res = await fetch('/api/courses', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, title }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          set(s => ({ dbCourses: s.dbCourses.map(c => c.id === id ? { ...c, title } : c) }));
+          return { success: true };
+        }
+        return { success: false, error: data.error || 'Failed' };
+      } catch { return { success: false, error: 'Network error' }; }
+    },
+    deleteCourse: async (id) => {
+      try {
+        const res = await fetch(`/api/courses`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          set(s => ({ dbCourses: s.dbCourses.filter(c => c.id !== id) }));
+          return { success: true };
+        }
+        return { success: false, error: data.error || 'Failed' };
+      } catch { return { success: false, error: 'Network error' }; }
+    },
+
+    routineData: [],
+    routineLoading: false,
+
+    profile: { ...defaultProfile },
+    loadProfile: async () => {
+      try {
+        const res = await fetch('/api/profile');
+        if (res.ok) {
+          const data = await res.json();
+          const email = data.email || '';
+          const emailRole = email ? config.detectRole(email) : 'user';
+          const role = data.role && data.role !== 'user' ? data.role : emailRole;
+          const updates: Record<string, any> = { profile: { ...defaultProfile, ...data, role } };
+          if (data.githubToken) updates.githubToken = data.githubToken;
+          if (data.githubInstallationId) updates.githubInstallationId = data.githubInstallationId;
+          if (data.githubLogin) updates.githubLogin = data.githubLogin;
+          if (data.githubAvatar) updates.githubAvatar = data.githubAvatar;
+          set(updates);
+        } else {
+          const err = await res.json().catch(() => ({ error: res.statusText }));
+        }
+      } catch {
+      }
+    },
+    updateProfile: async (p) => {
+      const current = get().profile;
+      const snapshot = { ...current };
+      const updated = { ...current, ...p };
+      set({ profile: updated });
+      try {
+        const res = await fetch('/api/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          set({ profile: { ...defaultProfile, ...data } });
+        } else {
+          const err = await res.json().catch(() => ({ error: res.statusText }));
+          set({ profile: snapshot });
+          if (typeof window !== 'undefined') {
+            const { showToast } = await import('@/lib/utils');
+            showToast(`Failed to save: ${err.error || 'Unknown error'}`, 'error');
+          }
+        }
+      } catch {
+        set({ profile: snapshot });
+      }
+    },
+
+    githubToken: '',
+    setGithubToken: (token: string) => set({ githubToken: token }),
+
+    loadTree: async (token?: string) => {
+      const TREE_CACHE_KEY = 'qsis-tree-cache';
+      const TREE_CACHE_TS = 'qsis-tree-cache-ts';
+      const TREE_CACHE_TTL = 5 * 60 * 1000;
+
+      try {
+        const cached = localStorage.getItem(TREE_CACHE_KEY);
+        const cachedTs = parseInt(localStorage.getItem(TREE_CACHE_TS) || '0', 10);
+        if (cached && cachedTs && Date.now() - cachedTs < TREE_CACHE_TTL) {
+          const filtered = JSON.parse(cached);
+          set({ tree: filtered, loading: false, error: '' });
+          return;
+        }
+      } catch {}
+
+      set({ loading: true, error: '' });
+      try {
+        const headers: Record<string, string> = {};
+        if (token) headers['x-auth-token'] = token;
+        const res = await fetch(`/api/github?_t=${Date.now()}`, { headers });
+        const data = await safeJson(res);
+        if (data.error) throw new Error(data.error);
+        const filtered = (data.tree || []).filter((item: any) => {
+          const parts = item.path.split('/');
+          const fileName = parts[parts.length - 1];
+          const ext = fileName.split('.').pop()?.toLowerCase() || '';
+          if (item.type === 'blob') {
+            if (['README.md', 'LICENSE'].includes(fileName)) return false;
+            if (['js', 'json', 'yml', 'yaml', 'css', 'html', 'md', 'lock'].includes(ext)) return false;
+            if (!config.academicExtensions.includes(ext) && fileName !== '.gitkeep') return false;
+          }
+          return true;
+        });
+        try {
+          localStorage.setItem(TREE_CACHE_KEY, JSON.stringify(filtered));
+          localStorage.setItem(TREE_CACHE_TS, String(Date.now()));
+        } catch {}
+        set({ tree: filtered });
+      } catch (err: any) {
+        try {
+          const cached = localStorage.getItem(TREE_CACHE_KEY);
+          if (cached) {
+            set({ tree: JSON.parse(cached), error: err.message || 'Failed to refresh files (showing cached)' });
+            return;
+          }
+        } catch {}
+        set({ error: err.message || 'Failed to load files' });
+      }
+      set({ loading: false });
+    },
+
+    invalidateTreeCache: () => {
+      try {
+        localStorage.removeItem('qsis-tree-cache');
+        localStorage.removeItem('qsis-tree-cache-ts');
+      } catch {}
+    },
+
+    isTreeCacheStale: () => {
+      try {
+        const cachedTs = parseInt(localStorage.getItem('qsis-tree-cache-ts') || '0', 10);
+        return !cachedTs || Date.now() - cachedTs >= 5 * 60 * 1000;
+      } catch { return true; }
+    },
+
+    navigateToDepartment: (deptId) => {
+      const dept = (() => {
+        for (const f of FACULTIES) {
+          const d = f.departments.find(dd => dd.id === deptId);
+          if (d) return d;
+        }
+        return null;
+      })();
+      set({
+        currentDept: deptId,
+        currentSem: '',
+        currentCat: '',
+        currentCourseCode: '',
+        currentCourseTitle: '',
+        view: 'semesters',
+        breadcrumbs: [
+          { label: 'Departments', icon: 'fa-building', onClick: () => get().goHome() },
+          { label: dept?.shortName || deptId, icon: dept?.icon },
+        ],
+      });
+    },
+
+    navigateToSemester: (semId) => {
+      const { currentDept } = get();
+      const isRelated = semId === config.relatedKitabsFolder;
+      const isSources = semId === config.relatedSourcesFolder;
+      let label: string;
+      if (isRelated) label = 'Related Kitabs';
+      else if (isSources) label = 'Related Sources';
+      else label = semId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+      const dept = (() => {
+        if (!currentDept) return null;
+        for (const f of FACULTIES) {
+          const d = f.departments.find(dd => dd.id === currentDept);
+          if (d) return d;
+        }
+        return null;
+      })();
+
+      set({
+        currentSem: semId,
+        currentCat: '',
+        currentCourseCode: '',
+        currentCourseTitle: '',
+        view: 'courses',
+        breadcrumbs: [
+          { label: 'Departments', icon: 'fa-building', onClick: () => get().goHome() },
+          ...(dept ? [{ label: dept.shortName, icon: dept.icon, onClick: () => get().navigateToDepartment(currentDept) }] : []),
+          { label, icon: 'fa-calendar' },
+        ],
+      });
+    },
+
+    navigateToCategory: (catKey) => {
+      const { breadcrumbs } = get();
+      const catConfig = config.categories[catKey as keyof typeof config.categories];
+
+      set({
+        currentCat: catKey,
+        view: 'files',
+        breadcrumbs: [
+          ...breadcrumbs,
+          { label: catConfig?.label || catKey, icon: 'fa-folder' },
+        ],
+      });
+    },
+
+    navigateToCourse: (courseCode, courseTitle) => {
+      const { breadcrumbs } = get();
+      const label = courseTitle ? `${courseCode} - ${courseTitle}` : courseCode;
+      set({
+        currentCourseCode: courseCode,
+        currentCourseTitle: courseTitle,
+        currentMidFinal: '',
+        view: 'categories',
+        breadcrumbs: [
+          ...breadcrumbs,
+          { label, icon: 'fa-book' },
+        ],
+      });
+    },
+
+    navigateToMidFinal: (midFinal) => {
+      const { currentDept, currentSem, currentCourseCode, currentCourseTitle } = get();
+      set({
+        currentMidFinal: midFinal,
+        currentCat: '',
+        view: 'categories',
+        breadcrumbs: [
+          { label: 'Departments', icon: 'fa-building', onClick: () => get().goHome() },
+          ...(currentDept ? [{ label: (() => { for (const f of FACULTIES) { const d = f.departments.find(dd => dd.id === currentDept); if (d) return d.shortName; } return currentDept; })(), icon: 'fa-building', onClick: () => get().navigateToDepartment(currentDept) }] : []),
+          ...(currentSem ? [{ label: currentSem.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()), icon: 'fa-calendar', onClick: () => get().navigateToSemester(currentSem) }] : []),
+          ...(currentCourseCode ? [{ label: currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : currentCourseCode, icon: 'fa-book', onClick: () => get().navigateToCourse(currentCourseCode, currentCourseTitle) }] : []),
+          { label: midFinal, icon: 'fa-folder' },
+        ],
+      });
+    },
+
+    navigateToHistory: () => {
+      set({
+        view: 'history',
+        breadcrumbs: [
+          { label: 'Home', onClick: () => get().goHome() },
+          { label: 'History' },
+        ],
+      });
+      get().loadRecentReads();
+    },
+
+    navigateToContributors: () => {
+      set({
+        view: 'contributors',
+        breadcrumbs: [
+          { label: 'Home', onClick: () => get().goHome() },
+          { label: 'Contributors' },
+        ],
+      });
+      get().loadContributors();
+    },
+
+    navigateToRoutine: () => {
+      set({
+        view: 'routine',
+        breadcrumbs: [
+          { label: 'Home', onClick: () => get().goHome() },
+          { label: 'Routine' },
+        ],
+      });
+      get().loadRoutine();
+    },
+
+    navigateToDashboard: () => {
+      set({
+        view: 'dashboard',
+        breadcrumbs: [
+          { label: 'Home', onClick: () => get().goHome() },
+          { label: 'Dashboard' },
+        ],
+      });
+    },
+
+    goBack: () => {
+      const { view, currentDept, currentSem, currentCourseCode, currentCourseTitle, currentMidFinal, breadcrumbs } = get();
+      if (view === 'files') {
+        get().navigateToCourse(currentCourseCode, currentCourseTitle);
+      } else if (view === 'categories' && currentMidFinal) {
+        set({
+          currentMidFinal: '',
+          breadcrumbs: breadcrumbs.slice(0, -1),
+        });
+      } else if (view === 'categories') {
+        get().navigateToSemester(currentSem);
+      } else if (view === 'courses') {
+        if (currentDept) {
+          get().navigateToDepartment(currentDept);
+        } else {
+          get().goHome();
+        }
+      } else if (view === 'semesters') {
+        get().goHome();
+      } else {
+        get().goHome();
+      }
+    },
+
+    goHome: () => {
+      set({
+        view: 'departments',
+        currentDept: '',
+        currentSem: '',
+        currentCat: '',
+        currentCourseCode: '',
+        currentCourseTitle: '',
+        currentMidFinal: '',
+        breadcrumbs: [],
+        searchQuery: '',
+        fileTypeFilter: '',
+        searchSemester: '',
+        searchYear: '',
+      });
+      get().loadRecentReads();
+    },
+
+    setSearchQuery: (q) => set({ searchQuery: q }),
+    setFileTypeFilter: (f) => set({ fileTypeFilter: f }),
+    setSearchSemester: (s) => set({ searchSemester: s }),
+    setSearchYear: (y) => set({ searchYear: y }),
+    resetFilters: () => set({ searchQuery: '', fileTypeFilter: '', searchSemester: '', searchYear: '' }),
+
+    openFile: (item) => {
+      const ext = item.path.split('/').pop()?.split('.').pop()?.toLowerCase() || '';
+      const mime = getMimeFromExt(ext);
+      const githubPath = item.githubPath || (item.department ? item.department + '/' + item.path : item.path);
+      const rawUrl = getRawUrl(item.path, githubPath);
+      const viewerItem: ViewerItem = {
+        path: item.path,
+        name: item.path.split('/').pop() || '',
+        mimeType: mime,
+        rawUrl,
+      };
+      set({ viewerItem, viewerOpen: true });
+      get().addHistory(viewerItem);
+      if (mime === 'pdf') {
+        try {
+          localStorage.setItem('qsis_viewer_state', JSON.stringify({ ...viewerItem, savedAt: Date.now() }));
+        } catch {}
+      }
+    },
+
+    openRecentFile: (item) => {
+      set({ viewerItem: item, viewerOpen: true });
+      get().addHistory(item);
+      if (item.mimeType === 'pdf') {
+        try {
+          localStorage.setItem('qsis_viewer_state', JSON.stringify({ ...item, savedAt: Date.now() }));
+        } catch {}
+      }
+    },
+
+    closeViewer: () => {
+      set({ viewerOpen: false, viewerItem: null });
+      try { localStorage.removeItem('qsis_viewer_state'); } catch {}
+      if (typeof document !== 'undefined' && document.fullscreenElement) document.exitFullscreen();
+    },
+
+    setUploadOpen: (open) => set({ uploadOpen: open }),
+
+    loadRecentReads: () => {
+      try {
+        const raw = localStorage.getItem('qsis_history');
+        const items = raw ? JSON.parse(raw) : [];
+        set({ recentReads: items.slice(0, 7) });
+      } catch { set({ recentReads: [] }); }
+    },
+
+    addHistory: (item) => {
+      try {
+        let items = JSON.parse(localStorage.getItem('qsis_history') || '[]');
+        items = items.filter((i: any) => i.path !== item.path);
+        items.unshift({ ...item, lastRead: Date.now() });
+        if (items.length > 50) items = items.slice(0, 50);
+        localStorage.setItem('qsis_history', JSON.stringify(items));
+        get().loadRecentReads();
+      } catch {}
+    },
+
+    setImgZoom: (z) => set({ imgZoom: z }),
+    setImgRotation: (r) => set({ imgRotation: r }),
+    resetImageViewer: () => set({ imgZoom: 100, imgRotation: 0 }),
+
+    loadContributors: async () => {
+      set({ contributorsLoading: true });
+      try {
+        const res = await fetch('/api/contributors');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            set({ contributors: data });
+          } else if (Array.isArray(data.contributors)) {
+            set({ contributors: data.contributors });
+          } else {
+            set({ contributors: [] });
+          }
+        } else {
+          set({ contributors: [] });
+        }
+      } catch {
+        set({ contributors: [] });
+      }
+      set({ contributorsLoading: false });
+    },
+
+    loadRoutine: async () => {
+      set({ routineLoading: true });
+      try {
+        const res = await fetch('/routine.json');
+        if (res.ok) {
+          const data = await res.json();
+          set({ routineData: data });
+        } else {
+          set({ routineData: [] });
+        }
+      } catch {
+        set({ routineData: [] });
+      }
+      set({ routineLoading: false });
+    },
+
+    ...treeHelpers,
+  };
+});
+
+export function savePdfPage(filePath: string, pageNum: number) {
+  if (!filePath || !pageNum) return;
+  try {
+    localStorage.setItem(getPdfPageKey(filePath), String(pageNum));
+  } catch {}
+}
+
+export function getSavedPdfPage(filePath: string) {
+  if (!filePath) return 1;
+  try {
+    return parseInt(localStorage.getItem(getPdfPageKey(filePath)) || '1') || 1;
+  } catch {
+    return 1;
+  }
+}

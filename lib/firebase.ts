@@ -142,6 +142,36 @@ export async function updateUserProfile(displayName?: string, photoURL?: string)
   return user;
 }
 
+export async function changePassword(newPassword: string) {
+  const user = getFirebaseAuth().currentUser;
+  if (!user) throw new Error('Not logged in');
+  const { updatePassword } = await import('firebase/auth');
+  await updatePassword(user, newPassword);
+}
+
+export async function reauthenticateAndSetPassword(currentPassword: string, newPassword: string) {
+  const user = getFirebaseAuth().currentUser;
+  if (!user) throw new Error('Not logged in');
+  const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('firebase/auth');
+  const credential = EmailAuthProvider.credential(user.email!, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await updatePassword(user, newPassword);
+}
+
+export async function hasPasswordProvider(): Promise<boolean> {
+  const user = getFirebaseAuth().currentUser;
+  if (!user) return false;
+  await user.reload();
+  return user.providerData.some(p => p.providerId === 'password');
+}
+
+export async function setInitialPassword(email: string, newPassword: string) {
+  const user = getFirebaseAuth().currentUser;
+  if (!user) throw new Error('Not logged in');
+  const { updatePassword } = await import('firebase/auth');
+  await updatePassword(user, newPassword);
+}
+
 export async function logoutFirebase() {
   await getFirebaseAuth().signOut();
   await fetch('/api/auth/firebase-session', { method: 'DELETE' });

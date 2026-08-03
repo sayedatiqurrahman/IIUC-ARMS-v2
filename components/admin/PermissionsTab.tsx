@@ -249,7 +249,7 @@ export default function PermissionsTab() {
       {/* CR Semester Restriction */}
       <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
         <div className="flex items-center gap-2 mb-2">
-          <i className="fas fa-user-lock text-purple-40"></i>
+          <i className="fas fa-user-lock text-purple-400"></i>
           <span className="text-[0.82rem] font-semibold text-dark-text">Course Addition Restrictions</span>
         </div>
         <label className="flex items-center gap-3 cursor-pointer">
@@ -271,6 +271,37 @@ export default function PermissionsTab() {
             </div>
           </div>
         </label>
+      </div>
+
+      {/* Telegram Notification Settings */}
+      <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <i className="fas fa-paper-plane text-cyan-400"></i>
+          <span className="text-[0.82rem] font-semibold text-dark-text">Telegram Notifications</span>
+        </div>
+        <div className="space-y-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${permissions.notifyPendingAccounts !== false ? 'bg-qsis' : 'bg-dark-bg border border-dark-border'}`}
+              onClick={async () => {
+                const newVal = permissions.notifyPendingAccounts === false ? true : false;
+                const newPerms = { ...permissions, notifyPendingAccounts: newVal };
+                setPermissions(newPerms);
+                await savePermissions(newPerms);
+              }}
+            >
+              <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${permissions.notifyPendingAccounts !== false ? 'translate-x-5' : 'translate-x-0.5'}`}></div>
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-dark-text">Notify admins on new pending accounts</div>
+              <div className="text-[0.68rem] text-dark-text3">
+                {permissions.notifyPendingAccounts !== false
+                  ? 'Admins with Telegram connected will be notified when a non-university email signs up'
+                  : 'Admins will not receive Telegram notifications for pending accounts'}
+              </div>
+            </div>
+          </label>
+        </div>
       </div>
 
       {/* Per-User Permission Scopes */}

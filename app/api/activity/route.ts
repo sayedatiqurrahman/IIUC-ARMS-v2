@@ -26,45 +26,95 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
     const offset = parseInt(url.searchParams.get('offset') || '0');
 
-    const [activities, total, userStats, uploadStats] = await Promise.all([
+    const [activities, total] = await Promise.all([
       prisma.activityLog.findMany({
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
       }),
       prisma.activityLog.count(),
-      prisma.profile.groupBy({
-        by: ['role'],
-        _count: true,
-      }),
-      prisma.profile.aggregate({
-        _count: {
-          githubLogin: true,
-          universityId: true,
-        },
-      }),
     ]);
 
-    const totalUsers = await prisma.profile.count();
-    const bannedUsers = await prisma.profile.count({ where: { isBanned: true } });
-    const githubConnected = await prisma.profile.count({ where: { githubLogin: { not: null } } });
+    // Build merged user list from Firebase + Prisma (same logic as /api/admin/users)
+    let firebaseUsers: any[] = [];
+    try {
+      const { getAdminAuth } = await import('@/lib/firebase-admin');
+      const auth = getAdminAuth();
+      if (auth) {
+        const listResult = await auth.listUsers(1000);
+        firebaseUsers = Array.isArray(listResult?.users) ? listResult.users : [];
+      }
+    } catch {}
 
-    const roleMap: Record<string, number> = {};
-    for (const r of userStats) {
-      roleMap[r.role || 'user'] = r._count;
+    const profiles = await prisma.profile.findMany({
+      select: { email: true, role: true, githubLogin: true, isBanned: true, department: true },
+    });
+    const profileMap = new Map(profiles.map(p => [p.email?.toLowerCase(), p]));
+
+    // Merge Firebase + Prisma
+    const mergedUsers: { email: string; role: string; isBanned: boolean; department: string | null }[] = [];
+    const seen = new Set<string>();
+
+    for (const fu of firebaseUsers) {
+      const userEmail = fu.email?.toLowerCase();
+      if (!userEmail || seen.has(userEmail)) continue;
+      seen.add(userEmail);
+      const profile = profileMap.get(userEmail);
+      mergedUsers.push({
+        email: userEmail,
+        role: profile?.role || config.detectRole(userEmail),
+        isBanned: profile?.isBanned || false,
+        department: profile?.department || null,
+      });
     }
+    for (const [emailKey, profile] of Array.from(profileMap.entries())) {
+      if (!seen.has(emailKey)) {
+        seen.add(emailKey);
+        mergedUsers.push({
+          email: emailKey,
+          role: profile.role || 'user',
+          isBanned: profile.isBanned || false,
+          department: profile.department || null,
+        });
+      }
+    }
+
+    // Count from merged list
+    let studentCount = 0;
+    let teacherCount = 0;
+    let specialCount = 0;
+    let externalCount = 0;
+    let adminCount = 0;
+    let managerCount = 0;
+    let bannedCount = 0;
+
+    for (const u of mergedUsers) {
+      if (u.isBanned) bannedCount++;
+      if (u.role === 'admin') adminCount++;
+      else if (u.role === 'manager') managerCount++;
+      else if (u.role === 'teacher') teacherCount++;
+      else {
+        const e = u.email;
+        if (/@ugrad\.iiuc\.ac\.bd$/i.test(e)) studentCount++;
+        else if (/@iiuc\.ac\.bd$/i.test(e)) teacherCount++;
+        else externalCount++;
+      }
+    }
+
+    const githubConnected = profiles.filter(p => p.githubLogin).length;
 
     return NextResponse.json({
       activities,
       total,
       stats: {
-        total: totalUsers,
-        admins: roleMap['admin'] || 0,
-        teachers: roleMap['teacher'] || 0,
-        students: roleMap['student'] || 0,
-        managers: roleMap['manager'] || 0,
-        users: (roleMap['user'] || 0) + (roleMap['student'] || 0),
-        banned: bannedUsers,
+        total: mergedUsers.length,
+        admins: adminCount,
+        managers: managerCount,
+        teachers: teacherCount,
+        students: studentCount,
+        users: externalCount,
+        external: externalCount,
+        banned: bannedCount,
         githubConnected,
       },
     });

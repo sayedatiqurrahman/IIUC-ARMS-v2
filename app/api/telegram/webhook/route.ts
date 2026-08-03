@@ -187,6 +187,26 @@ async function handleMessage(msg: any) {
                 data: { telegramChatId: String(chatId) },
               });
             }
+          } else {
+            // Try matching by phone number (from telegramId field)
+            const phoneDigits = msg.from?.phone_number?.replace(/\D/g, '');
+            if (phoneDigits) {
+              const allProfiles = await prisma.profile.findMany({
+                where: { telegramId: { not: null } },
+                select: { userId: true, telegramId: true },
+              });
+              for (const p of allProfiles) {
+                const tid = p.telegramId?.replace(/\D/g, '') || '';
+                if (tid && phoneDigits.endsWith(tid.slice(-8))) {
+                  await prisma.profile.update({
+                    where: { userId: p.userId },
+                    data: { telegramChatId: String(chatId) },
+                  });
+                  console.log(`[TG] Linked phone ${phoneDigits} -> chat_id ${chatId} (user: ${p.userId})`);
+                  break;
+                }
+              }
+            }
           }
         }
       } catch (err: any) {
@@ -209,6 +229,30 @@ async function handleMessage(msg: any) {
         },
       });
       return;
+    }
+
+    // ─── /start <email> (deep link from web app) ───
+    if (cleanText.startsWith('/start ')) {
+      const payload = cleanText.replace('/start', '').trim();
+      if (payload) {
+        try {
+          const { prisma } = await import('@/lib/prisma');
+          const profile = await prisma.profile.findUnique({ where: { userId: payload } });
+          if (profile) {
+            await prisma.profile.update({
+              where: { userId: payload },
+              data: { telegramChatId: String(chatId) },
+            });
+            await sendMessage(chatId, `✅ <b>Telegram connected!</b>\n\nYour account (<code>${payload}</code>) is now linked to this Telegram chat.\n\nYou will now receive notifications here.`, { parse_mode: 'HTML' });
+            console.log(`[TG] Deep link: ${payload} -> chat_id ${chatId}`);
+            return;
+          }
+        } catch (err: any) {
+          console.error('[TG] Deep link error:', err?.message);
+        }
+        await sendMessage(chatId, `⚠️ Could not link account <code>${payload}</code>. Please try again or contact admin.`, { parse_mode: 'HTML' });
+        return;
+      }
     }
 
     // ─── /help ───

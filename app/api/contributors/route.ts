@@ -265,6 +265,11 @@ export async function GET() {
         matchedContributor = map.get(p.email.split('@')[0]);
       }
       if (matchedContributor) {
+        // Skip contributors who opted out
+        if (p.showInContributors === false) {
+          map.delete(matchedContributor.login);
+          continue;
+        }
         const profileComplete = !!(p.universityId && p.whatsapp && p.semester);
         matchedContributor.email = p.publicEmail || '';
         matchedContributor.name = p.name || matchedContributor.name;

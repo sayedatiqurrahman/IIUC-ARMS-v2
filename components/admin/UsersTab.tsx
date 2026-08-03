@@ -1,0 +1,345 @@
+'use client';
+
+import { useMemo } from 'react';
+import { config } from '@/lib/config';
+import CustomSelect from '@/components/CustomSelect';
+import { type UserRecord, type UserSubTab } from './types';
+import UserRow from './UserRow';
+
+const PER_PAGE = 10;
+
+interface UsersTabProps {
+  users: UserRecord[];
+  totalUsers: number;
+  currentPage: number;
+  setCurrentPage: (page: number) => void;
+  loading: boolean;
+  loadingMore: boolean;
+  firebaseNextPageToken: string | null;
+  userSubTab: UserSubTab;
+  setUserSubTab: (tab: UserSubTab) => void;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  showCreateUser: boolean;
+  setShowCreateUser: (show: boolean) => void;
+  createUserForm: { email: string; name: string; role: string; department: string; semester: string; section: string };
+  setCreateUserForm: React.Dispatch<React.SetStateAction<{ email: string; name: string; role: string; department: string; semester: string; section: string }>>;
+  createUserLoading: boolean;
+  createUserError: string;
+  createUserSuccess: string;
+  showAddAdmin: boolean;
+  setShowAddAdmin: (show: boolean) => void;
+  newAdminEmail: string;
+  setNewAdminEmail: (email: string) => void;
+  isSuperAdmin: boolean;
+  isAdmin: boolean;
+  isManager: boolean;
+  canViewExternalUsers: boolean;
+  email: string;
+  actionLoading: string;
+  handleCreateUser: () => void;
+  handleAddAdmin: () => void;
+  handleToggleCR: (email: string, current: boolean) => void;
+  handleToggleACR: (email: string, current: boolean) => void;
+  handleSetRole: (email: string, role: string) => void;
+  handleBan: (email: string, isBanned: boolean) => void;
+  handleToggleManager: (email: string, currentRole: string) => void;
+  handleApprove: (email: string) => void;
+  handleReject: (email: string) => void;
+  handleDeleteUser: (email: string) => void;
+  loadUsers: (role?: string, search?: string, pageToken?: string, append?: boolean, domain?: string, page?: number) => void;
+  setCreateUserError: (msg: string) => void;
+  setCreateUserSuccess: (msg: string) => void;
+}
+
+export default function UsersTab({
+  users,
+  totalUsers,
+  currentPage,
+  setCurrentPage,
+  loading,
+  loadingMore,
+  firebaseNextPageToken,
+  userSubTab,
+  setUserSubTab,
+  searchQuery,
+  setSearchQuery,
+  showCreateUser,
+  setShowCreateUser,
+  createUserForm,
+  setCreateUserForm,
+  createUserLoading,
+  createUserError,
+  createUserSuccess,
+  showAddAdmin,
+  setShowAddAdmin,
+  newAdminEmail,
+  setNewAdminEmail,
+  isSuperAdmin,
+  isAdmin,
+  isManager,
+  canViewExternalUsers,
+  email,
+  actionLoading,
+  handleCreateUser,
+  handleAddAdmin,
+  handleToggleCR,
+  handleToggleACR,
+  handleSetRole,
+  handleBan,
+  handleToggleManager,
+  handleApprove,
+  handleReject,
+  handleDeleteUser,
+  loadUsers,
+  setCreateUserError,
+  setCreateUserSuccess,
+}: UsersTabProps) {
+  const totalPages = Math.ceil(totalUsers / PER_PAGE);
+
+  const goToPage = (page: number) => {
+    const domainFilter = userSubTab === 'student' ? 'student' : userSubTab === 'teacher' ? 'teacher' : userSubTab === 'external' ? 'external' : userSubTab === 'pending' ? 'pending' : undefined;
+    const roleFilter = userSubTab === 'admin' ? 'admin' : userSubTab === 'manager' ? 'manager' : undefined;
+    setCurrentPage(page);
+    loadUsers(roleFilter, searchQuery, undefined, false, domainFilter, page);
+  };
+
+  const pageNumbers = useMemo(() => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('...');
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+        pages.push(i);
+      }
+      if (currentPage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  }, [totalPages, currentPage]);
+
+  const handleSubTabChange = (tab: UserSubTab) => {
+    setCurrentPage(1);
+    setUserSubTab(tab);
+  };
+
+  return (
+    <div>
+      {/* Sub-tab Navigation */}
+      <div className="flex gap-1 mb-4 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto">
+        {([
+          { key: 'all' as UserSubTab, label: 'All Users', icon: 'fa-users', color: 'text-dark-text2' },
+          { key: 'admin' as UserSubTab, label: 'Admins', icon: 'fa-crown', color: 'text-red-400' },
+          { key: 'manager' as UserSubTab, label: 'Managers', icon: 'fa-user-shield', color: 'text-orange-400' },
+          { key: 'teacher' as UserSubTab, label: 'Teachers', icon: 'fa-chalkboard-teacher', color: 'text-green-400' },
+          { key: 'student' as UserSubTab, label: 'Students', icon: 'fa-user-graduate', color: 'text-blue-400' },
+          { key: 'external' as UserSubTab, label: 'External', icon: 'fa-globe', color: 'text-purple-400', show: canViewExternalUsers },
+          { key: 'pending' as UserSubTab, label: 'Pending', icon: 'fa-clock', color: 'text-yellow-400', show: isAdmin },
+        ]).filter(s => s.show !== false).map(sub => (
+          <button
+            key={sub.key}
+            onClick={() => handleSubTabChange(sub.key)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[0.73rem] font-semibold transition-all cursor-pointer border-none whitespace-nowrap ${
+              userSubTab === sub.key ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+            }`}
+          >
+            <i className={`fas ${sub.icon} ${userSubTab === sub.key ? 'text-white' : sub.color}`}></i>
+            {sub.label}
+            {userSubTab === sub.key && <span className="ml-1 text-[0.65rem] opacity-80">({users.length})</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Add Admin (only on admin sub-tab) */}
+      {userSubTab === 'admin' && isSuperAdmin && (
+        <div className="mb-4">
+          <button onClick={() => setShowAddAdmin(!showAddAdmin)} className="px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 text-[0.75rem] font-semibold cursor-pointer hover:bg-red-500/25 border-none">
+            <i className="fas fa-plus mr-1"></i>Add Admin
+          </button>
+          {showAddAdmin && (
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4 mt-3 flex gap-2">
+              <input value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} placeholder="Email to make admin" className="flex-1 px-3 py-2 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-sm" />
+              <button onClick={handleAddAdmin} disabled={!newAdminEmail.trim()} className="px-4 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">Add</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Search + Create User */}
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 className="text-sm font-semibold text-dark-text">
+          {userSubTab === 'all' && <><i className="fas fa-users text-dark-text2 mr-1"></i>All Users</>}
+          {userSubTab === 'admin' && <><i className="fas fa-crown text-red-400 mr-1"></i>Admins</>}
+          {userSubTab === 'manager' && <><i className="fas fa-user-shield text-orange-400 mr-1"></i>Managers</>}
+          {userSubTab === 'teacher' && <><i className="fas fa-chalkboard-teacher text-green-400 mr-1"></i>Teachers</>}
+          {userSubTab === 'student' && <><i className="fas fa-user-graduate text-blue-400 mr-1"></i>Students</>}
+          {userSubTab === 'external' && <><i className="fas fa-globe text-purple-400 mr-1"></i>External Accounts</>}
+          {userSubTab === 'pending' && <><i className="fas fa-clock text-yellow-400 mr-1"></i>Pending Approval</>}
+          <span className="text-dark-text3 ml-1">({users.length})</span>
+        </h3>
+        <div className="flex gap-2 items-center">
+          {isAdmin && (
+            <button onClick={() => setShowCreateUser(!showCreateUser)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-qsis/15 text-qsis text-[0.78rem] font-semibold hover:bg-qsis/25 transition-colors">
+              <i className="fas fa-user-plus"></i> Create User
+            </button>
+          )}
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => { setSearchQuery(e.target.value); goToPage(1); }}
+            placeholder="Search by name or email..."
+            className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-[0.78rem] w-60"
+          />
+        </div>
+      </div>
+
+      {/* Create User Form */}
+      {showCreateUser && (
+        <div className="bg-dark-bg2 border border-qsis/20 rounded-xl p-4 mb-4">
+          <h4 className="text-[0.85rem] font-semibold text-dark-text mb-3"><i className="fas fa-user-plus text-qsis mr-1.5"></i>Create New User</h4>
+          <p className="text-[0.72rem] text-dark-text3 mb-3">Create an account for any email address (including non-university emails). They can set their password via email.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">Email *</label>
+              <input type="email" value={createUserForm.email} onChange={e => setCreateUserForm(p => ({ ...p, email: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="user@example.com" />
+            </div>
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
+              <input type="text" value={createUserForm.name} onChange={e => setCreateUserForm(p => ({ ...p, name: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="John Doe" />
+            </div>
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">Role *</label>
+              <CustomSelect
+                value={createUserForm.role}
+                onChange={(val) => setCreateUserForm(p => ({ ...p, role: val }))}
+                options={[
+                  { value: 'user', label: 'User', icon: 'fa-user' },
+                  { value: 'student', label: 'Student', icon: 'fa-user-graduate' },
+                  { value: 'teacher', label: 'Teacher', icon: 'fa-chalkboard-teacher' },
+                  { value: 'manager', label: 'Manager', icon: 'fa-user-shield' },
+                  { value: 'admin', label: 'Admin', icon: 'fa-crown' },
+                ]}
+              />
+            </div>
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">Department</label>
+              <input type="text" value={createUserForm.department} onChange={e => setCreateUserForm(p => ({ ...p, department: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="e.g. qsis" />
+            </div>
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester</label>
+              <CustomSelect
+                value={createUserForm.semester}
+                onChange={(val) => setCreateUserForm(p => ({ ...p, semester: val }))}
+                placeholder="None"
+                options={config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }))}
+              />
+            </div>
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">Section</label>
+              <input type="text" value={createUserForm.section} onChange={e => setCreateUserForm(p => ({ ...p, section: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="e.g. A" />
+            </div>
+          </div>
+          {createUserError && <p className="text-[0.75rem] text-red-400 mb-2"><i className="fas fa-exclamation-circle mr-1"></i>{createUserError}</p>}
+          {createUserSuccess && <p className="text-[0.75rem] text-green-400 mb-2"><i className="fas fa-check-circle mr-1"></i>{createUserSuccess}</p>}
+          <div className="flex gap-2">
+            <button onClick={() => { setShowCreateUser(false); setCreateUserError(''); setCreateUserSuccess(''); }} className="px-4 py-2 rounded-lg bg-dark-bg border border-dark-border text-dark-text2 text-[0.82rem] hover:bg-dark-bg3 transition-colors">Cancel</button>
+            <button onClick={handleCreateUser} disabled={createUserLoading} className="px-4 py-2 rounded-lg bg-qsis text-white text-[0.82rem] font-semibold hover:bg-qsis/90 transition-colors disabled:opacity-50">
+              {createUserLoading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Creating...</> : <><i className="fas fa-user-plus mr-1"></i>Create User</>}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Users List */}
+      <div className="flex flex-col gap-2">
+        {users.map(u => (
+          <UserRow
+            key={u.email}
+            u={u}
+            email={email}
+            isAdmin={isAdmin}
+            isManager={isManager}
+            isSuperAdmin={isSuperAdmin}
+            actionLoading={actionLoading}
+            handleToggleCR={handleToggleCR}
+            handleToggleACR={handleToggleACR}
+            handleSetRole={handleSetRole}
+            handleBan={handleBan}
+            handleToggleManager={handleToggleManager}
+            handleApprove={handleApprove}
+            handleReject={handleReject}
+            handleDeleteUser={handleDeleteUser}
+          />
+        ))}
+      </div>
+      {users.length === 0 && !loading && (
+        <div className="text-center py-10">
+          <i className="fas fa-users text-3xl text-dark-text3 mb-3"></i>
+          <p className="text-dark-text3 text-sm">No users found</p>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-dark-border">
+          <p className="text-[0.72rem] text-dark-text3">
+            Showing <span className="text-dark-text2 font-semibold">{(currentPage - 1) * PER_PAGE + 1}</span>
+            {' '}–{' '}
+            <span className="text-dark-text2 font-semibold">{Math.min(currentPage * PER_PAGE, totalUsers)}</span>
+            {' '}of{' '}
+            <span className="text-dark-text2 font-semibold">{totalUsers}</span> users
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => goToPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text2 text-[0.75rem] flex items-center justify-center hover:bg-dark-bg3 hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+            >
+              <i className="fas fa-chevron-left text-[0.6rem]"></i>
+            </button>
+            {pageNumbers.map((p, i) =>
+              typeof p === 'string' ? (
+                <span key={`dots-${i}`} className="w-8 h-8 flex items-center justify-center text-dark-text3 text-[0.7rem]">…</span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => goToPage(p)}
+                  className={`w-8 h-8 rounded-lg text-[0.75rem] font-semibold flex items-center justify-center transition-all cursor-pointer border ${
+                    currentPage === p
+                      ? 'bg-qsis text-white border-qsis'
+                      : 'border-dark-border bg-dark-bg2 text-dark-text2 hover:bg-dark-bg3 hover:text-dark-text'
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            )}
+            <button
+              onClick={() => goToPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text2 text-[0.75rem] flex items-center justify-center hover:bg-dark-bg3 hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+            >
+              <i className="fas fa-chevron-right text-[0.6rem]"></i>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {firebaseNextPageToken && (
+        <button
+          onClick={() => {
+            const domainFilter = userSubTab === 'student' ? 'student' : userSubTab === 'teacher' ? 'teacher' : userSubTab === 'external' ? 'external' : userSubTab === 'pending' ? 'pending' : undefined;
+            loadUsers(userSubTab === 'admin' ? 'admin' : userSubTab === 'manager' ? 'manager' : undefined, searchQuery, firebaseNextPageToken, true, domainFilter);
+          }}
+          disabled={loadingMore}
+          className="mt-3 w-full py-2.5 rounded-xl border border-dark-border bg-dark-bg2 text-dark-text2 text-[0.78rem] font-semibold hover:bg-dark-bg3 hover:text-dark-text cursor-pointer transition-colors disabled:opacity-50"
+        >
+          {loadingMore ? <><i className="fas fa-spinner fa-spin mr-1.5"></i>Loading more users...</> : <><i className="fas fa-arrow-down mr-1.5"></i>Load more users</>}
+        </button>
+      )}
+      {loadingMore && <p className="text-[0.68rem] text-dark-text3 text-center mt-1">Fetching from Firebase...</p>}
+    </div>
+  );
+}

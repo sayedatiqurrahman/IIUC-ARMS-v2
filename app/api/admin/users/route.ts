@@ -30,6 +30,8 @@ export async function GET(req: NextRequest) {
     const filterRole = url.searchParams.get('role');
     const filterSemester = url.searchParams.get('semester');
     const filterDept = url.searchParams.get('department');
+    const filterDomain = url.searchParams.get('domain');
+    const filterAccountStatus = url.searchParams.get('accountStatus');
     const search = url.searchParams.get('search') || '';
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '50');
@@ -44,6 +46,21 @@ export async function GET(req: NextRequest) {
     }
     if (filterDept && filterDept !== 'all') {
       where.department = filterDept;
+    }
+    if (filterDomain && filterDomain !== 'all') {
+      if (filterDomain === 'student') {
+        where.email = { endsWith: '@ugrad.iiuc.ac.bd' };
+      } else if (filterDomain === 'teacher') {
+        where.email = { endsWith: '@iiuc.ac.bd', not: { endsWith: '@ugrad.iiuc.ac.bd' } };
+      } else if (filterDomain === 'external') {
+        where.email = { not: { endsWith: '.iiuc.ac.bd' } };
+        where.accountStatus = 'active';
+      } else if (filterDomain === 'pending') {
+        where.accountStatus = 'pending';
+      }
+    }
+    if (filterAccountStatus && filterAccountStatus !== 'all') {
+      where.accountStatus = filterAccountStatus;
     }
     if (effectiveRole === 'manager' && callerDept) {
       where.department = callerDept;
@@ -71,7 +88,8 @@ export async function GET(req: NextRequest) {
           isCR: true, isACR: true, department: true, universityId: true,
           githubLogin: true, githubAvatar: true, image: true, semester: true,
           section: true, createdAt: true, customPermissions: true,
-          phone: true, telegramId: true, batchId: true,
+          phone: true, telegramId: true, telegramChatId: true, batchId: true,
+          accountStatus: true,
         },
       });
     } catch (e: any) {
@@ -120,11 +138,16 @@ export async function GET(req: NextRequest) {
         image: profile?.image || fu.photoURL || null,
         semester: profile?.semester || null,
         section: profile?.section || null,
+        phone: profile?.phone || null,
+        telegramId: profile?.telegramId || null,
+        telegramChatId: profile?.telegramChatId || null,
+        batchId: profile?.batchId || null,
         hasProfile: !!profile,
         lastSignIn: fu.lastSignInTime || null,
         createdAt: profile?.createdAt?.toISOString?.() || fu.metadata?.creationTime || null,
         providers: fu.providerData?.map((p: any) => p.providerId) || [],
         customPermissions: profile?.customPermissions || {},
+        accountStatus: profile?.accountStatus || 'active',
       });
     }
 
@@ -148,11 +171,16 @@ export async function GET(req: NextRequest) {
           image: profile.image || null,
           semester: profile.semester || null,
           section: profile.section || null,
+          phone: profile.phone || null,
+          telegramId: profile.telegramId || null,
+          telegramChatId: profile.telegramChatId || null,
+          batchId: profile.batchId || null,
           hasProfile: true,
           lastSignIn: null,
           createdAt: profile.createdAt?.toISOString?.() || null,
           providers: [],
           customPermissions: profile.customPermissions || {},
+          accountStatus: profile.accountStatus || 'active',
         });
       }
     });
@@ -176,6 +204,24 @@ export async function GET(req: NextRequest) {
     // Server-side department filter for Firebase users
     if (filterDept && filterDept !== 'all') {
       result = result.filter(u => u.department === filterDept);
+    }
+
+    // Server-side domain filter for Firebase users
+    if (filterDomain && filterDomain !== 'all') {
+      if (filterDomain === 'student') {
+        result = result.filter(u => u.email?.endsWith('@ugrad.iiuc.ac.bd'));
+      } else if (filterDomain === 'teacher') {
+        result = result.filter(u => u.email?.endsWith('@iiuc.ac.bd') && !u.email?.endsWith('@ugrad.iiuc.ac.bd'));
+      } else if (filterDomain === 'external') {
+        result = result.filter(u => !u.email?.endsWith('.iiuc.ac.bd') && u.accountStatus === 'active');
+      } else if (filterDomain === 'pending') {
+        result = result.filter(u => u.accountStatus === 'pending');
+      }
+    }
+
+    // Server-side role filter for merged results (Firebase users have role from detectRole)
+    if (filterRole && filterRole !== 'all') {
+      result = result.filter(u => u.role === filterRole);
     }
 
     return NextResponse.json({
@@ -207,7 +253,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { targetEmail, action } = body;
-    const validActions = ['ban', 'unban', 'setRole', 'toggleCR', 'toggleACR', 'grantPermission', 'revokePermission', 'setCustomPermissions'];
+    const validActions = ['ban', 'unban', 'setRole', 'toggleCR', 'toggleACR', 'grantPermission', 'revokePermission', 'setCustomPermissions', 'approve', 'reject', 'delete'];
     if (!targetEmail || !validActions.includes(action)) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
@@ -422,6 +468,67 @@ export async function POST(req: NextRequest) {
       const { setCustomPermissions } = await import('@/lib/permissions');
       await setCustomPermissions(targetEmail, customPermissions);
       return NextResponse.json({ success: true, message: `Updated custom permissions for ${targetEmail}` });
+    }
+
+    // ─── APPROVE PENDING ACCOUNT ───
+    if (action === 'approve') {
+      if (effectiveRole !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can approve accounts' }, { status: 403 });
+      }
+      await prisma.profile.upsert({
+        where: { userId: targetEmail },
+        update: { accountStatus: 'active' },
+        create: { userId: targetEmail, email: targetEmail, accountStatus: 'active' },
+      });
+      return NextResponse.json({ success: true, message: `Account approved for ${targetEmail}` });
+    }
+
+    // ─── REJECT PENDING ACCOUNT ───
+    if (action === 'reject') {
+      if (effectiveRole !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can reject accounts' }, { status: 403 });
+      }
+      await prisma.profile.upsert({
+        where: { userId: targetEmail },
+        update: { accountStatus: 'rejected', isBanned: true },
+        create: { userId: targetEmail, email: targetEmail, accountStatus: 'rejected', isBanned: true },
+      });
+      return NextResponse.json({ success: true, message: `Account rejected for ${targetEmail}` });
+    }
+
+    // ─── DELETE USER (Firebase + DB) ───
+    if (action === 'delete') {
+      if (effectiveRole !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can delete users' }, { status: 403 });
+      }
+      const { banReason: deleteReason } = body;
+      if (targetEmail.toLowerCase() === email.toLowerCase()) {
+        return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 });
+      }
+      // Delete from Firebase Auth
+      try {
+        const { getAdminAuth } = await import('@/lib/firebase-admin');
+        const auth = getAdminAuth();
+        if (auth) {
+          try {
+            const firebaseUser = await auth.getUserByEmail(targetEmail);
+            await auth.deleteUser(firebaseUser.uid);
+          } catch (fbErr: any) {
+            if (fbErr.code !== 'auth/user-not-found') {
+              console.error('[Admin Users] Firebase delete error:', fbErr?.message);
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error('[Admin Users] Firebase delete failed:', err?.message);
+      }
+      // Delete from DB
+      try {
+        await prisma.profile.delete({ where: { userId: targetEmail } });
+      } catch {
+        // Profile may not exist
+      }
+      return NextResponse.json({ success: true, message: `User ${targetEmail} deleted from Firebase and database` });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

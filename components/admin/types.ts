@@ -16,9 +16,16 @@ export interface UserRecord {
   section?: string;
   lastSignIn?: string;
   department?: string;
+  batch?: string;
+  phone?: string;
+  telegramId?: string;
+  telegramChatId?: string;
+  batchId?: number;
   providers?: string[];
   hasProfile?: boolean;
   customPermissions?: Record<string, boolean>;
+  createdAt?: string;
+  accountStatus?: string;
 }
 
 export interface ActivityLog {
@@ -33,14 +40,16 @@ export interface ActivityLog {
 export interface AdminStats {
   total: number;
   admins: number;
+  managers: number;
   teachers: number;
   students: number;
   users: number;
   banned: number;
+  githubConnected: number;
 }
 
 export type Tab = 'overview' | 'users' | 'activity' | 'faculty' | 'facultyDept' | 'courses' | 'permissions' | 'rooms' | 'batches' | 'telegram' | 'contributors';
-export type UserSubTab = 'all' | 'admin' | 'manager' | 'teacher' | 'student';
+export type UserSubTab = 'all' | 'admin' | 'manager' | 'teacher' | 'student' | 'external' | 'pending';
 
 export interface ContributorSettings {
   hiddenLogins: string[];

@@ -7,56 +7,56 @@ datasource db {
 }
 
 model Profile {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  email           String?
-  name            String?
-  title           String?
-  shortForm       String?
-  department      String?
-  section         String?
-  isCR            Boolean  @default(false)
-  isACR           Boolean  @default(false)
-  universityId    String?
-  whatsapp        String?
-  phone           String?
-  telegramId      String?
-  telegramChatId  String?
-  semester        String?
-  image           String?
-  role            String?  @default("user")
-  batchId         String?
-  isBanned        Boolean  @default(false)
-  banReason       String?
-  bannedBy        String?
-  githubLogin     String?
-  githubToken     String?
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  email                String?
+  name                 String?
+  universityId         String?
+  whatsapp             String?
+  semester             String?
+  image                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  facebook             String?
+  githubLogin          String?
+  hideUniversityId     Boolean  @default(false)
+  hideWhatsapp         Boolean  @default(false)
+  linkedin             String?
+  twitter              String?
+  website              String?
+  githubToken          String?
+  company              String?
+  companyUrl           String?
+  hideEmail            Boolean  @default(false)
+  hideSemester         Boolean  @default(false)
+  publicEmail          String?
   githubInstallationId String?
-  githubAvatar    String?
-  totpSecret      String?
-  totpEnabled     Boolean  @default(false)
-  totpMethods     String[] @default(["email"])
-  facebook        String?
-  twitter         String?
-  linkedin        String?
-  website         String?
-  company         String?
-  companyUrl      String?
-  publicEmail     String?
-  linkedEmails    String[] @default([])
-  showInContributors Boolean @default(true)
-  hideWhatsapp    Boolean @default(false)
-  hideUniversityId Boolean @default(false)
-  hideSemester    Boolean @default(false)
-  hideEmail       Boolean @default(false)
-  hideCompany     Boolean @default(false)
-  customPermissions Json?  @default("{}")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  githubAvatar         String?
+  role                 String?  @default("user")
+  totpEnabled          Boolean  @default(false)
+  totpSecret           String?
+  title                String?
+  isBanned             Boolean? @default(false)
+  shortForm            String?
+  department           String?
+  isCR                 Boolean? @default(false)
+  isACR                Boolean  @default(false)
+  section              String?
+  totpMethods          String[] @default(["email"])
+  hideCompany          Boolean? @default(false)
+  banReason            String?
+  bannedBy             String?
+  customPermissions    Json?    @default("{}")
+  phone                String?
+  telegramId           String?
+  batchId              String?
+  telegramChatId       String?
+  linkedEmails         String[] @default([])
+  showInContributors   Boolean? @default(true)
+  accountStatus        String?  @default("active")
 
   @@index([githubLogin])
   @@index([email])
-  @@index([batchId])
 }
 
 model ActivityLog {
@@ -73,61 +73,57 @@ model ActivityLog {
 }
 
 model FacultyMember {
-  id          String   @id @default(cuid())
-  department  String
-  name        String
-  title       String?
-  email       String?
-  phone       String?
-  shortForm   String?
-  memberType  String   @default("faculty")
-  isCR        Boolean  @default(false)
-  isVisible   Boolean  @default(false)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([department])
-  @@index([email])
-  @@index([name])
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
+  department String
+  name       String
+  title      String?
+  email      String?
+  phone      String?
+  shortForm  String?
+  memberType String   @default("faculty")
+  isCR       Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  isVisible  Boolean  @default(false)
 }
 
 model Course {
-  id          String   @id @default(cuid())
-  department  String
-  semester    String
-  code        String
-  title       String
-  addedBy     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
+  department String
+  semester   String
+  code       String
+  title      String
+  addedBy    String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
+  @@unique([department, semester, code])
   @@index([department])
   @@index([semester])
-  @@unique([department, semester, code])
 }
 
 model SiteSettings {
-  id                  String   @id @default("site-settings")
-  permissions         Json     @default("{}")
-  contributorSettings Json     @default("{}")
-  customFaculties     Json     @default("[]")
-  extraDepartments    Json     @default("{}")
-  updatedAt           DateTime @updatedAt
+  id                 String   @id @default("site-settings")
+  permissions        Json     @default("{}")
+  updatedAt          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  extraDepartments   Json?    @default("{}")
+  customFaculties    Json?    @default("[]")
+  contributorSettings Json?
 }
 
 model SemesterCourse {
-  id          String   @id @default(cuid())
-  semester    String
-  code        String
-  title       String
-  teacher     String?
-  room        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  semester  String
+  code      String
+  title     String
+  teacher   String?
+  room      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([semester])
   @@unique([semester, code])
+  @@index([semester])
 }
 
 model PublishedRoutine {
@@ -159,7 +155,7 @@ model PublishedRoutine {
 }
 
 model FacultyRequest {
-  id          String   @id @default(cuid())
+  id          String    @id @default(dbgenerated("gen_random_uuid()"))
   requesterId String
   department  String
   name        String
@@ -167,12 +163,12 @@ model FacultyRequest {
   email       String?
   phone       String?
   shortForm   String?
-  memberType  String   @default("faculty")
+  memberType  String    @default("faculty")
   notes       String?
-  status      String   @default("pending")
+  status      String    @default("pending")
   reviewedBy  String?
-  reviewedAt  DateTime?
-  createdAt   DateTime @default(now())
+  reviewedAt  DateTime? @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
 
   @@index([requesterId])
   @@index([status])
@@ -180,45 +176,42 @@ model FacultyRequest {
 }
 
 model PublishedExamRoutine {
-  id            String   @id @default(cuid())
-  examId        String
-  semester      String
-  session       String?
-  department    String?
-  examType      String?
-  type          String?
-  rows          Json
-  slots         Json
-  status        String   @default("published")
-  publishedBy   String?
+  id               String   @id @default(dbgenerated("gen_random_uuid()"))
+  examId           String
+  semester         String
+  session          String?
+  department       String?
+  examType         String?
+  type             String?
+  rows             Json
+  slots            Json
+  publishedBy      String?
   publishedByEmail String?
-  publishedAt   DateTime @default(now())
-  expiresAt     DateTime
+  publishedAt      DateTime @default(now()) @db.Timestamptz(6)
+  expiresAt        DateTime @db.Timestamptz(6)
+  status           String   @default("published")
 
   @@index([examId])
   @@index([semester])
   @@index([department])
-  @@index([status])
-  @@index([type])
   @@index([expiresAt])
 }
 
 model Room {
-  id                String   @id @default(cuid())
-  department        String
-  name              String
-  capacity          Int      @default(40)
-  gender            String   @default("both")
-  building          String?
-  floor             String?
-  numberOfColumns   Int?
-  chairsPerColumn   Int?
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id              String   @id @default(cuid())
+  department      String
+  name            String
+  capacity        Int      @default(40)
+  gender          String   @default("both")
+  building        String?
+  floor           String?
+  numberOfColumns Int?
+  chairsPerColumn Int?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
 
-  @@index([department])
   @@unique([department, name])
+  @@index([department])
 }
 
 model Batch {
@@ -235,7 +228,6 @@ model Batch {
   updatedAt       DateTime @updatedAt
 
   @@index([department])
-  @@index([isActive])
 }
 
 model BatchStudent {
@@ -246,24 +238,22 @@ model BatchStudent {
   originalId    String?
   name          String?
   isReAdmission Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
 
+  @@unique([batchId, universityId])
   @@index([batchId])
   @@index([email])
-  @@unique([batchId, universityId])
 }
 
 model TelegramNotification {
-  id            String   @id @default(cuid())
-  department    String
-  type          String
-  title         String
-  message       String
-  sentBy        String?
-  sentAt        DateTime @default(now())
-  recipientCount Int     @default(0)
+  id             String   @id @default(cuid())
+  department     String
+  type           String
+  title          String
+  message        String
+  sentBy         String?
+  recipientCount Int      @default(0)
+  sentAt         DateTime @default(now())
 
   @@index([department])
-  @@index([type])
+  @@index([sentAt])
 }

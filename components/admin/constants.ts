@@ -55,6 +55,7 @@ export const PERMISSION_GROUPS = [
       { key: 'manageFaculty', label: 'Manage Faculty', desc: 'Add/edit faculty & staff', icon: 'fa-building', color: 'text-teal-400' },
       { key: 'manageBatches', label: 'Manage Batches', desc: 'Student batch management', icon: 'fa-layer-group', color: 'text-indigo-400' },
       { key: 'manageUsers', label: 'Manage Users', desc: 'Ban, promote, change roles', icon: 'fa-users-cog', color: 'text-orange-400' },
+      { key: 'viewExternalUsers', label: 'View External Users', desc: 'See non-university accounts', icon: 'fa-globe', color: 'text-purple-400' },
     ],
   },
   {

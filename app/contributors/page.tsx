@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import ContributorsView from '@/components/views/ContributorsView';
+import ContributorsView from '@/components/contributors';
 
 export const metadata: Metadata = {
   title: 'Contributors',

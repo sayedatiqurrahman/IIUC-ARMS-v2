@@ -19,6 +19,7 @@ async function main() {
     { name: 'customPermissions', type: "JSONB DEFAULT '{}'" },
     { name: 'banReason', type: 'TEXT' },
     { name: 'bannedBy', type: 'TEXT' },
+    { name: 'accountStatus', type: "STRING DEFAULT 'active'" },
   ];
 
   for (const col of columns) {

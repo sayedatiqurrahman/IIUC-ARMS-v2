@@ -1,0 +1,73 @@
+import Image from 'next/image';
+import { config } from '@/lib/config';
+
+export default function FounderCard({ c }: { c: any }) {
+  return (
+    <div className="bg-gradient-to-br from-qsis/10 to-accent/10 border-2 border-qsis/40 rounded-2xl p-4 sm:p-5 mb-5 ring-1 ring-qsis/20">
+      {/* Mobile: vertical centered layout */}
+      <div className="sm:hidden text-center">
+        <div className="relative inline-block mb-3">
+          <Image src={c.avatar_url} alt={c.login} width={72} height={72} className="w-[72px] h-[72px] rounded-full border-[3px] border-qsis shadow-[0_0_24px_rgba(34,197,94,0.4)] object-cover" />
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2">
+            <i className="fas fa-crown text-white text-[0.6rem]"></i>
+          </div>
+        </div>
+        <h3 className="text-[1rem] font-bold text-dark-text">{c.name || c.login}</h3>
+        <p className="text-[0.75rem] text-qsis font-medium mb-1">{config.founderName}</p>
+        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors no-underline inline-block mb-2.5">
+          <i className="fab fa-github mr-1"></i>@{c.login}
+        </a>
+        <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
+          <span className="px-2 py-0.5 rounded-full bg-qsis/25 text-qsis text-[0.6rem] font-bold ring-1 ring-qsis/40">
+            <i className="fas fa-crown mr-1"></i>Founder & Lead
+          </span>
+        </div>
+        <div className="flex items-center justify-center gap-2 bg-dark-bg3/50 rounded-xl px-3 py-2.5 mt-2">
+          <div className="flex-1 text-center"><div className="text-[0.85rem] font-bold text-blue-400">{c.v2Contributions}</div><div className="text-[0.5rem] text-dark-text3">Code</div></div>
+          <div className="w-px h-6 bg-dark-border"></div>
+          <div className="flex-1 text-center"><div className="text-[0.85rem] font-bold text-orange-400">{c.dataContributions}</div><div className="text-[0.5rem] text-dark-text3">Data</div></div>
+          <div className="w-px h-6 bg-dark-border"></div>
+          <div className="flex-1 text-center"><div className="text-[0.85rem] font-bold text-accent">{c.prCount}</div><div className="text-[0.5rem] text-dark-text3">PRs</div></div>
+          <div className="w-px h-6 bg-dark-border"></div>
+          <div className="flex-1 text-center"><div className="text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions}</div><div className="text-[0.5rem] text-dark-text3">Total</div></div>
+        </div>
+      </div>
+
+      {/* Desktop: horizontal layout */}
+      <div className="hidden sm:flex items-center gap-4">
+        <div className="relative flex-shrink-0">
+          <Image src={c.avatar_url} alt={c.login} width={80} height={80} className="w-20 h-20 rounded-full border-[3px] border-qsis shadow-[0_0_24px_rgba(34,197,94,0.4)] object-cover" />
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2">
+            <i className="fas fa-crown text-white text-[0.6rem]"></i>
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-[1.1rem] font-bold text-dark-text">{c.name || c.login}</h3>
+            <span className="px-2.5 py-0.5 rounded-full bg-qsis/25 text-qsis text-[0.68rem] font-bold ring-1 ring-qsis/40">
+              <i className="fas fa-crown mr-1"></i>Founder & Lead
+            </span>
+          </div>
+          <p className="text-[0.82rem] text-qsis font-medium">{config.founderName}</p>
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
+              <i className="fab fa-github mr-1"></i>@{c.login}
+            </a>
+            <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+              <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions} Code
+            </span>
+            <span className="text-[0.65rem] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
+              <i className="fas fa-book-open mr-1"></i>{c.dataContributions} Data
+            </span>
+            <span className="text-[0.65rem] text-accent bg-accent/10 px-2 py-0.5 rounded-full">
+              <i className="fas fa-code-merge mr-1"></i>{c.prCount} PRs
+            </span>
+            <span className="text-[0.65rem] font-bold text-dark-text bg-dark-bg3 px-2 py-0.5 rounded-full">
+              <i className="fas fa-star mr-1 text-yellow-500"></i>{c.v2Contributions + c.dataContributions} Total
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
