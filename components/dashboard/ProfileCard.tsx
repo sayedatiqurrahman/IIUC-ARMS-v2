@@ -7,6 +7,7 @@ import { config } from '@/lib/config';
 import CustomSelect from '@/components/CustomSelect';
 import BatchSelector from './BatchSelector';
 import SocialLinks from './SocialLinks';
+import TelegramVerify from './TelegramVerify';
 
 function extractUniversityId(email: string): string {
   const match = email.match(/^(q\d+)/i);
@@ -195,8 +196,10 @@ export default function ProfileCard({
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1"></i>Telegram Username / Number</label>
               <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or +8801XXXXXXXXX" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
-              {profile.telegramChatId ? (
+              {profile.telegramChatId && (profile as any).telegramVerified ? (
                 <p className="text-[0.65rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected</p>
+              ) : profile.telegramChatId ? (
+                <p className="text-[0.65rem] text-yellow-400 mt-0.5"><i className="fas fa-hourglass-half mr-0.5"></i>Pending — open web app to verify</p>
               ) : (
                 <p className="text-[0.65rem] text-dark-text3 mt-0.5">
                   Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline">@iiuc_arms_bot</a> and send{' '}
@@ -313,25 +316,12 @@ export default function ProfileCard({
                 {profile.whatsapp || 'Not set'}
               </span>
             </div>
-            <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-              <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1 text-blue-400"></i>Telegram</span>
-              <span className={`text-[0.85rem] font-semibold ${profile.telegramId ? '' : 'text-dark-text2'}`}>
-                {profile.telegramId || 'Not set'}
-              </span>
-              {profile.telegramChatId ? (
-                <p className="text-[0.6rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected! You&apos;ll receive routine updates</p>
-              ) : (
-                <div className="mt-1">
-                  {profile.telegramId && (
-                    <p className="text-[0.6rem] text-yellow-400"><i className="fas fa-link mr-0.5"></i>Pending connection</p>
-                  )}
-                  <p className="text-[0.6rem] text-dark-text3 mt-0.5">
-                    Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline">@iiuc_arms_bot</a> and send:<br/>
-                    <code className="bg-dark-bg px-1 rounded text-qsis text-[0.6rem]">/connect {profile.email || (session as any)?.user?.email || 'youremail@example.com'}</code>
-                  </p>
-                </div>
-              )}
-            </div>
+            <TelegramVerify
+              telegramChatId={profile.telegramChatId}
+              telegramVerified={(profile as any).telegramVerified}
+              telegramId={profile.telegramId}
+              email={profile.email || (session as any)?.user?.email || ''}
+            />
             <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
               <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-envelope mr-1 text-blue-400"></i>Public Email</span>
               <span className={`text-[0.85rem] font-semibold ${profile.publicEmail ? '' : 'text-dark-text2'}`}>

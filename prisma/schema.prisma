@@ -48,10 +48,13 @@ model Profile {
   bannedBy             String?
   customPermissions    Json?    @default("{}")
   phone                String?
-  telegramId           String?
-  batchId              String?
-  telegramChatId       String?
-  linkedEmails         String[] @default([])
+   telegramId           String?
+   batchId              String?
+   telegramChatId       String?
+   telegramVerified     Boolean? @default(false)
+   telegramOtp          String?
+   telegramOtpExpiresAt DateTime?
+   linkedEmails         String[] @default([])
   showInContributors   Boolean? @default(true)
   accountStatus        String?  @default("active")
 
