@@ -314,7 +314,7 @@ export async function POST(req: NextRequest) {
     if (!createBranchRes.ok && createBranchRes.status !== 422) {
       const errBody = await createBranchRes.json().catch(() => ({}));
       if (createBranchRes.status === 403) {
-        throw new Error('Permission denied (403). Token needs Contents + Pull requests access. Create at: https://github.com/settings/personal-access-tokens');
+        throw new Error('Permission denied (403). Token needs Contents + Pull requests access. Create a classic PAT at: https://github.com/settings/tokens/new?description=IIUC-ARMS&scopes=repo');
       }
       throw new Error(errBody.message || `Failed to create branch`);
     }

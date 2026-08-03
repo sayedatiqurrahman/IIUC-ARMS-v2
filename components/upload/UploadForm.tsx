@@ -503,7 +503,7 @@ export default function UploadForm({
                 </button>
               </div>
               <p className="text-[0.6rem] text-dark-text3 mt-1.5">
-                <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline">Create new PAT</a> → check <strong>repo</strong> scope → paste above
+                <a href="https://github.com/settings/tokens/new?description=IIUC-ARMS&scopes=repo" target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline">Create classic PAT</a> (Note: IIUC-ARMS + <strong>repo</strong> scope pre-filled) → paste above
               </p>
             </div>
           )}

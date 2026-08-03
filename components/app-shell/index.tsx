@@ -631,8 +631,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               onChange={e => setPatInputToken(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handlePatSaveAndContinue()}
             />
-            <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-qsis hover:underline inline-block mb-3">
-              How to create a PAT — give it a name and select the <code className="bg-dark-bg3 px-1 rounded">repo</code> scope
+            <a href="https://github.com/settings/tokens/new?description=IIUC-ARMS&scopes=repo" target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-qsis hover:underline inline-block mb-3">
+              Create a classic token — Note <code className="bg-dark-bg3 px-1 rounded">IIUC-ARMS</code> and <code className="bg-dark-bg3 px-1 rounded">repo</code> scope are pre-filled
             </a>
 
             <button
