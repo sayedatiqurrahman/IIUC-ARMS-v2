@@ -195,19 +195,17 @@ export default function ProfileCard({
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1"></i>Telegram Username / Number</label>
               <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or +8801XXXXXXXXX" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
-              {profile.telegramId && profile.telegramChatId ? (
+              {profile.telegramChatId ? (
                 <p className="text-[0.65rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected</p>
-              ) : profile.telegramId ? (
+              ) : (
                 <a
                   href={`https://t.me/iiuc_arms_bot?start=${encodeURIComponent(profile.email || (session as any)?.user?.email || '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-400 text-[0.65rem] font-semibold hover:bg-blue-500/30 transition-colors"
+                  className="inline-flex items-center gap-1 mt-1 px-2 py-1 rounded-md bg-blue-500/20 text-blue-400 text-[0.65rem] font-semibold hover:bg-blue-500/30 transition-colors"
                 >
-                  <i className="fab fa-telegram"></i> Connect via Telegram
+                  <i className="fab fa-telegram"></i> Connect with Telegram
                 </a>
-              ) : (
-                <p className="text-[0.65rem] text-dark-text3 mt-0.5">Receive routines & notifications via Telegram DM</p>
               )}
             </div>
             {isStudent && (
@@ -324,21 +322,23 @@ export default function ProfileCard({
               <span className={`text-[0.85rem] font-semibold ${profile.telegramId ? '' : 'text-dark-text2'}`}>
                 {profile.telegramId || 'Not set'}
               </span>
-              {profile.telegramId && profile.telegramChatId ? (
+              {profile.telegramChatId ? (
                 <p className="text-[0.6rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected! You&apos;ll receive routine updates</p>
-              ) : profile.telegramId ? (
+              ) : (
                 <div className="mt-1">
-                  <p className="text-[0.6rem] text-yellow-400"><i className="fas fa-link mr-0.5"></i>Pending connection</p>
+                  {profile.telegramId && (
+                    <p className="text-[0.6rem] text-yellow-400"><i className="fas fa-link mr-0.5"></i>Pending connection</p>
+                  )}
                   <a
                     href={`https://t.me/iiuc_arms_bot?start=${encodeURIComponent(profile.email || (session as any)?.user?.email || '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-400 text-[0.6rem] font-semibold hover:bg-blue-500/30 transition-colors"
+                    className="inline-flex items-center gap-1 mt-1 px-2 py-1 rounded-md bg-blue-500/20 text-blue-400 text-[0.65rem] font-semibold hover:bg-blue-500/30 transition-colors"
                   >
-                    <i className="fab fa-telegram"></i> Connect via Telegram
+                    <i className="fab fa-telegram"></i> Connect with Telegram
                   </a>
                 </div>
-              ) : null}
+              )}
             </div>
             <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
               <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fas fa-envelope mr-1 text-blue-400"></i>Public Email</span>
