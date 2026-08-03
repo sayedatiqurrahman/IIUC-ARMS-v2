@@ -67,6 +67,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'Telegram connected successfully!' });
   } catch {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Server error. Please try again, or contact the manager/admin.' }, { status: 500 });
   }
 }

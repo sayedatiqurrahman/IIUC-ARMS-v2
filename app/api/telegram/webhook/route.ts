@@ -174,6 +174,24 @@ async function processConnectEmail(chatId: number, email: string, telegramUserna
     return;
   }
 
+  // One Telegram account can be linked to up to MAX_ACCOUNTS_PER_CHAT profiles
+  const linkedCount = await prisma.profile.count({
+    where: {
+      telegramChatId: String(chatId),
+      telegramVerified: true,
+      userId: { not: email },
+    },
+  });
+  if (linkedCount >= 3) {
+    await sendMessage(chatId,
+      `❌ <b>Limit reached</b>\n\n` +
+      `This Telegram is already connected to <b>${linkedCount}</b> accounts (max 3).\n\n` +
+      `Please contact the manager/admin to increase your limit.`,
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+
   await prisma.profile.update({
     where: { userId: email },
     data: {
@@ -185,10 +203,10 @@ async function processConnectEmail(chatId: number, email: string, telegramUserna
   });
 
   await sendMessage(chatId,
-    `🔗 <b>Connection request received!</b>\n\n` +
+    `✅ <b>Request sent successfully!</b>\n\n` +
     `📧 Account: <code>${esc(email)}</code>\n\n` +
-    `Now open IIUC-ARMS web app and verify your Telegram account.\n\n` +
-    `Go to <b>Dashboard → Connections → Telegram</b> and enter the OTP.`,
+    `Now open <b>IIUC-ARMS web app → Dashboard → Connections → Telegram</b>,\n` +
+    `click <b>Send OTP</b>, then enter the 6-digit OTP from this chat to verify.`,
     { parse_mode: 'HTML' }
   );
   console.log(`[TG] /connect: ${email} -> chat_id ${chatId} (pending verification)`);

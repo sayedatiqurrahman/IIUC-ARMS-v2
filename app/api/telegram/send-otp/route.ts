@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_API;
+const MAX_ACCOUNTS_PER_CHAT = 3;
 
 async function sendTelegramMessage(chatId: string, text: string) {
   const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -24,11 +25,27 @@ export async function POST(req: NextRequest) {
     });
 
     if (!profile?.telegramChatId) {
-      return NextResponse.json({ error: 'No pending Telegram connection. Send /connect in the bot first.' }, { status: 400 });
+      return NextResponse.json({
+        error: `No /connect request found for this email yet. Send /connect ${email} in @iiuc_arms_bot first, then come back and click Send OTP.`,
+      }, { status: 400 });
     }
 
     if (profile.telegramVerified) {
       return NextResponse.json({ error: 'Telegram is already connected.' }, { status: 400 });
+    }
+
+    // One Telegram account can be linked to up to MAX_ACCOUNTS_PER_CHAT profiles
+    const linkedCount = await prisma.profile.count({
+      where: {
+        telegramChatId: profile.telegramChatId,
+        telegramVerified: true,
+        userId: { not: email },
+      },
+    });
+    if (linkedCount >= MAX_ACCOUNTS_PER_CHAT) {
+      return NextResponse.json({
+        error: `This Telegram is already connected to ${linkedCount} accounts (max ${MAX_ACCOUNTS_PER_CHAT}). Please contact the manager/admin to increase your limit.`,
+      }, { status: 400 });
     }
 
     // Generate fresh 6-digit OTP
@@ -47,11 +64,11 @@ export async function POST(req: NextRequest) {
     );
 
     if (!sent) {
-      return NextResponse.json({ error: 'Failed to send OTP to Telegram. Please try again.' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to send OTP to Telegram. Please try again, or contact the manager/admin if the problem continues.' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, message: 'OTP sent to your Telegram!' });
   } catch {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Server error. Please try again, or contact the manager/admin.' }, { status: 500 });
   }
 }

@@ -21,7 +21,7 @@ export default function TelegramVerify({ telegramChatId, telegramVerified, teleg
   const [checking, setChecking] = useState(false);
 
   useEffect(() => {
-    if (telegramChatId && !telegramVerified) setStep('pending');
+    if (telegramChatId && !telegramVerified) setStep(s => (s === 'idle' ? 'pending' : s));
     else if (telegramChatId && telegramVerified) setStep('idle');
     else setStep('idle');
   }, [telegramChatId, telegramVerified]);
@@ -50,7 +50,10 @@ export default function TelegramVerify({ telegramChatId, telegramVerified, teleg
     try {
       const res = await fetch('/api/telegram/send-otp', { method: 'POST' });
       const data = await res.json();
-      if (res.ok) { setMsg(data.message); setStep('otp'); }
+      if (res.ok) {
+        setMsg(data.message); setStep('otp');
+        loadProfile();
+      }
       else setErrMsg(data.error);
     } catch { setErrMsg('Network error'); }
     setLoading(false);
@@ -197,10 +200,20 @@ export default function TelegramVerify({ telegramChatId, telegramVerified, teleg
         <ol className="text-[0.65rem] text-dark-text2 space-y-1.5 list-decimal list-inside">
           <li>Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline font-semibold">@iiuc_arms_bot</a></li>
           <li>Send <code className="bg-dark-bg2 px-1 rounded text-qsis">/connect {email}</code></li>
-          <li>Come back here and click &quot;Send OTP&quot;</li>
-          <li>Enter the OTP code from Telegram</li>
+          <li>Come back here and click &quot;Send OTP&quot; below</li>
+          <li>Enter the 6-digit OTP you receive in Telegram</li>
         </ol>
       </div>
+
+      <button onClick={sendOtp} disabled={loading}
+        className="w-full mb-1.5 py-2 rounded-lg bg-blue-500 text-white text-[0.78rem] font-semibold cursor-pointer hover:bg-blue-600 transition-colors disabled:opacity-50">
+        {loading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Checking /connect request...</> : <><i className="fas fa-paper-plane mr-1"></i>Send OTP to my Telegram</>}
+      </button>
+      <p className="text-[0.65rem] text-dark-text3 mb-2">
+        Checks if your <code className="bg-dark-bg2 px-1 rounded text-qsis">/connect</code> request was received, then sends a 6-digit OTP to your Telegram.
+      </p>
+
+      {errMsg && <p className="text-[0.7rem] text-red-400 mb-2"><i className="fas fa-exclamation-circle mr-0.5"></i>{errMsg}</p>}
 
       <p className="text-[0.65rem] text-dark-text3 mb-2">
         <i className={`fas fa-sync ${checking ? 'fa-spin' : ''} text-qsis mr-1`}></i>
