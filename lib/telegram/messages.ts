@@ -22,10 +22,9 @@ export function buildConnectMessage(): string {
     `<b>How it works:</b>\n` +
     `1️⃣ Tap "Yes, Connect" below\n` +
     `2️⃣ Enter your IIUC-ARMS login email\n` +
-    `3️⃣ We'll send a 6-digit OTP to this chat\n` +
-    `4️⃣ Open the web app and enter the OTP\n\n` +
-    `🔒 Your email is only used to find your account.\n` +
-    `OTP expires in 5 minutes.\n\n` +
+    `3️⃣ Open the web app → Dashboard → Connections\n` +
+    `4️⃣ Click "Send OTP" and enter the code from Telegram\n\n` +
+    `🔒 OTP is sent to this chat and verified in the web app.\n\n` +
     `<i>You can connect up to 3 Telegram accounts from\n` +
     `Dashboard → Connections in the web app.</i>`
   );
@@ -37,9 +36,12 @@ export function buildWelcomeMessage(): string {
     `Find academic resources for IIUC courses.\n\n` +
     `<b>Quick Start:</b>\n` +
     `• Type a course code → <code>QSM-3602</code>\n` +
-    `• Type a course code → <code>/code QSM-3602</code>\n` +
     `• Browse all → <code>/departments</code>\n` +
     `• Search anything → <code>/search notes</code>\n\n` +
+    `<b>Account:</b>\n` +
+    `• <code>/connect</code> — Link your Telegram for notifications\n` +
+    `• <code>/status</code> — Check connection status\n` +
+    `• <code>/help</code> — All commands\n\n` +
     `<i>📚 Powered by IIUC-ARMS</i>`
   );
 }
