@@ -339,25 +339,19 @@ async function handleMessage(msg: any) {
       }
     }
 
-    // ─── /connect <email> — direct email (backward compat) ───
-    if (cleanText.startsWith('/connect ')) {
+    // ─── /connect — link Telegram account ───
+    if (cleanText === '/connect' || cleanText.startsWith('/connect ')) {
       const email = cleanText.replace('/connect', '').trim().toLowerCase();
       if (!email || !email.includes('@')) {
-        await sendMessage(chatId, '⚠️ Usage: <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\nOr just send <code>/connect</code> for the interactive flow.', { parse_mode: 'HTML' });
+        await sendMessage(chatId,
+          `🔗 <b>Connect your Telegram</b>\n\n` +
+          `Usage: <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\n` +
+          `Then open the web app → Dashboard → Connections → Telegram → Send OTP.`,
+          { parse_mode: 'HTML' }
+        );
         return;
       }
       await processConnectEmail(chatId, email, telegramUsername);
-      return;
-    }
-
-    // ─── /connect (no email — show usage) ───
-    if (cleanText === '/connect') {
-      await sendMessage(chatId,
-        `🔗 <b>Connect your Telegram</b>\n\n` +
-        `Usage: <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\n` +
-        `Then open the web app → Dashboard → Connections → Telegram → Send OTP.`,
-        { parse_mode: 'HTML' }
-      );
       return;
     }
 
