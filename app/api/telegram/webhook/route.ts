@@ -127,14 +127,29 @@ async function processConnectEmail(chatId: number, email: string, telegramUserna
 
   const profile = await prisma.profile.findUnique({
     where: { userId: email },
-    select: { userId: true, telegramChatId: true, telegramVerified: true },
+    select: { userId: true, telegramChatId: true, telegramVerified: true, accountStatus: true },
   });
 
   if (!profile) {
     await sendMessage(chatId,
       `❌ No account found for <code>${esc(email)}</code>.\n\n` +
-      `Make sure you registered on IIUC-ARMS with this email.\n\n` +
-      `Or send /cancel to abort.`,
+      `Make sure you registered on IIUC-ARMS with this email.`,
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+
+  // Only active accounts can connect
+  const isOwner = config.ownerEmails.includes(email);
+  if (!isOwner && profile.accountStatus !== 'active') {
+    const statusLabel = profile.accountStatus === 'pending' ? '⏳ Pending approval' :
+      profile.accountStatus === 'rejected' ? '❌ Rejected' :
+      profile.accountStatus === 'banned' ? '🚫 Banned' : '⚠️ Unknown status';
+    await sendMessage(chatId,
+      `❌ <b>Account not approved</b>\n\n` +
+      `📧 <code>${esc(email)}</code>\n` +
+      `Status: ${statusLabel}\n\n` +
+      `Please wait for admin approval or contact support.`,
       { parse_mode: 'HTML' }
     );
     return;
