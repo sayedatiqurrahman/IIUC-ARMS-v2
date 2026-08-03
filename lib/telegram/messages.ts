@@ -27,6 +27,10 @@ export function buildWelcomeMessage(): string {
 export function buildHelpMessage(): string {
   return (
     `📖 <b>IIUC-ARMS Bot — Commands</b>\n\n` +
+    `<b>🔗 Account:</b>\n` +
+    `<code>/connect yourmail@ugrad.iiuc.ac.bd</code> — Link your account (OTP sent to email)\n` +
+    `<code>/status</code> — Check connection status\n` +
+    `<code>/disconnect</code> — Unlink your account\n\n` +
     `<b>📚 Course Lookup:</b>\n` +
     `<code>QSM-3602</code> — Type any course code\n` +
     `<code>/code QSM-3602</code> — Same as above\n` +

@@ -198,14 +198,10 @@ export default function ProfileCard({
               {profile.telegramChatId ? (
                 <p className="text-[0.65rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected</p>
               ) : (
-                <a
-                  href={`https://t.me/iiuc_arms_bot?start=${encodeURIComponent(profile.email || (session as any)?.user?.email || '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 mt-1 px-2 py-1 rounded-md bg-blue-500/20 text-blue-400 text-[0.65rem] font-semibold hover:bg-blue-500/30 transition-colors"
-                >
-                  <i className="fab fa-telegram"></i> Connect with Telegram
-                </a>
+                <p className="text-[0.65rem] text-dark-text3 mt-0.5">
+                  Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline">@iiuc_arms_bot</a> and send{' '}
+                  <code className="bg-dark-bg px-1 rounded text-qsis">/connect {profile.email || (session as any)?.user?.email || '...'}</code>
+                </p>
               )}
             </div>
             {isStudent && (
@@ -329,14 +325,10 @@ export default function ProfileCard({
                   {profile.telegramId && (
                     <p className="text-[0.6rem] text-yellow-400"><i className="fas fa-link mr-0.5"></i>Pending connection</p>
                   )}
-                  <a
-                    href={`https://t.me/iiuc_arms_bot?start=${encodeURIComponent(profile.email || (session as any)?.user?.email || '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 mt-1 px-2 py-1 rounded-md bg-blue-500/20 text-blue-400 text-[0.65rem] font-semibold hover:bg-blue-500/30 transition-colors"
-                  >
-                    <i className="fab fa-telegram"></i> Connect with Telegram
-                  </a>
+                  <p className="text-[0.6rem] text-dark-text3 mt-0.5">
+                    Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline">@iiuc_arms_bot</a> and send:<br/>
+                    <code className="bg-dark-bg px-1 rounded text-qsis text-[0.6rem]">/connect {profile.email || (session as any)?.user?.email || 'youremail@example.com'}</code>
+                  </p>
                 </div>
               )}
             </div>
