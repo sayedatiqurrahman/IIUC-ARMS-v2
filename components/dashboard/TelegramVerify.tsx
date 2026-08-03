@@ -10,11 +10,13 @@ interface Props {
 }
 
 export default function TelegramVerify({ telegramChatId, telegramVerified, telegramId, email }: Props) {
-  const [step, setStep] = useState<'idle' | 'pending' | 'otp'>('idle');
+  const [step, setStep] = useState<'idle' | 'pending' | 'otp' | 'sending'>('idle');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [errMsg, setErrMsg] = useState('');
+  const [showBenefits, setShowBenefits] = useState(false);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   useEffect(() => {
     if (telegramChatId && !telegramVerified) setStep('pending');
@@ -52,23 +54,108 @@ export default function TelegramVerify({ telegramChatId, telegramVerified, teleg
     setLoading(true); setErrMsg(''); setMsg('');
     try {
       const res = await fetch('/api/telegram/cancel', { method: 'POST' });
-      if (res.ok) { setStep('idle'); window.location.reload(); }
+      if (res.ok) { setStep('idle'); setShowDisconnectConfirm(false); window.location.reload(); }
     } catch { setErrMsg('Network error'); }
     setLoading(false);
   };
 
-  // Connected
+  const disconnect = async () => {
+    setLoading(true); setErrMsg(''); setMsg('');
+    try {
+      const res = await fetch('/api/telegram/cancel', { method: 'POST' });
+      if (res.ok) { setStep('idle'); setShowDisconnectConfirm(false); window.location.reload(); }
+    } catch { setErrMsg('Network error'); }
+    setLoading(false);
+  };
+
+  // ─── Connected state — Management view ───
   if (telegramChatId && telegramVerified) {
     return (
       <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-        <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1 text-blue-400"></i>Telegram</span>
-        <span className="text-[0.85rem] font-semibold">{telegramId || 'Connected'}</span>
-        <p className="text-[0.6rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected! You&apos;ll receive routine updates</p>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <i className="fab fa-telegram text-blue-400 text-lg"></i>
+            <div>
+              <span className="text-[0.7rem] text-dark-text2 block">Telegram</span>
+              <span className="text-[0.85rem] font-semibold text-green-400">
+                <i className="fas fa-check-circle mr-1"></i>Connected
+              </span>
+            </div>
+          </div>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setShowBenefits(!showBenefits)}
+              className="px-2 py-1 rounded-lg border border-dark-border bg-dark-bg text-dark-text2 text-[0.65rem] cursor-pointer hover:border-blue-500 hover:text-blue-400 transition-colors"
+              title="Why connect?"
+            >
+              <i className="fas fa-info-circle"></i>
+            </button>
+            <button
+              onClick={() => setShowDisconnectConfirm(!showDisconnectConfirm)}
+              className="px-2 py-1 rounded-lg border border-dark-border bg-dark-bg text-dark-text2 text-[0.65rem] cursor-pointer hover:border-red-500 hover:text-red-400 transition-colors"
+              title="Disconnect"
+            >
+              <i className="fas fa-unlink"></i>
+            </button>
+          </div>
+        </div>
+
+        {telegramId && (
+          <p className="text-[0.72rem] text-dark-text2 mb-1">
+            <i className="fab fa-telegram mr-1 text-blue-400"></i>{telegramId}
+          </p>
+        )}
+        <p className="text-[0.6rem] text-green-400">
+          <i className="fas fa-bell mr-0.5"></i>You&apos;ll receive routine & exam notifications
+        </p>
+
+        {/* Benefits dropdown */}
+        {showBenefits && (
+          <div className="mt-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/20">
+            <p className="text-[0.7rem] font-semibold text-blue-400 mb-1.5">
+              <i className="fas fa-star mr-1"></i>Why you&apos;re connected:
+            </p>
+            <ul className="text-[0.65rem] text-dark-text2 space-y-1">
+              <li><i className="fas fa-check text-green-400 mr-1.5 w-3"></i>Instant class routine updates</li>
+              <li><i className="fas fa-check text-green-400 mr-1.5 w-3"></i>Exam schedule notifications</li>
+              <li><i className="fas fa-check text-green-400 mr-1.5 w-3"></i>New file upload alerts</li>
+              <li><i className="fas fa-check text-green-400 mr-1.5 w-3"></i>Batch announcements</li>
+            </ul>
+          </div>
+        )}
+
+        {/* Disconnect confirmation */}
+        {showDisconnectConfirm && (
+          <div className="mt-2 p-2.5 rounded-lg bg-red-500/5 border border-red-500/20">
+            <p className="text-[0.72rem] text-red-400 font-semibold mb-1.5">
+              <i className="fas fa-exclamation-triangle mr-1"></i>Disconnect Telegram?
+            </p>
+            <p className="text-[0.65rem] text-dark-text2 mb-2">
+              You won&apos;t receive notifications anymore. You can reconnect anytime.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={disconnect}
+                disabled={loading}
+                className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-[0.7rem] font-semibold cursor-pointer hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                {loading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Disconnecting...</> : <><i className="fas fa-unlink mr-1"></i>Yes, Disconnect</>}
+              </button>
+              <button
+                onClick={() => setShowDisconnectConfirm(false)}
+                disabled={loading}
+                className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.7rem] font-semibold cursor-pointer hover:border-dark-border transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  // Pending verification — show popup banner
+  // ─── Pending verification state ───
   if (step === 'pending' || step === 'otp') {
     return (
       <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 mb-3">
@@ -118,19 +205,58 @@ export default function TelegramVerify({ telegramChatId, telegramVerified, teleg
     );
   }
 
-  // Not connected — show instructions
+  // ─── Not connected — Full guide ───
   return (
     <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-      <span className="text-[0.7rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1 text-blue-400"></i>Telegram</span>
-      <span className={`text-[0.85rem] font-semibold ${telegramId ? '' : 'text-dark-text2'}`}>
-        {telegramId || 'Not set'}
-      </span>
-      <div className="mt-1">
-        <p className="text-[0.6rem] text-dark-text3">
-          Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline">@iiuc_arms_bot</a> and send:<br/>
-          <code className="bg-dark-bg px-1 rounded text-qsis text-[0.6rem]">/connect {email}</code>
-        </p>
+      <div className="flex items-center gap-2 mb-2">
+        <i className="fab fa-telegram text-blue-400 text-lg"></i>
+        <div>
+          <span className="text-[0.7rem] text-dark-text2 block">Telegram</span>
+          <span className="text-[0.85rem] font-semibold text-dark-text2">Not connected</span>
+        </div>
       </div>
+
+      {/* Why connect */}
+      <div className="mb-2.5 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/10">
+        <p className="text-[0.7rem] font-semibold text-blue-400 mb-1.5">
+          <i className="fas fa-bell mr-1"></i>Why connect?
+        </p>
+        <ul className="text-[0.65rem] text-dark-text2 space-y-1">
+          <li><i className="fas fa-check text-green-400 mr-1.5 w-3"></i>Instant class routine updates</li>
+          <li><i className="fas fa-check text-green-400 mr-1.5 w-3"></i>Exam schedule notifications</li>
+          <li><i className="fas fa-check text-green-400 mr-1.5 w-3"></i>New file upload alerts</li>
+          <li><i className="fas fa-check text-green-400 mr-1.5 w-3"></i>Batch announcements</li>
+        </ul>
+      </div>
+
+      {/* How to connect */}
+      <div className="mb-2.5 p-2.5 rounded-lg bg-dark-bg border border-dark-border">
+        <p className="text-[0.7rem] font-semibold text-dark-text mb-1.5">
+          <i className="fas fa-link mr-1 text-qsis"></i>How to connect:
+        </p>
+        <ol className="text-[0.65rem] text-dark-text2 space-y-1.5 list-decimal list-inside">
+          <li>Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline font-semibold">@iiuc_arms_bot</a> in Telegram</li>
+          <li>Send <code className="bg-dark-bg2 px-1 rounded text-qsis">/connect</code></li>
+          <li>Tap &quot;Yes, Connect My Account&quot;</li>
+          <li>Enter your email: <code className="bg-dark-bg2 px-1 rounded text-qsis">{email}</code></li>
+          <li>Come back here and click &quot;Send OTP&quot;</li>
+          <li>Enter the OTP code from Telegram</li>
+        </ol>
+      </div>
+
+      {/* Quick connect button */}
+      <a
+        href="https://t.me/iiuc_arms_bot?start=connect"
+        target="_blank"
+        rel="noopener"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500 text-white text-[0.72rem] font-semibold cursor-pointer hover:bg-blue-600 transition-colors no-underline"
+      >
+        <i className="fab fa-telegram mr-0.5"></i>Open Telegram Bot
+      </a>
+
+      <p className="text-[0.6rem] text-dark-text3 mt-2">
+        <i className="fas fa-shield-alt mr-0.5"></i>OTP verified in web app for security. Max 3 accounts per profile.
+      </p>
     </div>
   );
 }

@@ -11,6 +11,26 @@ export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+export function buildConnectMessage(): string {
+  return (
+    `🔗 <b>Connect Your Telegram to IIUC-ARMS</b>\n\n` +
+    `<b>Why connect?</b>\n` +
+    `• 📅 Get instant class routine updates\n` +
+    `• 📝 Receive exam schedule notifications\n` +
+    `• 📚 Know when new files are uploaded\n` +
+    `• 🎓 Batch announcements & updates\n\n` +
+    `<b>How it works:</b>\n` +
+    `1️⃣ Tap "Yes, Connect" below\n` +
+    `2️⃣ Enter your IIUC-ARMS login email\n` +
+    `3️⃣ We'll send a 6-digit OTP to this chat\n` +
+    `4️⃣ Open the web app and enter the OTP\n\n` +
+    `🔒 Your email is only used to find your account.\n` +
+    `OTP expires in 5 minutes.\n\n` +
+    `<i>You can connect up to 3 Telegram accounts from\n` +
+    `Dashboard → Connections in the web app.</i>`
+  );
+}
+
 export function buildWelcomeMessage(): string {
   return (
     `🎓 <b>IIUC-ARMS Bot</b>\n\n` +
@@ -28,9 +48,10 @@ export function buildHelpMessage(): string {
   return (
     `📖 <b>IIUC-ARMS Bot — Commands</b>\n\n` +
     `<b>🔗 Account:</b>\n` +
-    `<code>/connect yourmail@ugrad.iiuc.ac.bd</code> — Link your account (OTP sent to email)\n` +
+    `<code>/connect</code> — Link your IIUC-ARMS account (interactive)\n` +
     `<code>/status</code> — Check connection status\n` +
-    `<code>/disconnect</code> — Unlink your account\n\n` +
+    `<code>/disconnect</code> — Unlink your account\n` +
+    `<code>/cancel</code> — Cancel ongoing connection\n\n` +
     `<b>📚 Course Lookup:</b>\n` +
     `<code>QSM-3602</code> — Type any course code\n` +
     `<code>/code QSM-3602</code> — Same as above\n` +

@@ -11,6 +11,7 @@ import {
   getCourseInfo,
   buildWelcomeMessage,
   buildHelpMessage,
+  buildConnectMessage,
   buildCourseResult,
   buildCategoryResult,
   buildDeptList,
@@ -34,6 +35,7 @@ import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-ap
 const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
 const GITHUB_API = 'https://api.github.com';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function openLink(target: string): string {
   return SITE_URL + '/open?url=' + encodeURIComponent(target);
@@ -119,6 +121,77 @@ async function batchDeleteFiles(token: string, files: { path: string; sha: strin
   return files.length;
 }
 
+// ─── Helper: process email input from user ────────────────────────
+async function processConnectEmail(chatId: number, email: string, telegramUsername: string | null) {
+  const { prisma } = await import('@/lib/prisma');
+
+  const profile = await prisma.profile.findUnique({
+    where: { userId: email },
+    select: { userId: true, telegramChatId: true, telegramVerified: true },
+  });
+
+  if (!profile) {
+    await sendMessage(chatId,
+      `❌ No account found for <code>${esc(email)}</code>.\n\n` +
+      `Make sure you registered on IIUC-ARMS with this email.\n\n` +
+      `Or send /cancel to abort.`,
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+
+  if (profile.telegramChatId && profile.telegramVerified && profile.telegramChatId !== String(chatId)) {
+    await sendMessage(chatId,
+      `ℹ️ The email <code>${esc(email)}</code> is already connected to another Telegram account.\n\n` +
+      `Use <code>/disconnect</code> on that account first, or contact admin.`,
+      { parse_mode: 'HTML' }
+    );
+    await prisma.profile.update({
+      where: { userId: email },
+      data: { telegramConnectState: null },
+    });
+    return;
+  }
+
+  if (profile.telegramChatId === String(chatId) && profile.telegramVerified) {
+    await sendMessage(chatId,
+      `✅ <b>Already connected!</b>\n\n` +
+      `📧 Account: <code>${esc(email)}</code>\n\n` +
+      `You're all set. Use <code>/disconnect</code> if you want to unlink.`,
+      { parse_mode: 'HTML' }
+    );
+    await prisma.profile.update({
+      where: { userId: email },
+      data: { telegramConnectState: null },
+    });
+    return;
+  }
+
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+  await prisma.profile.update({
+    where: { userId: email },
+    data: {
+      telegramChatId: String(chatId),
+      telegramVerified: false,
+      telegramOtp: otp,
+      telegramOtpExpiresAt: expiresAt,
+      telegramConnectState: null,
+      ...(telegramUsername ? { telegramId: telegramUsername } : {}),
+    },
+  });
+
+  await sendMessage(chatId,
+    `🔗 <b>Connection request received!</b>\n\n` +
+    `📧 Account: <code>${esc(email)}</code>\n\n` +
+    `Now open IIUC-ARMS web app and verify your Telegram account.\n\n` +
+    `Go to <b>Dashboard → Connections → Telegram</b> and enter the OTP.`,
+    { parse_mode: 'HTML' }
+  );
+  console.log(`[TG] /connect: ${email} -> chat_id ${chatId} (pending verification)`);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -149,23 +222,44 @@ async function handleMessage(msg: any) {
 
   console.log(`[TG] msg from ${chatId}: "${text}" | TOKEN=${process.env.TELEGRAM_BOT_TOKEN ? 'SET(' + process.env.TELEGRAM_BOT_TOKEN.substring(0, 5) + '...)' : 'MISSING'}`);
 
-  // Show typing indicator
   await sendChatAction(chatId);
 
-  // In groups, only respond to commands and mentions
   if (isGroup) {
     const isCommand = msg.entities?.some((e: any) => e.type === 'bot_command' && e.offset === 0);
     const isMention = msg.entities?.some((e: any) => e.type === 'mention' && e.offset === 0);
     if (!isCommand && !isMention && !COURSE_REGEX.test(text)) return;
   }
 
-  // Strip bot mention
   const cleanText = text.replace(/@\S+/g, '').trim();
+  const telegramUsername = msg.from?.username ? `@${msg.from.username}` : null;
 
   try {
+    // ─── Check for awaiting_email state BEFORE command parsing ───
+    if (!isGroup && !cleanText.startsWith('/')) {
+      const { prisma } = await import('@/lib/prisma');
+      const pendingProfile = await prisma.profile.findFirst({
+        where: { telegramChatId: String(chatId), telegramConnectState: 'awaiting_email' },
+        select: { userId: true },
+      });
+
+      if (pendingProfile) {
+        const email = cleanText.toLowerCase().trim();
+        if (!email || !EMAIL_REGEX.test(email)) {
+          await sendMessage(chatId,
+            `⚠️ Please enter a valid email address.\n\n` +
+            `Example: <code>yourname@ugrad.iiuc.ac.bd</code>\n\n` +
+            `Or send /cancel to abort.`,
+            { parse_mode: 'HTML' }
+          );
+          return;
+        }
+        await processConnectEmail(chatId, email, telegramUsername);
+        return;
+      }
+    }
+
     // ─── /start ───
     if (cleanText === '/start') {
-      // Link Telegram chat_id to IIUC-ARMS profile if user has telegramId set
       try {
         const username = msg.from?.username;
         if (username) {
@@ -180,7 +274,6 @@ async function handleMessage(msg: any) {
             });
             console.log(`[TG] Linked @${username} -> chat_id ${chatId} (user: ${profile.userId})`);
           } else if (profile) {
-            // Already linked — update if chat_id changed
             if (profile.telegramChatId !== String(chatId)) {
               await prisma.profile.update({
                 where: { userId: profile.userId },
@@ -188,7 +281,6 @@ async function handleMessage(msg: any) {
               });
             }
           } else {
-            // Try matching by phone number (from telegramId field)
             const phoneDigits = msg.from?.phone_number?.replace(/\D/g, '');
             if (phoneDigits) {
               const allProfiles = await prisma.profile.findMany({
@@ -231,7 +323,7 @@ async function handleMessage(msg: any) {
       return;
     }
 
-    // ─── /start <email> (deep link from web app) — same as /connect ───
+    // ─── /start <email> (deep link from web app) ───
     if (cleanText.startsWith('/start ')) {
       const payload = cleanText.replace('/start', '').trim();
       if (payload && payload.includes('@')) {
@@ -241,7 +333,6 @@ async function handleMessage(msg: any) {
           if (profile && !(profile.telegramChatId && profile.telegramVerified)) {
             const otp = String(Math.floor(100000 + Math.random() * 900000));
             const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-            const telegramUsername = msg.from?.username ? `@${msg.from.username}` : null;
             await prisma.profile.update({
               where: { userId: payload },
               data: {
@@ -249,6 +340,7 @@ async function handleMessage(msg: any) {
                 telegramVerified: false,
                 telegramOtp: otp,
                 telegramOtpExpiresAt: expiresAt,
+                telegramConnectState: null,
                 ...(telegramUsername ? { telegramId: telegramUsername } : {}),
               },
             });
@@ -268,43 +360,75 @@ async function handleMessage(msg: any) {
       }
     }
 
-    // ─── /connect <email> — store pending, ask user to verify from web app ───
+    // ─── /connect <email> — direct email (backward compat) ───
     if (cleanText.startsWith('/connect ')) {
       const email = cleanText.replace('/connect', '').trim().toLowerCase();
       if (!email || !email.includes('@')) {
-        await sendMessage(chatId, '⚠️ Usage: <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\nEnter the email you used to create your IIUC-ARMS account.', { parse_mode: 'HTML' });
+        await sendMessage(chatId, '⚠️ Usage: <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\nOr just send <code>/connect</code> for the interactive flow.', { parse_mode: 'HTML' });
         return;
       }
+      await processConnectEmail(chatId, email, telegramUsername);
+      return;
+    }
+
+    // ─── /connect (no email — conversational flow) ───
+    if (cleanText === '/connect') {
       try {
         const { prisma } = await import('@/lib/prisma');
-        const profile = await prisma.profile.findUnique({ where: { userId: email }, select: { userId: true, telegramChatId: true, telegramVerified: true } });
-        if (!profile) {
-          await sendMessage(chatId, `❌ No account found for <code>${email}</code>.\n\nMake sure you registered on IIUC-ARMS with this email.`, { parse_mode: 'HTML' });
-          return;
-        }
-        if (profile.telegramChatId && profile.telegramVerified) {
-          await sendMessage(chatId, `ℹ️ This account is already connected to Telegram.\n\nUse <code>/disconnect</code> to unlink first.`, { parse_mode: 'HTML' });
+
+        // Check if already connected
+        const existing = await prisma.profile.findFirst({
+          where: { telegramChatId: String(chatId), telegramVerified: true },
+          select: { userId: true },
+        });
+        if (existing) {
+          await sendMessage(chatId,
+            `✅ <b>Already connected!</b>\n\n` +
+            `📧 Account: <code>${existing.userId}</code>\n\n` +
+            `Use <code>/disconnect</code> first if you want to change.`,
+            { parse_mode: 'HTML' }
+          );
           return;
         }
 
-        // Generate 6-digit OTP and store in DB
-        const otp = String(Math.floor(100000 + Math.random() * 900000));
-        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-        const telegramUsername = msg.from?.username ? `@${msg.from.username}` : null;
+        // Check if pending
+        const pending = await prisma.profile.findFirst({
+          where: { telegramChatId: String(chatId), telegramVerified: false, telegramConnectState: null },
+          select: { userId: true },
+        });
+        if (pending) {
+          await sendMessage(chatId,
+            `⏳ <b>Pending verification</b>\n\n` +
+            `📧 Account: <code>${pending.userId}</code>\n\n` +
+            `Open the IIUC-ARMS web app to complete verification, or send <code>/cancel</code> to abort.`,
+            { parse_mode: 'HTML' }
+          );
+          return;
+        }
 
-        await prisma.profile.update({
-          where: { userId: email },
-          data: {
-            telegramChatId: String(chatId),
-            telegramVerified: false,
-            telegramOtp: otp,
-            telegramOtpExpiresAt: expiresAt,
-            ...(telegramUsername ? { telegramId: telegramUsername } : {}),
+        // Check if already in awaiting_email state
+        const inProgress = await prisma.profile.findFirst({
+          where: { telegramChatId: String(chatId), telegramConnectState: 'awaiting_email' },
+          select: { userId: true },
+        });
+        if (inProgress) {
+          await sendMessage(chatId,
+            `📧 You're already in the connection flow.\n\n` +
+            `Send your IIUC-ARMS login email now, or <code>/cancel</code> to abort.`,
+            { parse_mode: 'HTML' }
+          );
+          return;
+        }
+
+        // Show the connect benefits message with buttons
+        await sendMessage(chatId, buildConnectMessage(), {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '✅ Yes, Connect My Account', callback_data: 'connect_confirm' }],
+              [{ text: '❌ Cancel', callback_data: 'connect_cancel' }],
+            ],
           },
         });
-
-        await sendMessage(chatId, `🔗 <b>Telegram connection requested!</b>\n\nNow open IIUC-ARMS web app and confirm your Telegram account.\n\nYou'll need to enter a verification code that will be sent to this chat.`, { parse_mode: 'HTML' });
-        console.log(`[TG] /connect: ${email} -> chat_id ${chatId} (pending verification)`);
       } catch (err: any) {
         console.error('[TG] /connect error:', err?.message);
         await sendMessage(chatId, '❌ Something went wrong. Please try again later.', { parse_mode: 'HTML' });
@@ -312,9 +436,27 @@ async function handleMessage(msg: any) {
       return;
     }
 
-    // ─── /connect (no email — show instructions) ───
-    if (cleanText === '/connect') {
-      await sendMessage(chatId, '🔗 <b>Connect your IIUC-ARMS account</b>\n\nSend your login email:\n\n<code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\nThen open the web app to confirm.', { parse_mode: 'HTML' });
+    // ─── /cancel — abort ongoing connection flow ───
+    if (cleanText === '/cancel') {
+      try {
+        const { prisma } = await import('@/lib/prisma');
+        const profile = await prisma.profile.findFirst({
+          where: { telegramChatId: String(chatId) },
+          select: { userId: true, telegramConnectState: true },
+        });
+        if (profile?.telegramConnectState === 'awaiting_email') {
+          await prisma.profile.update({
+            where: { userId: profile.userId },
+            data: { telegramConnectState: null },
+          });
+          await sendMessage(chatId, `❌ <b>Connection cancelled.</b>\n\nSend <code>/connect</code> to start again.`, { parse_mode: 'HTML' });
+        } else {
+          await sendMessage(chatId, `ℹ️ No active connection flow to cancel.`, { parse_mode: 'HTML' });
+        }
+      } catch (err: any) {
+        console.error('[TG] /cancel error:', err?.message);
+        await sendMessage(chatId, '❌ Something went wrong.', { parse_mode: 'HTML' });
+      }
       return;
     }
 
@@ -329,7 +471,7 @@ async function handleMessage(msg: any) {
         }
         await prisma.profile.update({
           where: { userId: profile.userId },
-          data: { telegramChatId: null, telegramVerified: false, telegramOtp: null, telegramOtpExpiresAt: null },
+          data: { telegramChatId: null, telegramVerified: false, telegramOtp: null, telegramOtpExpiresAt: null, telegramConnectState: null },
         });
         await sendMessage(chatId, `✅ <b>Telegram disconnected</b>\n\nYour account (<code>${profile.userId}</code>) has been unlinked from this Telegram chat.`, { parse_mode: 'HTML' });
         console.log(`[TG] /disconnect: ${profile.userId} <- chat_id ${chatId}`);
@@ -344,13 +486,15 @@ async function handleMessage(msg: any) {
     if (cleanText === '/status') {
       try {
         const { prisma } = await import('@/lib/prisma');
-        const profile = await prisma.profile.findFirst({ where: { telegramChatId: String(chatId) }, select: { userId: true, name: true, telegramVerified: true } });
+        const profile = await prisma.profile.findFirst({ where: { telegramChatId: String(chatId) }, select: { userId: true, name: true, telegramVerified: true, telegramConnectState: true } });
         if (!profile) {
-          await sendMessage(chatId, 'ℹ️ You are not connected to any IIUC-ARMS account.\n\nSend <code>/connect yourmail@ugrad.iiuc.ac.bd</code> to link.', { parse_mode: 'HTML' });
+          await sendMessage(chatId, 'ℹ️ You are not connected to any IIUC-ARMS account.\n\nSend <code>/connect</code> to link.', { parse_mode: 'HTML' });
           return;
         }
         if (profile.telegramVerified) {
           await sendMessage(chatId, `✅ <b>Connected</b>\n\n📧 Account: <code>${profile.userId}</code>\n👤 Name: ${profile.name || 'Not set'}\n\nYou will receive notifications for this account.`, { parse_mode: 'HTML' });
+        } else if (profile.telegramConnectState === 'awaiting_email') {
+          await sendMessage(chatId, `📧 <b>Awaiting your email</b>\n\n📧 Account: <code>${profile.userId}</code>\n\nSend your IIUC-ARMS login email to continue, or <code>/cancel</code> to abort.`, { parse_mode: 'HTML' });
         } else {
           await sendMessage(chatId, `⏳ <b>Pending verification</b>\n\n📧 Account: <code>${profile.userId}</code>\n\nOpen the IIUC-ARMS web app to complete verification.`, { parse_mode: 'HTML' });
         }
@@ -415,7 +559,6 @@ async function handleMessage(msg: any) {
       const info = getCourseInfo(files);
 
       if (!info) {
-        // Fallback: detect course from folder names even with no real files
         const locations = findCourseLocations(tree, code);
         if (locations.length === 0) {
           await sendMessage(chatId,
@@ -614,8 +757,8 @@ async function handleMessage(msg: any) {
       await sendMessage(chatId,
         `🤔 Unknown command.\n\n` +
         `Try:\n` +
+        `• <code>/connect</code> — Link your Telegram\n` +
         `• <code>QUR101</code> — search a course\n` +
-        `• <code>/course-code QSM-3602</code> — search by code\n` +
         `• <code>/search notes</code> — search files\n` +
         `• <code>/departments</code> — list departments\n` +
         `• <code>/help</code> — all commands`
@@ -628,7 +771,7 @@ async function handleMessage(msg: any) {
       await sendMessage(chatId,
         `🤔 Send a course code like <code>QSM-3602</code> to search.\n\n` +
         `Or try:\n` +
-        `• <code>/course-code QSM-3602</code>\n` +
+        `• <code>/connect</code> — Link your Telegram\n` +
         `• <code>/search notes</code>\n` +
         `• <code>/departments</code>\n` +
         `• <code>/help</code>`
@@ -689,6 +832,66 @@ async function handleCallbackQuery(cq: any) {
       return;
     }
 
+    // ─── Connect flow buttons ───
+    if (parsed.type === 'connect_confirm') {
+      const { prisma } = await import('@/lib/prisma');
+      const telegramUsername = cq.from?.username ? `@${cq.from.username}` : null;
+
+      // Check if already connected
+      const existing = await prisma.profile.findFirst({
+        where: { telegramChatId: String(chatId), telegramVerified: true },
+        select: { userId: true },
+      });
+      if (existing) {
+        await editMessageText(chatId, messageId,
+          `✅ <b>Already connected!</b>\n\n` +
+          `📧 Account: <code>${existing.userId}</code>\n\n` +
+          `Use <code>/disconnect</code> first if you want to change.`,
+        );
+        return;
+      }
+
+      // Set state to awaiting_email
+      const profile = await prisma.profile.findFirst({
+        where: { telegramChatId: String(chatId) },
+        select: { userId: true },
+      });
+
+      if (profile) {
+        await prisma.profile.update({
+          where: { userId: profile.userId },
+          data: { telegramConnectState: 'awaiting_email' },
+        });
+      } else {
+        // No profile linked yet — create a temporary one or just set state on the chat
+        // We'll handle this in the email processing step
+      }
+
+      await editMessageText(chatId, messageId,
+        `📧 <b>Great! Now enter your email.</b>\n\n` +
+        `Send your IIUC-ARMS login email in the next message.\n\n` +
+        `Example: <code>yourname@ugrad.iiuc.ac.bd</code>\n\n` +
+        `<i>Or send /cancel to abort.</i>`,
+      );
+      return;
+    }
+
+    if (parsed.type === 'connect_cancel') {
+      const { prisma } = await import('@/lib/prisma');
+      const profile = await prisma.profile.findFirst({
+        where: { telegramChatId: String(chatId) },
+        select: { userId: true, telegramConnectState: true },
+      });
+      if (profile?.telegramConnectState === 'awaiting_email') {
+        await prisma.profile.update({
+          where: { userId: profile.userId },
+          data: { telegramConnectState: null },
+        });
+      }
+      await editMessageText(chatId, messageId, `❌ Connection cancelled.\n\nSend <code>/connect</code> to start again.`);
+      return;
+    }
+
     // ─── Category buttons ───
     if (parsed.type === 'cat') {
       const [courseCode, category] = parsed.args;
@@ -729,7 +932,6 @@ async function handleCallbackQuery(cq: any) {
 
       const { prisma } = await import('@/lib/prisma');
 
-      // Try DB first, but don't require it
       let course: any = null;
       try {
         course = await prisma.course.findFirst({ where: { code: code.toUpperCase(), semester: sem, department: dept } });
@@ -740,7 +942,6 @@ async function handleCallbackQuery(cq: any) {
       const courseSem = course?.semester || sem;
       const courseCode = course?.code || code.toUpperCase();
 
-      // Build folder path
       const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
       const folderPath = `${config.uploadPath}/${courseDept}/${courseSem}/${courseCode} - ${cleanTitle}`;
 
@@ -753,7 +954,6 @@ async function handleCallbackQuery(cq: any) {
         }
       } catch {}
 
-      // Delete from DB if exists
       if (course) {
         try { await prisma.course.delete({ where: { id: course.id } }); } catch {}
       }

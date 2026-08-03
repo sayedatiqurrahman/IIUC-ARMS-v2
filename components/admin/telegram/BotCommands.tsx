@@ -3,9 +3,10 @@
 const botCommands = [
   { cmd: '/start', desc: 'Welcome message & main menu' },
   { cmd: '/help', desc: 'List all available commands' },
-  { cmd: '/connect', desc: 'Link your IIUC-ARMS account via OTP' },
+  { cmd: '/connect', desc: 'Link your IIUC-ARMS account (interactive)' },
   { cmd: '/disconnect', desc: 'Unlink your account' },
   { cmd: '/status', desc: 'Check connection status' },
+  { cmd: '/cancel', desc: 'Cancel ongoing connection' },
   { cmd: '/courses', desc: 'List all courses (dept > sem > courses)' },
   { cmd: '/search notes', desc: 'Search files by name' },
   { cmd: '/stats', desc: 'View site statistics' },

@@ -54,6 +54,7 @@ model Profile {
    telegramVerified     Boolean? @default(false)
    telegramOtp          String?
    telegramOtpExpiresAt DateTime?
+   telegramConnectState String?
    linkedEmails         String[] @default([])
   showInContributors   Boolean? @default(true)
   accountStatus        String?  @default("active")

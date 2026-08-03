@@ -16,6 +16,14 @@ export function broadcastCallbackData(action: 'confirm' | 'cancel'): string {
   return `broadcast:${action}`;
 }
 
+export function connectConfirmData(): string {
+  return `connect_confirm`;
+}
+
+export function connectCancelData(): string {
+  return `connect_cancel`;
+}
+
 export function parseCallbackData(data: string): { type: string; args: string[] } | null {
   const parts = data.split(':');
   if (parts[0] === 'cat' && parts.length === 3) {
@@ -38,5 +46,8 @@ export function parseCallbackData(data: string): { type: string; args: string[] 
   if (data === 'start_contributors') return { type: 'start_contributors', args: [] };
   if (data === 'start_devby') return { type: 'start_devby', args: [] };
   if (data === 'start_help') return { type: 'start_help', args: [] };
+  // Connect flow callbacks
+  if (data === 'connect_confirm') return { type: 'connect_confirm', args: [] };
+  if (data === 'connect_cancel') return { type: 'connect_cancel', args: [] };
   return null;
 }
