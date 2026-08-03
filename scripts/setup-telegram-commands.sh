@@ -13,6 +13,9 @@ curl -s "${API}/setMyCommands" \
   "commands": [
     {"command": "start", "description": "Welcome message & main menu"},
     {"command": "help", "description": "List all available commands"},
+    {"command": "connect", "description": "Link your IIUC-ARMS account (e.g. /connect mail@ugrad.iiuc.ac.bd)"},
+    {"command": "disconnect", "description": "Unlink your account"},
+    {"command": "status", "description": "Check connection status"},
     {"command": "courses", "description": "List all courses (dept > sem > courses)"},
     {"command": "departments", "description": "List all departments with links"},
     {"command": "semester", "description": "Browse a semester (e.g. /semester 3)"},

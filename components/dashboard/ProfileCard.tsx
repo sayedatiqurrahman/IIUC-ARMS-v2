@@ -193,20 +193,6 @@ export default function ProfileCard({
               <input type="email" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. yourmail@gmail.com" value={profileForm.publicEmail} onChange={e => setProfileForm(p => ({ ...p, publicEmail: e.target.value }))} />
               <p className="text-[0.65rem] text-dark-text3 mt-0.5">Leave empty to use login email</p>
             </div>
-            <div>
-              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-telegram mr-1"></i>Telegram Username / Number</label>
-              <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. @username or +8801XXXXXXXXX" value={profileForm.telegramId} onChange={e => setProfileForm(p => ({ ...p, telegramId: e.target.value }))} />
-              {profile.telegramChatId && (profile as any).telegramVerified ? (
-                <p className="text-[0.65rem] text-green-400 mt-0.5"><i className="fas fa-check-circle mr-0.5"></i>Connected</p>
-              ) : profile.telegramChatId ? (
-                <p className="text-[0.65rem] text-yellow-400 mt-0.5"><i className="fas fa-hourglass-half mr-0.5"></i>Pending — open web app to verify</p>
-              ) : (
-                <p className="text-[0.65rem] text-dark-text3 mt-0.5">
-                  Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline">@iiuc_arms_bot</a> and send{' '}
-                  <code className="bg-dark-bg px-1 rounded text-qsis">/connect {profile.email || (session as any)?.user?.email || '...'}</code>
-                </p>
-              )}
-            </div>
             {isStudent && (
               <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">University ID</label>
