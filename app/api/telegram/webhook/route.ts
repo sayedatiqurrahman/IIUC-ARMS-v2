@@ -132,8 +132,9 @@ async function processConnectEmail(chatId: number, email: string, telegramUserna
 
   if (!profile) {
     await sendMessage(chatId,
-      `❌ No account found for <code>${esc(email)}</code>.\n\n` +
-      `Make sure you registered on IIUC-ARMS with this email.`,
+      `❌ <b>User doesn't exist</b>\n\n` +
+      `No account found for <code>${esc(email)}</code> in IIUC-ARMS.\n\n` +
+      `Make sure you registered on IIUC-ARMS with this exact email, or contact the manager/admin.`,
       { parse_mode: 'HTML' }
     );
     return;
