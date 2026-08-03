@@ -19,12 +19,9 @@ export function buildConnectMessage(): string {
     `• 📝 Receive exam schedule notifications\n` +
     `• 📚 Know when new files are uploaded\n` +
     `• 🎓 Batch announcements & updates\n\n` +
-    `<b>How it works:</b>\n` +
-    `1️⃣ Tap "Yes, Connect" below\n` +
-    `2️⃣ Enter your IIUC-ARMS login email\n` +
-    `3️⃣ Open the web app → Dashboard → Connections\n` +
-    `4️⃣ Click "Send OTP" and enter the code from Telegram\n\n` +
-    `🔒 OTP is sent to this chat and verified in the web app.\n\n` +
+    `<b>How to connect:</b>\n` +
+    `Send: <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\n` +
+    `Then open the web app → Dashboard → Connections → Telegram → Send OTP.\n\n` +
     `<i>You can connect up to 3 Telegram accounts from\n` +
     `Dashboard → Connections in the web app.</i>`
   );
@@ -50,10 +47,9 @@ export function buildHelpMessage(): string {
   return (
     `📖 <b>IIUC-ARMS Bot — Commands</b>\n\n` +
     `<b>🔗 Account:</b>\n` +
-    `<code>/connect</code> — Link your IIUC-ARMS account (interactive)\n` +
+    `<code>/connect yourmail@ugrad.iiuc.ac.bd</code> — Link your account\n` +
     `<code>/status</code> — Check connection status\n` +
-    `<code>/disconnect</code> — Unlink your account\n` +
-    `<code>/cancel</code> — Cancel ongoing connection\n\n` +
+    `<code>/disconnect</code> — Unlink your account\n\n` +
     `<b>📚 Course Lookup:</b>\n` +
     `<code>QSM-3602</code> — Type any course code\n` +
     `<code>/code QSM-3602</code> — Same as above\n` +

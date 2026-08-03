@@ -16,7 +16,6 @@ curl -s "${API}/setMyCommands" \
     {"command": "connect", "description": "Link your IIUC-ARMS account (interactive)"},
     {"command": "disconnect", "description": "Unlink your account"},
     {"command": "status", "description": "Check connection status"},
-    {"command": "cancel", "description": "Cancel ongoing connection"},
     {"command": "courses", "description": "List all courses (dept > sem > courses)"},
     {"command": "departments", "description": "List all departments with links"},
     {"command": "semester", "description": "Browse a semester (e.g. /semester 3)"},

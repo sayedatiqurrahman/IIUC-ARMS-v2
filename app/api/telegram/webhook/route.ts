@@ -146,10 +146,6 @@ async function processConnectEmail(chatId: number, email: string, telegramUserna
       `Use <code>/disconnect</code> on that account first, or contact admin.`,
       { parse_mode: 'HTML' }
     );
-    await prisma.profile.update({
-      where: { userId: email },
-      data: { telegramConnectState: null },
-    });
     return;
   }
 
@@ -160,23 +156,14 @@ async function processConnectEmail(chatId: number, email: string, telegramUserna
       `You're all set. Use <code>/disconnect</code> if you want to unlink.`,
       { parse_mode: 'HTML' }
     );
-    await prisma.profile.update({
-      where: { userId: email },
-      data: { telegramConnectState: null },
-    });
     return;
   }
-
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
   await prisma.profile.update({
     where: { userId: email },
     data: {
       telegramChatId: String(chatId),
       telegramVerified: false,
-      telegramOtp: otp,
-      telegramOtpExpiresAt: expiresAt,
       telegramConnectState: null,
       ...(telegramUsername ? { telegramId: telegramUsername } : {}),
     },
@@ -234,46 +221,11 @@ async function handleMessage(msg: any) {
   const telegramUsername = msg.from?.username ? `@${msg.from.username}` : null;
 
   try {
-    // ─── Check for awaiting_email state BEFORE command parsing ───
-    if (!isGroup && !cleanText.startsWith('/')) {
-      const { prisma } = await import('@/lib/prisma');
-      const pendingProfile = await prisma.profile.findFirst({
-        where: { telegramChatId: String(chatId), telegramConnectState: 'awaiting_email' },
-        select: { userId: true },
-      });
-
-      if (pendingProfile) {
-        const email = cleanText.toLowerCase().trim();
-        if (!email || !EMAIL_REGEX.test(email)) {
-          await sendMessage(chatId,
-            `⚠️ Please enter a valid email address.\n\n` +
-            `Example: <code>yourname@ugrad.iiuc.ac.bd</code>\n\n` +
-            `Or send /cancel to abort.`,
-            { parse_mode: 'HTML' }
-          );
-          return;
-        }
-        await processConnectEmail(chatId, email, telegramUsername);
-        return;
-      }
-    }
-
     // ─── /start ───
     if (cleanText === '/start') {
       try {
         const username = msg.from?.username;
-        // Clear any stale connect flow state
         const { prisma } = await import('@/lib/prisma');
-        const chatProfile = await prisma.profile.findFirst({
-          where: { telegramChatId: String(chatId) },
-          select: { userId: true, telegramConnectState: true },
-        });
-        if (chatProfile?.telegramConnectState === 'awaiting_email') {
-          await prisma.profile.update({
-            where: { userId: chatProfile.userId },
-            data: { telegramConnectState: null },
-          });
-        }
 
         if (username) {
           const profile = await prisma.profile.findFirst({
@@ -335,48 +287,9 @@ async function handleMessage(msg: any) {
       return;
     }
 
-    // ─── /start <payload> (deep link from web app) ───
+    // ─── /start <email> (deep link from web app) ───
     if (cleanText.startsWith('/start ')) {
       const payload = cleanText.replace('/start', '').trim();
-
-      // /start connect — trigger the connect flow
-      if (payload === 'connect') {
-        try {
-          const { prisma } = await import('@/lib/prisma');
-          const existing = await prisma.profile.findFirst({
-            where: { telegramChatId: String(chatId), telegramVerified: true },
-            select: { userId: true },
-          });
-          if (existing) {
-            await sendMessage(chatId,
-              `✅ <b>Already connected!</b>\n\n📧 Account: <code>${existing.userId}</code>\n\nUse <code>/disconnect</code> first to change.`,
-              { parse_mode: 'HTML' }
-            );
-          } else {
-            await sendMessage(chatId, buildConnectMessage(), {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: '✅ Yes, Connect My Account', callback_data: 'connect_confirm' }],
-                  [{ text: '❌ Cancel', callback_data: 'connect_cancel' }],
-                ],
-              },
-            });
-          }
-        } catch (err: any) {
-          console.error('[TG] /start connect error:', err?.message);
-          await sendMessage(chatId, buildConnectMessage(), {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '✅ Yes, Connect My Account', callback_data: 'connect_confirm' }],
-                [{ text: '❌ Cancel', callback_data: 'connect_cancel' }],
-              ],
-            },
-          });
-        }
-        return;
-      }
-
-      // /start <email> — direct email deep link
       if (payload && payload.includes('@')) {
         try {
           const { prisma } = await import('@/lib/prisma');
@@ -422,104 +335,14 @@ async function handleMessage(msg: any) {
       return;
     }
 
-    // ─── /connect (no email — conversational flow) ───
+    // ─── /connect (no email — show usage) ───
     if (cleanText === '/connect') {
-      try {
-        const { prisma } = await import('@/lib/prisma');
-
-        // Clear any stale awaiting_email state first (fresh start)
-        const staleProfile = await prisma.profile.findFirst({
-          where: { telegramChatId: String(chatId), telegramConnectState: 'awaiting_email' },
-          select: { userId: true },
-        });
-        if (staleProfile) {
-          await prisma.profile.update({
-            where: { userId: staleProfile.userId },
-            data: { telegramConnectState: null },
-          });
-        }
-
-        // Check if already connected
-        const existing = await prisma.profile.findFirst({
-          where: { telegramChatId: String(chatId), telegramVerified: true },
-          select: { userId: true },
-        });
-        if (existing) {
-          await sendMessage(chatId,
-            `✅ <b>Already connected!</b>\n\n` +
-            `📧 Account: <code>${existing.userId}</code>\n\n` +
-            `Use <code>/disconnect</code> first if you want to change.`,
-            { parse_mode: 'HTML' }
-          );
-          return;
-        }
-
-        // Check if pending
-        const pending = await prisma.profile.findFirst({
-          where: { telegramChatId: String(chatId), telegramVerified: false, telegramConnectState: null },
-          select: { userId: true },
-        });
-        if (pending) {
-          await sendMessage(chatId,
-            `⏳ <b>Pending verification</b>\n\n` +
-            `📧 Account: <code>${pending.userId}</code>\n\n` +
-            `Open the IIUC-ARMS web app to complete verification, or send <code>/cancel</code> to abort.`,
-            { parse_mode: 'HTML' }
-          );
-          return;
-        }
-
-        // Check if already in awaiting_email state
-        const inProgress = await prisma.profile.findFirst({
-          where: { telegramChatId: String(chatId), telegramConnectState: 'awaiting_email' },
-          select: { userId: true },
-        });
-        if (inProgress) {
-          await sendMessage(chatId,
-            `📧 You're already in the connection flow.\n\n` +
-            `Send your IIUC-ARMS login email now, or <code>/cancel</code> to abort.`,
-            { parse_mode: 'HTML' }
-          );
-          return;
-        }
-
-        // Show the connect benefits message with buttons
-        await sendMessage(chatId, buildConnectMessage(), {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '✅ Yes, Connect My Account', callback_data: 'connect_confirm' }],
-              [{ text: '❌ Cancel', callback_data: 'connect_cancel' }],
-            ],
-          },
-        });
-      } catch (err: any) {
-        console.error('[TG] /connect error:', err?.message);
-        await sendMessage(chatId, '❌ Something went wrong. Please try again later.', { parse_mode: 'HTML' });
-      }
-      return;
-    }
-
-    // ─── /cancel — abort ongoing connection flow ───
-    if (cleanText === '/cancel') {
-      try {
-        const { prisma } = await import('@/lib/prisma');
-        const profile = await prisma.profile.findFirst({
-          where: { telegramChatId: String(chatId) },
-          select: { userId: true, telegramConnectState: true },
-        });
-        if (profile?.telegramConnectState === 'awaiting_email') {
-          await prisma.profile.update({
-            where: { userId: profile.userId },
-            data: { telegramConnectState: null },
-          });
-          await sendMessage(chatId, `❌ <b>Connection cancelled.</b>\n\nSend <code>/connect</code> to start again.`, { parse_mode: 'HTML' });
-        } else {
-          await sendMessage(chatId, `ℹ️ No active connection flow to cancel.`, { parse_mode: 'HTML' });
-        }
-      } catch (err: any) {
-        console.error('[TG] /cancel error:', err?.message);
-        await sendMessage(chatId, '❌ Something went wrong.', { parse_mode: 'HTML' });
-      }
+      await sendMessage(chatId,
+        `🔗 <b>Connect your Telegram</b>\n\n` +
+        `Usage: <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\n` +
+        `Then open the web app → Dashboard → Connections → Telegram → Send OTP.`,
+        { parse_mode: 'HTML' }
+      );
       return;
     }
 
@@ -892,66 +715,6 @@ async function handleCallbackQuery(cq: any) {
     }
     if (parsed.type === 'start_help') {
       await editMessageText(chatId, messageId, buildHelpMessage());
-      return;
-    }
-
-    // ─── Connect flow buttons ───
-    if (parsed.type === 'connect_confirm') {
-      const { prisma } = await import('@/lib/prisma');
-      const telegramUsername = cq.from?.username ? `@${cq.from.username}` : null;
-
-      // Check if already connected
-      const existing = await prisma.profile.findFirst({
-        where: { telegramChatId: String(chatId), telegramVerified: true },
-        select: { userId: true },
-      });
-      if (existing) {
-        await editMessageText(chatId, messageId,
-          `✅ <b>Already connected!</b>\n\n` +
-          `📧 Account: <code>${existing.userId}</code>\n\n` +
-          `Use <code>/disconnect</code> first if you want to change.`,
-        );
-        return;
-      }
-
-      // Set state to awaiting_email
-      const profile = await prisma.profile.findFirst({
-        where: { telegramChatId: String(chatId) },
-        select: { userId: true },
-      });
-
-      if (profile) {
-        await prisma.profile.update({
-          where: { userId: profile.userId },
-          data: { telegramConnectState: 'awaiting_email' },
-        });
-      } else {
-        // No profile linked yet — create a temporary one or just set state on the chat
-        // We'll handle this in the email processing step
-      }
-
-      await editMessageText(chatId, messageId,
-        `📧 <b>Great! Now enter your email.</b>\n\n` +
-        `Send your IIUC-ARMS login email in the next message.\n\n` +
-        `Example: <code>yourname@ugrad.iiuc.ac.bd</code>\n\n` +
-        `<i>Or send /cancel to abort.</i>`,
-      );
-      return;
-    }
-
-    if (parsed.type === 'connect_cancel') {
-      const { prisma } = await import('@/lib/prisma');
-      const profile = await prisma.profile.findFirst({
-        where: { telegramChatId: String(chatId) },
-        select: { userId: true, telegramConnectState: true },
-      });
-      if (profile?.telegramConnectState === 'awaiting_email') {
-        await prisma.profile.update({
-          where: { userId: profile.userId },
-          data: { telegramConnectState: null },
-        });
-      }
-      await editMessageText(chatId, messageId, `❌ Connection cancelled.\n\nSend <code>/connect</code> to start again.`);
       return;
     }
 
