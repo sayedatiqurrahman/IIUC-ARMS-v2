@@ -93,26 +93,28 @@ export default function SecuritySection({
   }
 
   return (
-    <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
+    <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-3 md:p-5 mb-4">
       <h4 className="text-[0.95rem] font-semibold mb-4"><i className="fas fa-shield-alt"></i> Security</h4>
 
       {/* Password Management */}
       <div className="mb-4">
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-dark-bg3 border border-dark-border mb-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasPassword ? 'bg-green-500/20' : 'bg-amber-500/20'}`}>
-            <i className={`fas ${hasPassword ? 'fa-key text-green-500' : 'fa-key text-amber-500'}`}></i>
-          </div>
-          <div className="flex-1">
-            <span className="text-[0.85rem] font-semibold block">Password</span>
-            <span className="text-[0.72rem] text-dark-text2">
-              {hasPassword === null ? 'Checking...' :
-               hasPassword ? 'You have a password set for email login' : 'No password set — sign in with Google only'}
-            </span>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg bg-dark-bg3 border border-dark-border mb-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${hasPassword ? 'bg-green-500/20' : 'bg-amber-500/20'}`}>
+              <i className={`fas ${hasPassword ? 'fa-key text-green-500' : 'fa-key text-amber-500'}`}></i>
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-[0.85rem] font-semibold block">Password</span>
+              <span className="text-[0.72rem] text-dark-text2 block">
+                {hasPassword === null ? 'Checking...' :
+                 hasPassword ? 'You have a password set for email login' : 'No password set — sign in with Google only'}
+              </span>
+            </div>
           </div>
           {hasPassword !== null && (
             <button
               onClick={() => setPasswordMode(passwordMode === 'none' ? (hasPassword ? 'change' : 'set') : 'none')}
-              className={`text-[0.72rem] font-semibold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+              className={`text-[0.72rem] font-semibold px-3 py-1.5 rounded-lg border transition-all cursor-pointer self-start sm:self-center ${
                 passwordMode !== 'none'
                   ? 'border-dark-border bg-dark-bg text-dark-text2'
                   : 'border-qsis/30 bg-qsis/5 text-qsis hover:bg-qsis/10'
@@ -189,17 +191,19 @@ export default function SecuritySection({
 
       {/* TOTP Section */}
       <div className="border-t border-dark-border pt-4">
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-dark-bg3 border border-dark-border mb-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${totpEnabled ? 'bg-green-500/20' : 'bg-dark-bg'}`}>
-            <i className={`fas ${totpEnabled ? 'fa-check-circle text-green-500' : 'fa-shield-alt text-dark-text2'}`}></i>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg bg-dark-bg3 border border-dark-border mb-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${totpEnabled ? 'bg-green-500/20' : 'bg-dark-bg'}`}>
+              <i className={`fas ${totpEnabled ? 'fa-check-circle text-green-500' : 'fa-shield-alt text-dark-text2'}`}></i>
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-[0.85rem] font-semibold block">Two-Factor Authentication (TOTP)</span>
+              <span className="text-[0.72rem] text-dark-text2 block">
+                {totpEnabled ? 'Enabled — your account is protected with an authenticator app' : 'Not enabled — add an extra layer of security to your account'}
+              </span>
+            </div>
           </div>
-          <div className="flex-1">
-            <span className="text-[0.85rem] font-semibold block">Two-Factor Authentication (TOTP)</span>
-            <span className="text-[0.72rem] text-dark-text2">
-              {totpEnabled ? 'Enabled — your account is protected with an authenticator app' : 'Not enabled — add an extra layer of security to your account'}
-            </span>
-          </div>
-          <span className={`text-[0.7rem] font-bold px-2 py-1 rounded-full ${totpEnabled ? 'bg-green-500/20 text-green-400' : 'bg-dark-bg text-dark-text2'}`}>
+          <span className={`text-[0.7rem] font-bold px-2 py-1 rounded-full self-start sm:self-center ${totpEnabled ? 'bg-green-500/20 text-green-400' : 'bg-dark-bg text-dark-text2'}`}>
             {totpEnabled ? 'ON' : 'OFF'}
           </span>
         </div>
