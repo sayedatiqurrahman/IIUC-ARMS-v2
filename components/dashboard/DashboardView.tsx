@@ -17,6 +17,7 @@ import {
   GitHubConnection,
   SecuritySection,
 } from '@/components/dashboard';
+import TelegramVerify from './TelegramVerify';
 
 function extractUniversityId(email: string): string {
   const match = email.match(/^(q\d+)/i);
@@ -535,13 +536,21 @@ export default function DashboardView() {
 
       case 'github':
         return (
-          <GitHubConnection
-            hasGitHub={hasGitHub} ghUser={ghUser} ghStats={ghStats} profile={profile}
-            showTokenModal={showTokenModal} setShowTokenModal={setShowTokenModal}
-            patInput={patInput} setPatInput={setPatInput} patLoading={patLoading}
-            patValid={patValid} patReplacing={patReplacing} setPatReplacing={setPatReplacing}
-            handlePastePAT={handlePastePAT} handleInstallGitHub={handleInstallGitHub} handleDisconnect={handleDisconnect}
-          />
+          <div>
+            <GitHubConnection
+              hasGitHub={hasGitHub} ghUser={ghUser} ghStats={ghStats} profile={profile}
+              showTokenModal={showTokenModal} setShowTokenModal={setShowTokenModal}
+              patInput={patInput} setPatInput={setPatInput} patLoading={patLoading}
+              patValid={patValid} patReplacing={patReplacing} setPatReplacing={setPatReplacing}
+              handlePastePAT={handlePastePAT} handleInstallGitHub={handleInstallGitHub} handleDisconnect={handleDisconnect}
+            />
+            <TelegramVerify
+              telegramChatId={(profile as any).telegramChatId}
+              telegramVerified={(profile as any).telegramVerified}
+              telegramId={(profile as any).telegramId}
+              email={email}
+            />
+          </div>
         );
 
       case 'security':

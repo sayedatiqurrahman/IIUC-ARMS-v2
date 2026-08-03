@@ -25,7 +25,7 @@ const baseMenu: MenuItem[] = [
   { id: 'overview', label: 'Overview', icon: 'fas fa-th-large' },
   { id: 'profile', label: 'Edit Profile', icon: 'fas fa-user-edit' },
   { id: 'activity', label: 'My Activity', icon: 'fas fa-history' },
-  { id: 'github', label: 'GitHub', icon: 'fab fa-github' },
+  { id: 'github', label: 'Connections', icon: 'fas fa-link' },
   { id: 'security', label: 'Security', icon: 'fas fa-shield-alt' },
 ];
 
