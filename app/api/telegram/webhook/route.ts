@@ -262,8 +262,20 @@ async function handleMessage(msg: any) {
     if (cleanText === '/start') {
       try {
         const username = msg.from?.username;
+        // Clear any stale connect flow state
+        const { prisma } = await import('@/lib/prisma');
+        const chatProfile = await prisma.profile.findFirst({
+          where: { telegramChatId: String(chatId) },
+          select: { userId: true, telegramConnectState: true },
+        });
+        if (chatProfile?.telegramConnectState === 'awaiting_email') {
+          await prisma.profile.update({
+            where: { userId: chatProfile.userId },
+            data: { telegramConnectState: null },
+          });
+        }
+
         if (username) {
-          const { prisma } = await import('@/lib/prisma');
           const profile = await prisma.profile.findFirst({
             where: { telegramId: { in: [`@${username}`, username] } },
           });
@@ -414,6 +426,18 @@ async function handleMessage(msg: any) {
     if (cleanText === '/connect') {
       try {
         const { prisma } = await import('@/lib/prisma');
+
+        // Clear any stale awaiting_email state first (fresh start)
+        const staleProfile = await prisma.profile.findFirst({
+          where: { telegramChatId: String(chatId), telegramConnectState: 'awaiting_email' },
+          select: { userId: true },
+        });
+        if (staleProfile) {
+          await prisma.profile.update({
+            where: { userId: staleProfile.userId },
+            data: { telegramConnectState: null },
+          });
+        }
 
         // Check if already connected
         const existing = await prisma.profile.findFirst({
