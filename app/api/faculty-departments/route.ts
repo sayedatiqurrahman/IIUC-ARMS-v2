@@ -41,8 +41,9 @@ export async function POST(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     const callerProfile = await prisma.profile.findUnique({ where: { userId: email } });
     const effective = config.getEffectiveRole(email, callerProfile?.role);
-    const customPerms = (callerProfile?.customPermissions || {}) as Record<string, boolean>;
-    if (customPerms.manageFaculty !== true && effective !== 'admin' && effective !== 'manager' && effective !== 'teacher') {
+    const { hasPermission } = await import('@/lib/permissions');
+    const canManage = await hasPermission('manageFacultyDepts', effective, false, email);
+    if (!canManage) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

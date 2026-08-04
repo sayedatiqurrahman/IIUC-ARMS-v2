@@ -234,6 +234,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-dark-bg text-dark-text">
+      {(session as any)?.accountStatus === 'pending' && (
+        <div className="bg-yellow-500/15 border-b border-yellow-500/30 px-4 py-2 text-center text-[0.8rem] font-medium text-yellow-300 flex items-center justify-center gap-3 z-[200] relative">
+          <i className="fas fa-clock"></i>
+          <span>Your account is pending approval — you have <strong>no access</strong> until an Admin, Manager, or Teacher approves it.</span>
+          <button onClick={() => signOut({ callbackUrl: '/' })} className="px-3 py-1 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/30 border-none cursor-pointer text-yellow-200 text-[0.75rem] font-semibold transition-colors">
+            Sign Out
+          </button>
+        </div>
+      )}
       {showUpdateBanner && (
         <div className="bg-gradient-to-r from-qsis to-accent text-white px-4 py-2 text-center text-[0.82rem] font-medium flex items-center justify-center gap-3 z-[200] relative">
           <i className="fas fa-download"></i>
@@ -299,14 +308,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     >
                       <i className="fas fa-th-large w-4 text-center text-dark-text2"></i> Dashboard
                     </button>
-                    {config.adminEmails.includes((session as any)?.user?.email || '') && (
-                      <button
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-dark-text hover:bg-dark-bg3 cursor-pointer bg-transparent border-none text-left transition-colors"
-                        onClick={() => { setProfileDropdownOpen(false); router.push('/admin'); }}
-                      >
-                        <i className="fas fa-shield-alt w-4 text-center text-qsis"></i> Admin Panel
-                      </button>
-                    )}
+                    {(() => {
+                      const email = (session as any)?.user?.email || profile.email || '';
+                      const effectiveRole = config.getEffectiveRole(email, profile.role);
+                      const canAccessAdminPanel = effectiveRole === 'admin';
+                      return canAccessAdminPanel ? (
+                        <button
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-dark-text hover:bg-dark-bg3 cursor-pointer bg-transparent border-none text-left transition-colors"
+                          onClick={() => { setProfileDropdownOpen(false); router.push('/admin'); }}
+                        >
+                          <i className="fas fa-shield-alt w-4 text-center text-qsis"></i> Admin Panel
+                        </button>
+                      ) : null;
+                    })()}
                     <button
                       className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-red-400 hover:bg-red-500/10 cursor-pointer bg-transparent border-none text-left transition-colors"
                       onClick={() => { setProfileDropdownOpen(false); fetch('/api/auth/firebase-session', { method: 'DELETE' }); signOut({ callbackUrl: '/' }); }}

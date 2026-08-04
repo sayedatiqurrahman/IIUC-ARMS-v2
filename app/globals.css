@@ -929,6 +929,13 @@ button { font-family: inherit; }
   line-height: 1.2;
 }
 
+.routine-course-room {
+  font-size: 0.58rem;
+  color: #1d4ed8;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
 .routine-empty {
   color: #d1d5db;
   font-size: 0.8rem;

@@ -2,36 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-import { invalidatePermissionsCache } from '@/lib/permissions';
+import { invalidatePermissionsCache, DEFAULT_PERMISSIONS } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-  addCourse: ['admin', 'manager', 'teacher', 'cr', 'student', 'user'],
-  editCourse: ['admin', 'manager', 'teacher', 'cr'],
-  deleteCourse: ['admin', 'manager', 'teacher'],
-  uploadFile: ['admin', 'manager', 'teacher', 'cr', 'student'],
-  requireGithubForUpload: ['admin', 'manager', 'teacher', 'cr', 'student'],
-  editLinks: ['admin', 'manager', 'teacher', 'cr'],
-  moveFile: ['admin'],
-  copyFile: ['admin'],
-  renameFile: ['admin'],
-  deleteFile: ['admin'],
-  manageFaculty: ['admin', 'manager', 'teacher'],
-  publishRoutine: ['admin', 'manager', 'teacher', 'cr'],
-  manageUsers: ['admin', 'manager'],
-  manageSettings: ['admin'],
-};
-
 export async function GET() {
   try {
-    const { prisma } = await import('@/lib/prisma');
-    const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
-    const saved = (settings?.permissions as Record<string, string[]>) || {};
-    const permissions: Record<string, string[]> = {};
-    for (const key of Object.keys(DEFAULT_PERMISSIONS)) {
-      permissions[key] = saved[key] || DEFAULT_PERMISSIONS[key];
-    }
+    const { getPermissions } = await import('@/lib/permissions');
+    const permissions = await getPermissions();
     return NextResponse.json({ success: true, permissions });
   } catch {
     return NextResponse.json({ success: true, permissions: DEFAULT_PERMISSIONS });

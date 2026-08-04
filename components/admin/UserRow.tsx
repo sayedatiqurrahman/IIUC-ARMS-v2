@@ -49,6 +49,7 @@ interface UserRowProps {
   isManager: boolean;
   isSuperAdmin: boolean;
   actionLoading: string;
+  isPendingTab?: boolean;
   handleToggleCR: (email: string, current: boolean) => void;
   handleToggleACR: (email: string, current: boolean) => void;
   handleSetRole: (email: string, role: string) => void;
@@ -57,6 +58,7 @@ interface UserRowProps {
   handleApprove?: (email: string) => void;
   handleReject?: (email: string) => void;
   handleDeleteUser?: (email: string) => void;
+  handleSendToPending?: (email: string) => void;
 }
 
 export default function UserRow({
@@ -66,6 +68,7 @@ export default function UserRow({
   isManager,
   isSuperAdmin,
   actionLoading,
+  isPendingTab,
   handleToggleCR,
   handleToggleACR,
   handleSetRole,
@@ -74,10 +77,14 @@ export default function UserRow({
   handleApprove,
   handleReject,
   handleDeleteUser,
+  handleSendToPending,
 }: UserRowProps) {
   const isSelf = u.email === email;
   const uRole = u.role || 'user';
   const isOwnerUser = config.ownerEmails.includes(u.email.toLowerCase());
+  const isUniversityEmail = /@iiuc\.ac\.bd$/i.test(u.email);
+  const isPendingRow = isPendingTab || u.accountStatus === 'pending';
+  const canSendToPending = isAdmin && !isSelf && !isOwnerUser && !isUniversityEmail && u.accountStatus === 'active' && !isPendingTab;
   const canEditRole = !isSelf && !isOwnerUser && (isAdmin || (isManager && uRole !== 'admin' && uRole !== 'manager'));
   const canBan = !isSelf && !isOwnerUser && uRole !== 'admin' && (isAdmin || isManager);
   const canToggleCR = !isSelf && (isAdmin || isManager);
@@ -169,16 +176,23 @@ export default function UserRow({
               </button>
             )
           )}
-          {u.accountStatus === 'pending' && handleApprove && (
+          {isPendingRow && handleApprove && (
             <button onClick={() => handleApprove(u.email)} disabled={actionLoading === u.email + 'approve'}
               className="px-2.5 py-1 rounded-lg bg-green-500/15 text-green-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-green-500/25 border border-green-500/20 disabled:opacity-50">
               {actionLoading === u.email + 'approve' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Approve</>}
             </button>
           )}
-          {u.accountStatus === 'pending' && handleReject && (
+          {isPendingRow && handleReject && (
             <button onClick={() => handleReject(u.email)} disabled={actionLoading === u.email + 'reject'}
               className="px-2.5 py-1 rounded-lg bg-red-500/15 text-red-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/25 border border-red-500/20 disabled:opacity-50">
               {actionLoading === u.email + 'reject' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-times mr-0.5"></i>Reject</>}
+            </button>
+          )}
+          {canSendToPending && handleSendToPending && (
+            <button onClick={() => handleSendToPending(u.email)} disabled={actionLoading === u.email + 'pending'}
+              className="px-2.5 py-1 rounded-lg bg-yellow-500/15 text-yellow-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-yellow-500/25 border border-yellow-500/20 disabled:opacity-50"
+              title="Remove access — moves this external account back to pending approval">
+              {actionLoading === u.email + 'pending' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-clock mr-0.5"></i>Move to Pending</>}
             </button>
           )}
           {isAdmin && !isSelf && !isOwnerUser && handleDeleteUser && (

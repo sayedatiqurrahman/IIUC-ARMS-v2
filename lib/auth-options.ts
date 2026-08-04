@@ -33,6 +33,7 @@ async function getAccountStatus(email: string): Promise<string | null> {
     return null;
   }
 }
+export { getAccountStatus };
 
 async function ensurePendingProfile(email: string, name?: string): Promise<void> {
   try {
@@ -247,7 +248,14 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       try {
         (session as any).accessToken = token.accessToken;
-        (session as any).accountStatus = token.accountStatus || 'active';
+        // Refresh account status from DB on every session poll so pending/rejected
+        // users lose access immediately when an admin moves/approves them.
+        if (token.email) {
+          const status = await getAccountStatus(token.email as string);
+          (session as any).accountStatus = status || 'active';
+        } else {
+          (session as any).accountStatus = token.accountStatus || 'active';
+        }
         if (session.user) {
           session.user.email = token.email as string;
           session.user.name = token.name as string;

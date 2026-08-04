@@ -24,6 +24,8 @@ export interface ExamRoutineItem {
   examType: string;
   rows: ExamRow[];
   slots: ExamSlot[];
+  type?: string;
+  entries?: any[];
   createdAt?: number;
   published?: boolean;
   isDraft?: boolean;

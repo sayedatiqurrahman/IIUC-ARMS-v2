@@ -11,6 +11,10 @@ export async function getUserEmail(req?: NextRequest): Promise<string | null> {
   try {
     const session = await getServerSession(authOptions);
     if (session?.user?.email) {
+      // Pending/rejected accounts have no application access
+      if ((session as any).accountStatus === 'pending' || (session as any).accountStatus === 'rejected') {
+        return null;
+      }
       return session.user.email;
     }
   } catch {
@@ -27,6 +31,9 @@ export async function getUserEmail(req?: NextRequest): Promise<string | null> {
       const { adminAuth } = await import('@/lib/firebase-admin');
       const decoded = await adminAuth.verifyIdToken(idToken);
       if (decoded.email) {
+        const { getAccountStatus } = await import('@/lib/auth-options');
+        const status = await getAccountStatus(decoded.email);
+        if (status === 'pending' || status === 'rejected') return null;
         return decoded.email;
       }
     } catch {
@@ -41,6 +48,9 @@ export async function getUserEmail(req?: NextRequest): Promise<string | null> {
       const { adminAuth } = await import('@/lib/firebase-admin');
       const decoded = await adminAuth.verifyIdToken(cookieToken);
       if (decoded.email) {
+        const { getAccountStatus } = await import('@/lib/auth-options');
+        const status = await getAccountStatus(decoded.email);
+        if (status === 'pending' || status === 'rejected') return null;
         return decoded.email;
       }
     } catch {

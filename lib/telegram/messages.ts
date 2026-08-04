@@ -20,7 +20,10 @@ export function buildConnectMessage(): string {
     `• 📚 Know when new files are uploaded\n` +
     `• 🎓 Batch announcements & updates\n\n` +
     `<b>How to connect:</b>\n` +
-    `Send: <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\n` +
+    `We link by your <b>username</b>, <b>phone number</b>, or <b>email</b> — whichever you have.\n\n` +
+    `Option 1: Send <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n` +
+    `Option 2: Tap <b>📱 Connect by Phone Number</b> below\n` +
+    `          (needed if you don't have a Telegram username)\n\n` +
     `Then open the web app → Dashboard → Connections → Telegram → Send OTP.\n\n` +
     `<i>You can connect up to 3 Telegram accounts from\n` +
     `Dashboard → Connections in the web app.</i>`
@@ -38,7 +41,8 @@ export function buildWelcomeMessage(): string {
     `<b>Account:</b>\n` +
     `• <code>/connect</code> — Link your Telegram for notifications\n` +
     `• <code>/status</code> — Check connection status\n` +
-    `• <code>/help</code> — All commands\n\n` +
+    `• <code>/help</code> — All commands\n` +
+    `• No username? Tap <b>📱 Connect by Phone Number</b> below\n\n` +
     `<i>📚 Powered by IIUC-ARMS</i>`
   );
 }

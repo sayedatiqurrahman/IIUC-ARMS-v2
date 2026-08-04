@@ -124,24 +124,24 @@ export default function PermissionsTab() {
     setSaving(false);
   };
 
-  const clearAllScopePerms = async () => {
-    if (!scopeUser) return;
-    setScopePerms({});
+  const clearAllScopePerms = async (targetEmail: string = scopeUser) => {
+    if (!targetEmail) return;
     setSaving(true);
     try {
       await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'setCustomPermissions', targetEmail: scopeUser, customPermissions: {} }),
+        body: JSON.stringify({ action: 'setCustomPermissions', targetEmail, customPermissions: {} }),
       });
-      setAllUsers(prev => prev.map(u => u.email === scopeUser ? { ...u, customPermissions: {} } : u));
-      flash('Cleared all custom permissions', 'ok');
+      setAllUsers(prev => prev.map(u => u.email === targetEmail ? { ...u, customPermissions: {} } : u));
+      if (targetEmail === scopeUser) setScopePerms({});
+      flash(targetEmail === scopeUser ? 'Cleared all custom permissions' : `Removed ${targetEmail} from custom scopes`, 'ok');
     } catch { flash('Network error', 'err'); }
     setSaving(false);
   };
 
   const usersWithCustomPerms = useMemo(() => {
-    return allUsers.filter(u => u.customPermissions && Object.keys(u.customPermissions).length > 0);
+    return allUsers.filter(u => u.customPermissions && Object.values(u.customPermissions).some(Boolean));
   }, [allUsers]);
 
   if (loading) return <div className="text-center py-10"><i className="fas fa-spinner fa-spin text-2xl text-qsis"></i></div>;
@@ -379,7 +379,7 @@ export default function PermissionsTab() {
               </div>
               <div className="flex gap-2">
                 {Object.values(scopePerms).some(Boolean) && (
-                  <button onClick={clearAllScopePerms} className="text-[0.68rem] text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer">
+                  <button onClick={() => clearAllScopePerms()} className="text-[0.68rem] text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer">
                     <i className="fas fa-times mr-0.5"></i>Clear all
                   </button>
                 )}
@@ -444,7 +444,8 @@ export default function PermissionsTab() {
                       })}
                       {granted.length > 3 && <span className="text-[0.58rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3">+{granted.length - 3}</span>}
                     </div>
-                    <button onClick={() => selectScopeUser(u)} className="text-qsis hover:text-qsis/80 bg-transparent border-none cursor-pointer text-[0.68rem]"><i className="fas fa-edit"></i></button>
+                    <button onClick={() => selectScopeUser(u)} className="text-qsis hover:text-qsis/80 bg-transparent border-none cursor-pointer text-[0.68rem]" title="Edit custom scopes"><i className="fas fa-edit"></i></button>
+                    <button onClick={() => clearAllScopePerms(u.email)} disabled={saving} className="text-red-400/80 hover:text-red-400 bg-transparent border-none cursor-pointer text-[0.68rem] disabled:opacity-50" title="Remove all custom scopes"><i className="fas fa-times"></i></button>
                   </div>
                 );
               })}

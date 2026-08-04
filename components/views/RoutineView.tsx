@@ -72,7 +72,9 @@ export default function RoutineView() {
   const sharedRoutines: RoutineItem[] = Array.isArray(routineData) ? routineData : [];
   const routines = sharedRoutines;
 
-  // Onboarding-based personalization for routines
+  // Onboarding-based personalization for routines (students only)
+  const effectiveRole = config.getEffectiveRole(email, profile.role);
+  const isTeacherPlus = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
   const userSemesterLabel = onboardData?.semester || null;
   const userGender = onboardData?.gender || null;
   const isMySemesterOnly = onboardData?.fileView === 'my-semester-only' && userSemesterLabel;
@@ -86,6 +88,8 @@ export default function RoutineView() {
 
   const allVisibleRoutines = (() => {
     const all = [...publishedRoutines, ...sharedRoutines].filter(filterByGender);
+    // Teachers, managers, and admins see ALL semesters (role-based control)
+    if (isTeacherPlus) return all;
     if (!userSemesterLabel) return all;
     if (isMySemesterOnly) {
       return all.filter(r => r.semester === userSemesterLabel);

@@ -11,6 +11,7 @@ interface AdminSidebarProps {
   isOwner: boolean;
   effectiveRole: string;
   profileIsCR?: boolean;
+  canManageFacultyDepts?: boolean;
 }
 
 export default function AdminSidebar({
@@ -21,6 +22,7 @@ export default function AdminSidebar({
   isOwner,
   effectiveRole,
   profileIsCR,
+  canManageFacultyDepts,
 }: AdminSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -72,18 +74,18 @@ export default function AdminSidebar({
 
           {(isAdmin || isManager) && section('Users', btn('users', 'fa-users', 'text-blue-400', 'All Users'))}
 
-          {(isAdmin || isManager || effectiveRole === 'teacher') && section('Academic', (
+          {isAdmin || isManager || canManageFacultyDepts ? section('Academic', (
             <>
-              {btn('faculty', 'fa-chalkboard-teacher', 'text-teal-400', 'Faculty Members')}
-              {(isAdmin || isManager) && btn('facultyDept', 'fa-building', 'text-purple-400', 'Faculties & Depts')}
+              {(isAdmin || isManager) && btn('faculty', 'fa-chalkboard-teacher', 'text-teal-400', 'Faculty Members')}
+              {canManageFacultyDepts && btn('facultyDept', 'fa-building', 'text-purple-400', 'Faculties & Depts')}
             </>
-          ))}
+          )) : null}
 
           {(isAdmin || isManager || effectiveRole === 'teacher' || !!profileIsCR) && section('Content', (
             <>
-              {btn('courses', 'fa-book', 'text-indigo-400', 'Courses')}
-              {btn('rooms', 'fa-door-open', 'text-cyan-400', 'Rooms')}
-              {btn('batches', 'fa-layer-group', 'text-purple-400', 'Batches')}
+              {(isAdmin || isManager || effectiveRole === 'teacher' || !!profileIsCR) && btn('courses', 'fa-book', 'text-indigo-400', 'Courses')}
+              {(isAdmin || isManager || effectiveRole === 'teacher') && btn('rooms', 'fa-door-open', 'text-cyan-400', 'Rooms')}
+              {(isAdmin || isManager || effectiveRole === 'teacher' || !!profileIsCR) && btn('batches', 'fa-layer-group', 'text-purple-400', 'Batches')}
             </>
           ))}
 
@@ -94,10 +96,10 @@ export default function AdminSidebar({
             </>
           ))}
 
-          {(isOwner || isAdmin || isManager) && section('Other', (
+          {(isAdmin || isManager || isOwner) && section('Other', (
             <>
               {isOwner && btn('telegram', 'fa-paper-plane', 'text-cyan-400', 'Telegram')}
-              {btn('activity', 'fa-history', 'text-yellow-400', 'Activity Log')}
+              {(isAdmin || isManager) && btn('activity', 'fa-history', 'text-yellow-400', 'Activity Log')}
             </>
           ))}
         </nav>

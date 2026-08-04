@@ -42,6 +42,7 @@ export const config = {
     if (base === 'admin') return 'admin';
     if (profileRole === 'admin') return 'admin';
     if (profileRole === 'manager') return 'manager';
+    if (profileRole === 'teacher') return 'teacher';
     return base;
   },
   isManager: (email: string, profileRole?: string): boolean => {

@@ -20,6 +20,15 @@ export default function PendingPage() {
           You&apos;ll receive access once an administrator reviews and approves your account. This usually happens within 24 hours.
         </p>
 
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 mb-6 text-left">
+          <h3 className="text-[0.82rem] font-semibold text-dark-text mb-1">
+            <i className="fas fa-exclamation-triangle mr-2 text-yellow-400"></i>No access until approved
+          </h3>
+          <p className="text-[0.78rem] text-dark-text2">
+            While your account is pending you cannot log in or use the app (no write access, no profile editing). If you need access sooner, contact an <strong className="text-dark-text">Admin</strong>, <strong className="text-dark-text">Manager</strong>, or <strong className="text-dark-text">Teacher</strong>.
+          </p>
+        </div>
+
         <div className="bg-dark-bg border border-dark-border rounded-xl p-4 mb-6 text-left">
           <h3 className="text-[0.82rem] font-semibold text-dark-text mb-2">
             <i className="fas fa-info-circle mr-2 text-qsis"></i>What happens next?

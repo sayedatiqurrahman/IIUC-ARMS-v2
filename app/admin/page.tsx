@@ -17,7 +17,7 @@ export default function AdminPage() {
     if (status === 'unauthenticated') {
       router.push('/');
     }
-    if (status === 'authenticated' && effectiveRole !== 'admin') {
+    if (status === 'authenticated' && !['admin', 'manager', 'teacher'].includes(effectiveRole)) {
       router.push('/');
     }
   }, [status, effectiveRole, router]);
@@ -43,7 +43,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!session || effectiveRole !== 'admin') return null;
+  if (!session || !['admin', 'manager', 'teacher'].includes(effectiveRole)) return null;
 
   return <AdminPanelView />;
 }

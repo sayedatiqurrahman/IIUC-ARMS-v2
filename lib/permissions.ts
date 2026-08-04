@@ -8,6 +8,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   uploadFile: ['admin', 'manager', 'teacher', 'cr', 'student'],
   requireGithubForUpload: ['admin', 'manager', 'teacher', 'cr', 'student'],
   manageFaculty: ['admin', 'manager', 'teacher'],
+  manageFacultyDepts: ['admin', 'manager'],
   publishRoutine: ['admin', 'manager', 'teacher', 'cr'],
   manageBatches: ['admin', 'manager', 'teacher', 'cr', 'acr'],
   manageUsers: ['admin', 'manager'],
@@ -21,6 +22,8 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   manageRooms: ['admin', 'manager', 'teacher'],
   viewExternalUsers: ['admin', 'manager'],
 };
+
+export { DEFAULT_PERMISSIONS };
 
 let cachedPermissions: Record<string, string[]> | null = null;
 let lastFetch = 0;

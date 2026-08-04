@@ -171,23 +171,54 @@ export async function POST(req: NextRequest) {
       });
     } catch {}
 
-    // Send Telegram notifications to users in affected departments
+    // Send Telegram notifications — only students of the affected department(s)
+    // and specific semester(s) get notified, plus teachers assigned in the routine.
     try {
-      const affectedDepts = Array.from(new Set(routines.map(r => r.department).filter(Boolean)));
-      if (affectedDepts.length > 0) {
-        const { sendDepartmentNotifications, getDeptName } = await import('@/lib/telegram');
-        const deptNames = affectedDepts.map(d => getDeptName(d || '')).join(', ');
-        const msg = `📢 <b>${routines.length > 1 ? 'Routines' : 'Routine'} Updated!\n\n</b>` +
-          `🏢 Department: <b>${deptNames}</b>\n` +
-          `📅 Semester: <b>${routines[0]?.semester || ''}</b>\n` +
-          (routines[0]?.session ? `📆 Session: ${routines[0].session}\n` : '') +
-          `\n🔗 View now: <a href="https://iiuc-arms.eu.cc/?tab=routine">Open IIUC-ARMS</a>`;
-        const result = await sendDepartmentNotifications(affectedDepts, msg, {
+      const { sendDepartmentNotifications, sendTeacherNotifications, semesterLabelToId, semesterLabel, getDeptName } = await import('@/lib/telegram');
+      const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+      const ROUTINE_URL = `${SITE}/routine?tab=class`;
+      const TEACHER_URL = `${SITE}/routine?tab=teacher`;
+
+      for (const r of routines) {
+        const dept = r.department;
+        if (!dept) continue;
+
+        const semId = semesterLabelToId(r.semester || '');
+        const semLabel = semesterLabel(r.semester || '');
+        const msg = `📢 <b>${routines.length > 1 ? 'Routines' : 'Routine'} Updated!</b>\n\n` +
+          `🏢 Department: <b>${getDeptName(dept)}</b>\n` +
+          `📅 Semester: <b>${semLabel || ''}</b>\n` +
+          (r.session ? `📆 Session: ${r.session}\n` : '') +
+          `\n🔗 View now: <a href="${ROUTINE_URL}">Open IIUC-ARMS</a>`;
+
+        const result = await sendDepartmentNotifications([dept], msg, {
           type: 'routine_publish',
-          title: `Routine: ${deptNames}`,
+          title: `Routine: ${getDeptName(dept)}`,
+          sentBy: email,
+          semesters: semId ? [semId] : undefined,
+        });
+        console.log(`[Routine] ${getDeptName(dept)}${semId ? ' / ' + semLabel : ''} notifications sent: ${result.sent}, failed: ${result.failed}`);
+      }
+
+      // Notify teachers who have classes in this routine
+      const teacherNames = Array.from(new Set(
+        routines.flatMap(r => (r.courses || [])
+          .map((c: any) => (c?.teacher || '').trim())
+          .filter(Boolean))
+      ));
+      if (teacherNames.length > 0) {
+        const deptNames = Array.from(new Set(routines.map(r => r.department).filter(Boolean))).map(d => getDeptName(d || '')).join(', ');
+        const teacherMsg = `👨‍🏫 <b>Your Class Routine is Published</b>\n\n` +
+          `Dear Teacher,\n` +
+          `A class routine has been published for <b>${deptNames}</b> (${routines[0]?.semester || ''})${routines[0]?.session ? ` — ${routines[0].session}` : ''}.\n` +
+          `You have class(es) assigned to you in this routine.\n\n` +
+          `🔗 <a href="${TEACHER_URL}">View Your Routine →</a>`;
+        const tRes = await sendTeacherNotifications(teacherNames, teacherMsg, {
+          type: 'routine_teacher',
+          title: `Your Routine: ${deptNames}`,
           sentBy: email,
         });
-        console.log(`[Routine] Telegram notifications sent: ${result.sent}, failed: ${result.failed}`);
+        console.log(`[Routine] Teacher notifications sent: ${tRes.sent}, failed: ${tRes.failed}, matched: ${tRes.matched}`);
       }
     } catch {}
 

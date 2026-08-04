@@ -18,8 +18,8 @@ import TelegramTab from '@/components/admin/TelegramTab';
 import OverviewTab from '@/components/admin/OverviewTab';
 import UsersTab from '@/components/admin/UsersTab';
 import FacultyTab from '@/components/admin/FacultyTab';
-import AdminSidebar from '@/components/admin/AdminSidebar';
 import ActivityLogTab from '@/components/admin/ActivityLogTab';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 
 export default function AdminPanelView() {
   const { data: session } = useSession();
@@ -31,14 +31,36 @@ export default function AdminPanelView() {
   const [userSubTab, setUserSubTab] = useState<UserSubTab>('all');
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [users, setUsers] = useState<UserRecord[]>([]);
-  const [totalUsers, setTotalUsers] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [firebaseNextPageToken, setFirebaseNextPageToken] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // Per-sub-tab pagination state so tabs never share each other's lists/pages
+  const [userStates, setUserStates] = useState<Partial<Record<UserSubTab, { users: UserRecord[]; total: number; page: number; search: string; nextToken: string | null }>>>({});
+  const userState = userStates[userSubTab] ?? { users: [] as UserRecord[], total: 0, page: 1, search: '', nextToken: null as string | null };
+  const users = userState.users;
+  const totalUsers = userState.total;
+  const currentPage = userState.page;
+  const searchQuery = userState.search;
+  const firebaseNextPageToken = userState.nextToken;
+
+  const patchUserState = (tab: UserSubTab, patch: Partial<typeof userState>) => {
+    setUserStates(prev => ({
+      ...prev,
+      [tab]: { users: [], total: 0, page: 1, search: '', nextToken: null, ...prev[tab], ...patch },
+    }));
+  };
+  const setCurrentPage = (page: number) => patchUserState(userSubTab, { page });
+  const setSearchQuery = (q: string) => patchUserState(userSubTab, { search: q });
+  const tabFromArgs = (role?: string, domain?: string): UserSubTab => {
+    if (role === 'admin') return 'admin';
+    if (role === 'manager') return 'manager';
+    if (domain === 'teacher') return 'teacher';
+    if (domain === 'student') return 'student';
+    if (domain === 'external') return 'external';
+    if (domain === 'pending') return 'pending';
+    return 'all';
+  };
   const [actionLoading, setActionLoading] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [showAddAdmin, setShowAddAdmin] = useState(false);
@@ -67,7 +89,9 @@ export default function AdminPanelView() {
   const isOwner = config.ownerEmails.includes(email.toLowerCase());
   const hasAdminAccess = isAdmin || isManager || effectiveRole === 'teacher';
   const canViewExternalUsers = isAdmin || isManager;
+  const canManageFacultyDepts = isAdmin || isManager || profile.customPermissions?.manageFacultyDepts === true;
   const isSuperAdmin = config.ownerEmails.includes(email);
+  const useSidebar = isAdmin || isManager;
 
   useEffect(() => {
     if (!hasAdminAccess) return;
@@ -93,6 +117,7 @@ export default function AdminPanelView() {
   }, [hasAdminAccess]);
 
   const loadUsers = useCallback((role?: string, search?: string, pageToken?: string, append = false, domain?: string, page?: number) => {
+    const tab = tabFromArgs(role, domain);
     const params = new URLSearchParams();
     if (role && role !== 'all') params.set('role', role);
     if (search) params.set('search', search);
@@ -104,13 +129,19 @@ export default function AdminPanelView() {
     fetch(`/api/admin/users?${params}`)
       .then(r => r.json())
       .then(data => {
-        if (append) {
-          setUsers(prev => [...prev, ...(data.users || [])]);
-        } else {
-          setUsers(data.users || []);
-        }
-        setTotalUsers(data.total || data.users?.length || 0);
-        setFirebaseNextPageToken(data.firebaseNextPageToken || null);
+        setUserStates(prev => {
+          const cur = prev[tab] ?? { users: [], total: 0, page: 1, search: '', nextToken: null };
+          return {
+            ...prev,
+            [tab]: {
+              ...cur,
+              users: append ? [...cur.users, ...(data.users || [])] : (data.users || []),
+              total: data.total || data.users?.length || 0,
+              nextToken: data.firebaseNextPageToken || null,
+              page: page || cur.page,
+            },
+          };
+        });
         setLoadingMore(false);
       })
       .catch(() => setLoadingMore(false));
@@ -333,6 +364,53 @@ export default function AdminPanelView() {
     }
   };
 
+  const handleSendToPending = async (targetEmail: string) => {
+    if (!await confirm({ message: `Move ${targetEmail} back to Pending Approval? They will immediately lose access until approved again.`, title: 'Move to Pending', danger: true })) return;
+    setActionLoading(targetEmail + 'pending');
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetEmail, action: 'sendToPending' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        refreshUsers();
+      } else {
+        showToast(data.error || 'Failed', 'error');
+      }
+    } catch {
+      showToast('Action failed', 'error');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const [approveAllLoading, setApproveAllLoading] = useState(false);
+  const handleApproveAll = async () => {
+    if (!await confirm({ message: 'Approve ALL pending external accounts? They will gain access immediately.', title: 'Approve All Pending', danger: true })) return;
+    setApproveAllLoading(true);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approveAllPending' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        refreshUsers();
+      } else {
+        showToast(data.error || 'Failed', 'error');
+      }
+    } catch {
+      showToast('Action failed', 'error');
+    } finally {
+      setApproveAllLoading(false);
+    }
+  };
+
   const handleCreateUser = async () => {
     setCreateUserError('');
     setCreateUserSuccess('');
@@ -537,8 +615,8 @@ export default function AdminPanelView() {
   const TABS: { key: Tab; label: string; icon: string; color: string; show: boolean }[] = [
     { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', color: 'text-qsis', show: isAdmin || isManager },
     { key: 'users', label: 'All Users', icon: 'fa-users', color: 'text-dark-text2', show: isAdmin || isManager },
-    { key: 'faculty', label: 'Faculty Members', icon: 'fa-chalkboard-teacher', color: 'text-teal-400', show: isAdmin || isManager || effectiveRole === 'teacher' },
-    { key: 'facultyDept', label: 'Faculties & Depts', icon: 'fa-building', color: 'text-purple-400', show: isAdmin || isManager },
+    { key: 'faculty', label: 'Faculty Members', icon: 'fa-chalkboard-teacher', color: 'text-teal-400', show: isAdmin || isManager },
+    { key: 'facultyDept', label: 'Faculties & Depts', icon: 'fa-building', color: 'text-purple-400', show: canManageFacultyDepts },
     { key: 'courses', label: 'Courses', icon: 'fa-book', color: 'text-indigo-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR },
     { key: 'rooms', label: 'Rooms', icon: 'fa-door-open', color: 'text-cyan-400', show: isAdmin || isManager || effectiveRole === 'teacher' },
     { key: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR },
@@ -568,7 +646,7 @@ export default function AdminPanelView() {
           <i className="fas fa-shield-alt text-qsis"></i>Admin Panel
         </h2>
         <p className="text-[0.82rem] text-dark-text2 mt-1">
-          {isAdmin ? 'Full admin access' : isManager ? 'Manager access — you can manage users but cannot change admin roles' : 'Teacher access — you can manage faculty members'}
+          {isAdmin ? 'Full admin access' : isManager ? 'Manager access — you can manage users but cannot change admin roles' : 'Teacher access — you can manage faculty, courses, rooms, and batches'}
         </p>
       </div>
 
@@ -586,22 +664,24 @@ export default function AdminPanelView() {
         </div>
       )}
 
-      {/* Tab Navigation - Sidebar + Content */}
+      {/* Tab Navigation - Sidebar (admin/manager) + Inline tabs (teacher/custom permission) */}
       <div className="flex gap-4 mb-5">
-        {/* Sidebar */}
-        <AdminSidebar
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          isAdmin={isAdmin}
-          isManager={isManager}
-          isOwner={isOwner}
-          effectiveRole={effectiveRole}
-          profileIsCR={profile?.isCR}
-        />
+        {useSidebar && (
+          <AdminSidebar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            isAdmin={isAdmin}
+            isManager={isManager}
+            isOwner={isOwner}
+            effectiveRole={effectiveRole}
+            profileIsCR={profile?.isCR}
+            canManageFacultyDepts={canManageFacultyDepts}
+          />
+        )}
 
-        {/* Mobile Tab Bar */}
         <div className="flex-1 min-w-0">
-          <div className="flex gap-1 mb-4 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto md:hidden">
+          {/* Inline Tab Bar - always visible for teacher/custom permission, mobile-only for admin/manager */}
+          <div className={`flex gap-1 mb-4 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto scrollbar-thin ${useSidebar ? 'md:hidden' : ''}`}>
             {TABS.filter(t => t.show).map(tab => (
               <button
                 key={tab.key}
@@ -616,6 +696,7 @@ export default function AdminPanelView() {
             ))}
           </div>
 
+        <div>
       {/* Overview Tab */}
       {activeTab === 'overview' && stats && (
         <OverviewTab
@@ -669,6 +750,9 @@ export default function AdminPanelView() {
           handleApprove={handleApprove}
           handleReject={handleReject}
           handleDeleteUser={handleDeleteUser}
+          handleSendToPending={handleSendToPending}
+          handleApproveAll={handleApproveAll}
+          approveAllLoading={approveAllLoading}
           loadUsers={loadUsers}
           setCreateUserError={setCreateUserError}
           setCreateUserSuccess={setCreateUserSuccess}
@@ -706,7 +790,7 @@ export default function AdminPanelView() {
       )}
 
       {/* Faculty & Departments Tab */}
-      {activeTab === 'facultyDept' && <FacultyDeptTab effectiveRole={effectiveRole} profile={profile} />}
+      {activeTab === 'facultyDept' && <FacultyDeptTab effectiveRole={effectiveRole} profile={profile} canManage={canManageFacultyDepts} />}
 
       {/* Courses Tab */}
       {activeTab === 'courses' && <CoursesTab effectiveRole={effectiveRole} profile={profile} />}
@@ -730,6 +814,7 @@ export default function AdminPanelView() {
 
       {/* Activity Log Tab */}
       {activeTab === 'activity' && <ActivityLogTab activities={activities} />}
+        </div>{/* end content */}
         </div>{/* end flex-1 min-w-0 */}
       </div>{/* end flex gap-4 */}
       {confirmDialog}

@@ -18,6 +18,8 @@ import {
   SecuritySection,
 } from '@/components/dashboard';
 import TelegramVerify from './TelegramVerify';
+import InstallAppButton from './InstallAppButton';
+import AdminPanelView from '@/components/views/AdminPanelView';
 
 function extractUniversityId(email: string): string {
   const match = email.match(/^(q\d+)/i);
@@ -61,7 +63,7 @@ export default function DashboardView() {
   const isStudent = effectiveRole === 'student';
   const isTeacherOrAbove = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
   const isTeacherEmail = /@iiuc\.ac\.bd$/i.test(email) && !/@ugrad\.iiuc\.ac\.bd$/i.test(email);
-  const hasAdminAccess = config.isAdminOrAbove(email, profile.role) || effectiveRole === 'manager';
+  const hasAdminAccess = config.isAdminOrAbove(email, profile.role) || effectiveRole === 'manager' || effectiveRole === 'teacher';
   const [ghUser, setGhUser] = useState<any>(null);
   const [ghStats, setGhStats] = useState<any>(null);
   const [personalActivity, setPersonalActivity] = useState<any[]>([]);
@@ -383,7 +385,7 @@ export default function DashboardView() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 text-[0.72rem] font-medium"><i className="fas fa-info-circle"></i> Read-only</span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-[0.72rem] font-medium"><i className="fas fa-download"></i> Downloads available</span>
+                      <InstallAppButton />
                     </div>
                   </div>
                 </div>
@@ -646,18 +648,7 @@ export default function DashboardView() {
         );
 
       case 'admin-panel':
-        return (
-          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
-            <h4 className="text-[0.95rem] font-semibold mb-3"><i className="fas fa-cog text-amber-400 mr-2"></i>Admin Panel</h4>
-            <p className="text-[0.8rem] text-dark-text2 mb-4">Manage users, courses, rooms, permissions, and system settings.</p>
-            <button
-              onClick={() => router.push('/admin')}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-400 text-[0.82rem] font-semibold cursor-pointer hover:from-amber-500/30 transition-all"
-            >
-              <i className="fas fa-arrow-right"></i> Open Admin Panel
-            </button>
-          </div>
-        );
+        return <AdminPanelView />;
 
       default:
         return null;

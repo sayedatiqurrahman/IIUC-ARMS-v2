@@ -49,15 +49,34 @@ export async function GET(req: NextRequest) {
     }
     if (filterDomain && filterDomain !== 'all') {
       if (filterDomain === 'student') {
+        // Students = @ugrad.iiuc.ac.bd email, never pending
         where.email = { endsWith: '@ugrad.iiuc.ac.bd' };
+        where.accountStatus = { notIn: ['pending', 'rejected'] };
       } else if (filterDomain === 'teacher') {
-        where.email = { endsWith: '@iiuc.ac.bd', not: { endsWith: '@ugrad.iiuc.ac.bd' } };
+        // Teachers = faculty email domain (@iiuc.ac.bd, NOT @ugrad student) OR role 'teacher'
+        // @ugrad.iiuc.ac.bd students never appear, regardless of role
+        where.AND = [...(where.AND || []), {
+          OR: [
+            { email: { endsWith: '@iiuc.ac.bd', not: { endsWith: '@ugrad.iiuc.ac.bd' } } },
+            { role: 'teacher', email: { not: { endsWith: '@ugrad.iiuc.ac.bd' } } },
+          ],
+        }];
+        where.accountStatus = { notIn: ['pending', 'rejected'] };
       } else if (filterDomain === 'external') {
         where.email = { not: { endsWith: '.iiuc.ac.bd' } };
         where.accountStatus = 'active';
       } else if (filterDomain === 'pending') {
         where.accountStatus = 'pending';
+        where.email = {
+          not: { endsWith: '.iiuc.ac.bd' },
+          notIn: config.ownerEmails.map(e => e.toLowerCase()),
+        };
       }
+    }
+    // Every non-pending view excludes pending/rejected accounts, so "All Users"
+    // only ever shows registered (non-pending) users.
+    if (filterDomain !== 'pending' && !filterAccountStatus && !where.accountStatus) {
+      where.accountStatus = { notIn: ['pending', 'rejected'] };
     }
     if (filterAccountStatus && filterAccountStatus !== 'all') {
       where.accountStatus = filterAccountStatus;
@@ -75,6 +94,25 @@ export async function GET(req: NextRequest) {
 
     let profiles: any[] = [];
     let totalCount = 0;
+    // Auto-heal: university / owner accounts are pre-approved and should never sit
+    // in the pending queue. If any are stuck pending, activate them before listing.
+    if (filterDomain === 'pending') {
+      try {
+        await prisma.profile.updateMany({
+          where: {
+            accountStatus: 'pending',
+            OR: [
+              { email: { endsWith: '@ugrad.iiuc.ac.bd' } },
+              { email: { endsWith: '@iiuc.ac.bd', not: { endsWith: '@ugrad.iiuc.ac.bd' } } },
+              { email: { in: config.ownerEmails.map(e => e.toLowerCase()) } },
+            ],
+          },
+          data: { accountStatus: 'active' },
+        });
+      } catch (e: any) {
+        console.error('[Admin Users] Auto-activate pending IIUC accounts failed:', e?.message);
+      }
+    }
     try {
       totalCount = await prisma.profile.count({ where });
       profiles = await prisma.profile.findMany({
@@ -209,14 +247,19 @@ export async function GET(req: NextRequest) {
     // Server-side domain filter for Firebase users
     if (filterDomain && filterDomain !== 'all') {
       if (filterDomain === 'student') {
-        result = result.filter(u => u.email?.endsWith('@ugrad.iiuc.ac.bd'));
+        result = result.filter(u => u.email?.endsWith('@ugrad.iiuc.ac.bd') && u.accountStatus !== 'pending' && u.accountStatus !== 'rejected');
       } else if (filterDomain === 'teacher') {
-        result = result.filter(u => u.email?.endsWith('@iiuc.ac.bd') && !u.email?.endsWith('@ugrad.iiuc.ac.bd'));
+        result = result.filter(u => u.accountStatus !== 'pending' && u.accountStatus !== 'rejected' && !u.email?.endsWith('@ugrad.iiuc.ac.bd') && (u.role === 'teacher' || u.email?.endsWith('@iiuc.ac.bd')));
       } else if (filterDomain === 'external') {
         result = result.filter(u => !u.email?.endsWith('.iiuc.ac.bd') && u.accountStatus === 'active');
       } else if (filterDomain === 'pending') {
-        result = result.filter(u => u.accountStatus === 'pending');
+        result = result.filter(u => u.accountStatus === 'pending' && !u.email?.endsWith('.iiuc.ac.bd') && !config.ownerEmails.includes(u.email?.toLowerCase()));
       }
+    }
+
+    // Every non-pending view excludes pending/rejected accounts
+    if (filterDomain !== 'pending' && !filterAccountStatus) {
+      result = result.filter(u => u.accountStatus !== 'pending' && u.accountStatus !== 'rejected');
     }
 
     // Server-side role filter for merged results (Firebase users have role from detectRole)
@@ -253,16 +296,38 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { targetEmail, action } = body;
-    const validActions = ['ban', 'unban', 'setRole', 'toggleCR', 'toggleACR', 'grantPermission', 'revokePermission', 'setCustomPermissions', 'approve', 'reject', 'delete'];
-    if (!targetEmail || !validActions.includes(action)) {
+    const validActions = ['ban', 'unban', 'setRole', 'toggleCR', 'toggleACR', 'grantPermission', 'revokePermission', 'setCustomPermissions', 'approve', 'reject', 'delete', 'sendToPending', 'approveAllPending'];
+    if (!validActions.includes(action)) {
+      return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+    }
+    if (action !== 'approveAllPending' && !targetEmail) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
 
-    if (targetEmail.toLowerCase() === email.toLowerCase() && (action === 'ban' || action === 'unban')) {
+    if (targetEmail && targetEmail.toLowerCase() === email.toLowerCase() && (action === 'ban' || action === 'unban')) {
       return NextResponse.json({ error: 'Cannot ban yourself' }, { status: 400 });
     }
 
     const { prisma } = await import('@/lib/prisma');
+
+    // ─── APPROVE ALL PENDING EXTERNAL ACCOUNTS ───
+    if (action === 'approveAllPending') {
+      if (effectiveRole !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can approve accounts' }, { status: 403 });
+      }
+      const result = await prisma.profile.updateMany({
+        where: {
+          accountStatus: 'pending',
+          email: { not: { endsWith: '.iiuc.ac.bd' } },
+        },
+        data: { accountStatus: 'active' },
+      });
+      return NextResponse.json({
+        success: true,
+        message: `Approved ${result.count} pending account${result.count === 1 ? '' : 's'}`,
+        approved: result.count,
+      });
+    }
 
     const callerProfile = await prisma.profile.findUnique({ where: { userId: email } });
 
@@ -409,7 +474,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Only admins can grant permissions' }, { status: 403 });
       }
       const { permission } = body;
-        const validPerms = ['addCourse', 'editCourse', 'deleteCourse', 'moveFile', 'copyFile', 'renameFile', 'deleteFile', 'uploadFile', 'manageFaculty', 'publishRoutine', 'manageUsers', 'manageSettings', 'editLinks'];
+        const validPerms = ['addCourse', 'editCourse', 'deleteCourse', 'moveFile', 'copyFile', 'renameFile', 'deleteFile', 'uploadFile', 'manageFaculty', 'manageFacultyDepts', 'publishRoutine', 'manageUsers', 'manageSettings', 'editLinks'];
       if (!permission || !validPerms.includes(permission)) {
         return NextResponse.json({ error: 'Invalid permission' }, { status: 400 });
       }
@@ -494,6 +559,22 @@ export async function POST(req: NextRequest) {
         create: { userId: targetEmail, email: targetEmail, accountStatus: 'rejected', isBanned: true },
       });
       return NextResponse.json({ success: true, message: `Account rejected for ${targetEmail}` });
+    }
+
+    // ─── SEND ACTIVE EXTERNAL USER BACK TO PENDING ───
+    if (action === 'sendToPending') {
+      if (effectiveRole !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can move accounts back to pending' }, { status: 403 });
+      }
+      if (/@iiuc\.ac\.bd$/i.test(targetEmail)) {
+        return NextResponse.json({ error: 'University accounts are pre-approved and cannot be moved to pending' }, { status: 400 });
+      }
+      await prisma.profile.upsert({
+        where: { userId: targetEmail },
+        update: { accountStatus: 'pending' },
+        create: { userId: targetEmail, email: targetEmail, accountStatus: 'pending' },
+      });
+      return NextResponse.json({ success: true, message: `Account ${targetEmail} moved back to pending approval` });
     }
 
     // ─── DELETE USER (Firebase + DB) ───

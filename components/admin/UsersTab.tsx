@@ -47,6 +47,9 @@ interface UsersTabProps {
   handleApprove: (email: string) => void;
   handleReject: (email: string) => void;
   handleDeleteUser: (email: string) => void;
+  handleSendToPending: (email: string) => void;
+  handleApproveAll: () => void;
+  approveAllLoading: boolean;
   loadUsers: (role?: string, search?: string, pageToken?: string, append?: boolean, domain?: string, page?: number) => void;
   setCreateUserError: (msg: string) => void;
   setCreateUserSuccess: (msg: string) => void;
@@ -91,11 +94,26 @@ export default function UsersTab({
   handleApprove,
   handleReject,
   handleDeleteUser,
+  handleSendToPending,
+  handleApproveAll,
+  approveAllLoading,
   loadUsers,
   setCreateUserError,
   setCreateUserSuccess,
 }: UsersTabProps) {
   const totalPages = Math.ceil(totalUsers / PER_PAGE);
+
+  // Safety net: never surface university / owner / non-pending accounts in the
+  // pending queue, regardless of what the API returns.
+  const isPendingTab = userSubTab === 'pending';
+  const displayedUsers = useMemo(() => {
+    if (!isPendingTab) return users;
+    return users.filter(u =>
+      u.accountStatus === 'pending' &&
+      !/@iiuc\.ac\.bd$/i.test(u.email) &&
+      !config.ownerEmails.includes(u.email.toLowerCase())
+    );
+  }, [isPendingTab, users]);
 
   const goToPage = (page: number) => {
     const domainFilter = userSubTab === 'student' ? 'student' : userSubTab === 'teacher' ? 'teacher' : userSubTab === 'external' ? 'external' : userSubTab === 'pending' ? 'pending' : undefined;
@@ -147,7 +165,7 @@ export default function UsersTab({
           >
             <i className={`fas ${sub.icon} ${userSubTab === sub.key ? 'text-white' : sub.color}`}></i>
             {sub.label}
-            {userSubTab === sub.key && <span className="ml-1 text-[0.65rem] opacity-80">({users.length})</span>}
+            {userSubTab === sub.key && <span className="ml-1 text-[0.65rem] opacity-80">({sub.key === 'pending' ? displayedUsers.length : users.length})</span>}
           </button>
         ))}
       </div>
@@ -176,10 +194,19 @@ export default function UsersTab({
           {userSubTab === 'teacher' && <><i className="fas fa-chalkboard-teacher text-green-400 mr-1"></i>Teachers</>}
           {userSubTab === 'student' && <><i className="fas fa-user-graduate text-blue-400 mr-1"></i>Students</>}
           {userSubTab === 'external' && <><i className="fas fa-globe text-purple-400 mr-1"></i>External Accounts</>}
-          {userSubTab === 'pending' && <><i className="fas fa-clock text-yellow-400 mr-1"></i>Pending Approval</>}
-          <span className="text-dark-text3 ml-1">({users.length})</span>
+            {userSubTab === 'pending' && <><i className="fas fa-clock text-yellow-400 mr-1"></i>Pending Approval</>}
+          <span className="text-dark-text3 ml-1">({displayedUsers.length})</span>
         </h3>
         <div className="flex gap-2 items-center">
+          {userSubTab === 'pending' && isAdmin && (
+            <button
+              onClick={handleApproveAll}
+              disabled={approveAllLoading || displayedUsers.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/15 text-green-400 text-[0.78rem] font-semibold hover:bg-green-500/25 transition-colors disabled:opacity-50"
+            >
+              {approveAllLoading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check-double"></i>} Approve All
+            </button>
+          )}
           {isAdmin && (
             <button onClick={() => setShowCreateUser(!showCreateUser)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-qsis/15 text-qsis text-[0.78rem] font-semibold hover:bg-qsis/25 transition-colors">
               <i className="fas fa-user-plus"></i> Create User
@@ -254,7 +281,7 @@ export default function UsersTab({
 
       {/* Users List */}
       <div className="flex flex-col gap-2">
-        {users.map(u => (
+        {displayedUsers.map(u => (
           <UserRow
             key={u.email}
             u={u}
@@ -263,6 +290,7 @@ export default function UsersTab({
             isManager={isManager}
             isSuperAdmin={isSuperAdmin}
             actionLoading={actionLoading}
+            isPendingTab={isPendingTab}
             handleToggleCR={handleToggleCR}
             handleToggleACR={handleToggleACR}
             handleSetRole={handleSetRole}
@@ -271,10 +299,11 @@ export default function UsersTab({
             handleApprove={handleApprove}
             handleReject={handleReject}
             handleDeleteUser={handleDeleteUser}
+            handleSendToPending={handleSendToPending}
           />
         ))}
       </div>
-      {users.length === 0 && !loading && (
+      {displayedUsers.length === 0 && !loading && (
         <div className="text-center py-10">
           <i className="fas fa-users text-3xl text-dark-text3 mb-3"></i>
           <p className="text-dark-text3 text-sm">No users found</p>

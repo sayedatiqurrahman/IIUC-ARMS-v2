@@ -16,4 +16,5 @@ export interface CustomFaculty {
 export interface FacultyDeptTabProps {
   effectiveRole: string;
   profile: any;
+  canManage: boolean;
 }

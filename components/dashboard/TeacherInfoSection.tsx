@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { showToast } from '@/lib/utils';
 import { config } from '@/lib/config';
 import { FACULTIES, TEACHER_TITLES } from '@/lib/departments';
+import { useAppStore } from '@/lib/store';
 import CustomSelect from '@/components/CustomSelect';
 import { useConfirm } from '@/components/ConfirmModal';
 
@@ -15,6 +16,8 @@ export default function TeacherInfoSection({ email, profile }: { email: string; 
 
   const [myEntry, setMyEntry] = useState<any>(null);
   const [myEntryChecked, setMyEntryChecked] = useState(false);
+  const [linkedMember, setLinkedMember] = useState<any>(null);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState({ department: myDept, name: profile.name || '', title: profile.title || '', shortForm: profile.shortForm || '', email: email, phone: '' });
   const [saving, setSaving] = useState(false);
@@ -26,22 +29,57 @@ export default function TeacherInfoSection({ email, profile }: { email: string; 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ department: '', name: '', title: '', shortForm: '', email: '', phone: '' });
 
-  // Check if teacher has entry
+  // Check if teacher has entry + if this account is linked to a faculty profile
   useEffect(() => {
     fetch('/api/faculty')
       .then(r => r.json())
       .then(data => {
         const entries = data.members || [];
         const mine = entries.find((m: any) => m.email?.toLowerCase() === email.toLowerCase());
+        const linked = profile.shortForm
+          ? entries.find((m: any) => m.shortForm?.toUpperCase() === String(profile.shortForm).toUpperCase()) || null
+          : null;
         setMyEntry(mine || null);
+        setLinkedMember(linked);
         setMyEntryChecked(true);
-        if (!mine) {
+        if (!mine && !linked) {
           setForm({ department: myDept, name: profile.name || '', title: profile.title || '', shortForm: profile.shortForm || '', email: email, phone: '' });
           setShowAddForm(true);
         }
       })
       .catch(() => setMyEntryChecked(true));
   }, [email]);
+
+  const handleClaim = async (m: any) => {
+    if (!await confirm({ message: `Link your account to "${m.name}"? Your account will then be recognized as this teacher across the site.`, title: 'Connect Teacher Profile' })) return;
+    setClaimingId(m.id);
+    try {
+      const res = await fetch('/api/profile/claim-faculty', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ facultyId: m.id }) });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Account linked to your faculty profile!', 'success');
+        setLinkedMember(data.member || m);
+        setMyEntry(mine => mine?.id === m.id ? mine : mine);
+        useAppStore.setState(s => ({ profile: { ...s.profile, shortForm: data.shortForm || m.shortForm || '', department: m.department, name: s.profile.name || m.name, title: s.profile.title || m.title || '' } }));
+      } else showToast(data.error || 'Failed to link', 'error');
+    } catch { showToast('Failed to link', 'error'); }
+    finally { setClaimingId(null); }
+  };
+
+  const handleUnlink = async () => {
+    if (!await confirm({ message: 'Unlink your account from this faculty profile?', danger: true, title: 'Disconnect Teacher Profile' })) return;
+    setClaimingId('unlink');
+    try {
+      const res = await fetch('/api/profile/claim-faculty', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ unlink: true }) });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Account unlinked', 'success');
+        setLinkedMember(null);
+        useAppStore.setState(s => ({ profile: { ...s.profile, shortForm: '' } }));
+      } else showToast(data.error || 'Failed to unlink', 'error');
+    } catch { showToast('Failed to unlink', 'error'); }
+    finally { setClaimingId(null); }
+  };
 
   const handleAdd = async () => {
     if (!form.department || !form.name) { showToast('Department and name required', 'error'); return; }
@@ -189,14 +227,51 @@ export default function TeacherInfoSection({ email, profile }: { email: string; 
               <span className="text-[0.78rem] font-bold text-qsis">{myEntry.shortForm || myEntry.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[0.9rem] font-bold text-dark-text">{myEntry.name}</span>
-                <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[0.6rem] font-semibold">In Directory</span>
+                {linkedMember?.id === myEntry.id ? (
+                  <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[0.6rem] font-semibold"><i className="fas fa-link mr-1"></i>Linked to your account</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[0.6rem] font-semibold">In Directory</span>
+                )}
               </div>
               {myEntry.title && <p className="text-[0.75rem] text-qsis font-medium">{myEntry.title}</p>}
               <p className="text-[0.72rem] text-dark-text3">{getDeptLabel(myEntry.department)}{myEntry.email ? ` · ${myEntry.email}` : ''}{myEntry.phone ? ` · ${myEntry.phone}` : ''}</p>
             </div>
+            {linkedMember?.id !== myEntry.id ? (
+              <button onClick={() => handleClaim(myEntry)} disabled={claimingId === myEntry.id} className="px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50 flex-shrink-0">
+                {claimingId === myEntry.id ? <><i className="fas fa-spinner fa-spin mr-1"></i>Linking...</> : <><i className="fas fa-link mr-1"></i>Connect to my account</>}
+              </button>
+            ) : (
+              <button onClick={handleUnlink} disabled={claimingId === 'unlink'} className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text2 text-[0.72rem] font-semibold cursor-pointer hover:text-red-400 hover:border-red-400/50 transition-all disabled:opacity-50 flex-shrink-0">
+                {claimingId === 'unlink' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-unlink mr-1"></i>Unlink</>}
+              </button>
+            )}
           </div>
+          <p className="text-[0.7rem] text-dark-text3 mt-2"><i className="fas fa-info-circle text-qsis mr-1"></i>Connecting your account lets you receive your personal routine &amp; exam duty notifications on Telegram and auto-detects you on the Teacher Routine page.</p>
+        </div>
+      )}
+
+      {/* ─── CONNECTED: Linked via short form (no email match) ─── */}
+      {!myEntry && linkedMember && (
+        <div className="bg-gradient-to-br from-qsis/5 to-accent/5 border border-qsis/20 rounded-xl p-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-qsis/20 to-accent/20 border border-dark-border flex items-center justify-center flex-shrink-0">
+              <span className="text-[0.78rem] font-bold text-qsis">{linkedMember.shortForm || linkedMember.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[0.9rem] font-bold text-dark-text">{linkedMember.name}</span>
+                <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[0.6rem] font-semibold"><i className="fas fa-link mr-1"></i>Linked to your account</span>
+              </div>
+              {linkedMember.title && <p className="text-[0.75rem] text-qsis font-medium">{linkedMember.title}</p>}
+              <p className="text-[0.72rem] text-dark-text3">{getDeptLabel(linkedMember.department)}</p>
+            </div>
+            <button onClick={handleUnlink} disabled={claimingId === 'unlink'} className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text2 text-[0.72rem] font-semibold cursor-pointer hover:text-red-400 hover:border-red-400/50 transition-all disabled:opacity-50 flex-shrink-0">
+              {claimingId === 'unlink' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-unlink mr-1"></i>Unlink</>}
+            </button>
+          </div>
+          <p className="text-[0.7rem] text-dark-text3 mt-2"><i className="fas fa-info-circle text-qsis mr-1"></i>You are linked by short form ({linkedMember.shortForm || '—'}). You can also add your own entry below so students find you in the directory.</p>
         </div>
       )}
 
@@ -265,6 +340,15 @@ export default function TeacherInfoSection({ email, profile }: { email: string; 
                             <i className="fas fa-trash"></i>
                           </button>
                         </div>
+                      )}
+                      {linkedMember?.id === m.id ? (
+                        <button onClick={handleUnlink} disabled={claimingId === 'unlink'} className="px-2.5 py-1 rounded-lg bg-green-500/15 text-green-400 hover:bg-green-500/25 text-[0.65rem] font-semibold cursor-pointer transition-all border-none flex-shrink-0" title="Unlink from your account">
+                          {claimingId === 'unlink' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-link mr-1"></i>Linked</>}
+                        </button>
+                      ) : (
+                        <button onClick={() => handleClaim(m)} disabled={claimingId === m.id} className="px-2.5 py-1 rounded-lg border border-qsis/30 text-qsis hover:bg-qsis/10 text-[0.65rem] font-semibold cursor-pointer transition-all bg-transparent flex-shrink-0" title="Link this teacher to your account">
+                          {claimingId === m.id ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-link mr-1"></i>Connect</>}
+                        </button>
                       )}
                     </>
                   )}

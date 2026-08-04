@@ -8,7 +8,7 @@ import CustomSelect from '@/components/CustomSelect';
 import { ICON_OPTIONS } from './constants';
 import type { CustomFaculty, CustomDepartment, FacultyDeptTabProps } from './types';
 
-export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTabProps) {
+export default function FacultyDeptTab({ effectiveRole, profile, canManage }: FacultyDeptTabProps) {
   const { confirm, confirmDialog } = useConfirm();
   const [customFaculties, setCustomFaculties] = useState<CustomFaculty[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,7 +186,7 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
         <h3 className="text-sm font-semibold text-dark-text">
           <i className="fas fa-building text-teal-400 mr-2"></i>Faculties & Departments
         </h3>
-        {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+        {(canManage) && (
           <button
             onClick={() => setShowNewFacultyForm(!showNewFacultyForm)}
             className="px-3 py-1.5 bg-qsis text-white rounded-lg text-[0.75rem] font-semibold hover:bg-qsis/90 cursor-pointer border-none"
@@ -291,7 +291,7 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
-                  {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                  {(canManage) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowNewDeptForm(faculty.id); setExpandedFaculties(prev => new Set(prev).add(faculty.id)); setNewDept({ id: '', name: '', shortName: '', icon: 'fa-building' }); }}
                       className="p-1.5 text-qsis hover:bg-qsis/10 rounded cursor-pointer border-none bg-transparent"
@@ -314,7 +314,7 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
                           <span className="text-[0.75rem] text-dark-text font-medium">{dept.name}</span>
                           <span className="text-[0.6rem] text-dark-text3 ml-1.5 font-mono">({dept.shortName})</span>
                         </div>
-                        {!isBuiltinDept(faculty.id, dept.id) && (effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                        {!isBuiltinDept(faculty.id, dept.id) && (canManage) && (
                           <button onClick={() => handleDeleteDept(faculty.id, dept.id, dept.name)} className="p-1 text-red-400 hover:bg-red-500/10 rounded cursor-pointer border-none bg-transparent" title="Delete department">
                             <i className="fas fa-times text-[0.6rem]"></i>
                           </button>
@@ -322,7 +322,7 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
                       </div>
                     ))}
                   </div>
-                  {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                  {(canManage) && (
                     <>
                       {showNewDeptForm === faculty.id ? (
                         <div className="bg-dark-bg2 border border-dark-border rounded-lg p-3">
@@ -399,7 +399,7 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
-                    {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                    {(canManage) && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDeleteFaculty(faculty.id, faculty.name); }}
                         className="p-1.5 text-red-400 hover:bg-red-500/10 rounded cursor-pointer border-none bg-transparent"
@@ -408,7 +408,7 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
                         <i className="fas fa-trash text-xs"></i>
                       </button>
                     )}
-                    {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                    {(canManage) && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setShowNewDeptForm(faculty.id); setExpandedFaculties(prev => new Set(prev).add(faculty.id)); setNewDept({ id: '', name: '', shortName: '', icon: 'fa-building' }); }}
                         className="p-1.5 text-qsis hover:bg-qsis/10 rounded cursor-pointer border-none bg-transparent"
@@ -432,7 +432,7 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
                             <span className="text-[0.75rem] text-dark-text font-medium">{dept.name}</span>
                             <span className="text-[0.6rem] text-dark-text3 ml-1.5 font-mono">({dept.shortName})</span>
                           </div>
-                          {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                          {(canManage) && (
                             <button
                               onClick={() => handleDeleteDept(faculty.id, dept.id, dept.name)}
                               className="p-1 text-red-400 hover:bg-red-500/10 rounded cursor-pointer border-none bg-transparent"
@@ -446,7 +446,7 @@ export default function FacultyDeptTab({ effectiveRole, profile }: FacultyDeptTa
                     </div>
 
                     {/* Add Department */}
-                    {(effectiveRole === 'admin' || effectiveRole === 'manager') && (
+                    {(canManage) && (
                       <>
                         {showNewDeptForm === faculty.id ? (
                           <div className="bg-dark-bg2 border border-dark-border rounded-lg p-3">

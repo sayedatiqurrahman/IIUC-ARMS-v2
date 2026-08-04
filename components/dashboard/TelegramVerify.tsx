@@ -199,7 +199,7 @@ export default function TelegramVerify({ telegramChatId, telegramVerified, teleg
         <p className="text-[0.7rem] font-semibold text-dark-text mb-1.5"><i className="fas fa-link mr-1 text-qsis"></i>How to connect:</p>
         <ol className="text-[0.65rem] text-dark-text2 space-y-1.5 list-decimal list-inside">
           <li>Open <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener" className="text-qsis underline font-semibold">@iiuc_arms_bot</a></li>
-          <li>Send <code className="bg-dark-bg2 px-1 rounded text-qsis">/connect {email}</code></li>
+          <li>Send <code className="bg-dark-bg2 px-1 rounded text-qsis">/connect {email}</code>, or tap <b>&quot;Connect by Phone Number&quot;</b> if you have no Telegram username</li>
           <li>Come back here and click &quot;Send OTP&quot; below</li>
           <li>Enter the 6-digit OTP you receive in Telegram</li>
         </ol>
