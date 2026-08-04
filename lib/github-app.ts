@@ -67,6 +67,33 @@ export async function getInstallationAccessToken(installationId: number): Promis
   return data.token;
 }
 
+/**
+ * Find the installation that actually has access to a given repo.
+ * Unlike listing all app installations and picking [0], this resolves the
+ * exact installation for the target repo — robust when the app is installed
+ * on more than one account/org.
+ */
+export async function getRepoInstallation(owner: string, repo: string): Promise<number | null> {
+  const jwt = generateJWT();
+  const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/installation`, {
+    headers: { Authorization: `Bearer ${jwt}`, Accept: 'application/vnd.github.v3+json' },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.id || null;
+}
+
+/** Fresh installation access token scoped to the repo the app is installed on (or null). */
+export async function getRepoBotToken(owner: string, repo: string): Promise<string | null> {
+  try {
+    const installationId = await getRepoInstallation(owner, repo);
+    if (!installationId) return null;
+    return await getInstallationAccessToken(installationId);
+  } catch {
+    return null;
+  }
+}
+
 export async function getAppInfo() {
   const jwt = generateJWT();
   const res = await fetch(`${GITHUB_API}/app`, {

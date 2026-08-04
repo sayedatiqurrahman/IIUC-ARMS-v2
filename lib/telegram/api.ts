@@ -1,5 +1,5 @@
 import { config } from '@/lib/config';
-import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
+import { getRepoBotToken } from '@/lib/github-app';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 export const API = `https://api.telegram.org/bot${TOKEN}`;
@@ -21,16 +21,13 @@ export async function resolveGithubToken(): Promise<string> {
     return cachedToken;
   }
 
-  // Try GitHub App installation token
+  // Try GitHub App installation token for the files repo
   try {
-    const installations = await getAppInstallations();
-    if (Array.isArray(installations) && installations.length > 0) {
-      const token = await getInstallationAccessToken(installations[0].id);
-      if (token) {
-        cachedToken = token;
-        cachedTokenTs = Date.now();
-        return token;
-      }
+    const token = await getRepoBotToken(config.owner, config.repo);
+    if (token) {
+      cachedToken = token;
+      cachedTokenTs = Date.now();
+      return token;
     }
   } catch {}
 

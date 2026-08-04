@@ -73,10 +73,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const loadOnboarding = useAppStore(s => s.loadOnboarding);
   const setStoreOnboarding = useAppStore(s => s.setOnboardingData);
 
-  // ─── GitHub PAT prompt (shown before opening upload panel when not connected) ───
+  // ─── GitHub connect prompt (shown before opening upload panel when not connected) ───
   const githubToken = useAppStore(s => s.githubToken);
   const patToken = githubToken || profile.githubToken || '';
-  const hasPat = patToken.startsWith('ghp_') || patToken.startsWith('github_pat_');
+  // "Connected" = has a PAT (credit path) OR installed the GitHub App (bot-upload path).
+  // Either way they can upload — no need to nag.
+  const isGithubConnected = patToken.startsWith('ghp_') || patToken.startsWith('github_pat_') || !!profile.githubInstallationId;
   const [patPromptOpen, setPatPromptOpen] = useState(false);
   const [patPromptWarn, setPatPromptWarn] = useState(false);
   const [patInputToken, setPatInputToken] = useState('');
@@ -91,7 +93,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   });
 
   const handleOpenUpload = useCallback(() => {
-    if (!hasPat) {
+    if (!isGithubConnected) {
       if (patSkipForever) { setUploadOpen(true); return; }
       const nextCount = patAskCount + 1;
       setPatAskCount(nextCount);
@@ -101,7 +103,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
     setUploadOpen(true);
-  }, [hasPat, patSkipForever, patAskCount, setUploadOpen]);
+  }, [isGithubConnected, patSkipForever, patAskCount, setUploadOpen]);
 
   const handlePatUploadAnyway = () => {
     setPatPromptOpen(false);

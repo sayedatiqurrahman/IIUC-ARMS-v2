@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
-import { getInstallationAccessToken, getAppInstallations } from '@/lib/github-app';
+import { getRepoBotToken } from '@/lib/github-app';
 import { decrypt, isEncrypted } from '@/lib/crypto';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission } from '@/lib/permissions';
@@ -28,95 +28,13 @@ async function ghPut(url: string, token: string, body: any) {
   return fetch(url, { method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body) });
 }
 
-async function getAppBotToken(): Promise<string | null> {
-  try {
-    const installations = await getAppInstallations();
-    if (!Array.isArray(installations) || installations.length === 0) return null;
-    return await getInstallationAccessToken(installations[0].id);
-  } catch { return null; }
-}
-
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.upload);
   if (!rl.success) return rl.response!;
 
-  // Skip Turnstile for uploads — already authenticated via session/token.
-  // Uploads resolve tokens server-side (PAT → installation → bot token → GITHUB_TOKEN).
-
   try {
-    let token = '';
-    let installationId: number | null = null;
-    let userEmail = '';
-
     const body = await req.json();
     const { files, message, githubToken: bodyToken } = body;
-
-    // Load from DB — prioritize PAT over installation token
-    let hasPAT = false;
-    try {
-      const email = await getUserEmail(req);
-      userEmail = email || '';
-      if (email) {
-        const { prisma } = await import('@/lib/prisma');
-        const profile = await prisma.profile.findUnique({ where: { userId: email } });
-        if (profile?.isBanned) {
-          return NextResponse.json({ error: 'Account banned — upload not allowed' }, { status: 403 });
-        }
-        if (profile?.githubToken) {
-          const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
-          if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) {
-            token = decrypted;
-            hasPAT = true;
-          } else if (profile?.githubInstallationId) {
-            installationId = Number(profile.githubInstallationId);
-          }
-        }
-        if (!hasPAT && profile?.githubInstallationId) {
-          installationId = Number(profile.githubInstallationId);
-        }
-      }
-    } catch {}
-
-    if (!token && bodyToken) {
-      token = bodyToken;
-      if (bodyToken.startsWith('ghp_') || bodyToken.startsWith('github_pat_')) hasPAT = true;
-    }
-
-    if (!token) {
-      try {
-        const session = await getServerSession(authOptions);
-        if (session?.accessToken) token = session.accessToken;
-      } catch {}
-    }
-
-    // Only refresh installation token if user has NO PAT
-    if (!token && installationId) {
-      try {
-        token = await getInstallationAccessToken(installationId);
-      } catch {
-        // Installation token failed — will try bot token below
-      }
-    }
-
-    // If still no token, check if user is allowed to upload without GitHub (bot token)
-    if (!token && userEmail) {
-      const role = config.getEffectiveRole(userEmail);
-      const isCR = false; // simplified — CR check happens elsewhere
-      if (await hasPermission('uploadFile', role, isCR, userEmail)) {
-        const botToken = await getAppBotToken();
-        if (botToken) {
-          token = botToken;
-          // Bot upload — commit as bot, not as user
-        }
-      }
-    }
-
-    if (!token) {
-      return NextResponse.json(
-        { error: 'GitHub not connected. Go to Dashboard → Connect with GitHub to set up, or ask admin for upload access.', code: 'AUTH_REQUIRED' },
-        { status: 401 }
-      );
-    }
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: 'No files provided' }, { status: 400 });
@@ -126,30 +44,92 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Maximum ${config.maxFilesPerUpload} files per upload` }, { status: 400 });
     }
 
-    // Determine owner status — check githubLogin OR owner email
+    // ── Resolve authenticated user + stored GitHub identity ─────────────
+    let userEmail = '';
+    let storedPat = '';                 // decrypted PAT stored in DB (credit path)
+    let installationId: number | null = null; // app installation the user connected to
     let isOwner = false;
+    let isBanned = false;
+    let canUpload = false;
+
     try {
       const email = await getUserEmail(req);
+      userEmail = email || '';
       if (email) {
-        isOwner = config.ownerEmails.includes(email);
-        if (!isOwner) {
-          const { prisma } = await import('@/lib/prisma');
-          const profile = await prisma.profile.findUnique({ where: { userId: email } });
-          isOwner = profile?.githubLogin === config.owner;
+        const { prisma } = await import('@/lib/prisma');
+        const profile = await prisma.profile.findUnique({ where: { userId: email } });
+        isBanned = !!profile?.isBanned;
+        if (profile?.githubToken) {
+          const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
+          // Only PATs are usable for PR-based credit; installation tokens (ghs_) expire in ~1h
+          // so they are never trusted here — we mint a fresh one via the GitHub App instead.
+          if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) storedPat = decrypted;
         }
+        if (profile?.githubInstallationId) {
+          installationId = Number(profile.githubInstallationId);
+        }
+        isOwner = config.ownerEmails.includes(email) || profile?.githubLogin === config.owner;
       }
     } catch {}
 
-    // OWNER: Only use bot token if user has no PAT (so credits go to user)
-    if (isOwner && !hasPAT && process.env.GITHUB_TOKEN) {
-      token = process.env.GITHUB_TOKEN;
+    if (isBanned) {
+      return NextResponse.json({ error: 'Account banned — upload not allowed' }, { status: 403 });
     }
 
-    // Detect if using app bot token (ghs_ prefix from installation)
-    const isBotUpload = token.startsWith('ghs_');
+    if (userEmail) {
+      canUpload = await hasPermission('uploadFile', config.getEffectiveRole(userEmail), false, userEmail);
+    }
 
-    // ── OWNER or BOT: Direct commit to main (fast, no branch/PR) ──
-    if (isOwner || isBotUpload) {
+    // ── Resolve a write-capable token (server-authoritative) ─────────────
+    // Priority: stored PAT → PAT pasted in the modal → NextAuth session token
+    //           → GitHub App bot token for THIS repo → server GITHUB_TOKEN.
+    // The App bot token lets users upload with NO GitHub connection at all,
+    // committing directly to main (fast). Stored ghs_ tokens are ignored.
+    let token = '';
+    let tokenKind: 'pat' | 'session' | 'bot' | 'env' = 'pat';
+
+    if (storedPat) {
+      token = storedPat;
+    } else if (bodyToken && (bodyToken.startsWith('ghp_') || bodyToken.startsWith('github_pat_'))) {
+      token = bodyToken;
+    } else {
+      try {
+        const session = await getServerSession(authOptions);
+        if (session?.accessToken) {
+          token = session.accessToken;
+          tokenKind = 'session';
+        }
+      } catch {}
+    }
+
+    // No user token → fall back to the GitHub App bot (works without ANY GitHub connection).
+    // Allowed for users with upload permission, or anyone already connected via the app.
+    if (!token && (canUpload || installationId)) {
+      const botToken = await getRepoBotToken(config.owner, config.repo);
+      if (botToken) {
+        token = botToken;
+        tokenKind = 'bot';
+      }
+    }
+    if (!token && (canUpload || installationId) && process.env.GITHUB_TOKEN) {
+      token = process.env.GITHUB_TOKEN;
+      tokenKind = 'env';
+    }
+
+    if (!token) {
+      return NextResponse.json(
+        { error: 'GitHub not connected. Go to Dashboard → Connect with GitHub to set up, or ask admin for upload access.', code: 'AUTH_REQUIRED' },
+        { status: 401 }
+      );
+    }
+
+    // Bot/installation/env tokens can commit straight to main (fast).
+    // Owner PATs can also commit directly. Everyone else uses a fork + PR for credit.
+    const isBotToken = token.startsWith('ghs_') || tokenKind === 'bot' || tokenKind === 'env';
+    const directCommit = isOwner || isBotToken;
+
+    // ── OWNER or BOT token: Direct commit to main (fast, no branch/PR) ──
+    if (directCommit) {
       const repoRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}`, token);
       if (repoRes.status === 401 || repoRes.status === 403) {
         return NextResponse.json(
@@ -191,51 +171,37 @@ export async function POST(req: NextRequest) {
         return filePath;
       }));
 
-    // Log upload activity
-    try {
-      const email = await getUserEmail(req);
-      if (email) {
-        const { prisma } = await import('@/lib/prisma');
-        const profile = await prisma.profile.findUnique({ where: { userId: email } });
-        await prisma.activityLog.create({
-          data: {
-            action: 'file_upload',
-            userId: email,
-            userName: profile?.name || email.split('@')[0],
-            details: JSON.stringify({
-              files: files.map((f: any) => f.path),
-              count: files.length,
-              isOwner: isOwner,
-            }),
-          },
-        });
-      }
-    } catch {}
+      // Log upload activity
+      try {
+        const email = await getUserEmail(req);
+        if (email) {
+          const { prisma } = await import('@/lib/prisma');
+          const profile = await prisma.profile.findUnique({ where: { userId: email } });
+          await prisma.activityLog.create({
+            data: {
+              action: 'file_upload',
+              userId: email,
+              userName: profile?.name || email.split('@')[0],
+              details: JSON.stringify({
+                files: files.map((f: any) => f.path),
+                count: files.length,
+                isOwner: isOwner,
+              }),
+            },
+          });
+        }
+      } catch {}
 
-    return NextResponse.json({
-      success: true,
-      pr: { url: `https://github.com/${config.owner}/${config.repo}/commit/main`, number: 0 },
-      isOwner: true,
-      uploadedFiles: results,
-    });
+      return NextResponse.json({
+        success: true,
+        pr: { url: `https://github.com/${config.owner}/${config.repo}/commit/main`, number: 0 },
+        isOwner: true,
+        uploadedFiles: results,
+      });
     }
 
-    // ── CONTRIBUTOR: Requires a PAT (installation tokens can't fork) ──
-    if (token.startsWith('ghs_')) {
-      // Try bot token as fallback for non-owner contributors
-      const botToken = await getAppBotToken();
-      if (botToken) {
-        token = botToken;
-        // Bot upload — commit as bot, not as user
-      } else {
-        return NextResponse.json({
-          error: 'Contributors need a Personal Access Token to upload. Go to Dashboard → GitHub Connection → paste a PAT.',
-          code: 'NEEDS_PAT',
-        }, { status: 403 });
-      }
-    }
-
-    // Validate PAT by calling /user
+    // ── CONTRIBUTOR with a user token: fork + PR (gives contribution credit) ──
+    // Validate token via /user
     const userRes = await ghFetch(`${GITHUB_API}/user`, token);
     if (userRes.status === 401) {
       return NextResponse.json(
@@ -319,7 +285,8 @@ export async function POST(req: NextRequest) {
       throw new Error(errBody.message || `Failed to create branch`);
     }
 
-    for (const file of files) {
+    // Upload all files in parallel for speed
+    await Promise.all(files.map(async (file: any) => {
       const filePath = `${config.uploadPath}/${file.path}`;
       const putBody: any = {
         message: `Add ${file.path}`,
@@ -334,7 +301,7 @@ export async function POST(req: NextRequest) {
         const err = await putRes.json().catch(() => ({}));
         throw new Error(err.message || `Failed to upload ${file.path}`);
       }
-    }
+    }));
 
     const prRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/pulls`, token, {
       method: 'POST',
@@ -353,7 +320,7 @@ export async function POST(req: NextRequest) {
           `*Submitted via IIUC-ARMS v2*`,
         ].join('\n'),
         head: `${githubUser.login}:${branch}`,
-        base: await defaultBranch,
+        base: defaultBranch,
       }),
     });
 

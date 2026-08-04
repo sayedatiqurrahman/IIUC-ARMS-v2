@@ -48,3 +48,4 @@ public/webviewer/
 .windsurf/
 skills-lock.json
 scripts/.cleanup-token
+.env*

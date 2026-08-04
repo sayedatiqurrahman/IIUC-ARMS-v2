@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { hasPermission } from '@/lib/permissions';
-import { getInstallationAccessToken, getAppInstallations } from '@/lib/github-app';
+import { getRepoBotToken, getInstallationAccessToken } from '@/lib/github-app';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
@@ -23,11 +23,7 @@ function ghHeaders(token: string) {
 }
 
 async function getAppBotToken(): Promise<string | null> {
-  try {
-    const installations = await getAppInstallations();
-    if (!Array.isArray(installations) || installations.length === 0) return null;
-    return await getInstallationAccessToken(installations[0].id);
-  } catch { return null; }
+  return getRepoBotToken(config.owner, config.repo);
 }
 
 async function resolveToken(req: NextRequest): Promise<{ token: string; isOwner: boolean }> {
