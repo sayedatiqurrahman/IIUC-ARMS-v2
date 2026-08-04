@@ -1,4 +1,5 @@
 export { default as BatchSelector } from './BatchSelector';
+export { default as SessionSelector } from './SessionSelector';
 export { default as ProfileCard } from './ProfileCard';
 export { default as SocialLinks } from './SocialLinks';
 export { default as TeacherInfoSection } from './TeacherInfoSection';

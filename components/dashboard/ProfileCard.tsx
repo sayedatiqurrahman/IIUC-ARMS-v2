@@ -6,6 +6,8 @@ import { FACULTIES } from '@/lib/departments';
 import { config } from '@/lib/config';
 import CustomSelect from '@/components/CustomSelect';
 import BatchSelector from './BatchSelector';
+import SessionSelector from './SessionSelector';
+import TeacherInfoSection from './TeacherInfoSection';
 import SocialLinks from './SocialLinks';
 
 function extractUniversityId(email: string): string {
@@ -22,6 +24,8 @@ interface ProfileCardProps {
   ghUser: any;
   isStudent: boolean;
   isTeacherOrAbove: boolean;
+  isTeacherUser: boolean;
+  isAdmin: boolean;
   editingProfile: boolean;
   editingSocials: boolean;
   profileForm: any;
@@ -37,17 +41,53 @@ interface ProfileCardProps {
 
 export default function ProfileCard({
   profile, displayImage, displayName, displayEmail,
-  hasGitHub, ghUser, isStudent, isTeacherOrAbove,
+  hasGitHub, ghUser, isStudent, isTeacherOrAbove, isTeacherUser, isAdmin,
   editingProfile, editingSocials,
   profileForm, setProfileForm, setEditingProfile, setEditingSocials,
   updateProfile, socialLinks,
   uploadingAvatar, avatarInputRef, handleAvatarUpload,
 }: ProfileCardProps) {
   const { data: session } = useSession();
-  const isTeacherUser = isTeacherOrAbove && profile.role !== 'admin' && profile.role !== 'manager';
+  const email = profile.email || (session as any)?.user?.email || '';
+  // Students = @ugrad.iiuc.ac.bd, teachers = @iiuc.ac.bd (or role). Admins see both.
+  const showStudentSection = isStudent || isAdmin;
+  const showTeacherSection = isTeacherUser || isAdmin;
+  // University email is auto-derived from the login email.
+  const universityEmail = /@(?:ugrad\.)?iiuc\.ac\.bd$/i.test(email) ? email : '';
   // Company / organization is student- and external-user-only; admins, managers
   // and teachers show their department instead.
   const showCompany = isStudent || !isTeacherOrAbove;
+
+  const startEdit = () => {
+    const autoId = profile.universityId || extractUniversityId(email);
+    setProfileForm({
+      universityId: autoId,
+      name: profile.name || '',
+      title: profile.title || '',
+      shortForm: profile.shortForm || '',
+      whatsapp: profile.whatsapp,
+      telegramId: profile.telegramId || '',
+      semester: profile.semester,
+      section: profile.section || '',
+      department: profile.department || '',
+      batchId: (profile as any).batchId || '',
+      session: (profile as any).session || '',
+      facebook: profile.facebook,
+      twitter: profile.twitter,
+      linkedin: profile.linkedin,
+      website: profile.website,
+      company: profile.company,
+      companyUrl: profile.companyUrl,
+      publicEmail: profile.publicEmail,
+      hideWhatsapp: profile.hideWhatsapp,
+      hideUniversityId: profile.hideUniversityId,
+      hideSemester: profile.hideSemester,
+      hideEmail: profile.hideEmail,
+      hideCompany: (profile as any).hideCompany || false,
+      showInContributors: (profile as any).showInContributors !== false,
+    });
+    setEditingProfile(true);
+  };
 
   return (
     <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
@@ -72,7 +112,7 @@ export default function ProfileCard({
               )}
             </div>
             <p className="text-[0.82rem] text-dark-text2">{displayEmail}</p>
-            {!isTeacherUser && profile.company && (
+            {!isTeacherUser && !isAdmin && profile.company && (
               <p className="text-[0.72rem] text-dark-text2 mt-0.5">
                 <i className="fas fa-building mr-1"></i>
                 {profile.companyUrl ? (
@@ -93,36 +133,7 @@ export default function ProfileCard({
           </div>
         </div>
         {!editingProfile && (
-          <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={() => {
-            const email = profile.email || (session as any)?.user?.email || '';
-            const autoId = profile.universityId || extractUniversityId(email);
-            setProfileForm({
-              universityId: autoId,
-              name: profile.name || '',
-              title: profile.title || '',
-              shortForm: profile.shortForm || '',
-              whatsapp: profile.whatsapp,
-              telegramId: profile.telegramId || '',
-              semester: profile.semester,
-              section: profile.section || '',
-              department: profile.department || '',
-              batchId: (profile as any).batchId || '',
-              facebook: profile.facebook,
-              twitter: profile.twitter,
-              linkedin: profile.linkedin,
-              website: profile.website,
-              company: profile.company,
-              companyUrl: profile.companyUrl,
-              publicEmail: profile.publicEmail,
-              hideWhatsapp: profile.hideWhatsapp,
-              hideUniversityId: profile.hideUniversityId,
-              hideSemester: profile.hideSemester,
-              hideEmail: profile.hideEmail,
-              hideCompany: (profile as any).hideCompany || false,
-              showInContributors: (profile as any).showInContributors !== false,
-            });
-            setEditingProfile(true);
-          }}>
+          <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={startEdit}>
             <i className="fas fa-pen mr-1"></i> Edit Profile
           </button>
         )}
@@ -151,10 +162,34 @@ export default function ProfileCard({
       {editingProfile ? (
         <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4">
           <h5 className="text-[0.85rem] font-semibold mb-3"><i className="fas fa-user-edit text-qsis mr-2"></i>Edit Profile</h5>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-            {/* Academic Info */}
-            {isStudent ? (
-              <>
+
+          {/* ─── BASIC INFO ─── */}
+          <p className="text-[0.72rem] font-bold text-qsis uppercase tracking-wider mb-2"><i className="fas fa-id-card mr-1"></i>Basic Info</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
+              <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Sayed Atiqur Rahman" value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-whatsapp mr-1"></i>WhatsApp</label>
+              <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-envelope mr-1"></i>Public Email <span className="text-dark-text3">(shown on profile)</span></label>
+              <input type="email" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. yourmail@gmail.com" value={profileForm.publicEmail} onChange={e => setProfileForm(p => ({ ...p, publicEmail: e.target.value }))} />
+              <p className="text-[0.65rem] text-dark-text3 mt-0.5">Leave empty to use login email</p>
+            </div>
+          </div>
+
+          {/* ─── ACADEMIC / VERSITY INFO ─── */}
+          {(showStudentSection || showTeacherSection) && (
+            <p className="text-[0.72rem] font-bold text-qsis uppercase tracking-wider mb-2"><i className="fas fa-university mr-1"></i>Versity Info</p>
+          )}
+
+          {showStudentSection && (
+            <div className="border border-dark-border rounded-lg p-3 mb-3">
+              <p className="text-[0.7rem] font-semibold text-dark-text2 mb-2"><i className="fas fa-graduation-cap mr-1"></i>Student Info</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-building mr-1"></i>Department</label>
                   <CustomSelect
@@ -176,6 +211,16 @@ export default function ProfileCard({
                     ]}
                   />
                 </div>
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">University ID</label>
+                  <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Q233099 (auto from email)" value={profileForm.universityId} onChange={e => setProfileForm(p => ({ ...p, universityId: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-envelope-open mr-1"></i>University Email</label>
+                  <input type="email" readOnly className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg/50 text-dark-text2 text-[0.82rem] outline-none cursor-not-allowed" placeholder={universityEmail || 'Auto from login email'} value={universityEmail} />
+                  <p className="text-[0.65rem] text-dark-text3 mt-0.5">Auto-filled from your login email</p>
+                </div>
+                <SessionSelector value={profileForm.session} onChange={session => setProfileForm(p => ({ ...p, session }))} />
                 {profileForm.department && (
                   <BatchSelector
                     department={profileForm.department}
@@ -183,9 +228,18 @@ export default function ProfileCard({
                     onChange={batchId => setProfileForm(p => ({ ...p, batchId }))}
                   />
                 )}
-              </>
-            ) : (
-              <>
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1">Section</label>
+                  <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. A, B, C" value={profileForm.section} onChange={e => setProfileForm(p => ({ ...p, section: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showTeacherSection && (
+            <div className="border border-dark-border rounded-lg p-3 mb-3">
+              <p className="text-[0.7rem] font-semibold text-dark-text2 mb-2"><i className="fas fa-chalkboard-teacher mr-1"></i>Teacher Info</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-building mr-1"></i>Department</label>
                   <CustomSelect
@@ -203,37 +257,17 @@ export default function ProfileCard({
                   <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-user-tag mr-1"></i>Short Form</label>
                   <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. MA Rahman" value={profileForm.shortForm} onChange={e => setProfileForm(p => ({ ...p, shortForm: e.target.value }))} />
                 </div>
-              </>
-            )}
-
-            {/* Personal Info */}
-            <div>
-              <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
-              <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Sayed Atiqur Rahman" value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} />
-            </div>
-            {/* Contact Info */}
-            <div>
-              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-whatsapp mr-1"></i>WhatsApp</label>
-              <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
-            </div>
-            <div>
-              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-envelope mr-1"></i>Public Email <span className="text-dark-text3">(shown on profile)</span></label>
-              <input type="email" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. yourmail@gmail.com" value={profileForm.publicEmail} onChange={e => setProfileForm(p => ({ ...p, publicEmail: e.target.value }))} />
-              <p className="text-[0.65rem] text-dark-text3 mt-0.5">Leave empty to use login email</p>
-            </div>
-            {isStudent && (
-              <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">University ID</label>
-                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. Q233099" value={profileForm.universityId} onChange={e => setProfileForm(p => ({ ...p, universityId: e.target.value }))} />
+                <div>
+                  <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-envelope-open mr-1"></i>University Contact Email</label>
+                  <input type="email" readOnly className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg/50 text-dark-text2 text-[0.82rem] outline-none cursor-not-allowed" placeholder={universityEmail || 'Auto from login email'} value={universityEmail} />
+                  <p className="text-[0.65rem] text-dark-text3 mt-0.5">Auto-filled from your login email</p>
+                </div>
               </div>
-            )}
-            {isStudent && (
-              <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Section</label>
-                <input type="text" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. A, B, C" value={profileForm.section} onChange={e => setProfileForm(p => ({ ...p, section: e.target.value }))} />
+              <div className="mt-3">
+                <TeacherInfoSection email={email} profile={profile} />
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Company / Organization */}
           {showCompany && (
@@ -252,7 +286,7 @@ export default function ProfileCard({
           {/* Privacy Toggles */}
           <div className="mb-3 p-3 rounded-lg bg-dark-bg border border-dark-border">
             <p className="text-[0.72rem] text-dark-text2 mb-2"><i className="fas fa-eye-slash mr-1"></i>Privacy Settings</p>
-            {isStudent && (
+            {showStudentSection && (
               <label className="flex items-center gap-2 cursor-pointer mb-2">
                 <input type="checkbox" checked={profileForm.hideUniversityId} onChange={e => setProfileForm(p => ({ ...p, hideUniversityId: e.target.checked }))} className="accent-qsis" />
                 <span className="text-[0.78rem] text-dark-text">Hide University ID from public profile</span>
@@ -262,7 +296,7 @@ export default function ProfileCard({
               <input type="checkbox" checked={profileForm.hideWhatsapp} onChange={e => setProfileForm(p => ({ ...p, hideWhatsapp: e.target.checked }))} className="accent-qsis" />
               <span className="text-[0.78rem] text-dark-text">Hide WhatsApp from public profile</span>
             </label>
-            {isStudent && (
+            {showStudentSection && (
               <label className="flex items-center gap-2 cursor-pointer mb-2">
                 <input type="checkbox" checked={profileForm.hideSemester} onChange={e => setProfileForm(p => ({ ...p, hideSemester: e.target.checked }))} className="accent-qsis" />
                 <span className="text-[0.78rem] text-dark-text">Hide Semester from public profile</span>
@@ -301,7 +335,7 @@ export default function ProfileCard({
         <>
           {/* Info Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-            {isStudent && (
+            {showStudentSection && (
               <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                 <span className="text-[0.7rem] text-dark-text2 block mb-1">University ID</span>
                 <span className={`text-[0.85rem] font-semibold ${profile.universityId ? 'text-qsis' : 'text-dark-text2'}`}>
@@ -318,13 +352,13 @@ export default function ProfileCard({
                 })()}</span>
               </div>
             )}
-            {profile.shortForm && (
+            {profile.shortForm && showTeacherSection && (
               <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                 <span className="text-[0.7rem] text-dark-text2 block mb-1">Short Form</span>
                 <span className="text-[0.85rem] font-semibold text-qsis">{profile.shortForm}</span>
               </div>
             )}
-            {isTeacherOrAbove && profile.title && (
+            {showTeacherSection && profile.title && (
               <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                 <span className="text-[0.7rem] text-dark-text2 block mb-1">Designation</span>
                 <span className="text-[0.85rem] font-semibold text-qsis">{profile.title}</span>
@@ -343,13 +377,19 @@ export default function ProfileCard({
               </span>
               <p className="text-[0.6rem] text-dark-text3 mt-0.5">Shown on public contributors profile</p>
             </div>
-            {isStudent && profile.semester && (
+            {showStudentSection && profile.semester && (
               <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                 <span className="text-[0.7rem] text-dark-text2 block mb-1">Semester</span>
                 <span className="text-[0.85rem] font-semibold">{profile.semester === 'graduated' ? '🎓 Graduated' : config.semesters.find(s => s.id === profile.semester)?.label || profile.semester}</span>
               </div>
             )}
-            {profile.section && isStudent && (
+            {showStudentSection && (profile as any).session && (
+              <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+                <span className="text-[0.7rem] text-dark-text2 block mb-1">Session</span>
+                <span className="text-[0.85rem] font-semibold">{config.sessions.find(s => s.id === (profile as any).session)?.label || (profile as any).session}</span>
+              </div>
+            )}
+            {profile.section && showStudentSection && (
               <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
                 <span className="text-[0.7rem] text-dark-text2 block mb-1">Section</span>
                 <span className="text-[0.85rem] font-semibold">{profile.section}</span>
