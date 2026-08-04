@@ -266,10 +266,10 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         pdf.addImage(dataUrl, 'JPEG', (pageW - w) / 2, (pageH - h) / 2, w, h);
       }
       const authorName = profile?.name || email.split('@')[0] || 'Unknown';
-      const mergedName = `${mergeSession} ${mergeYear} - ${authorName}.pdf`;
-      const mergedFile = new File([pdf.output('blob')], mergedName, { type: 'application/pdf' });
       const course = courses.find(c => c.id === courseId);
       if (!course) return;
+      const mergedName = `${course.selectedCourseCode} ${mergeSession} ${mergeYear} - ${authorName}.pdf`;
+      const mergedFile = new File([pdf.output('blob')], mergedName, { type: 'application/pdf' });
       updateCourse(courseId, {
         files: [...course.files.filter(f => !mergeImages.some(m => m.file === f.file)), { file: mergedFile, year: '', yearRange: `${mergeYear}-${mergeYear}` }],
         examSession: mergeSession || course.examSession,
@@ -332,18 +332,15 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
     setUploading(true); setResult(null);
     try {
-      const allFiles: { path: string; content: string }[] = [];
+      const formData = new FormData();
+      const fileMetas: { path: string; isReadme: boolean }[] = [];
+
       for (const course of validCourses) {
         const courseCode = course.selectedCourseCode;
         const courseTitle = course.selectedCourseTitle || courseCode;
         const courseFolder = `${courseCode} - ${courseTitle}`;
 
         for (const fileMeta of course.files) {
-          const base64 = await fileMeta.file.arrayBuffer().then(buf => {
-            const bytes = new Uint8Array(buf); let binary = '';
-            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-            return btoa(binary);
-          });
           const isExamSpecific = category === config.categories.notes.folder || category === config.categories.questions.folder;
           const midFinalPart = (isExamSpecific && course.midFinal) ? `/${course.midFinal}` : '';
           const authorName = profile?.name || email.split('@')[0] || 'Unknown';
@@ -359,18 +356,19 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             filePath = `${facId}/${config.relatedSourcesFolder}/${fn}/${fileMeta.file.name}`;
           } else if (isExamSpecific && course.examSession) {
             const yearPart = isPdf(fileMeta.file.name) ? (fileMeta.yearRange || '') : (fileMeta.year || '');
-            const renamedFile = `${course.examSession} ${CURRENT_YEAR} - ${authorName}.${ext}`;
+            const renamedFile = `${courseCode} ${course.examSession} ${CURRENT_YEAR} - ${authorName}.${ext}`;
             filePath = yearPart
               ? `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${yearPart}/${renamedFile}`
               : `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${renamedFile}`;
           } else {
             filePath = `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${fileMeta.file.name}`;
           }
-          allFiles.push({ path: filePath, content: base64 });
+          formData.append('files', fileMeta.file, filePath);
+          fileMetas.push({ path: filePath, isReadme: false });
         }
 
         if (course.links.length > 0) {
-          const readmeBase64 = btoa(unescape(encodeURIComponent(linksToReadmeContent(course.links))));
+          const readmeContent = linksToReadmeContent(course.links);
           let readmePath: string;
           if (semester === config.relatedKitabsFolder) {
             const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
@@ -380,16 +378,33 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
             readmePath = `${facId}/${config.relatedSourcesFolder}/${fn}/README.md`;
           } else { readmePath = `${department}/${semester}/${courseFolder}/README.md`; }
-          allFiles.push({ path: readmePath, content: readmeBase64 });
+          const readmeBlob = new Blob([readmeContent], { type: 'text/markdown' });
+          formData.append('files', readmeBlob, readmePath);
+          fileMetas.push({ path: readmePath, isReadme: true });
         }
       }
 
       const message = `Add ${validCourses.map(c => `${c.selectedCourseCode} - ${c.selectedCourseTitle || c.selectedCourseCode}`).join(', ')} (${category}) — ${semester}`;
+      formData.append('message', message);
+      if (token) formData.append('githubToken', token);
+
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 55000);
-      const res = await fetch('/api/github/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: allFiles, message, githubToken: token }), signal: controller.signal });
+      const timeout = setTimeout(() => controller.abort(), 85000);
+      const res = await fetch('/api/github/upload', { method: 'POST', body: formData, signal: controller.signal });
       clearTimeout(timeout);
-      const data = await res.json();
+
+      let data: any;
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text.includes('Too Large') || text.includes('too large')
+          ? 'Files too large. Try fewer or smaller files.'
+          : text.includes('Entity')
+            ? 'Upload failed — server rejected the request.'
+            : `Unexpected server response (${res.status}). Please try again.`);
+      }
 
       if (data.success) {
         setResult({ success: true, prUrl: data.pr?.url });

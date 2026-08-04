@@ -50,6 +50,7 @@ export default function BrowsePage() {
   const recentReads = useAppStore(s => s.recentReads);
   const loadTree = useAppStore(s => s.loadTree);
   const loadCourses = useAppStore(s => s.loadCourses);
+  const dbCourses = useAppStore(s => s.dbCourses);
   const setSearchQuery = useAppStore(s => s.setSearchQuery);
   const setFileTypeFilter = useAppStore(s => s.setFileTypeFilter);
   const setSearchSemester = useAppStore(s => s.setSearchSemester);
@@ -472,6 +473,8 @@ export default function BrowsePage() {
           goBack={goBack} setShowAddCourse={setShowAddCourse}
           setAddCourseCode={setAddCourseCode} setAddCourseTitle={setAddCourseTitle}
           setAddCourseError={setAddCourseError} setAddCourseSuccess={setAddCourseSuccess}
+          dbCourses={dbCourses} userEmail={email}
+          currentDept={currentDept} currentSem={currentSem}
         />
       )}
       {!loading && !error && !isSearching && view === 'categories' && (

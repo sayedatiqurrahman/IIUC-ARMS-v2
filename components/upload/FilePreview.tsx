@@ -24,6 +24,7 @@ function getFileIcon(name: string) {
 interface FilePreviewProps {
   files: FileWithMeta[];
   courseId: number;
+  courseCode: string;
   category: string;
   isNotes: boolean;
   isQuestions: boolean;
@@ -41,7 +42,7 @@ interface FilePreviewProps {
 }
 
 export default function FilePreview({
-  files, courseId, category, isNotes, isQuestions,
+  files, courseId, courseCode, category, isNotes, isQuestions,
   onRemoveFile, onUpdateFile,
   mergeDialogCourseId, mergeImages, mergeSession, mergeYear, mergeMerging,
   onMerge, onDismissMerge, profile, email,
@@ -136,7 +137,7 @@ export default function FilePreview({
                 These images appear to be parts of the same question paper ({mergeSession} {mergeYear}).
               </p>
               <p className="text-[0.65rem] text-dark-text3 mt-0.5">
-                Will be saved as: <span className="text-blue-300 font-semibold">{mergeSession} {mergeYear} - {profile?.name || email.split('@')[0] || 'Unknown'}.pdf</span>
+                Will be saved as: <span className="text-blue-300 font-semibold">{courseCode} {mergeSession} {mergeYear} - {profile?.name || email.split('@')[0] || 'Unknown'}.pdf</span>
               </p>
             </div>
           </div>

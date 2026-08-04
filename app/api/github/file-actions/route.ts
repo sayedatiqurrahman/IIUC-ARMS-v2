@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { decrypt, isEncrypted } from '@/lib/crypto';
+import { sendMessageWithButtons, delFileConfirmData, delFileRejectData, buildBrowseLink } from '@/lib/telegram';
 
 const GITHUB_API = 'https://api.github.com';
 const OWNER_CHAT_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID || '0');
@@ -171,8 +172,10 @@ export async function POST(req: NextRequest) {
       const sha = await getFileSha(token, fromFull, branch);
       if (!sha) return NextResponse.json({ error: 'File not found' }, { status: 404 });
 
-      // OWNER: allow direct delete
-      if (isOwner) {
+      const isAdmin = isOwner || effectiveRole === 'admin' || effectiveRole === 'manager';
+
+      // OWNER / ADMIN: direct delete, no confirmation
+      if (isAdmin) {
         const folderFiles = await getAllFilesInFolder(token, fromFull, branch);
         if (folderFiles.length > 0) {
           let deleted = 0;
@@ -189,59 +192,68 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      // NON-OWNER: notify owner via GitHub issue + Telegram, do NOT delete
+      // NON-ADMIN: send Telegram approval request to all connected admins
       const requesterName = profile?.name || email.split('@')[0];
       const filePathDisplay = from;
       const fileCount = (await getAllFilesInFolder(token, fromFull, branch)).length || 1;
       const isFolder = fileCount > 1;
 
-      // 1. Create GitHub issue for owner approval
+      // 1. Store pending request in activity log
+      let activityId = '';
       try {
-        const issueBody = [
-          `## Delete Request`,
-          ``,
-          `**Requested by:** ${requesterName} (\`${email}\`)`,
-          `**Path:** \`${config.uploadPath}/${filePathDisplay}\``,
-          `**Type:** ${isFolder ? `Folder (${fileCount} files)` : 'Single file'}`,
-          `**Date:** ${new Date().toISOString()}`,
-          ``,
-          `---`,
-          `*Approve by merging this issue. The file will NOT be deleted until the owner approves.*`,
-        ].join('\n');
+        const logEntry = await prisma.activityLog.create({
+          data: {
+            action: 'file_delete_request',
+            userId: email,
+            userName: requesterName,
+            details: JSON.stringify({ path: from, fileCount, isFolder, status: 'pending_approval' }),
+          },
+        });
+        activityId = logEntry.id;
+      } catch {}
 
-        const appToken = await getAppBotToken();
-        if (appToken) {
-          await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/issues`, {
-            method: 'POST',
-            headers: { Authorization: `token ${appToken}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: `[DELETE REQUEST] ${filePathDisplay}`,
-              body: issueBody,
-              labels: ['delete-request', 'needs-approval'],
-            }),
-          });
+      // 2. Send to all connected admins (owner + admins with telegramChatId)
+      const approverChatIds: number[] = [];
+      if (OWNER_CHAT_ID) approverChatIds.push(OWNER_CHAT_ID);
+
+      try {
+        const adminProfiles = await prisma.profile.findMany({
+          where: { role: 'admin' },
+          select: { telegramChatId: true },
+        });
+        for (const ap of adminProfiles) {
+          const chatId = (ap as any).telegramChatId;
+          if (chatId && !approverChatIds.includes(chatId)) {
+            approverChatIds.push(chatId);
+          }
         }
       } catch {}
 
-      // 2. Notify owner via Telegram
-      try {
-        if (OWNER_CHAT_ID && TG_TOKEN) {
-          const tgMsg = [
-            `🗑 <b>Delete Request</b>`,
-            ``,
-            `<b>By:</b> ${requesterName} (${email})`,
-            `<b>File:</b> <code>${filePathDisplay}</code>`,
-            `<b>Type:</b> ${isFolder ? `Folder (${fileCount} files)` : 'Single file'}`,
-            ``,
-            `⚡ <a href="${SITE_URL}">Review on IIUC-ARMS</a>`,
-          ].join('\n');
-          await fetch(`${TG_API}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: OWNER_CHAT_ID, text: tgMsg, parse_mode: 'HTML', disable_web_page_preview: true }),
-          });
-        }
-      } catch {}
+      // Build browse link for the parent folder
+      const pathParts = from.split('/');
+      const browseLink = pathParts.length >= 2
+        ? buildBrowseLink({ dept: pathParts[0], sem: pathParts[1] })
+        : SITE_URL;
+
+      const tgMsg = [
+        `🗑 <b>File Delete Request</b>`, ``,
+        `<b>By:</b> ${requesterName} (${email})`,
+        `<b>Path:</b> <code>${filePathDisplay}</code>`,
+        `<b>Type:</b> ${isFolder ? `Folder (${fileCount} files)` : 'Single file'}`, ``,
+        `Approve or reject this deletion:`,
+      ].join('\n');
+
+      for (const chatId of approverChatIds) {
+        try {
+          await sendMessageWithButtons(chatId, tgMsg, [
+            [
+              ...(activityId ? [{ text: '✅ Confirm Delete', callback_data: delFileConfirmData(activityId) }] : []),
+              ...(activityId ? [{ text: '❌ Reject', callback_data: delFileRejectData(activityId) }] : []),
+            ],
+            [{ text: '📂 Visit Directory', url: browseLink }],
+          ]);
+        } catch {}
+      }
 
       // 3. Log the request
       try {
@@ -257,7 +269,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: false,
-        message: `Delete request sent to owner for approval. The file will NOT be deleted until approved.`,
+        message: `Delete request sent to admins for approval. You'll be notified when approved.`,
         pendingApproval: true,
       });
     }

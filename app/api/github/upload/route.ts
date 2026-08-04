@@ -8,7 +8,7 @@ import { decrypt, isEncrypted } from '@/lib/crypto';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission } from '@/lib/permissions';
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -33,8 +33,44 @@ export async function POST(req: NextRequest) {
   if (!rl.success) return rl.response!;
 
   try {
-    const body = await req.json();
-    const { files, message, githubToken: bodyToken } = body;
+    // ── Parse FormData (multipart) — avoids JSON body-size limits ────
+    const contentType = req.headers.get('content-type') || '';
+    let files: { path: string; content: string }[] = [];
+    let message = '';
+    let bodyToken = '';
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      message = formData.get('message') as string || '';
+      bodyToken = formData.get('githubToken') as string || '';
+
+      // Extract files — each entry's filename is the full upload path
+      const entries = Array.from(formData.entries());
+      for (const [key, value] of entries) {
+        if (key !== 'files') continue;
+        if (!(value instanceof File)) continue;
+
+        const filePath = value.name; // filename was set to the full path by the client
+        if (!filePath) continue;
+
+        const arrayBuf = await value.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuf);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const base64 = btoa(binary);
+
+        // Strip the config.uploadPath prefix — the client already sends the full path
+        // but the GitHub API calls below prepend it again, so store relative to uploadPath
+        const relPath = filePath.startsWith(`${config.uploadPath}/`) ? filePath.slice(`${config.uploadPath}/`.length) : filePath;
+        files.push({ path: relPath, content: base64 });
+      }
+    } else {
+      // Fallback: legacy JSON body (for any old clients or testing)
+      const body = await req.json();
+      files = body.files || [];
+      message = body.message || '';
+      bodyToken = body.githubToken || '';
+    }
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: 'No files provided' }, { status: 400 });

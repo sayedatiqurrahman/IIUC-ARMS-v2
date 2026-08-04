@@ -12,6 +12,14 @@ export function deleteRejectData(courseId: string): string {
   return `del_reject:${courseId}`;
 }
 
+export function delFileConfirmData(activityId: string): string {
+  return `del_file_confirm:${activityId}`;
+}
+
+export function delFileRejectData(activityId: string): string {
+  return `del_file_reject:${activityId}`;
+}
+
 export function broadcastCallbackData(action: 'confirm' | 'cancel'): string {
   return `broadcast:${action}`;
 }
@@ -37,6 +45,12 @@ export function parseCallbackData(data: string): { type: string; args: string[] 
   }
   if (parts[0] === 'del_reject' && parts.length === 2) {
     return { type: 'del_reject', args: [parts[1]] };
+  }
+  if (parts[0] === 'del_file_confirm' && parts.length === 2) {
+    return { type: 'del_file_confirm', args: [parts[1]] };
+  }
+  if (parts[0] === 'del_file_reject' && parts.length === 2) {
+    return { type: 'del_file_reject', args: [parts[1]] };
   }
   if (parts[0] === 'broadcast' && parts.length >= 2) {
     return { type: 'broadcast', args: [parts[1]] };

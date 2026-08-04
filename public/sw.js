@@ -1,4 +1,4 @@
-const CACHE_NAME = 'iiuc-arms-v12';
+const CACHE_NAME = 'iiuc-arms-v13';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -27,6 +27,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
+  // API calls: network only, never cache
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request).catch(() => {
@@ -39,31 +40,50 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Navigation: stale-while-revalidate (instant from cache, update in background)
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-        return response;
-      }).catch(() => {
-        return caches.match(request).then((cached) => {
-          return cached || caches.match('/');
-        });
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(request);
+        const networkPromise = fetch(request).then((response) => {
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        }).catch(() => cached || caches.match('/'));
+
+        return cached || networkPromise;
       })
     );
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+  // Static assets (_next, fonts, images): cache-first
+  if (url.pathname.startsWith('/_next/') || url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|woff2?)$/i)) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        try {
+          const response = await fetch(request);
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        } catch {
+          return new Response('', { status: 504 });
         }
+      })
+    );
+    return;
+  }
+
+  // Everything else: stale-while-revalidate
+  event.respondWith(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cached = await cache.match(request);
+      const networkPromise = fetch(request).then((response) => {
+        if (response.ok) cache.put(request, response.clone());
         return response;
-      });
+      }).catch(() => cached);
+
+      return cached || networkPromise;
     })
   );
 });

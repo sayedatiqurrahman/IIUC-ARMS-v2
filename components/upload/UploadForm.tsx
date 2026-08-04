@@ -395,6 +395,7 @@ export default function UploadForm({
           <FilePreview
             files={course.files}
             courseId={course.id}
+            courseCode={course.selectedCourseCode || ''}
             category={category}
             isNotes={category === config.categories.notes.folder}
             isQuestions={category === config.categories.questions.folder}

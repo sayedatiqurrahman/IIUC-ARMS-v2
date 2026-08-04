@@ -240,16 +240,21 @@ export async function PUT(req: NextRequest) {
     const role = config.getEffectiveRole(email, profile?.role);
     const isCR = profile?.isCR || false;
 
-    if (!await hasPermission('editCourse', role, isCR, email)) {
-      return NextResponse.json({ error: 'You do not have permission to edit courses' }, { status: 403 });
-    }
-
     const body = await req.json();
     const { id, title } = body;
     if (!id || !title) return NextResponse.json({ error: 'id and title are required' }, { status: 400 });
 
-    const course = await prisma.course.update({ where: { id }, data: { title } });
-    return NextResponse.json({ success: true, course });
+    const hasRolePermission = await hasPermission('editCourse', role, isCR, email);
+
+    if (!hasRolePermission) {
+      const course = await prisma.course.findUnique({ where: { id }, select: { addedBy: true } });
+      if (!course || course.addedBy?.toLowerCase() !== email.toLowerCase()) {
+        return NextResponse.json({ error: 'You do not have permission to edit this course' }, { status: 403 });
+      }
+    }
+
+    const updated = await prisma.course.update({ where: { id }, data: { title } });
+    return NextResponse.json({ success: true, course: updated });
   } catch {
     return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
   }
@@ -275,10 +280,6 @@ export async function DELETE(req: NextRequest) {
     const isOwner = config.ownerEmails.includes(email.toLowerCase());
     const canDeleteByRole = ['admin', 'manager', 'teacher'].includes(role) || isCR;
 
-    if (!isOwner && !canDeleteByRole) {
-      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
-    }
-
     const body = await req.json().catch(() => ({}));
     const { code, semester, department, folderPath: rawFolderPath, title } = body;
 
@@ -294,6 +295,12 @@ export async function DELETE(req: NextRequest) {
       });
     } catch {}
 
+    const isCourseOwner = course?.addedBy?.toLowerCase() === email.toLowerCase();
+
+    if (!isOwner && !canDeleteByRole && !isCourseOwner) {
+      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
+    }
+
     const courseTitle = course?.title || title || code;
     const courseDept = course?.department || department;
     const courseSem = course?.semester || semester;
@@ -306,8 +313,8 @@ export async function DELETE(req: NextRequest) {
       folderPath = `${config.uploadPath}/${courseDept}/${courseSem}/${courseCode} - ${cleanTitle}`;
     }
 
-    // Admin/owner → direct delete, no notification needed
-    if (isOwner || role === 'admin') {
+    // Admin/owner/course creator → direct delete, no notification needed
+    if (isOwner || role === 'admin' || isCourseOwner) {
       let githubDeleted = 0;
       try {
         const botToken = await getAppBotToken();

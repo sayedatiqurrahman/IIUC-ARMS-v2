@@ -910,6 +910,141 @@ async function handleCallbackQuery(cq: any) {
       });
     }
 
+    // ─── File Delete confirm ───
+    if (parsed.type === 'del_file_confirm') {
+      const activityId = parsed.args[0];
+      if (!activityId) return;
+
+      const { prisma } = await import('@/lib/prisma');
+      let logEntry: any = null;
+      try {
+        logEntry = await prisma.activityLog.findUnique({ where: { id: activityId } });
+      } catch {}
+
+      if (!logEntry || logEntry.action !== 'file_delete_request') {
+        await editMessageText(chatId, messageId, `❌ Delete request not found or already processed.`);
+        return;
+      }
+
+      const details = JSON.parse(logEntry.details || '{}');
+      const filePath: string = details.path || '';
+      if (!filePath) {
+        await editMessageText(chatId, messageId, `❌ Invalid delete request — no file path found.`);
+        return;
+      }
+
+      const fromFull = `${config.uploadPath}/${filePath}`;
+      let githubDeleted = 0;
+
+      try {
+        const botToken = await getAppBotToken();
+        if (botToken) {
+          const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(botToken) });
+          if (refRes.ok) {
+            const refData = await refRes.json();
+            const baseCommitSha = refData.object.sha;
+            const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(botToken) });
+            if (commitRes.ok) {
+              const commitData = await commitRes.json();
+              const baseTreeSha = commitData.tree.sha;
+              const fullTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(botToken) });
+              if (fullTreeRes.ok) {
+                const fullTreeData = await fullTreeRes.json();
+                const deletePaths = new Set((fullTreeData.tree || []).filter((item: any) => item.path.startsWith(fromFull + '/') || item.path === fromFull).map((item: any) => item.path));
+                const keepItems = (fullTreeData.tree || []).filter((item: any) => !deletePaths.has(item.path));
+                if (keepItems.length > 0 && deletePaths.size > 0) {
+                  const treeItems = keepItems.map((item: any) => ({
+                    path: item.path, mode: item.mode, type: item.type,
+                    sha: item.type === 'blob' ? item.sha : undefined,
+                  }));
+                  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
+                    method: 'POST', headers: ghHeaders(botToken),
+                    body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems }),
+                  });
+                  if (treeRes.ok) {
+                    const treeData = await treeRes.json();
+                    const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
+                      method: 'POST', headers: ghHeaders(botToken),
+                      body: JSON.stringify({ message: `Delete: ${filePath}`, tree: treeData.sha, parents: [baseCommitSha] }),
+                    });
+                    if (newCommitRes.ok) {
+                      const newCommitData = await newCommitRes.json();
+                      await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
+                        method: 'PATCH', headers: ghHeaders(botToken),
+                        body: JSON.stringify({ sha: newCommitData.sha, force: true }),
+                      });
+                      githubDeleted = deletePaths.size;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch {}
+
+      // Update activity log
+      try {
+        const parsedDetails = JSON.parse(logEntry.details || '{}');
+        parsedDetails.status = 'approved';
+        parsedDetails.approvedBy = `chat:${chatId}`;
+        await prisma.activityLog.update({
+          where: { id: activityId },
+          data: { details: JSON.stringify(parsedDetails), action: 'file_delete_approved' },
+        });
+      } catch {}
+
+      const parentParts = filePath.split('/');
+      const browseLink = parentParts.length >= 2 ? buildBrowseLink({ dept: parentParts[0], sem: parentParts[1] }) : '';
+
+      await editMessageText(chatId, messageId, [
+        `✅ <b>File Deleted</b>`, ``,
+        `<b>Path:</b> <code>${filePath}</code>`,
+        `<b>Files removed:</b> ${githubDeleted}`, ``,
+        `<i>Approved by admin</i>`,
+      ].join('\n'), {
+        reply_markup: { inline_keyboard: [[{ text: '📂 Visit Directory', url: browseLink }]] },
+      });
+    }
+
+    // ─── File Delete reject ───
+    if (parsed.type === 'del_file_reject') {
+      const activityId = parsed.args[0];
+      if (!activityId) return;
+
+      const { prisma } = await import('@/lib/prisma');
+      let logEntry: any = null;
+      try {
+        logEntry = await prisma.activityLog.findUnique({ where: { id: activityId } });
+      } catch {}
+
+      const filePath = logEntry ? JSON.parse(logEntry.details || '{}').path : '';
+
+      // Update activity log
+      if (logEntry) {
+        try {
+          const parsedDetails = JSON.parse(logEntry.details || '{}');
+          parsedDetails.status = 'rejected';
+          parsedDetails.rejectedBy = `chat:${chatId}`;
+          await prisma.activityLog.update({
+            where: { id: activityId },
+            data: { details: JSON.stringify(parsedDetails), action: 'file_delete_rejected' },
+          });
+        } catch {}
+      }
+
+      const parentParts = (filePath || '').split('/');
+      const browseLink = parentParts.length >= 2 ? buildBrowseLink({ dept: parentParts[0], sem: parentParts[1] }) : '';
+
+      await editMessageText(chatId, messageId, [
+        `❌ <b>Delete Rejected</b>`, ``,
+        filePath ? `<b>Path:</b> <code>${filePath}</code>` : '', ``,
+        `<i>Rejected by admin</i>`,
+      ].join('\n'), {
+        reply_markup: { inline_keyboard: browseLink ? [[{ text: '📂 Visit Directory', url: browseLink }]] : [] },
+      });
+    }
+
     // ─── Broadcast confirm/cancel ───
     if (parsed.type === 'broadcast') {
       const action = parsed.args[0];
