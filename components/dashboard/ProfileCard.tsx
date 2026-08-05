@@ -98,28 +98,28 @@ export default function ProfileCard({
   return (
     <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
 
-      {/* Top row: Avatar + Name + Role + GitHub badge + Edit */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
-          <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-            <Image src={displayImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=22c55e&color=fff&bold=true&size=200`} alt="" width={64} height={64} className="w-16 h-16 rounded-full border-2 border-qsis object-cover" />
+      {/* Top: Avatar + Name + Role + GitHub badge, Edit button below on mobile */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="flex items-center gap-4 min-w-0 flex-1">
+          <div className="relative group cursor-pointer flex-shrink-0" onClick={() => avatarInputRef.current?.click()}>
+            <Image src={displayImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=22c55e&color=fff&bold=true&size=200`} alt="" width={64} height={64} className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-qsis object-cover" />
             <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               {uploadingAvatar ? <i className="fas fa-spinner fa-spin text-white text-sm"></i> : <i className="fas fa-camera text-white text-sm"></i>}
             </div>
             <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="text-[1.1rem] font-bold">{displayName}</h4>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <h4 className="text-[1.1rem] font-bold truncate">{displayName}</h4>
               {hasGitHub && ghUser && (
-                <a href={`https://github.com/${ghUser.login}`} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors flex items-center gap-1">
+                <a href={`https://github.com/${ghUser.login}`} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors flex items-center gap-1 flex-shrink-0">
                   <i className="fab fa-github"></i> @{ghUser.login}
                 </a>
               )}
             </div>
-            <p className="text-[0.82rem] text-dark-text2">{displayEmail}</p>
+            <p className="text-[0.82rem] text-dark-text2 truncate">{displayEmail}</p>
             {!isTeacherUser && !isAdmin && profile.company && (
-              <p className="text-[0.72rem] text-dark-text2 mt-0.5">
+              <p className="text-[0.72rem] text-dark-text2 mt-0.5 truncate">
                 <i className="fas fa-building mr-1"></i>
                 {profile.companyUrl ? (
                   <a href={profile.companyUrl} target="_blank" rel="noopener noreferrer" className="hover:text-qsis transition-colors">{profile.company}</a>
@@ -128,7 +128,7 @@ export default function ProfileCard({
             )}
             {/* Social icons row */}
             {socialLinks.length > 0 && (
-              <div className="flex items-center gap-2 mt-1.5">
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 {socialLinks.map((s, i) => (
                   <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" title={s.label} className="w-7 h-7 rounded-full bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
                     <i className={`${s.icon} text-[0.7rem]`}></i>
@@ -139,7 +139,7 @@ export default function ProfileCard({
           </div>
         </div>
         {!editingProfile && (
-          <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={startEdit}>
+          <button className="w-full sm:w-auto sm:ml-auto px-3 py-2 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.75rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={startEdit}>
             <i className="fas fa-pen mr-1"></i> Edit Profile
           </button>
         )}
