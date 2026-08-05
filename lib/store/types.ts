@@ -65,6 +65,7 @@ export interface Profile {
   hideEmail: boolean;
   hideCompany: boolean;
   batchId: string;
+  session: string;
   customPermissions: Record<string, boolean>;
   linkedEmails: string[];
   showInContributors: boolean;
@@ -78,6 +79,7 @@ export const defaultProfile: Profile = {
   facebook: '', twitter: '', linkedin: '', website: '',
   company: '', companyUrl: '', publicEmail: '',
   batchId: '',
+  session: '',
   customPermissions: {},
   linkedEmails: [],
   showInContributors: true,

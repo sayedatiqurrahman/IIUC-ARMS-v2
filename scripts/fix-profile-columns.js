@@ -16,6 +16,7 @@ async function main() {
     { name: 'telegramId', type: 'TEXT' },
     { name: 'telegramChatId', type: 'TEXT' },
     { name: 'batchId', type: 'TEXT' },
+    { name: 'session', type: 'TEXT' },
     { name: 'customPermissions', type: "JSONB DEFAULT '{}'" },
     { name: 'banReason', type: 'TEXT' },
     { name: 'bannedBy', type: 'TEXT' },

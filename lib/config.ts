@@ -82,6 +82,17 @@ export const config = {
     { id: '7th-semister', label: '7th Semester' },
     { id: '8th-semister', label: '8th Semester' },
   ],
+  // Academic sessions students can select (managed by teachers/admins via batch creation)
+  sessions: [
+    { id: '2019-20', label: '2019-20' },
+    { id: '2020-21', label: '2020-21' },
+    { id: '2021-22', label: '2021-22' },
+    { id: '2022-23', label: '2022-23' },
+    { id: '2023-24', label: '2023-24' },
+    { id: '2024-25', label: '2024-25' },
+    { id: '2025-26', label: '2025-26' },
+    { id: '2026-27', label: '2026-27' },
+  ],
   categories: {
     sheet: { label: 'Sheets', icon: 'scroll', color: '#3b82f6', folder: 'sheet' },
     notes: { label: 'Notes', icon: 'sticky-note', color: '#22c55e', folder: 'NOTES' },

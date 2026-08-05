@@ -44,7 +44,7 @@ export default function DashboardView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
-    universityId: '', name: '', whatsapp: '', telegramId: '', semester: '', section: '', department: '', batchId: '',
+    universityId: '', name: '', whatsapp: '', telegramId: '', semester: '', section: '', department: '', batchId: '', session: '',
     facebook: '', twitter: '', linkedin: '', website: '',
     company: '', companyUrl: '', publicEmail: '',
     hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false, showInContributors: true,
@@ -60,9 +60,11 @@ export default function DashboardView() {
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!profile.githubToken;
   const email = (session as any)?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
-  const isStudent = effectiveRole === 'student';
+  const isStudent = effectiveRole === 'student' || /@ugrad\.iiuc\.ac\.bd$/i.test(email);
   const isTeacherOrAbove = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
   const isTeacherEmail = /@iiuc\.ac\.bd$/i.test(email) && !/@ugrad\.iiuc\.ac\.bd$/i.test(email);
+  const isTeacherUser = effectiveRole === 'teacher' || effectiveRole === 'manager' || isTeacherEmail;
+  const isAdmin = effectiveRole === 'admin';
   const hasAdminAccess = config.isAdminOrAbove(email, profile.role) || effectiveRole === 'manager' || effectiveRole === 'teacher';
   const [ghUser, setGhUser] = useState<any>(null);
   const [ghStats, setGhStats] = useState<any>(null);
@@ -395,7 +397,7 @@ export default function DashboardView() {
             {/* Profile summary */}
             <ProfileCard
               profile={profile} displayImage={displayImage} displayName={displayName} displayEmail={displayEmail}
-              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove}
+              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove} isTeacherUser={isTeacherUser} isAdmin={isAdmin}
               editingProfile={editingProfile} editingSocials={editingSocials}
               profileForm={profileForm} setProfileForm={setProfileForm}
               setEditingProfile={setEditingProfile} setEditingSocials={setEditingSocials}
@@ -478,7 +480,7 @@ export default function DashboardView() {
           <div className="space-y-4">
             <ProfileCard
               profile={profile} displayImage={displayImage} displayName={displayName} displayEmail={displayEmail}
-              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove}
+              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove} isTeacherUser={isTeacherUser} isAdmin={isAdmin}
               editingProfile={editingProfile} editingSocials={editingSocials}
               profileForm={profileForm} setProfileForm={setProfileForm}
               setEditingProfile={setEditingProfile} setEditingSocials={setEditingSocials}
@@ -571,7 +573,7 @@ export default function DashboardView() {
         );
 
       case 'teacher-info':
-        return isTeacherEmail ? <TeacherInfoSection email={email} profile={profile} /> : null;
+        return isTeacherUser ? <TeacherInfoSection email={email} profile={profile} /> : null;
 
       case 'cr-tools':
         return (

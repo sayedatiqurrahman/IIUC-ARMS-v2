@@ -49,8 +49,9 @@ model Profile {
   customPermissions    Json?    @default("{}")
   phone                String?
    telegramId           String?
-   batchId              String?
-   telegramChatId       String?
+  batchId              String?
+  telegramChatId       String?
+  session              String?
    telegramVerified     Boolean? @default(false)
    telegramOtp          String?
    telegramOtpExpiresAt DateTime?

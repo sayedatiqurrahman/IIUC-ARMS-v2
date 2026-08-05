@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const createData: Record<string, any> = { userId, email };
 
     const fields = [
-      'name', 'title', 'shortForm', 'department', 'isCR', 'universityId', 'whatsapp', 'phone', 'telegramId', 'semester', 'section', 'image', 'batchId',
+      'name', 'title', 'shortForm', 'department', 'isCR', 'universityId', 'whatsapp', 'phone', 'telegramId', 'semester', 'section', 'image', 'batchId', 'session',
       'facebook', 'twitter', 'linkedin', 'website', 'company', 'companyUrl', 'publicEmail',
       'hideWhatsapp', 'hideUniversityId', 'hideSemester', 'hideEmail', 'hideCompany',
       'showInContributors',
