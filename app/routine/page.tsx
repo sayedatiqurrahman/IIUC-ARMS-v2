@@ -1,16 +1,24 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import RoutineView from '@/components/views/RoutineView';
 import ExamRoutineView from '@/components/views/ExamRoutineView';
 import SeatPlanView from '@/components/views/SeatPlanView';
 import TeacherRoutineView from '@/components/routine/TeacherRoutineView';
+import { useAppStore } from '@/lib/store';
+import { isTeacherUser } from '@/lib/roles';
 
 type RoutineTab = 'class' | 'exam' | 'seatplan' | 'teacher';
 
 const TAB_KEYS: RoutineTab[] = ['class', 'exam', 'seatplan', 'teacher'];
 
 export default function RoutinePage() {
+  const { data: session } = useSession();
+  const profile = useAppStore(s => s.profile);
+  const email = (session as any)?.user?.email || profile.email || '';
+  const canUseTeacherTab = isTeacherUser(email, profile);
+
   const [tab, setTab] = useState<RoutineTab>('class');
   const [teacherName, setTeacherName] = useState('');
   const appliedRef = useRef(false);
@@ -20,10 +28,13 @@ export default function RoutinePage() {
     appliedRef.current = true;
     const params = new URLSearchParams(window.location.search);
     const t = params.get('tab') as RoutineTab | null;
-    if (t && TAB_KEYS.includes(t)) setTab(t);
+    if (t && TAB_KEYS.includes(t)) {
+      // Only teachers may open the teacher tab; everyone else falls back.
+      setTab(t === 'teacher' && !canUseTeacherTab ? 'class' : t);
+    }
     const teacher = params.get('teacher');
     if (teacher) setTeacherName(teacher);
-  }, []);
+  }, [canUseTeacherTab]);
 
   const changeTab = useCallback((next: RoutineTab) => {
     setTab(next);
@@ -60,13 +71,13 @@ export default function RoutinePage() {
         {tabBtn('class', 'Class Routine', 'Class', 'fas fa-calendar-alt')}
         {tabBtn('exam', 'Exam Routine', 'Exam', 'fas fa-file-alt')}
         {tabBtn('seatplan', 'Seat Plan', 'Seat', 'fas fa-chair')}
-        {tabBtn('teacher', 'My Routine', 'Mine', 'fas fa-chalkboard-teacher')}
+        {canUseTeacherTab && tabBtn('teacher', 'My Routine', 'Mine', 'fas fa-chalkboard-teacher')}
       </div>
 
       {tab === 'class' && <RoutineView />}
       {tab === 'exam' && <ExamRoutineView />}
       {tab === 'seatplan' && <SeatPlanView />}
-      {tab === 'teacher' && <TeacherRoutineView initialTeacher={teacherName || undefined} onTeacherChange={handleTeacherChange} />}
+      {canUseTeacherTab && tab === 'teacher' && <TeacherRoutineView initialTeacher={teacherName || undefined} onTeacherChange={handleTeacherChange} />}
     </div>
   );
 }

@@ -49,7 +49,8 @@ export async function POST(req: NextRequest) {
 
     // Build update object — only include fields that are explicitly provided
     const updateData: Record<string, any> = {};
-    const createData: Record<string, any> = { userId, email };
+    const { roleForEmail } = await import('@/lib/roles');
+    const createData: Record<string, any> = { userId, email, role: roleForEmail(email) };
 
     const fields = [
       'name', 'title', 'shortForm', 'department', 'isCR', 'universityId', 'whatsapp', 'phone', 'telegramId', 'semester', 'section', 'image', 'batchId', 'session',

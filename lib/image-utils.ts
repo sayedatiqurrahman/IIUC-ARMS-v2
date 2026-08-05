@@ -384,7 +384,7 @@ export function detectDocumentQuad(source: HTMLCanvasElement | HTMLVideoElement,
   rctx.drawImage(source, 0, 0, previewW, previewH);
 
   let gray = toGray(raw);
-  gray = gaussianBlur(gray, 2);
+  gray = gaussianBlur(gray, 1);
   const { w, h } = gray;
   const minArea = previewW * previewH * 0.05;
   const candidates: Quad[] = [];
@@ -406,9 +406,18 @@ export function detectDocumentQuad(source: HTMLCanvasElement | HTMLVideoElement,
       ) dilated[i] = 1;
     }
   }
-  const comp = largestComponent(dilated, w, h, true);
-  const q1 = comp ? quadFromMask(comp, w, h, minArea) : null;
+
+  // Try a document that sits fully inside the frame first (preferred).
+  let comp = largestComponent(dilated, w, h, true);
+  let q1 = comp ? quadFromMask(comp, w, h, minArea) : null;
   if (q1) candidates.push(q1);
+
+  // Fallback: document nearly fills the frame and touches the border.
+  if (!q1) {
+    comp = largestComponent(dilated, w, h, false);
+    const q = comp ? quadFromMask(comp, w, h, previewW * previewH * 0.15) : null;
+    if (q) candidates.push(q);
+  }
 
   // ---- Path 2: brightness (paper is usually the brightest big region) ----
   const hist = new Array(256).fill(0);
@@ -420,6 +429,20 @@ export function detectDocumentQuad(source: HTMLCanvasElement | HTMLVideoElement,
   const q2 = brightComp ? quadFromMask(brightComp, w, h, minArea) : null;
   if (q2) candidates.push(q2);
 
+  // Bright paper that nearly fills the frame.
+  if (!q2) {
+    const comp2 = largestComponent(bright, w, h, false);
+    const q = comp2 ? quadFromMask(comp2, w, h, previewW * previewH * 0.15) : null;
+    if (q) candidates.push(q);
+  }
+
+  // ---- Path 3: dark document on a bright background (notebooks, blackboards) ----
+  const dark = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) dark[i] = gray.data[i] < otsu ? 1 : 0;
+  const darkComp = largestComponent(dark, w, h, true);
+  const q3 = darkComp ? quadFromMask(darkComp, w, h, minArea) : null;
+  if (q3) candidates.push(q3);
+
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => quadScore(b, previewW, previewH) - quadScore(a, previewW, previewH));
   const best = candidates[0];
@@ -427,6 +450,12 @@ export function detectDocumentQuad(source: HTMLCanvasElement | HTMLVideoElement,
   // Snap corners onto the strongest nearby edge so the crop follows the real
   // paper corners instead of the coarse convex-hull estimate.
   return refineCorners(best, edges, w, h);
+}
+
+// Re-run detection on a captured still frame (higher resolution than the live
+// preview) and return the quad in the *canvas* pixel space.
+export function detectQuadOnCanvas(canvas: HTMLCanvasElement, previewW: number, previewH: number): Quad | null {
+  return detectDocumentQuad(canvas, previewW, previewH);
 }
 
 // Move each corner a few pixels to the strongest edge nearby.

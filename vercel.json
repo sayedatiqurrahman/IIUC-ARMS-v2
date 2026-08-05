@@ -10,6 +10,6 @@
     }
   ],
   "framework": "nextjs",
-  "buildCommand": "npx prisma generate && next build",
+  "buildCommand": "npx prisma generate && node scripts/fix-profile-columns.js && next build",
   "outputDirectory": ".next"
 }

@@ -38,12 +38,13 @@ export { getAccountStatus };
 async function ensurePendingProfile(email: string, name?: string): Promise<void> {
   try {
     const { prisma } = await import('@/lib/prisma');
+    const { roleForEmail } = await import('@/lib/roles');
     const existing = await prisma.profile.findUnique({ where: { userId: email }, select: { accountStatus: true } });
     const isNew = !existing;
     await prisma.profile.upsert({
       where: { userId: email },
       update: {},
-      create: { userId: email, email, name: name || email.split('@')[0], role: 'user', accountStatus: 'pending' },
+      create: { userId: email, email, name: name || email.split('@')[0], role: roleForEmail(email), accountStatus: 'pending' },
     });
     if (isNew) {
       const { notifyAdminsPendingAccount } = await import('@/lib/telegram/notifications');
@@ -210,10 +211,11 @@ export const authOptions: NextAuthOptions = {
             if (githubLogin && user.email) {
               try {
                 const { prisma } = await import('@/lib/prisma');
+                const { roleForEmail } = await import('@/lib/roles');
                 await prisma.profile.upsert({
                   where: { userId: user.email },
                   update: { githubLogin, email: user.email },
-                  create: { userId: user.email, email: user.email, githubLogin },
+                  create: { userId: user.email, email: user.email, githubLogin, role: roleForEmail(user.email) },
                 });
               } catch {}
             }
