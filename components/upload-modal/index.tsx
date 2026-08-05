@@ -357,11 +357,14 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       }
     }
 
+    const isNotes = category === config.categories.notes.folder;
     const meta: FileWithMeta = isQuestions
       ? isPdf(file.name)
         ? { file, year: '', yearRange: `${CURRENT_YEAR}-${CURRENT_YEAR}` }
         : { file, year: String(CURRENT_YEAR), yearRange: '' }
-      : { file, year: '', yearRange: '' };
+      : isNotes
+        ? { file, year: String(CURRENT_YEAR), yearRange: '' }
+        : { file, year: '', yearRange: '' };
 
     const patch: Partial<CourseGroup> = { files: [...course.files, meta] };
     if ((isQuestions || category === config.categories.notes.folder) && !course.examSession) {
@@ -567,6 +570,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         onDone={handleScannerDone}
         onCancel={() => { setScannerOpen(false); setScannerCourseId(null); }}
         onResult={handleScannerResult}
+        docOnly={category === config.categories.notes.folder}
       />
     )}
     </>

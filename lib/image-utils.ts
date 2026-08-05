@@ -186,50 +186,55 @@ function otsuThreshold(hist: number[], total: number): number {
 // Connected components (largest foreground blob)
 // ---------------------------------------------------------------------------
 
-function largestComponent(mask: Uint8Array, w: number, h: number): Uint8Array {
-  const visited = new Uint8Array(w * h);
+// Returns the largest connected component. When interiorOnly is set, components
+// touching the frame border (walls/tables/background clutter) are skipped so a
+// document floating in the middle of the frame wins over background edges.
+function largestComponent(mask: Uint8Array, w: number, h: number, interiorOnly = false): Uint8Array | null {
   const labels = new Int32Array(w * h).fill(-1);
+  const sizes: number[] = [];
+  const touchesBorder: boolean[] = [];
   const queue = new Int32Array(w * h);
-  let bestCount = 0;
-  let bestLabel = -1;
+  const borderMargin = Math.max(2, Math.round(Math.min(w, h) * 0.03));
   let label = 0;
 
-  const push = (idx: number) => {
-    if (!mask[idx] || visited[idx]) return;
-    visited[idx] = 1;
-    labels[idx] = label;
-    queue[head++] = idx;
-  };
-
-  let head = 0;
   for (let i = 0; i < w * h; i++) {
-    if (!mask[i] || visited[i]) continue;
-    visited[i] = 1;
+    if (!mask[i] || labels[i] !== -1) continue;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = i;
     labels[i] = label;
-    head = 0;
-    queue[head++] = i;
     let count = 0;
-    while (head > 0) {
-      const idx = queue[--head];
+    let touches = false;
+    while (head < tail) {
+      const idx = queue[head++];
       count++;
       const x = idx % w;
       const y = (idx / w) | 0;
-      if (x > 0) push(idx - 1);
-      if (x < w - 1) push(idx + 1);
-      if (y > 0) push(idx - w);
-      if (y < h - 1) push(idx + w);
+      if (x <= borderMargin || y <= borderMargin || x >= w - 1 - borderMargin || y >= h - 1 - borderMargin) touches = true;
+      if (x > 0 && mask[idx - 1] && labels[idx - 1] === -1) { labels[idx - 1] = label; queue[tail++] = idx - 1; }
+      if (x < w - 1 && mask[idx + 1] && labels[idx + 1] === -1) { labels[idx + 1] = label; queue[tail++] = idx + 1; }
+      if (y > 0 && mask[idx - w] && labels[idx - w] === -1) { labels[idx - w] = label; queue[tail++] = idx - w; }
+      if (y < h - 1 && mask[idx + w] && labels[idx + w] === -1) { labels[idx + w] = label; queue[tail++] = idx + w; }
     }
-    if (count > bestCount) {
-      bestCount = count;
-      bestLabel = label;
-    }
+    sizes[label] = count;
+    touchesBorder[label] = touches;
     label++;
   }
 
-  if (bestLabel < 0) return mask;
+  let best = -1;
+  let bestCount = 0;
+  for (let l = 0; l < label; l++) {
+    if (interiorOnly && touchesBorder[l]) continue;
+    if (sizes[l] > bestCount) {
+      bestCount = sizes[l];
+      best = l;
+    }
+  }
+  if (best < 0) return null;
+
   const out = new Uint8Array(w * h);
   for (let i = 0; i < w * h; i++) {
-    if (labels[i] === bestLabel) out[i] = 1;
+    if (labels[i] === best) out[i] = 1;
   }
   return out;
 }
@@ -303,6 +308,74 @@ function polygonArea(points: Point[]): number {
 // Document quadrilateral detection
 // ---------------------------------------------------------------------------
 
+// Threshold that keeps the strongest `frac` of values (0..1 → keeps the top %).
+function percentileThreshold(values: Uint8ClampedArray, frac: number): number {
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < values.length; i++) hist[values[i]]++;
+  let cum = 0;
+  const target = values.length * (1 - frac);
+  for (let t = 255; t >= 0; t--) {
+    cum += hist[t];
+    if (cum >= target) return t;
+  }
+  return 0;
+}
+
+// Score a candidate quad: prefer large area and near-right angles.
+function quadScore(q: Quad, frameW: number, frameH: number): number {
+  const area = polygonArea(q);
+  const areaFrac = area / (frameW * frameH);
+  let angleScore = 0;
+  for (let i = 0; i < 4; i++) {
+    const ang = angleBetween(q[i], q[(i + 1) % 4], q[(i + 2) % 4]);
+    angleScore += 1 - Math.min(1, Math.abs(ang - 90) / 90);
+  }
+  angleScore /= 4;
+  return areaFrac * 0.65 + angleScore * 0.35;
+}
+
+// Turn a connected-component mask into a valid document quad.
+function quadFromMask(mask: Uint8Array, w: number, h: number, minArea: number): Quad | null {
+  const pts: Point[] = [];
+  for (let y = 0; y < h; y += 2) {
+    for (let x = 0; x < w; x += 2) {
+      if (mask[y * w + x]) pts.push({ x, y });
+    }
+  }
+  if (pts.length < 30) return null;
+
+  const hull = convexHull(pts);
+  if (hull.length < 4) return null;
+
+  const eps = Math.max(3, Math.min(w, h) * 0.02);
+  let poly = simplifyPolygon(hull.concat([hull[0]]), eps);
+
+  // Reduce to exactly 4 corners by dropping the sharpest angle repeatedly.
+  while (poly.length > 4) {
+    let worst = 1;
+    let worstVal = Infinity;
+    for (let i = 1; i < poly.length - 1; i++) {
+      const ang = angleBetween(poly[i - 1], poly[i], poly[i + 1]);
+      if (ang < worstVal) {
+        worstVal = ang;
+        worst = i;
+      }
+    }
+    if (poly.length > 2) poly.splice(worst, 1);
+    else break;
+  }
+  if (poly.length < 4) return null;
+  if (poly.length > 4) poly.splice(1, poly.length - 4);
+
+  const area = polygonArea(poly);
+  if (area < minArea || area > w * h * 0.97) return null;
+  for (let i = 0; i < 4; i++) {
+    const ang = angleBetween(poly[i], poly[(i + 1) % 4], poly[(i + 2) % 4]);
+    if (ang < 25 || ang > 155) return null;
+  }
+  return orderQuad(poly);
+}
+
 export function detectDocumentQuad(source: HTMLCanvasElement | HTMLVideoElement, previewW: number, previewH: number): Quad | null {
   const raw = document.createElement('canvas');
   raw.width = previewW;
@@ -312,78 +385,76 @@ export function detectDocumentQuad(source: HTMLCanvasElement | HTMLVideoElement,
 
   let gray = toGray(raw);
   gray = gaussianBlur(gray, 2);
-
-  const edges = sobelEdges(gray);
-
-  const hist = new Array(256).fill(0);
-  for (let i = 0; i < edges.length; i++) hist[edges[i]]++;
-  const total = edges.length;
-  const thr = otsuThreshold(hist, total);
-
-  // Dilate edges slightly to close small gaps
-  const dilated = new Uint8Array(edges.length);
   const { w, h } = gray;
+  const minArea = previewW * previewH * 0.05;
+  const candidates: Quad[] = [];
+
+  // ---- Path 1: strong edges (works on textured/contrast backgrounds) ----
+  const edges = sobelEdges(gray);
+  const thr = Math.max(percentileThreshold(edges, 0.10), 40);
+  const edgeMask = new Uint8Array(edges.length);
+  for (let i = 0; i < edges.length; i++) if (edges[i] >= thr) edgeMask[i] = 1;
+
+  // Dilate edges slightly to close small gaps.
+  const dilated = new Uint8Array(edges.length);
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x;
       if (
-        edges[i] >= thr ||
-        edges[i - 1] >= thr || edges[i + 1] >= thr ||
-        edges[i - w] >= thr || edges[i + w] >= thr
+        edgeMask[i] || edgeMask[i - 1] || edgeMask[i + 1] ||
+        edgeMask[i - w] || edgeMask[i + w]
       ) dilated[i] = 1;
     }
   }
+  const comp = largestComponent(dilated, w, h, true);
+  const q1 = comp ? quadFromMask(comp, w, h, minArea) : null;
+  if (q1) candidates.push(q1);
 
-  const comp = largestComponent(dilated, w, h);
+  // ---- Path 2: brightness (paper is usually the brightest big region) ----
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < gray.data.length; i++) hist[gray.data[i]]++;
+  const otsu = otsuThreshold(hist, gray.data.length);
+  const bright = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) bright[i] = gray.data[i] > otsu ? 1 : 0;
+  const brightComp = largestComponent(bright, w, h, true);
+  const q2 = brightComp ? quadFromMask(brightComp, w, h, minArea) : null;
+  if (q2) candidates.push(q2);
 
-  const pts: Point[] = [];
-  for (let y = 0; y < h; y += 2) {
-    for (let x = 0; x < w; x += 2) {
-      if (comp[y * w + x]) pts.push({ x, y });
-    }
-  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => quadScore(b, previewW, previewH) - quadScore(a, previewW, previewH));
+  const best = candidates[0];
 
-  const minArea = (previewW * previewH) * 0.06;
-  if (pts.length < 30) return null;
+  // Snap corners onto the strongest nearby edge so the crop follows the real
+  // paper corners instead of the coarse convex-hull estimate.
+  return refineCorners(best, edges, w, h);
+}
 
-  const hull = convexHull(pts);
-  if (hull.length < 4) return null;
-
-  const eps = Math.max(3, Math.min(previewW, previewH) * 0.02);
-  let poly = simplifyPolygon(hull.concat([hull[0]]), eps);
-
-  while (poly.length > 4) {
-    let worst = 0;
-    let worstVal = Infinity;
-    for (let i = 1; i < poly.length - 1; i++) {
-      const a = poly[i - 1];
-      const b = poly[i];
-      const c = poly[i + 1];
-      const ang = angleBetween(a, b, c);
-      if (ang < worstVal) {
-        worstVal = ang;
-        worst = i;
+// Move each corner a few pixels to the strongest edge nearby.
+function refineCorners(q: Quad, edges: Uint8ClampedArray, w: number, h: number): Quad {
+  const radius = 8;
+  const out = q.map(p => ({ ...p }));
+  for (let i = 0; i < 4; i++) {
+    const cx = Math.round(out[i].x);
+    const cy = Math.round(out[i].y);
+    let bestX = cx;
+    let bestY = cy;
+    let bestVal = -1;
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) continue;
+        const v = edges[y * w + x];
+        if (v > bestVal) {
+          bestVal = v;
+          bestX = x;
+          bestY = y;
+        }
       }
     }
-    if (poly.length > 2) poly.splice(worst, 1);
-    else break;
+    out[i] = { x: bestX, y: bestY };
   }
-
-  // Validate: must be roughly 4 points, reasonable area and convex-ish
-  if (poly.length < 4 || poly.length > 5) return null;
-  if (poly.length === 5) poly.splice(1, 1);
-
-  const area = polygonArea(poly);
-  if (area < minArea) return null;
-  for (let i = 0; i < 4; i++) {
-    const a = poly[i];
-    const b = poly[(i + 1) % 4];
-    const c = poly[(i + 2) % 4];
-    const ang = angleBetween(a, b, c);
-    if (ang < 15 || ang > 165) return null;
-  }
-
-  return orderQuad(poly as Point[]);
+  return orderQuad(out);
 }
 
 function angleBetween(a: Point, b: Point, c: Point): number {

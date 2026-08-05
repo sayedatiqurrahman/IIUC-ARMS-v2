@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { config } from '@/lib/config';
 import { FACULTIES, getFacultyIdForDepartment } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
@@ -90,6 +90,7 @@ export default function UploadForm({
   isLoggedIn, onLogin, onClose,
 }: UploadFormProps) {
   const email = (session as any)?.user?.email || profile.email || '';
+  const [chooserCourseId, setChooserCourseId] = useState<number | null>(null);
 
   const userDeptId = (() => {
     const deptVal = profile.department || '';
@@ -383,26 +384,43 @@ export default function UploadForm({
 
           {/* File Upload Area */}
           <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept={category === config.categories.notes.folder ? '.pdf,.doc,.docx,.ppt,.pptx' : category === config.categories.questions.folder ? '.pdf,.jpg,.jpeg,.png,.gif,.webp' : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv'} onChange={e => handleFilesForCourse(course.id, e)} />
-          <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => fileInputRefs.current[course.id]?.click()}>
-            <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
-            <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
-            <p className="text-[0.65rem] text-dark-text2">
-              {category === config.categories.questions.folder
-                ? 'Select 2-3 images together (auto-merged into one PDF) or 1 PDF file'
-                : isExamCategory
-                  ? '1 file only'
-                  : `Max 5 files, ${config.maxUploadSizeMB}MB each`}
-            </p>
+          <div className="relative">
+            <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => setChooserCourseId(course.id)}>
+              <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
+              <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
+              <p className="text-[0.65rem] text-dark-text2">
+                {category === config.categories.questions.folder
+                  ? 'Select 2-3 images together (auto-merged into one PDF) or 1 PDF file'
+                  : isExamCategory
+                    ? '1 file only'
+                    : `Max 5 files, ${config.maxUploadSizeMB}MB each`}
+              </p>
+              <span className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-qsis/15 text-qsis text-[0.72rem] font-semibold">
+                <i className="fas fa-camera"></i> Upload from device or scan with camera
+              </span>
+            </div>
+
+            {chooserCourseId === course.id && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setChooserCourseId(null)} />
+                <div className="absolute bottom-full mb-2 left-0 right-0 z-50 rounded-xl border border-dark-border bg-dark-bg3 shadow-xl overflow-hidden">
+                  <button
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left text-[0.8rem] font-semibold text-dark-text bg-transparent border-none cursor-pointer hover:bg-dark-border/40"
+                    onClick={() => { fileInputRefs.current[course.id]?.click(); setChooserCourseId(null); }}
+                  >
+                    <i className="fas fa-folder-open text-qsis"></i> Choose from device
+                  </button>
+                  <div className="h-px bg-dark-border" />
+                  <button
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left text-[0.8rem] font-semibold text-dark-text bg-transparent border-none cursor-pointer hover:bg-dark-border/40"
+                    onClick={() => { onOpenScanner(course.id); setChooserCourseId(null); }}
+                  >
+                    <i className="fas fa-camera text-qsis"></i> Scan document with camera
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-          {isExamCategory && (
-            <button
-              className="mt-2 w-full py-2.5 rounded-lg bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.8rem] font-semibold border-none cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-              onClick={() => onOpenScanner(course.id)}
-              title="Scan a document with your camera"
-            >
-              <i className="fas fa-camera"></i> Scan Document with Camera
-            </button>
-          )}
 
           <FilePreview
             files={course.files}
