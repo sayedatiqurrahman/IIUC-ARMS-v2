@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
 
     const fields = [
       'name', 'title', 'shortForm', 'department', 'isCR', 'universityId', 'whatsapp', 'phone', 'telegramId', 'semester', 'section', 'image', 'batchId', 'session',
+      'profileType',
       'facebook', 'twitter', 'linkedin', 'website', 'company', 'companyUrl', 'publicEmail',
       'hideWhatsapp', 'hideUniversityId', 'hideSemester', 'hideEmail', 'hideCompany',
       'showInContributors',

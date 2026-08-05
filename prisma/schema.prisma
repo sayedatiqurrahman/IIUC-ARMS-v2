@@ -59,6 +59,7 @@ model Profile {
    linkedEmails         String[] @default([])
   showInContributors   Boolean? @default(true)
   accountStatus        String?  @default("active")
+  profileType          String?  @default("")
 
   @@index([githubLogin])
   @@index([email])

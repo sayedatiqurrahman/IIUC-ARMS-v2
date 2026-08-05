@@ -17,6 +17,7 @@ interface DashboardSidebarProps {
   effectiveRole: string;
   isCR: boolean;
   hasAdminAccess: boolean;
+  isTeacherUser: boolean;
   profile: any;
   unreadCount?: number;
 }
@@ -46,17 +47,15 @@ const adminMenu: MenuItem[] = [
 ];
 
 export default function DashboardSidebar({
-  activeSection, onNavigate, effectiveRole, isCR, hasAdminAccess, profile, unreadCount,
+  activeSection, onNavigate, effectiveRole, isCR, hasAdminAccess, isTeacherUser, profile, unreadCount,
 }: DashboardSidebarProps) {
   const isStudent = effectiveRole === 'student';
-  const isTeacher = effectiveRole === 'teacher';
-  const isExternal = effectiveRole === 'external';
 
   const menuItems: MenuItem[] = [
     ...baseMenu,
     ...(isStudent ? studentMenu : []),
     ...(isCR ? crMenu : []),
-    ...(isTeacher ? teacherMenu : []),
+    ...(isTeacherUser ? teacherMenu : []),
     ...(hasAdminAccess ? adminMenu : []),
   ];
 

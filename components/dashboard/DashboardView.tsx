@@ -48,6 +48,7 @@ export default function DashboardView() {
     facebook: '', twitter: '', linkedin: '', website: '',
     company: '', companyUrl: '', publicEmail: '',
     hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false, showInContributors: true,
+    profileType: '',
   });
 
   const [switchCRMode, setSwitchCRMode] = useState(false);
@@ -60,17 +61,20 @@ export default function DashboardView() {
   const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!profile.githubToken;
   const email = (session as any)?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
-  const isStudent = effectiveRole === 'student' || /@ugrad\.iiuc\.ac\.bd$/i.test(email);
+  const isVersityEmail = /@(?:ugrad\.)?iiuc\.ac\.bd$/i.test(email);
+  const isStudentEmail = /@ugrad\.iiuc\.ac\.bd$/i.test(email);
+  const isTeacherEmail = isVersityEmail && !isStudentEmail;
+  const isStudent = effectiveRole === 'student' || isStudentEmail;
   const isTeacherOrAbove = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
-  const isTeacherEmail = /@iiuc\.ac\.bd$/i.test(email) && !/@ugrad\.iiuc\.ac\.bd$/i.test(email);
-  // Teachers are recognized by teacher role OR university email (@iiuc.ac.bd non-ugrad).
-  // Managers are NOT teachers — they only manage.
   const isTeacherUser = effectiveRole === 'teacher' || isTeacherEmail;
   const isAdmin = effectiveRole === 'admin';
-  // Admins see only ONE section: if they're a teacher they fill teacher info,
-  // otherwise (student email / plain email) they fill student info.
-  const showStudentSection = isStudent || effectiveRole === 'manager' || (isAdmin && !isTeacherUser);
-  const showTeacherSection = isTeacherUser;
+  // Non-versity admins choose their own info type (teacher / student / maintainer).
+  const isNonVersityAdmin = isAdmin && !isVersityEmail;
+  const profileType = (profile as any).profileType || '';
+  // Admins with a non-versity email decide which section they fill; otherwise
+  // the versity email decides. Teacher info never shows for students and vice versa.
+  const showStudentSection = isNonVersityAdmin ? profileType === 'student' : (isStudent || effectiveRole === 'manager' || (isAdmin && isStudentEmail));
+  const showTeacherSection = isNonVersityAdmin ? profileType === 'teacher' : isTeacherUser;
   const hasAdminAccess = config.isAdminOrAbove(email, profile.role) || effectiveRole === 'manager' || effectiveRole === 'teacher';
   const [ghUser, setGhUser] = useState<any>(null);
   const [ghStats, setGhStats] = useState<any>(null);
@@ -403,7 +407,7 @@ export default function DashboardView() {
             {/* Profile summary */}
             <ProfileCard
               profile={profile} displayImage={displayImage} displayName={displayName} displayEmail={displayEmail}
-              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove} isTeacherUser={isTeacherUser} isAdmin={isAdmin} showStudentSection={showStudentSection} showTeacherSection={showTeacherSection}
+              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove} isTeacherUser={isTeacherUser} isAdmin={isAdmin} isNonVersityAdmin={isNonVersityAdmin} showStudentSection={showStudentSection} showTeacherSection={showTeacherSection}
               editingProfile={editingProfile} editingSocials={editingSocials}
               profileForm={profileForm} setProfileForm={setProfileForm}
               setEditingProfile={setEditingProfile} setEditingSocials={setEditingSocials}
@@ -486,7 +490,7 @@ export default function DashboardView() {
           <div className="space-y-4">
             <ProfileCard
               profile={profile} displayImage={displayImage} displayName={displayName} displayEmail={displayEmail}
-              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove} isTeacherUser={isTeacherUser} isAdmin={isAdmin} showStudentSection={showStudentSection} showTeacherSection={showTeacherSection}
+              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove} isTeacherUser={isTeacherUser} isAdmin={isAdmin} isNonVersityAdmin={isNonVersityAdmin} showStudentSection={showStudentSection} showTeacherSection={showTeacherSection}
               editingProfile={editingProfile} editingSocials={editingSocials}
               profileForm={profileForm} setProfileForm={setProfileForm}
               setEditingProfile={setEditingProfile} setEditingSocials={setEditingSocials}
@@ -579,7 +583,7 @@ export default function DashboardView() {
         );
 
       case 'teacher-info':
-        return isTeacherUser ? <TeacherInfoSection email={email} profile={profile} /> : null;
+        return showTeacherSection ? <TeacherInfoSection email={email} profile={profile} /> : null;
 
       case 'cr-tools':
         return (
@@ -693,6 +697,7 @@ export default function DashboardView() {
           effectiveRole={effectiveRole}
           isCR={!!profile.isCR}
           hasAdminAccess={hasAdminAccess}
+          isTeacherUser={isTeacherUser || showTeacherSection}
           profile={profile}
         />
         <div className="flex-1 min-w-0">

@@ -69,6 +69,7 @@ export interface Profile {
   customPermissions: Record<string, boolean>;
   linkedEmails: string[];
   showInContributors: boolean;
+  profileType: string;
 }
 
 export const defaultProfile: Profile = {
@@ -83,6 +84,7 @@ export const defaultProfile: Profile = {
   customPermissions: {},
   linkedEmails: [],
   showInContributors: true,
+  profileType: '',
   hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false,
 };
 

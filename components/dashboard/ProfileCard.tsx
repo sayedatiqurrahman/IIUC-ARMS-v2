@@ -26,6 +26,7 @@ interface ProfileCardProps {
   isTeacherOrAbove: boolean;
   isTeacherUser: boolean;
   isAdmin: boolean;
+  isNonVersityAdmin: boolean;
   showStudentSection: boolean;
   showTeacherSection: boolean;
   editingProfile: boolean;
@@ -43,7 +44,7 @@ interface ProfileCardProps {
 
 export default function ProfileCard({
   profile, displayImage, displayName, displayEmail,
-  hasGitHub, ghUser, isStudent, isTeacherOrAbove, isTeacherUser, isAdmin, showStudentSection, showTeacherSection,
+  hasGitHub, ghUser, isStudent, isTeacherOrAbove, isTeacherUser, isAdmin, isNonVersityAdmin, showStudentSection, showTeacherSection,
   editingProfile, editingSocials,
   profileForm, setProfileForm, setEditingProfile, setEditingSocials,
   updateProfile, socialLinks,
@@ -56,6 +57,10 @@ export default function ProfileCard({
   // Company / organization is student- and external-user-only; admins, managers
   // and teachers show their department instead.
   const showCompany = isStudent || !isTeacherOrAbove;
+
+  // While editing, a non-versity admin's section follows the live selection.
+  const effStudentSection = isNonVersityAdmin ? profileForm.profileType === 'student' : showStudentSection;
+  const effTeacherSection = isNonVersityAdmin ? profileForm.profileType === 'teacher' : showTeacherSection;
 
   const startEdit = () => {
     const autoId = profile.universityId || extractUniversityId(email);
@@ -85,6 +90,7 @@ export default function ProfileCard({
       hideEmail: profile.hideEmail,
       hideCompany: (profile as any).hideCompany || false,
       showInContributors: (profile as any).showInContributors !== false,
+      profileType: (profile as any).profileType || '',
     });
     setEditingProfile(true);
   };
@@ -143,7 +149,8 @@ export default function ProfileCard({
       {(() => {
         const studentFields = [profile.name, profile.universityId, profile.whatsapp, profile.semester, profile.section];
         const teacherFields = [profile.name, profile.whatsapp];
-        const fields = isStudent ? studentFields : teacherFields;
+        const isStudentLike = isNonVersityAdmin ? effStudentSection : isStudent;
+        const fields = isStudentLike ? studentFields : teacherFields;
         const filled = fields.filter(Boolean).length;
         const pct = Math.round((filled / fields.length) * 100);
         return (
@@ -186,11 +193,38 @@ export default function ProfileCard({
           </div>
 
           {/* ─── ACADEMIC / VERSITY INFO ─── */}
-          {(showStudentSection || showTeacherSection) && (
+          {(effStudentSection || effTeacherSection) && (
             <p className="text-[0.72rem] font-bold text-qsis uppercase tracking-wider mb-2"><i className="fas fa-university mr-1"></i>Versity Info</p>
           )}
 
-          {showStudentSection && (
+          {isNonVersityAdmin && (
+            <div className="border border-dark-border rounded-lg p-3 mb-3">
+              <p className="text-[0.7rem] font-semibold text-dark-text2 mb-2"><i className="fas fa-user-tag mr-1"></i>I am a</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: 'student', label: 'Student', icon: 'fa-graduation-cap' },
+                  { value: 'teacher', label: 'Teacher', icon: 'fa-chalkboard-teacher' },
+                  { value: 'maintainer', label: 'Maintainer', icon: 'fa-wrench' },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setProfileForm(p => ({ ...p, profileType: opt.value }))}
+                    className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold border cursor-pointer transition-all flex items-center gap-1.5 ${
+                      profileForm.profileType === opt.value
+                        ? 'bg-qsis/15 border-qsis/40 text-qsis'
+                        : 'bg-dark-bg border-dark-border text-dark-text2 hover:border-qsis/30 hover:text-dark-text'
+                    }`}
+                  >
+                    <i className={`fas ${opt.icon}`}></i> {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[0.62rem] text-dark-text3 mt-2">You signed in with a personal email. Pick whether you are a student, teacher, or just a maintainer so we show the right info section.</p>
+            </div>
+          )}
+
+          {effStudentSection && (
             <div className="border border-dark-border rounded-lg p-3 mb-3">
               <p className="text-[0.7rem] font-semibold text-dark-text2 mb-2"><i className="fas fa-graduation-cap mr-1"></i>Student Info</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -240,7 +274,7 @@ export default function ProfileCard({
             </div>
           )}
 
-          {showTeacherSection && (
+          {effTeacherSection && (
             <div className="border border-dark-border rounded-lg p-3 mb-3">
               <p className="text-[0.7rem] font-semibold text-dark-text2 mb-2"><i className="fas fa-chalkboard-teacher mr-1"></i>Teacher Info</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -290,7 +324,7 @@ export default function ProfileCard({
           {/* Privacy Toggles */}
           <div className="mb-3 p-3 rounded-lg bg-dark-bg border border-dark-border">
             <p className="text-[0.72rem] text-dark-text2 mb-2"><i className="fas fa-eye-slash mr-1"></i>Privacy Settings</p>
-            {showStudentSection && (
+            {effStudentSection && (
               <label className="flex items-center gap-2 cursor-pointer mb-2">
                 <input type="checkbox" checked={profileForm.hideUniversityId} onChange={e => setProfileForm(p => ({ ...p, hideUniversityId: e.target.checked }))} className="accent-qsis" />
                 <span className="text-[0.78rem] text-dark-text">Hide University ID from public profile</span>
@@ -300,7 +334,7 @@ export default function ProfileCard({
               <input type="checkbox" checked={profileForm.hideWhatsapp} onChange={e => setProfileForm(p => ({ ...p, hideWhatsapp: e.target.checked }))} className="accent-qsis" />
               <span className="text-[0.78rem] text-dark-text">Hide WhatsApp from public profile</span>
             </label>
-            {showStudentSection && (
+            {effStudentSection && (
               <label className="flex items-center gap-2 cursor-pointer mb-2">
                 <input type="checkbox" checked={profileForm.hideSemester} onChange={e => setProfileForm(p => ({ ...p, hideSemester: e.target.checked }))} className="accent-qsis" />
                 <span className="text-[0.78rem] text-dark-text">Hide Semester from public profile</span>

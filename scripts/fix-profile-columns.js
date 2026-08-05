@@ -21,6 +21,7 @@ async function main() {
     { name: 'banReason', type: 'TEXT' },
     { name: 'bannedBy', type: 'TEXT' },
     { name: 'accountStatus', type: "STRING DEFAULT 'active'" },
+    { name: 'profileType', type: 'TEXT' },
   ];
 
   for (const col of columns) {
