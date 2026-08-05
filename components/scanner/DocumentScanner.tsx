@@ -94,17 +94,36 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
   // ---- Camera setup ----
   useEffect(() => {
     let cancelled = false;
+
     async function start() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
-          audio: false,
-        });
+        // Prefer the rear camera, but fall back to any available camera on
+        // devices where the rear one is missing or busy (avoids black screen).
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+            audio: false,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+            audio: false,
+          });
+        }
         if (cancelled) {
           stream.getTracks().forEach(t => t.stop());
           return;
         }
         streamRef.current = stream;
+        // Attach to the already-mounted <video> element directly — the element
+        // mounts before getUserMedia resolves, so the ref callback alone cannot
+        // be relied on to wire the stream up on first open.
+        const el = videoRef.current;
+        if (el && el.srcObject !== stream) {
+          el.srcObject = stream;
+          el.play().catch(() => {});
+        }
         setReady(true);
       } catch {
         setError('Camera access denied or unavailable. Please allow camera permission.');
