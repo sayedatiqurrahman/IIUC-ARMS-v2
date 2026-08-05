@@ -16,9 +16,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { targetEmail, name, role, department, semester, section } = body;
+    const { targetEmail, email: formEmail, name, role, department, semester, section, password } = body;
+    const normalizedEmail = (targetEmail || formEmail || '').toLowerCase().trim();
 
-    if (!targetEmail || !targetEmail.includes('@')) {
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
       return NextResponse.json({ error: 'Valid email required' }, { status: 400 });
     }
 
@@ -30,15 +31,14 @@ export async function POST(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     const { getAdminAuth } = await import('@/lib/firebase-admin');
 
-    const normalizedEmail = targetEmail.toLowerCase().trim();
-
     // Check if user already exists
     const existing = await prisma.profile.findUnique({ where: { userId: normalizedEmail } });
     if (existing) {
       return NextResponse.json({ error: 'User already exists. Use the Users tab to manage them.' }, { status: 409 });
     }
 
-    // Create Firebase Auth user (send password reset so they can set their own password)
+    // Create Firebase Auth user. If a password was supplied it is set directly,
+    // otherwise (or as well) a password-setup email is sent via Firebase.
     let firebaseUid = '';
     const auth = getAdminAuth();
     if (auth) {
@@ -47,9 +47,10 @@ export async function POST(req: NextRequest) {
           email: normalizedEmail,
           displayName: name || normalizedEmail.split('@')[0],
           emailVerified: true,
+          ...(password ? { password } : {}),
         });
         firebaseUid = firebaseUser.uid;
-        // Send password setup email
+        // Send password setup email so they can set/recover their password.
         await auth.generatePasswordResetLink(normalizedEmail);
       } catch (firebaseErr: any) {
         // If user already exists in Firebase, continue

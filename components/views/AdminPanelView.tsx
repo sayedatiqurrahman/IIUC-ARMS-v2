@@ -77,7 +77,7 @@ export default function AdminPanelView() {
   const [overviewFacultyCount, setOverviewFacultyCount] = useState(0);
   const [recentLogins, setRecentLogins] = useState<UserRecord[]>([]);
   const [showCreateUser, setShowCreateUser] = useState(false);
-  const [createUserForm, setCreateUserForm] = useState({ email: '', name: '', role: 'user', department: '', semester: '', section: '' });
+  const [createUserForm, setCreateUserForm] = useState({ email: '', name: '', role: 'user', department: '', semester: '', section: '', password: '' });
   const [createUserLoading, setCreateUserLoading] = useState(false);
   const [createUserError, setCreateUserError] = useState('');
   const [createUserSuccess, setCreateUserSuccess] = useState('');
@@ -428,7 +428,7 @@ export default function AdminPanelView() {
       const data = await res.json();
       if (data.success) {
         setCreateUserSuccess(data.message);
-        setCreateUserForm({ email: '', name: '', role: 'user', department: '', semester: '', section: '' });
+        setCreateUserForm({ email: '', name: '', role: 'user', department: '', semester: '', section: '', password: '' });
         setShowCreateUser(false);
         refreshUsers();
       } else {

@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { config } from '@/lib/config';
+import { getDepartmentOptions } from '@/lib/utils';
 import CustomSelect from '@/components/CustomSelect';
 import { type UserRecord, type UserSubTab } from './types';
 import UserRow from './UserRow';
@@ -22,8 +23,8 @@ interface UsersTabProps {
   setSearchQuery: (q: string) => void;
   showCreateUser: boolean;
   setShowCreateUser: (show: boolean) => void;
-  createUserForm: { email: string; name: string; role: string; department: string; semester: string; section: string };
-  setCreateUserForm: React.Dispatch<React.SetStateAction<{ email: string; name: string; role: string; department: string; semester: string; section: string }>>;
+  createUserForm: { email: string; name: string; role: string; department: string; semester: string; section: string; password: string };
+  setCreateUserForm: React.Dispatch<React.SetStateAction<{ email: string; name: string; role: string; department: string; semester: string; section: string; password: string }>>;
   createUserLoading: boolean;
   createUserError: string;
   createUserSuccess: string;
@@ -228,13 +229,18 @@ export default function UsersTab({
           <h4 className="text-[0.85rem] font-semibold text-dark-text mb-3"><i className="fas fa-user-plus text-qsis mr-1.5"></i>Create New User</h4>
           <p className="text-[0.72rem] text-dark-text3 mb-3">Create an account for any email address (including non-university emails). They can set their password via email.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-            <div>
+            <div className="sm:col-span-2">
               <label className="text-[0.72rem] text-dark-text2 block mb-1">Email *</label>
               <input type="email" value={createUserForm.email} onChange={e => setCreateUserForm(p => ({ ...p, email: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="user@example.com" />
+              <p className="text-[0.65rem] text-dark-text3 mt-1">Any email works — university (<span className="text-dark-text2">@ugrad.iiuc.ac.bd</span>, <span className="text-dark-text2">@iiuc.ac.bd</span>) or personal (Gmail, Outlook, etc.).</p>
             </div>
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
               <input type="text" value={createUserForm.name} onChange={e => setCreateUserForm(p => ({ ...p, name: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="John Doe" />
+            </div>
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">Password</label>
+              <input type="password" value={createUserForm.password} onChange={e => setCreateUserForm(p => ({ ...p, password: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="Leave blank to send setup email" />
             </div>
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1">Role *</label>
@@ -252,7 +258,13 @@ export default function UsersTab({
             </div>
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1">Department</label>
-              <input type="text" value={createUserForm.department} onChange={e => setCreateUserForm(p => ({ ...p, department: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="e.g. qsis" />
+              <CustomSelect
+                value={createUserForm.department}
+                onChange={(val) => setCreateUserForm(p => ({ ...p, department: val }))}
+                placeholder="None"
+                searchable
+                options={getDepartmentOptions()}
+              />
             </div>
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester</label>
