@@ -63,8 +63,14 @@ export default function DashboardView() {
   const isStudent = effectiveRole === 'student' || /@ugrad\.iiuc\.ac\.bd$/i.test(email);
   const isTeacherOrAbove = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
   const isTeacherEmail = /@iiuc\.ac\.bd$/i.test(email) && !/@ugrad\.iiuc\.ac\.bd$/i.test(email);
-  const isTeacherUser = effectiveRole === 'teacher' || effectiveRole === 'manager' || isTeacherEmail;
+  // Teachers are recognized by teacher role OR university email (@iiuc.ac.bd non-ugrad).
+  // Managers are NOT teachers — they only manage.
+  const isTeacherUser = effectiveRole === 'teacher' || isTeacherEmail;
   const isAdmin = effectiveRole === 'admin';
+  // Admins see only ONE section: if they're a teacher they fill teacher info,
+  // otherwise (student email / plain email) they fill student info.
+  const showStudentSection = isStudent || effectiveRole === 'manager' || (isAdmin && !isTeacherUser);
+  const showTeacherSection = isTeacherUser;
   const hasAdminAccess = config.isAdminOrAbove(email, profile.role) || effectiveRole === 'manager' || effectiveRole === 'teacher';
   const [ghUser, setGhUser] = useState<any>(null);
   const [ghStats, setGhStats] = useState<any>(null);
@@ -397,7 +403,7 @@ export default function DashboardView() {
             {/* Profile summary */}
             <ProfileCard
               profile={profile} displayImage={displayImage} displayName={displayName} displayEmail={displayEmail}
-              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove} isTeacherUser={isTeacherUser} isAdmin={isAdmin}
+              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove} isTeacherUser={isTeacherUser} isAdmin={isAdmin} showStudentSection={showStudentSection} showTeacherSection={showTeacherSection}
               editingProfile={editingProfile} editingSocials={editingSocials}
               profileForm={profileForm} setProfileForm={setProfileForm}
               setEditingProfile={setEditingProfile} setEditingSocials={setEditingSocials}
@@ -480,7 +486,7 @@ export default function DashboardView() {
           <div className="space-y-4">
             <ProfileCard
               profile={profile} displayImage={displayImage} displayName={displayName} displayEmail={displayEmail}
-              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove} isTeacherUser={isTeacherUser} isAdmin={isAdmin}
+              hasGitHub={hasGitHub} ghUser={ghUser} isStudent={isStudent} isTeacherOrAbove={isTeacherOrAbove} isTeacherUser={isTeacherUser} isAdmin={isAdmin} showStudentSection={showStudentSection} showTeacherSection={showTeacherSection}
               editingProfile={editingProfile} editingSocials={editingSocials}
               profileForm={profileForm} setProfileForm={setProfileForm}
               setEditingProfile={setEditingProfile} setEditingSocials={setEditingSocials}

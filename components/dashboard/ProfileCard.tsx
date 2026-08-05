@@ -26,6 +26,8 @@ interface ProfileCardProps {
   isTeacherOrAbove: boolean;
   isTeacherUser: boolean;
   isAdmin: boolean;
+  showStudentSection: boolean;
+  showTeacherSection: boolean;
   editingProfile: boolean;
   editingSocials: boolean;
   profileForm: any;
@@ -41,7 +43,7 @@ interface ProfileCardProps {
 
 export default function ProfileCard({
   profile, displayImage, displayName, displayEmail,
-  hasGitHub, ghUser, isStudent, isTeacherOrAbove, isTeacherUser, isAdmin,
+  hasGitHub, ghUser, isStudent, isTeacherOrAbove, isTeacherUser, isAdmin, showStudentSection, showTeacherSection,
   editingProfile, editingSocials,
   profileForm, setProfileForm, setEditingProfile, setEditingSocials,
   updateProfile, socialLinks,
@@ -49,9 +51,6 @@ export default function ProfileCard({
 }: ProfileCardProps) {
   const { data: session } = useSession();
   const email = profile.email || (session as any)?.user?.email || '';
-  // Students = @ugrad.iiuc.ac.bd, teachers = @iiuc.ac.bd (or role). Admins see both.
-  const showStudentSection = isStudent || isAdmin;
-  const showTeacherSection = isTeacherUser || isAdmin;
   // University email is auto-derived from the login email.
   const universityEmail = /@(?:ugrad\.)?iiuc\.ac\.bd$/i.test(email) ? email : '';
   // Company / organization is student- and external-user-only; admins, managers
