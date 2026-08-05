@@ -1,5 +1,15 @@
-const CACHE_NAME = 'iiuc-arms-v17';
+// IMMUTABLE: Next.js hashed build output (/_next/static/*). These files are
+// content-addressed — the hash changes when the file changes — so they can be
+// cached forever and NEVER deleted. Keeping them across updates is what makes
+// the installed app open instantly after a deploy (no re-download of all JS).
+const IMMUTABLE_CACHE = 'iiuc-arms-immutable-v1';
+
+// SHELL: HTML pages + non-hashed app assets. Revalidated on every navigation.
+const SHELL_CACHE = 'iiuc-arms-shell-v1';
+
+// FILE: opened file content from the files repo (offline reopening).
 const FILE_CACHE = 'iiuc-arms-files-v1';
+
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -7,18 +17,73 @@ const STATIC_ASSETS = [
   '/tessdata/worker.min.js',
 ];
 
+function isImmutable(url) {
+  return url.pathname.startsWith('/_next/static/');
+}
+
+// After fetching fresh HTML, download the JS/CSS chunks it references into the
+// immutable cache so the next launch is fully warm (only changed chunks re-fetch).
+async function prewarmLinkedAssets(htmlText, baseUrl) {
+  const urls = new Set();
+  const re = /(?:src|href)="([^"]+)"/g;
+  let m;
+  while ((m = re.exec(htmlText))) {
+    const rel = m[1];
+    if (rel.startsWith('/_next/')) urls.add(rel);
+  }
+  const imm = await caches.open(IMMUTABLE_CACHE);
+  for (const rel of urls) {
+    const href = new URL(rel, baseUrl).href;
+    try {
+      if (await imm.match(href)) continue;
+      const res = await fetch(href);
+      if (res.ok) await imm.put(href, res.clone());
+    } catch {}
+  }
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+    caches.open(SHELL_CACHE)
+      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then(async () => {
+        // Warm the immutable cache right away so even the FIRST launch of a
+        // freshly installed app renders instantly (no on-demand JS download).
+        try {
+          const res = await fetch('/');
+          if (res.ok) prewarmLinkedAssets(await res.text(), self.location.origin);
+        } catch {}
+      })
   );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== FILE_CACHE).map((k) => caches.delete(k)))
-    )
+    caches.keys().then(async (keys) => {
+      const keep = new Set([IMMUTABLE_CACHE, SHELL_CACHE, FILE_CACHE]);
+      const imm = await caches.open(IMMUTABLE_CACHE);
+
+      // Carry over hashed build assets from any previous cache (e.g. old
+      // iiuc-arms-v17) so an update doesn't force a full re-download.
+      for (const key of keys) {
+        if (keep.has(key)) continue;
+        const cache = await caches.open(key);
+        const requests = await cache.keys();
+        for (const req of requests) {
+          const u = new URL(req.url);
+          if (isImmutable(u)) {
+            try {
+              if (!(await imm.match(req.url))) {
+                const res = await cache.match(req);
+                if (res) await imm.put(req.url, res);
+              }
+            } catch {}
+          }
+        }
+        await caches.delete(key);
+      }
+    })
   );
   self.clients.claim();
 });
@@ -64,7 +129,7 @@ self.addEventListener('fetch', (event) => {
       // The app busts with ?_t=, so normalize the cache key to pathname-only.
       const treeUrl = url.origin + url.pathname;
       event.respondWith(
-        caches.open(CACHE_NAME).then(async (cache) => {
+        caches.open(SHELL_CACHE).then(async (cache) => {
           const cached = await cache.match(treeUrl);
           const networkPromise = fetch(request).then((response) => {
             if (response.ok) cache.put(treeUrl, response.clone());
@@ -88,16 +153,21 @@ self.addEventListener('fetch', (event) => {
 
   // Navigation: stale-while-revalidate. Installed-app launches open instantly
   // from the cached shell, while the network copy is fetched in the background
-  // to refresh the cache. Version changes are handled app-side by
-  // checkAndBustCache (clears caches + reloads), so serving a stale shell
-  // briefly is safe and fast.
+  // to refresh the cache. New chunks referenced by the fresh HTML are prewarmed
+  // into the immutable cache so the following launch is instant.
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.open(CACHE_NAME).then(async (cache) => {
+      caches.open(SHELL_CACHE).then(async (cache) => {
         const cached = await cache.match(request);
         const networkPromise = fetch(request)
-          .then((response) => {
-            if (response.ok) cache.put(request, response.clone()).catch(() => {});
+          .then(async (response) => {
+            if (response.ok) {
+              cache.put(request, response.clone()).catch(() => {});
+              try {
+                const text = await response.clone().text();
+                prewarmLinkedAssets(text, url.href).catch(() => {});
+              } catch {}
+            }
             return response;
           })
           .catch(() => null);
@@ -111,10 +181,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets (_next, fonts, images): cache-first
-  if (url.pathname.startsWith('/_next/') || url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|woff2?)$/i)) {
+  // Hashed build assets (/_next/static/*): cache-first, kept forever.
+  if (isImmutable(url)) {
     event.respondWith(
-      caches.open(CACHE_NAME).then(async (cache) => {
+      caches.open(IMMUTABLE_CACHE).then(async (cache) => {
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        try {
+          const response = await fetch(request);
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        } catch {
+          return new Response('', { status: 504 });
+        }
+      })
+    );
+    return;
+  }
+
+  // Other static assets (fonts, images, non-hashed css/js): cache-first.
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|woff2?)$/i)) {
+    event.respondWith(
+      caches.open(SHELL_CACHE).then(async (cache) => {
         const cached = await cache.match(request);
         if (cached) return cached;
         try {
@@ -131,7 +219,7 @@ self.addEventListener('fetch', (event) => {
 
   // Everything else: stale-while-revalidate
   event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
+    caches.open(SHELL_CACHE).then(async (cache) => {
       const cached = await cache.match(request);
       const networkPromise = fetch(request).then((response) => {
         if (response.ok) cache.put(request, response.clone());

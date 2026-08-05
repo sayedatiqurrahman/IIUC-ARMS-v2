@@ -11,6 +11,20 @@ const PRESERVE_KEYS = [
   'qsis_onboarding_cancel_count',
 ];
 
+// The SW keeps hashed build assets (/_next/static/*) in this cache forever so
+// the installed app launches instantly. It must NEVER be wiped here — old hashes
+// are harmless and new ones are added as the updated shell loads.
+const IMMUTABLE_CACHE_PREFIX = 'iiuc-arms-immutable-';
+
+async function deleteCachesExceptImmutable(): Promise<void> {
+  if (!('caches' in window)) return;
+  const keys = await caches.keys();
+  for (const key of keys) {
+    if (key.startsWith(IMMUTABLE_CACHE_PREFIX)) continue;
+    await caches.delete(key);
+  }
+}
+
 export function checkAndBustCache(): boolean {
   try {
     const stored = localStorage.getItem(VERSION_KEY);
@@ -44,11 +58,7 @@ export function clearAppCache(): void {
   } catch {}
 
   if ('caches' in window) {
-    caches.keys().then(keys => {
-      for (const key of keys) {
-        caches.delete(key);
-      }
-    });
+    deleteCachesExceptImmutable();
   }
 
   if ('serviceWorker' in navigator) {
@@ -113,8 +123,7 @@ export async function hardRefresh(): Promise<void> {
 
   if ('caches' in window) {
     try {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(key => caches.delete(key)));
+      await deleteCachesExceptImmutable();
     } catch {}
   }
 
@@ -134,11 +143,7 @@ export function forceResetApp(): void {
   } catch {}
 
   if ('caches' in window) {
-    caches.keys().then(keys => {
-      for (const key of keys) {
-        caches.delete(key);
-      }
-    });
+    deleteCachesExceptImmutable();
   }
 
   if ('serviceWorker' in navigator) {
