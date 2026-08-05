@@ -66,6 +66,7 @@ export default function ProfileCard({
       title: profile.title || '',
       shortForm: profile.shortForm || '',
       whatsapp: profile.whatsapp,
+      phone: profile.phone || '',
       telegramId: profile.telegramId || '',
       semester: profile.semester,
       section: profile.section || '',
@@ -173,6 +174,10 @@ export default function ProfileCard({
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fab fa-whatsapp mr-1"></i>WhatsApp</label>
               <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. +8801XXXXXXXXX" value={profileForm.whatsapp} onChange={e => setProfileForm(p => ({ ...p, whatsapp: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-phone mr-1"></i>Phone Number</label>
+              <input type="tel" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors" placeholder="e.g. 016XXXXXXXX" value={profileForm.phone} onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} />
             </div>
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-envelope mr-1"></i>Public Email <span className="text-dark-text3">(shown on profile)</span></label>
@@ -368,6 +373,12 @@ export default function ProfileCard({
               <span className="text-[0.7rem] text-dark-text2 block mb-1">WhatsApp</span>
               <span className={`text-[0.85rem] font-semibold ${profile.whatsapp ? '' : 'text-dark-text2'}`}>
                 {profile.whatsapp || 'Not set'}
+              </span>
+            </div>
+            <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+              <span className="text-[0.7rem] text-dark-text2 block mb-1">Phone Number</span>
+              <span className={`text-[0.85rem] font-semibold ${profile.phone ? '' : 'text-dark-text2'}`}>
+                {profile.phone || 'Not set'}
               </span>
             </div>
             <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">

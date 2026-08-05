@@ -44,7 +44,7 @@ export default function DashboardView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
-    universityId: '', name: '', whatsapp: '', telegramId: '', semester: '', section: '', department: '', batchId: '', session: '',
+    universityId: '', name: '', whatsapp: '', phone: '', telegramId: '', semester: '', section: '', department: '', batchId: '', session: '',
     facebook: '', twitter: '', linkedin: '', website: '',
     company: '', companyUrl: '', publicEmail: '',
     hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false, showInContributors: true,
