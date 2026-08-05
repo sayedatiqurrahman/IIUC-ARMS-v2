@@ -66,7 +66,8 @@ export const config = {
     return false;
   },
   maxFilesPerUpload: 10,
-  maxUploadSizeMB: 50,
+  // GitHub Contents API supports files up to 100MB — match that ceiling.
+  maxUploadSizeMB: 100,
   academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','webp','csv'],
   githubStarRepos: [
     { owner: 'sayedatiqurrahman', repo: 'QSIS-ACADEMIC-FILES-MANAFGER', label: 'QSIS Academic Files' },

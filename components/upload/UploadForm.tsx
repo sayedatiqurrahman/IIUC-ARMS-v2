@@ -436,12 +436,12 @@ export default function UploadForm({
             )}
             {' '}across {courses.filter(c => c.files.length > 0 || c.links.length > 0).length} course{courses.filter(c => c.files.length > 0 || c.links.length > 0).length !== 1 ? 's' : ''}
           </span>
-          <span className={`font-semibold ${totalSizeMB > 40 ? 'text-red-400' : 'text-qsis'}`}>
-            {totalSizeMB.toFixed(1)} / 50 MB
+          <span className={`font-semibold ${totalSizeMB > config.maxUploadSizeMB - 10 ? 'text-red-400' : 'text-qsis'}`}>
+            {totalSizeMB.toFixed(1)} / {config.maxUploadSizeMB} MB
           </span>
         </div>
         <div className="w-full h-1.5 bg-dark-bg3 rounded-full overflow-hidden mt-2">
-          <div className="h-full bg-gradient-to-r from-qsis to-accent rounded-full transition-all" style={{ width: `${Math.min((totalSizeMB / 50) * 100, 100)}%` }}></div>
+          <div className="h-full bg-gradient-to-r from-qsis to-accent rounded-full transition-all" style={{ width: `${Math.min((totalSizeMB / config.maxUploadSizeMB) * 100, 100)}%` }}></div>
         </div>
       </div>
 

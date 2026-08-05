@@ -203,7 +203,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     if (newTotal > 10) { alert(`Max 10 files total across all courses. You can add ${10 - totalFiles + currentCourseFiles} more.`); return; }
 
     const newTotalSize = (totalSizeMB * 1024 * 1024 - (course?.files.reduce((s, f) => s + f.file.size, 0) || 0) + valid.reduce((s, f) => s + f.size, 0)) / (1024 * 1024);
-    if (newTotalSize > 50) { alert('Total upload size cannot exceed 50MB.'); return; }
+    if (newTotalSize > config.maxUploadSizeMB) { alert(`Total upload size cannot exceed ${config.maxUploadSizeMB}MB.`); return; }
 
     const newFiles: FileWithMeta[] = valid.map(f => {
       if (isNotes) return { file: f, year: String(CURRENT_YEAR), yearRange: '' };
