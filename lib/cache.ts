@@ -88,22 +88,30 @@ export async function checkForAppUpdate(): Promise<boolean> {
 
     await reg.update();
 
-    if (await found) {
-      const alreadyActive = reg.active && reg.active === navigator.serviceWorker.controller;
-      if (alreadyActive) {
-        window.location.reload();
-      } else {
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          window.location.reload();
-        }, { once: true });
-        reg.active?.postMessage({ type: 'SKIP_WAITING' });
-      }
-      return true;
-    }
-    return false;
+    return await found;
   } catch {
     return false;
   }
+}
+
+export async function hardRefresh(): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  if ('caches' in window) {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(key => caches.delete(key)));
+    } catch {}
+  }
+
+  if ('serviceWorker' in navigator) {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(reg => reg.unregister()));
+    } catch {}
+  }
+
+  window.location.reload();
 }
 
 export function forceResetApp(): void {

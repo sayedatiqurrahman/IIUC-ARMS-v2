@@ -12,7 +12,7 @@ import OnboardingModal, { getOnboardingData, type OnboardingData } from '@/compo
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut, signIn } from 'next-auth/react';
 import { config } from '@/lib/config';
-import { checkAndBustCache, forceResetApp, checkForAppUpdate } from '@/lib/cache';
+import { checkAndBustCache, forceResetApp, checkForAppUpdate, hardRefresh } from '@/lib/cache';
 import { useConfirm } from '@/components/ConfirmModal';
 import { useTurnstile } from '@/lib/useTurnstile';
 import { handleGoogleRedirectResult } from '@/lib/firebase';
@@ -36,7 +36,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const { showToast } = await import('@/lib/utils');
     showToast('Checking for updates...', 'info');
     const hasUpdate = await checkForAppUpdate();
-    if (!hasUpdate) showToast('You are up to date!', 'success');
+    if (hasUpdate) {
+      showToast('Updating...', 'info');
+      await hardRefresh();
+    } else {
+      showToast('You are up to date!', 'success');
+    }
   };
 
   // Pre-render Turnstile when Sign In is clicked
@@ -256,7 +261,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="bg-gradient-to-r from-qsis to-accent text-white px-4 py-2 text-center text-[0.82rem] font-medium flex items-center justify-center gap-3 z-[200] relative">
           <i className="fas fa-download"></i>
           <span>New update available!</span>
-          <button onClick={() => window.location.reload()} className="px-3 py-1 rounded-lg bg-white/20 hover:bg-white/30 border-none cursor-pointer text-white text-[0.78rem] font-semibold transition-colors">
+          <button onClick={() => hardRefresh()} className="px-3 py-1 rounded-lg bg-white/20 hover:bg-white/30 border-none cursor-pointer text-white text-[0.78rem] font-semibold transition-colors">
             <i className="fas fa-sync-alt mr-1"></i>Update Now
           </button>
           <button onClick={() => setShowUpdateBanner(false)} className="px-2 py-1 rounded-lg bg-transparent hover:bg-white/10 border-none cursor-pointer text-white/70 text-[0.78rem] transition-colors">
