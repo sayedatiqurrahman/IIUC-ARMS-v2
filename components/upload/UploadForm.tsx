@@ -412,10 +412,14 @@ export default function UploadForm({
                   </button>
                   <div className="h-px bg-dark-border" />
                   <button
-                    className="w-full flex items-center gap-3 px-4 py-3 text-left text-[0.8rem] font-semibold text-dark-text bg-transparent border-none cursor-pointer hover:bg-dark-border/40"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left text-[0.8rem] font-semibold text-qsis bg-qsis/10 border-none cursor-pointer hover:bg-qsis/20"
                     onClick={() => { onOpenScanner(course.id); setChooserCourseId(null); }}
                   >
-                    <i className="fas fa-camera text-qsis"></i> Photo — scan with CamScanner
+                    <i className="fas fa-camera text-lg"></i>
+                    <span className="flex flex-col">
+                      <span>Doc Scanner</span>
+                      <span className="text-[0.65rem] text-dark-text2 font-normal">Detect, auto-crop &amp; straighten pages</span>
+                    </span>
                   </button>
                 </div>
               </>
