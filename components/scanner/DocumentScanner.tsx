@@ -185,7 +185,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
   useEffect(() => {
     if (!ready) return;
     let disposed = false;
-    const DETECT_MS = 180;
+    const DETECT_MS = 120;
     let lastDetect = 0;
 
     function tick() {
@@ -210,7 +210,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
       if (now - lastDetect < DETECT_MS) return;
       lastDetect = now;
 
-      const scale = Math.min(1, 320 / Math.max(vw, vh));
+      const scale = Math.min(1, 480 / Math.max(vw, vh));
       const dw = Math.round(vw * scale);
       const dh = Math.round(vh * scale);
       let quad: Quad | null = null;
@@ -222,12 +222,22 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
       const full = quad ? quad.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad : null;
 
       if (full) {
-        // Temporal smoothing so the frame glides instead of jumping.
+        // Adaptive temporal smoothing: snap hard while the paper is moving so
+        // the frame tracks in real time, ease gently once it settles.
         const prev = lastQuadRef.current;
+        let alpha = 0.75;
+        if (prev) {
+          let drift = 0;
+          for (let i = 0; i < 4; i++) {
+            drift += Math.hypot(full[i].x - prev[i].x, full[i].y - prev[i].y);
+          }
+          const diag = Math.hypot(vw, vh);
+          alpha = drift / 4 < diag * 0.008 ? 0.35 : drift / 4 < diag * 0.02 ? 0.6 : 1;
+        }
         const smoothed: Quad = prev
           ? orderQuad(full.map((p, i) => ({
-              x: prev[i].x * 0.55 + p.x * 0.45,
-              y: prev[i].y * 0.55 + p.y * 0.45,
+              x: prev[i].x * (1 - alpha) + p.x * alpha,
+              y: prev[i].y * (1 - alpha) + p.y * alpha,
             })) as Quad)
           : full;
         quadRef.current = smoothed;
@@ -309,9 +319,11 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
           const quad = quadRef.current;
           if (quad) {
             const pts = quad.map(p => ({ x: offX + p.x * scale, y: offY + p.y * scale }));
-            // Dim everything outside the document.
+            // Dim everything OUTSIDE the document: mask the whole frame, punch
+            // the quad out with even-odd winding (fills outside, keeps inside bright).
             ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
             ctx.beginPath();
+            ctx.rect(0, 0, cssW, cssH);
             ctx.moveTo(pts[0].x, pts[0].y);
             for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
             ctx.closePath();
