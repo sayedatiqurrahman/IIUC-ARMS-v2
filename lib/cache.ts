@@ -66,29 +66,27 @@ export async function checkForAppUpdate(): Promise<boolean> {
     const reg = await navigator.serviceWorker.getRegistration();
     if (!reg) return false;
 
-    const found = new Promise<boolean>((resolve) => {
-      let done = false;
-      const finish = (result: boolean) => { if (!done) { done = true; resolve(result); } };
-
-      const onFound = () => {
-        const worker = reg.installing;
-        if (!worker) { finish(false); return; }
-        const onState = () => {
-          if (worker.state === 'installed' || worker.state === 'activated') {
-            worker.removeEventListener('statechange', onState);
-            finish(true);
-          }
-        };
-        worker.addEventListener('statechange', onState);
-      };
-
-      if (reg.installing || reg.waiting) onFound();
-      else reg.addEventListener('updatefound', onFound, { once: true });
-    });
+    const prevActive = reg.active;
 
     await reg.update();
 
-    return await found;
+    const worker = reg.installing || reg.waiting;
+    if (worker) {
+      if (worker.state === 'installed' || worker.state === 'activated') return true;
+      return await new Promise<boolean>((resolve) => {
+        const t = window.setTimeout(() => resolve(true), 10000);
+        const onState = () => {
+          if (worker.state === 'installed' || worker.state === 'activated') {
+            worker.removeEventListener('statechange', onState);
+            window.clearTimeout(t);
+            resolve(true);
+          }
+        };
+        worker.addEventListener('statechange', onState);
+      });
+    }
+
+    return reg.active !== prevActive;
   } catch {
     return false;
   }
