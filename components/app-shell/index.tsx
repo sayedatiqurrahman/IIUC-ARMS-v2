@@ -14,6 +14,7 @@ import { signOut, signIn } from 'next-auth/react';
 import { config } from '@/lib/config';
 import { checkAndBustCache, forceResetApp, checkForAppUpdate, hardRefresh } from '@/lib/cache';
 import { useConfirm } from '@/components/ConfirmModal';
+import { isStandalone, isInBrowser, isIOSBrowser, type BeforeInstallPromptEvent } from '@/lib/standalone';
 import { useTurnstile } from '@/lib/useTurnstile';
 import { handleGoogleRedirectResult } from '@/lib/firebase';
 import ImageViewer from './ImageViewer';
@@ -31,6 +32,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { confirm, confirmDialog } = useConfirm();
   const confirmRef = useRef(confirm);
   confirmRef.current = confirm;
+  const [standalone, setStandalone] = useState(false);
+
+  useEffect(() => {
+    setStandalone(isStandalone());
+    const mq = window.matchMedia?.('(display-mode: standalone)');
+    const mq2 = window.matchMedia?.('(display-mode: window-controls-overlay)');
+    const update = () => setStandalone(isStandalone());
+    if (mq) {
+      mq.addEventListener?.('change', update);
+      mq2?.addEventListener?.('change', update);
+      return () => {
+        mq.removeEventListener?.('change', update);
+        mq2?.removeEventListener?.('change', update);
+      };
+    }
+  }, []);
 
   const handleCheckUpdate = async () => {
     const { showToast } = await import('@/lib/utils');
@@ -43,6 +60,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       showToast('You are up to date!', 'success');
     }
   };
+
+  const [installBannerDismissed, setInstallBannerDismissed] = useState(false);
+  const [canInstall, setCanInstall] = useState<BeforeInstallPromptEvent | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (localStorage.getItem('qsis-install-banner-dismissed') === 'true') setInstallBannerDismissed(true);
+    const onBeforeInstall = (e: any) => {
+      e.preventDefault();
+      setCanInstall(e);
+    };
+    const onAppInstalled = () => {
+      setCanInstall(null);
+      setInstallBannerDismissed(true);
+    };
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    window.addEventListener('appinstalled', onAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      window.removeEventListener('appinstalled', onAppInstalled);
+    };
+  }, []);
+
+  const showInstallBanner = isInBrowser() && !installBannerDismissed && (canInstall !== null || isIOSBrowser());
 
   // Pre-render Turnstile when Sign In is clicked
   const turnstileContainerId = 'pre-login-turnstile-container';
@@ -501,7 +541,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 onClick={async () => { if (await confirm({ message: 'Reset App? This will clear all cached data and reload.', danger: true, title: 'Force Reset' })) forceResetApp(); }}
                 className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer text-[0.8rem] font-medium"
               >
-                <i className="fas fa-trash-alt"></i> Reset App <span className="text-[0.62rem] opacity-60">(Ctrl+Shift+R)</span>
+                <i className="fas fa-trash-alt"></i> Reset App {!standalone && <span className="text-[0.62rem] opacity-60">(Ctrl+Shift+R)</span>}
               </button>
               {/* Check Update */}
               <button

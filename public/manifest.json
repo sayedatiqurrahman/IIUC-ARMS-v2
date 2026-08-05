@@ -1,10 +1,15 @@
 {
+  "id": "/",
   "name": "IIUC-ARMS",
   "short_name": "IIUC-ARMS",
   "description": "Academic Resource Management System for IIUC Departments",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "orientation": "any",

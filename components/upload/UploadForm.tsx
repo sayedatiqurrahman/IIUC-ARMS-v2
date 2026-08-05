@@ -411,30 +411,36 @@ export default function UploadForm({
                   </h4>
                   <p className="text-[0.72rem] text-dark-text3 mt-0.5">Choose how you want to add files</p>
                 </div>
-                <div className="px-4 pb-2 flex flex-col gap-2">
+                <div className="px-4 pb-2 flex flex-col gap-2.5">
                   <button
-                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left rounded-xl border border-dark-border bg-dark-bg3 hover:border-qsis/50 hover:bg-qsis/5 transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-3 px-4 py-4 text-left rounded-xl border-2 border-qsis/40 bg-qsis/10 hover:bg-qsis/20 hover:border-qsis active:scale-[0.98] transition-all cursor-pointer"
                     onClick={() => { fileInputRefs.current[course.id]?.click(); setChooserCourseId(null); }}
                   >
-                    <i className="fas fa-folder-open text-xl text-qsis"></i>
-                    <span className="flex flex-col">
-                      <span className="text-[0.8rem] font-semibold text-dark-text">Files</span>
+                    <div className="w-10 h-10 rounded-lg bg-qsis/20 flex items-center justify-center shrink-0">
+                      <i className="fas fa-folder-open text-lg text-qsis"></i>
+                    </div>
+                    <span className="flex flex-col min-w-0">
+                      <span className="text-[0.82rem] font-bold text-dark-text">Files</span>
                       <span className="text-[0.65rem] text-dark-text2">Upload from device or cloud storage</span>
                     </span>
+                    <i className="fas fa-chevron-right ml-auto text-qsis/70"></i>
                   </button>
                   <button
-                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left rounded-xl border border-qsis/40 bg-qsis/10 hover:bg-qsis/20 transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-3 px-4 py-4 text-left rounded-xl border-2 border-qsis/40 bg-qsis/10 hover:bg-qsis/20 hover:border-qsis active:scale-[0.98] transition-all cursor-pointer"
                     onClick={() => { onOpenScanner(course.id); setChooserCourseId(null); }}
                   >
-                    <i className="fas fa-camera text-xl text-qsis"></i>
-                    <span className="flex flex-col">
-                      <span className="text-[0.8rem] font-semibold text-qsis">Doc Scanner</span>
+                    <div className="w-10 h-10 rounded-lg bg-qsis/20 flex items-center justify-center shrink-0">
+                      <i className="fas fa-camera text-lg text-qsis"></i>
+                    </div>
+                    <span className="flex flex-col min-w-0">
+                      <span className="text-[0.82rem] font-bold text-dark-text">Doc Scanner</span>
                       <span className="text-[0.65rem] text-dark-text2">Detect, auto-crop &amp; straighten pages</span>
                     </span>
+                    <i className="fas fa-chevron-right ml-auto text-qsis/70"></i>
                   </button>
                 </div>
                 <button
-                  className="w-full mt-2 py-3 border-none bg-transparent text-dark-text3 hover:text-dark-text text-[0.75rem] font-semibold cursor-pointer"
+                  className="w-full mt-2 py-3.5 border-t border-dark-border bg-dark-bg3/60 hover:bg-dark-bg3 text-dark-text3 hover:text-dark-text text-[0.78rem] font-semibold cursor-pointer transition-colors"
                   onClick={() => setChooserCourseId(null)}
                 >
                   Cancel

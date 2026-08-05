@@ -2,14 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { showToast } from '@/lib/utils';
+import { isStandalone } from '@/lib/standalone';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
-function isStandalone() {
-  return window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true;
 }
 
 function isIOS() {
