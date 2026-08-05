@@ -1,4 +1,4 @@
-const CACHE_NAME = 'iiuc-arms-v15';
+const CACHE_NAME = 'iiuc-arms-v16';
 const FILE_CACHE = 'iiuc-arms-files-v1';
 const STATIC_ASSETS = [
   '/',
@@ -86,17 +86,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation: stale-while-revalidate (instant from cache, update in background)
+  // Navigation: network-first (fresh build every time), cache as offline fallback.
   if (request.mode === 'navigate') {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cached = await cache.match(request);
-        const networkPromise = fetch(request).then((response) => {
-          if (response.ok) cache.put(request, response.clone());
+        try {
+          const response = await fetch(request);
+          if (response.ok) cache.put(request, response.clone()).catch(() => {});
           return response;
-        }).catch(() => cached || caches.match('/'));
-
-        return cached || networkPromise;
+        } catch {
+          return cached || caches.match('/');
+        }
       })
     );
     return;

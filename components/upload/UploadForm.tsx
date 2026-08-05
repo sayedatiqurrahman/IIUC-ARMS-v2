@@ -408,14 +408,14 @@ export default function UploadForm({
                     className="w-full flex items-center gap-3 px-4 py-3 text-left text-[0.8rem] font-semibold text-dark-text bg-transparent border-none cursor-pointer hover:bg-dark-border/40"
                     onClick={() => { fileInputRefs.current[course.id]?.click(); setChooserCourseId(null); }}
                   >
-                    <i className="fas fa-folder-open text-qsis"></i> Choose from device
+                    <i className="fas fa-folder-open text-qsis"></i> Files
                   </button>
                   <div className="h-px bg-dark-border" />
                   <button
                     className="w-full flex items-center gap-3 px-4 py-3 text-left text-[0.8rem] font-semibold text-dark-text bg-transparent border-none cursor-pointer hover:bg-dark-border/40"
                     onClick={() => { onOpenScanner(course.id); setChooserCourseId(null); }}
                   >
-                    <i className="fas fa-camera text-qsis"></i> Scan document with camera
+                    <i className="fas fa-camera text-qsis"></i> Photo — scan with CamScanner
                   </button>
                 </div>
               </>

@@ -1,4 +1,4 @@
-import { APP_VERSION } from './config';
+import { APP_VERSION, BUILD_SHA } from './config';
 
 const VERSION_KEY = 'qsis-app-version';
 const PRESERVE_KEYS = [
@@ -61,7 +61,23 @@ export function clearAppCache(): void {
 }
 
 export async function checkForAppUpdate(): Promise<boolean> {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return false;
+  if (typeof window === 'undefined') return false;
+
+  // Primary check: the deployed commit SHA vs the SHA this build was compiled from.
+  // Vercel injects NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA at build time; /api/version
+  // returns the SHA of whatever is live now. If they differ, a newer deploy exists.
+  if (BUILD_SHA) {
+    try {
+      const res = await fetch('/api/version', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.sha) return data.sha !== BUILD_SHA;
+      }
+    } catch {}
+  }
+
+  // Fallback: compare the service-worker script bytes (browser-native update check).
+  if (!('serviceWorker' in navigator)) return false;
   try {
     const reg = await navigator.serviceWorker.getRegistration();
     if (!reg) return false;
