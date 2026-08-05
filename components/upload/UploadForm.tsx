@@ -44,6 +44,7 @@ interface UploadFormProps {
   creatingCourse: boolean;
   handleFilesForCourse: (courseId: number, e: React.ChangeEvent<HTMLInputElement>) => void;
   fileInputRefs: React.MutableRefObject<Record<number, HTMLInputElement | null>>;
+  onOpenScanner: (courseId: number) => void;
   totalFiles: number;
   totalSizeMB: number;
   uploading: boolean;
@@ -59,6 +60,8 @@ interface UploadFormProps {
   mergeSession: string;
   mergeYear: string;
   mergeMerging: boolean;
+  mergeOcr: boolean;
+  setMergeOcr: (v: boolean) => void;
   handleMergeImages: (courseId: number) => void;
   dismissMerge: () => void;
   isLoggedIn: boolean;
@@ -77,13 +80,13 @@ export default function UploadForm({
   newCourseCode, setNewCourseCode,
   newCourseTitle, setNewCourseTitle,
   handleCreateCourse, creatingCourse,
-  handleFilesForCourse, fileInputRefs,
+  handleFilesForCourse, fileInputRefs, onOpenScanner,
   totalFiles, totalSizeMB,
   uploading, result,
   handleSubmit, canSubmit,
   patInputToken, setPatInputToken, patSaving, handleSavePat,
   mergeDialogCourseId, mergeImages, mergeSession, mergeYear,
-  mergeMerging, handleMergeImages, dismissMerge,
+  mergeMerging, mergeOcr, setMergeOcr, handleMergeImages, dismissMerge,
   isLoggedIn, onLogin, onClose,
 }: UploadFormProps) {
   const email = (session as any)?.user?.email || profile.email || '';
@@ -391,6 +394,15 @@ export default function UploadForm({
                   : `Max 5 files, ${config.maxUploadSizeMB}MB each`}
             </p>
           </div>
+          {isExamCategory && (
+            <button
+              className="mt-2 w-full py-2.5 rounded-lg bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.8rem] font-semibold border-none cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+              onClick={() => onOpenScanner(course.id)}
+              title="Scan a document with your camera"
+            >
+              <i className="fas fa-camera"></i> Scan Document with Camera
+            </button>
+          )}
 
           <FilePreview
             files={course.files}
@@ -410,6 +422,8 @@ export default function UploadForm({
             mergeSession={mergeSession}
             mergeYear={mergeYear}
             mergeMerging={mergeMerging}
+            mergeOcr={mergeOcr}
+            setMergeOcr={setMergeOcr}
             onMerge={handleMergeImages}
             onDismissMerge={dismissMerge}
             profile={profile}

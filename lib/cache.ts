@@ -60,6 +60,52 @@ export function clearAppCache(): void {
   }
 }
 
+export async function checkForAppUpdate(): Promise<boolean> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return false;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return false;
+
+    const found = new Promise<boolean>((resolve) => {
+      let done = false;
+      const finish = (result: boolean) => { if (!done) { done = true; resolve(result); } };
+
+      const onFound = () => {
+        const worker = reg.installing;
+        if (!worker) { finish(false); return; }
+        const onState = () => {
+          if (worker.state === 'installed' || worker.state === 'activated') {
+            worker.removeEventListener('statechange', onState);
+            finish(true);
+          }
+        };
+        worker.addEventListener('statechange', onState);
+      };
+
+      if (reg.installing || reg.waiting) onFound();
+      else reg.addEventListener('updatefound', onFound, { once: true });
+    });
+
+    await reg.update();
+
+    if (await found) {
+      const alreadyActive = reg.active && reg.active === navigator.serviceWorker.controller;
+      if (alreadyActive) {
+        window.location.reload();
+      } else {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          window.location.reload();
+        }, { once: true });
+        reg.active?.postMessage({ type: 'SKIP_WAITING' });
+      }
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function forceResetApp(): void {
   try {
     localStorage.clear();

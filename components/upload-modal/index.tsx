@@ -10,7 +10,9 @@ import { jsPDF } from 'jspdf';
 import { UploadForm } from '@/components/upload';
 import { CURRENT_YEAR, CURRENT_SEASON, isPdf, isImage, isDocsOnly } from '@/components/upload/types';
 import type { CourseGroup, FileWithMeta, Link, UploadModalProps } from '@/components/upload/types';
-import MergeDialog from './MergeDialog';
+import DocumentScanner, { type CapturedPage } from '@/components/scanner/DocumentScanner';
+import { compressImage } from '@/lib/image-utils';
+import { buildSearchablePdf } from '@/lib/ocr';
 
 export default function UploadModal({ session, status, profile, onLogin, onClose }: UploadModalProps) {
   const githubToken = useAppStore(s => s.githubToken);
@@ -48,6 +50,10 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [mergeSession, setMergeSession] = useState('');
   const [mergeYear, setMergeYear] = useState('');
   const [mergeMerging, setMergeMerging] = useState(false);
+  const [mergeOcr, setMergeOcr] = useState(false);
+
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerCourseId, setScannerCourseId] = useState<number | null>(null);
 
   const [patInputToken, setPatInputToken] = useState('');
   const [patSaving, setPatSaving] = useState(false);
@@ -166,7 +172,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     setCourses(prev => prev.filter(c => c.id !== id));
   }
 
-  function handleFilesForCourse(courseId: number, e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFilesForCourse(courseId: number, e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files || []);
     const course = courses.find(c => c.id === courseId);
     const currentCourseFiles = course?.files.length || 0;
@@ -199,13 +205,29 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const valid = filtered.filter(f => f.size <= config.maxUploadSizeMB * 1024 * 1024);
     if (valid.length < filtered.length) alert(`${filtered.length - valid.length} file(s) exceeded ${config.maxUploadSizeMB}MB and were skipped.`);
 
-    const newTotal = totalFiles - currentCourseFiles + valid.length;
+    // Compress images automatically (90% JPEG quality, max 2000px)
+    const compressed: File[] = [];
+    for (const f of valid) {
+      if (isImage(f.name)) {
+        try {
+          const c = await compressImage(f);
+          compressed.push(c);
+        } catch {
+          compressed.push(f);
+        }
+      } else {
+        compressed.push(f);
+      }
+    }
+    const valid2 = compressed;
+
+    const newTotal = totalFiles - currentCourseFiles + valid2.length;
     if (newTotal > 10) { alert(`Max 10 files total across all courses. You can add ${10 - totalFiles + currentCourseFiles} more.`); return; }
 
-    const newTotalSize = (totalSizeMB * 1024 * 1024 - (course?.files.reduce((s, f) => s + f.file.size, 0) || 0) + valid.reduce((s, f) => s + f.size, 0)) / (1024 * 1024);
+    const newTotalSize = (totalSizeMB * 1024 * 1024 - (course?.files.reduce((s, f) => s + f.file.size, 0) || 0) + valid2.reduce((s, f) => s + f.size, 0)) / (1024 * 1024);
     if (newTotalSize > config.maxUploadSizeMB) { alert(`Total upload size cannot exceed ${config.maxUploadSizeMB}MB.`); return; }
 
-    const newFiles: FileWithMeta[] = valid.map(f => {
+    const newFiles: FileWithMeta[] = valid2.map(f => {
       if (isNotes) return { file: f, year: String(CURRENT_YEAR), yearRange: '' };
       if (isQuestions) {
         if (isPdf(f.name)) return { file: f, year: '', yearRange: `${CURRENT_YEAR}-${CURRENT_YEAR}` };
@@ -216,13 +238,13 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
     const patch: Partial<CourseGroup> = { files: [...(course?.files || []), ...newFiles] };
     if ((isNotes || isQuestions) && !course?.examSession) {
-      patch.examSession = (isQuestions && valid.length > 0 && isPdf(valid[0].name)) ? 'Both' : CURRENT_SEASON;
+      patch.examSession = (isQuestions && valid2.length > 0 && isPdf(valid2[0].name)) ? 'Both' : CURRENT_SEASON;
     }
     updateCourse(courseId, patch);
     if (fileInputRefs.current[courseId]) fileInputRefs.current[courseId]!.value = '';
-    if (isQuestions && valid.some(f => isImage(f.name))) setTimeout(() => checkForMergeableImages(courseId, newFiles), 100);
-    if (isQuestions && valid.length > 0 && !valid.some(f => isPdf(f.name))) {
-      const totalImgs = (course?.files || []).filter(f => isImage(f.file.name)).length + valid.filter(f => isImage(f.name)).length;
+    if (isQuestions && valid2.some(f => isImage(f.name))) setTimeout(() => checkForMergeableImages(courseId, newFiles), 100);
+    if (isQuestions && valid2.length > 0 && !valid2.some(f => isPdf(f.name))) {
+      const totalImgs = (course?.files || []).filter(f => isImage(f.file.name)).length + valid2.filter(f => isImage(f.name)).length;
       if (totalImgs === 1) showToast('Questions often have 2 parts — select 2-3 images together and they auto-merge into one PDF', 'info');
     }
   }
@@ -251,32 +273,109 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     if (mergeImages.length < 2) return;
     setMergeMerging(true);
     try {
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      for (let i = 0; i < mergeImages.length; i++) {
-        const dataUrl = await new Promise<string>(resolve => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(mergeImages[i].file);
-        });
-        const img = await new Promise<HTMLImageElement>(resolve => { const el = new Image(); el.onload = () => resolve(el); el.src = dataUrl; });
-        const pageW = pdf.internal.pageSize.getWidth(); const pageH = pdf.internal.pageSize.getHeight();
-        const ratio = Math.min((pageW - 10) / img.width, (pageH - 10) / img.height);
-        const w = img.width * ratio; const h = img.height * ratio;
-        if (i > 0) pdf.addPage();
-        pdf.addImage(dataUrl, 'JPEG', (pageW - w) / 2, (pageH - h) / 2, w, h);
-      }
       const authorName = profile?.name || email.split('@')[0] || 'Unknown';
       const course = courses.find(c => c.id === courseId);
       if (!course) return;
       const mergedName = `${course.selectedCourseCode} ${mergeSession} ${mergeYear} - ${authorName}.pdf`;
-      const mergedFile = new File([pdf.output('blob')], mergedName, { type: 'application/pdf' });
+      let mergedFile: File;
+
+      if (mergeOcr) {
+        showToast('Running OCR on merged pages...', 'info');
+        const pages = await Promise.all(mergeImages.map(async m => {
+          const dims = await getImageSize(m.file);
+          return { blob: m.file, width: dims.w, height: dims.h };
+        }));
+        mergedFile = await buildSearchablePdf(pages, true, mergedName);
+        showToast(`Merged ${mergeImages.length} images into ${mergedName} (with OCR text layer)`, 'success');
+      } else {
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        for (let i = 0; i < mergeImages.length; i++) {
+          const dataUrl = await new Promise<string>(resolve => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(mergeImages[i].file);
+          });
+          const img = await new Promise<HTMLImageElement>(resolve => { const el = new Image(); el.onload = () => resolve(el); el.src = dataUrl; });
+          const pageW = pdf.internal.pageSize.getWidth(); const pageH = pdf.internal.pageSize.getHeight();
+          const ratio = Math.min((pageW - 10) / img.width, (pageH - 10) / img.height);
+          const w = img.width * ratio; const h = img.height * ratio;
+          if (i > 0) pdf.addPage();
+          const isPng = mergeImages[i].file.type.includes('png') || dataUrl.startsWith('data:image/png');
+          pdf.addImage(dataUrl, isPng ? 'PNG' : 'JPEG', (pageW - w) / 2, (pageH - h) / 2, w, h);
+        }
+        mergedFile = new File([pdf.output('blob')], mergedName, { type: 'application/pdf' });
+        showToast(`Merged ${mergeImages.length} images into ${mergedName}`, 'success');
+      }
+
       updateCourse(courseId, {
         files: [...course.files.filter(f => !mergeImages.some(m => m.file === f.file)), { file: mergedFile, year: '', yearRange: `${mergeYear}-${mergeYear}` }],
         examSession: mergeSession || course.examSession,
       });
-      showToast(`Merged ${mergeImages.length} images into ${mergedName}`, 'success');
     } catch (err: any) { showToast('Failed to merge: ' + (err.message || 'Unknown'), 'error'); }
-    finally { setMergeMerging(false); setMergeDialogCourseId(null); setMergeImages([]); }
+    finally { setMergeMerging(false); setMergeDialogCourseId(null); setMergeImages([]); setMergeOcr(false); }
+  }
+
+  function getImageSize(file: File): Promise<{ w: number; h: number }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => resolve({ w: img.width, h: img.height });
+        img.onerror = () => reject(new Error('Invalid image'));
+        img.src = reader.result as string;
+      };
+      reader.onerror = () => reject(new Error('Read failed'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function openScanner(courseId: number) {
+    setScannerCourseId(courseId);
+    setScannerOpen(true);
+  }
+
+  function handleScannerDone(pages: CapturedPage[]) {
+    setScannerOpen(false);
+    setScannerCourseId(null);
+  }
+
+  function handleScannerResult(file: File, usedOcr: boolean) {
+    if (scannerCourseId === null) return;
+    const course = courses.find(c => c.id === scannerCourseId);
+    if (!course) return;
+    const isQuestions = category === config.categories.questions.folder;
+
+    if (isQuestions) {
+      const hasPdf = course.files.some(f => isPdf(f.file.name)) || isPdf(file.name);
+      if (hasPdf && course.files.length > 0) {
+        showToast('Only 1 PDF allowed for Previous Questions — remove existing file first', 'error');
+        return;
+      }
+      if (!hasPdf && course.files.length >= 5) {
+        showToast('Max 5 images per course for Previous Questions', 'error');
+        return;
+      }
+    }
+
+    const meta: FileWithMeta = isQuestions
+      ? isPdf(file.name)
+        ? { file, year: '', yearRange: `${CURRENT_YEAR}-${CURRENT_YEAR}` }
+        : { file, year: String(CURRENT_YEAR), yearRange: '' }
+      : { file, year: '', yearRange: '' };
+
+    const patch: Partial<CourseGroup> = { files: [...course.files, meta] };
+    if ((isQuestions || category === config.categories.notes.folder) && !course.examSession) {
+      patch.examSession = isQuestions && isPdf(file.name) ? 'Both' : CURRENT_SEASON;
+    }
+    updateCourse(scannerCourseId, patch);
+    showToast(
+      usedOcr
+        ? 'Scanned PDF added with OCR text layer (text is selectable & copyable)'
+        : isPdf(file.name)
+          ? `Merged ${file.name} added`
+          : 'Scanned image added (compressed)',
+      'success'
+    );
   }
 
   function canSubmit(): boolean {
@@ -452,17 +551,24 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             newCourseCode={newCourseCode} setNewCourseCode={setNewCourseCode}
             newCourseTitle={newCourseTitle} setNewCourseTitle={setNewCourseTitle}
             handleCreateCourse={handleCreateCourse} creatingCourse={creatingCourse}
-            handleFilesForCourse={handleFilesForCourse} fileInputRefs={fileInputRefs}
+            handleFilesForCourse={handleFilesForCourse} fileInputRefs={fileInputRefs} onOpenScanner={openScanner}
             totalFiles={totalFiles} totalSizeMB={totalSizeMB} uploading={uploading} result={result}
             handleSubmit={handleSubmit} canSubmit={canSubmit}
             patInputToken={patInputToken} setPatInputToken={setPatInputToken} patSaving={patSaving} handleSavePat={handleSavePat}
             mergeDialogCourseId={mergeDialogCourseId} mergeImages={mergeImages} mergeSession={mergeSession} mergeYear={mergeYear}
-            mergeMerging={mergeMerging} handleMergeImages={handleMergeImages} dismissMerge={() => { setMergeDialogCourseId(null); setMergeImages([]); }}
+            mergeMerging={mergeMerging} mergeOcr={mergeOcr} setMergeOcr={setMergeOcr} handleMergeImages={handleMergeImages} dismissMerge={() => { setMergeDialogCourseId(null); setMergeImages([]); setMergeOcr(false); }}
             isLoggedIn={isLoggedIn} onLogin={onLogin} onClose={onClose}
           />
         </div>
       </div>
     </div>
+    {scannerOpen && scannerCourseId !== null && (
+      <DocumentScanner
+        onDone={handleScannerDone}
+        onCancel={() => { setScannerOpen(false); setScannerCourseId(null); }}
+        onResult={handleScannerResult}
+      />
+    )}
     </>
   );
 }

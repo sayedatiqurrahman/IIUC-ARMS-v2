@@ -35,6 +35,8 @@ interface FilePreviewProps {
   mergeSession: string;
   mergeYear: string;
   mergeMerging: boolean;
+  mergeOcr: boolean;
+  setMergeOcr: (v: boolean) => void;
   onMerge: (courseId: number) => void;
   onDismissMerge: () => void;
   profile: Profile;
@@ -45,6 +47,7 @@ export default function FilePreview({
   files, courseId, courseCode, category, isNotes, isQuestions,
   onRemoveFile, onUpdateFile,
   mergeDialogCourseId, mergeImages, mergeSession, mergeYear, mergeMerging,
+  mergeOcr, setMergeOcr,
   onMerge, onDismissMerge, profile, email,
 }: FilePreviewProps) {
   if (files.length === 0) return null;
@@ -156,7 +159,14 @@ export default function FilePreview({
             >
               Keep Separate
             </button>
+            <label className="flex items-center gap-1.5 text-[0.7rem] text-dark-text2 cursor-pointer select-none">
+              <input type="checkbox" checked={mergeOcr} onChange={e => setMergeOcr(e.target.checked)} className="accent-blue-500" disabled={mergeMerging} />
+              <i className="fas fa-font"></i> OCR
+            </label>
           </div>
+          {mergeOcr && (
+            <p className="ml-5 mt-1.5 text-[0.65rem] text-blue-300"><i className="fas fa-info-circle mr-1"></i>OCR makes the merged PDF text selectable &amp; copyable (takes longer).</p>
+          )}
         </div>
       )}
     </>

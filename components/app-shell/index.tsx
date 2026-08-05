@@ -12,7 +12,7 @@ import OnboardingModal, { getOnboardingData, type OnboardingData } from '@/compo
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut, signIn } from 'next-auth/react';
 import { config } from '@/lib/config';
-import { checkAndBustCache, forceResetApp } from '@/lib/cache';
+import { checkAndBustCache, forceResetApp, checkForAppUpdate } from '@/lib/cache';
 import { useConfirm } from '@/components/ConfirmModal';
 import { useTurnstile } from '@/lib/useTurnstile';
 import { handleGoogleRedirectResult } from '@/lib/firebase';
@@ -31,6 +31,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { confirm, confirmDialog } = useConfirm();
   const confirmRef = useRef(confirm);
   confirmRef.current = confirm;
+
+  const handleCheckUpdate = async () => {
+    const { showToast } = await import('@/lib/utils');
+    showToast('Checking for updates...', 'info');
+    const hasUpdate = await checkForAppUpdate();
+    if (!hasUpdate) showToast('You are up to date!', 'success');
+  };
 
   // Pre-render Turnstile when Sign In is clicked
   const turnstileContainerId = 'pre-login-turnstile-container';
@@ -491,6 +498,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <i className="fas fa-trash-alt"></i> Reset App <span className="text-[0.62rem] opacity-60">(Ctrl+Shift+R)</span>
               </button>
+              {/* Check Update */}
+              <button
+                onClick={handleCheckUpdate}
+                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-qsis/10 border border-qsis/20 text-qsis hover:bg-qsis/20 transition-colors cursor-pointer text-[0.8rem] font-medium"
+              >
+                <i className="fas fa-cloud-arrow-down"></i> Check Update
+              </button>
             </div>
           </div>
         </div>
@@ -581,6 +595,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 title="Force Reset App (Ctrl+Shift+R)"
               >
                 <i className="fas fa-trash-alt"></i> Reset App
+              </button>
+              <button
+                onClick={handleCheckUpdate}
+                className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-qsis/10 border border-qsis/20 text-[0.65rem] sm:text-[0.72rem] text-qsis hover:bg-qsis/20 transition-all cursor-pointer"
+                title="Check for new updates and install them"
+              >
+                <i className="fas fa-cloud-arrow-down"></i> Check Update
               </button>
               <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
                 <i className="fas fa-star text-yellow-500"></i> Star Files Repo
