@@ -615,8 +615,13 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
 
   // ---- Delete a captured page ----
   const deletePage = useCallback((index: number) => {
-    setPages(prev => prev.filter((_, i) => i !== index));
-    setPreviewIndex(null);
+    const next = pagesRef.current.filter((_, i) => i !== index);
+    setPages(next);
+    if (next.length === 0) {
+      setPreviewIndex(null);
+    } else {
+      setPreviewIndex(prev => (prev === null ? null : Math.min(prev, next.length - 1)));
+    }
   }, []);
 
   // ---- Move a captured page left/right ----
@@ -631,6 +636,48 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
       return next;
     });
     setPreviewIndex(index + dir);
+  }, []);
+
+  // ---- Rotate a captured page 90° clockwise ----
+  const rotatePage = useCallback((index: number) => {
+    const page = pagesRef.current[index];
+    if (!page) return;
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const W = img.naturalWidth;
+        const H = img.naturalHeight;
+        const canvas = document.createElement('canvas');
+        canvas.width = H;
+        canvas.height = W;
+        const ctx = canvas.getContext('2d')!;
+        ctx.translate(H, 0);
+        ctx.rotate(Math.PI / 2);
+        ctx.drawImage(img, 0, 0);
+        const quad = page.quad
+          ? orderQuad(page.quad.map(p => ({ x: H - p.y, y: p.x })))
+          : null;
+        const result = processFrame(canvas, quad, modeRef.current, MAX_DIM_DEFAULT);
+        canvasToBlob(result.canvas, 'image/jpeg', 0.9).then(blob => {
+          const thumb = result.canvas.toDataURL('image/jpeg', 0.5);
+          const preview = result.canvas.toDataURL('image/jpeg', 0.75);
+          const src = canvas.toDataURL('image/jpeg', 0.85);
+          const rotated: CapturedPage = {
+            blob,
+            width: result.width,
+            height: result.height,
+            thumb,
+            preview,
+            src,
+            quad: quad ?? page.quad,
+          };
+          setPages(prev => prev.map((p, i) => (i === index ? rotated : p)));
+        });
+      } catch {
+        // ignore rotation errors
+      }
+    };
+    img.src = page.src;
   }, []);
 
   // ---- Discard edit and go back to camera ----
@@ -785,6 +832,120 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     );
   }
 
+  // ---- Preview & reorder screen ----
+  if (previewIndex !== null) {
+    const idx = Math.min(previewIndex, Math.max(0, pages.length - 1));
+    const page = pages[idx];
+    return (
+      <div className="fixed inset-0 z-[210] bg-black flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-black/90 border-b border-white/10">
+          <button className="w-9 h-9 rounded-lg bg-white/10 text-white flex items-center justify-center cursor-pointer border-none" onClick={() => setPreviewIndex(null)} title="Add another page">
+            <i className="fas fa-plus"></i>
+          </button>
+          <span className="text-white text-[0.9rem] font-semibold">Review pages</span>
+          <span className="text-white/60 text-[0.75rem] w-9 text-right">{pages.length}/{maxPages}</span>
+        </div>
+
+        {/* Large preview */}
+        <div className="relative flex-1 bg-black/80 flex items-center justify-center p-4 overflow-hidden">
+          {page ? (
+            <img src={page.preview} alt={`page ${idx + 1}`} className="max-h-full max-w-full object-contain rounded shadow-2xl" />
+          ) : (
+            <p className="text-white/70 text-[0.85rem]">No pages yet</p>
+          )}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-white/80 text-[0.7rem] bg-black/60 px-3 py-1 rounded-lg whitespace-nowrap">
+            <i className="fas fa-hand-pointer mr-1"></i>Tap a thumbnail to select
+          </div>
+        </div>
+
+        {/* Thumbnail strip (tap to select) */}
+        <div className="px-3 py-3 bg-black/90 border-t border-white/10">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {pages.map((p, i) => (
+              <button
+                key={i}
+                onClick={() => setPreviewIndex(i)}
+                className={`relative w-14 h-20 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer bg-white transition-all ${i === idx ? 'ring-2 ring-qsis' : 'ring-1 ring-white/30'}`}
+              >
+                <img src={p.thumb} alt={`page ${i + 1}`} className="w-full h-full object-cover" />
+                <span className="absolute top-1 left-1 w-4 h-4 rounded-full bg-black/70 text-white text-[0.6rem] flex items-center justify-center">{i + 1}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Page actions */}
+        <div className="px-4 py-3 bg-black/90 border-t border-white/10 flex items-center justify-center gap-6">
+          <button
+            className="flex flex-col items-center gap-1 text-white/70 text-[0.65rem] bg-transparent border-none cursor-pointer disabled:opacity-30"
+            onClick={() => movePage(idx, -1)}
+            disabled={idx <= 0}
+          >
+            <i className="fas fa-arrow-left text-lg"></i>
+            Move left
+          </button>
+          <button
+            className="flex flex-col items-center gap-1 text-white/70 text-[0.65rem] bg-transparent border-none cursor-pointer"
+            onClick={() => rotatePage(idx)}
+          >
+            <i className="fas fa-rotate text-lg"></i>
+            Rotate
+          </button>
+          <button
+            className="flex flex-col items-center gap-1 text-white/70 text-[0.65rem] bg-transparent border-none cursor-pointer"
+            onClick={() => reEditPage(idx)}
+          >
+            <i className="fas fa-crop-alt text-lg"></i>
+            Adjust
+          </button>
+          <button
+            className="flex flex-col items-center gap-1 text-red-400 text-[0.65rem] bg-transparent border-none cursor-pointer"
+            onClick={() => deletePage(idx)}
+          >
+            <i className="fas fa-trash text-lg"></i>
+            Delete
+          </button>
+          <button
+            className="flex flex-col items-center gap-1 text-white/70 text-[0.65rem] bg-transparent border-none cursor-pointer disabled:opacity-30"
+            onClick={() => movePage(idx, 1)}
+            disabled={idx >= pages.length - 1}
+          >
+            <i className="fas fa-arrow-right text-lg"></i>
+            Move right
+          </button>
+        </div>
+
+        {/* Bottom bar */}
+        <div className="px-4 py-4 bg-black/90 border-t border-white/10 flex items-center justify-center gap-8">
+          <button
+            className="flex flex-col items-center gap-1 text-white/60 text-[0.68rem] bg-transparent border-none cursor-pointer"
+            onClick={() => setPreviewIndex(null)}
+          >
+            <i className="fas fa-plus text-lg"></i>
+            Add page
+          </button>
+          <button
+            className="w-16 h-16 rounded-full bg-qsis text-white flex items-center justify-center cursor-pointer hover:opacity-90 border-none disabled:opacity-40"
+            onClick={finish}
+            disabled={busy || pages.length === 0}
+            title="Finish"
+          >
+            <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-check'} text-xl`}></i>
+          </button>
+          <button
+            className="flex flex-col items-center gap-1 text-qsis text-[0.68rem] bg-transparent border-none cursor-pointer disabled:opacity-40"
+            onClick={finish}
+            disabled={busy || pages.length === 0}
+          >
+            <i className="fas fa-file-pdf text-lg"></i>
+            {pages.length > 1 ? 'Merge to PDF' : 'Done'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ---- Live view ----
   return (
     <div className="fixed inset-0 z-[210] bg-black flex flex-col">
@@ -894,11 +1055,11 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
         {pages.length > 0 && (
           <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex gap-2">
             {pages.map((p, i) => (
-              <div key={i} className="relative w-14 h-20 rounded-lg overflow-hidden border-2 border-white/40 bg-white">
+              <div key={i} className="relative w-14 h-20 rounded-lg overflow-hidden border-2 border-white/40 bg-white cursor-pointer" onClick={() => setPreviewIndex(i)}>
                 <img src={p.thumb} alt={`page ${i + 1}`} className="w-full h-full object-cover" />
                 <button
                   className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-[0.6rem] rounded-bl-lg cursor-pointer border-none flex items-center justify-center"
-                  onClick={() => setPages(prev => prev.filter((_, j) => j !== i))}
+                  onClick={(e) => { e.stopPropagation(); deletePage(i); }}
                 >
                   <i className="fas fa-times"></i>
                 </button>
