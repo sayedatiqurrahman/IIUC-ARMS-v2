@@ -799,12 +799,16 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
 
       {/* Viewfinder */}
       <div className="relative flex-1 overflow-hidden bg-black">
+        {/* The video only mounts once the stream exists — key={ready} forces a
+            fresh element that attachVideo wires up while it is visible, which
+            avoids the iOS/Android black-frame bug from play() on hidden video. */}
         <video
+          key={ready ? 'stream-on' : 'stream-off'}
           ref={attachVideo}
+          autoPlay
           playsInline
           muted
           className="absolute inset-0 w-full h-full object-contain"
-          style={{ display: ready ? 'block' : 'none' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
