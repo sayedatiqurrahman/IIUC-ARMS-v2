@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
-import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
-import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, deleteConfirmData, deleteRejectData } from '@/lib/telegram';
+import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData } from '@/lib/telegram';
 import { verifyTurnstileRequest } from '@/lib/verifyTurnstileRequest';
+import { getAppBotToken, getAllFilesInFolder, deleteCourseFolder } from '@/lib/course-delete';
 
 const GITHUB_API = 'https://api.github.com';
 const OWNER_CHAT_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID || '0');
@@ -16,14 +16,6 @@ function ghHeaders(token: string) {
     Accept: 'application/vnd.github.v3+json',
     'Content-Type': 'application/json',
   };
-}
-
-async function getAppBotToken(): Promise<string | null> {
-  try {
-    const installations = await getAppInstallations();
-    if (!Array.isArray(installations) || installations.length === 0) return null;
-    return await getInstallationAccessToken(installations[0].id);
-  } catch { return null; }
 }
 
 async function batchCreateGitkeepFiles(token: string, folderPath: string, paths: string[]): Promise<number> {
@@ -59,69 +51,6 @@ async function batchCreateGitkeepFiles(token: string, folderPath: string, paths:
     body: JSON.stringify({ sha: newCommitData.sha, force: true }),
   });
   return paths.length;
-}
-
-async function batchDeleteFiles(token: string, files: { path: string; sha: string }[]): Promise<number> {
-  if (files.length === 0) return 0;
-  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
-  if (!refRes.ok) return 0;
-  const refData = await refRes.json();
-  const baseCommitSha = refData.object.sha;
-
-  const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
-  if (!commitRes.ok) return 0;
-  const commitData = await commitRes.json();
-  const baseTreeSha = commitData.tree.sha;
-
-  const fullTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
-  if (!fullTreeRes.ok) return 0;
-  const fullTreeData = await fullTreeRes.json();
-
-  const deletePaths = new Set(files.map(f => f.path));
-  const keepItems = (fullTreeData.tree || []).filter((item: any) => !deletePaths.has(item.path));
-  if (keepItems.length === 0) return 0;
-
-  const treeItems = keepItems.map((item: any) => ({
-    path: item.path, mode: item.mode, type: item.type,
-    sha: item.type === 'blob' ? item.sha : undefined,
-  }));
-
-  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
-    method: 'POST', headers: ghHeaders(token),
-    body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems }),
-  });
-  if (!treeRes.ok) return 0;
-  const treeData = await treeRes.json();
-
-  const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
-    method: 'POST', headers: ghHeaders(token),
-    body: JSON.stringify({ message: `Delete course: ${files.length} files removed`, tree: treeData.sha, parents: [baseCommitSha] }),
-  });
-  if (!newCommitRes.ok) return 0;
-  const newCommitData = await newCommitRes.json();
-
-  await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
-    method: 'PATCH', headers: ghHeaders(token),
-    body: JSON.stringify({ sha: newCommitData.sha, force: true }),
-  });
-  return files.length;
-}
-
-async function getAllFilesInFolder(token: string, folderPath: string): Promise<{ path: string; sha: string }[]> {
-  const url = `${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${folderPath}`;
-  const res = await fetch(url, { headers: ghHeaders(token) });
-  if (!res.ok) return [];
-  const items = await res.json();
-  if (!Array.isArray(items)) return [];
-  const files: { path: string; sha: string }[] = [];
-  for (const item of items) {
-    if (item.type === 'file') files.push({ path: item.path, sha: item.sha });
-    else if (item.type === 'dir') {
-      const sub = await getAllFilesInFolder(token, item.path);
-      files.push(...sub);
-    }
-  }
-  return files;
 }
 
 // GET — fast DB read
@@ -260,14 +189,12 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// DELETE — owner direct, non-owner Telegram confirm/reject
+// DELETE — role holders delete directly; a regular user deleting their own
+// upload goes through a pending approval that admins confirm from the panel
+// or the Telegram bot.
 export async function DELETE(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
-
-  // Bot protection
-  const turnstile = await verifyTurnstileRequest(req);
-  if (!turnstile.success) return turnstile.response!;
 
   try {
     const email = await getUserEmail(req);
@@ -278,7 +205,7 @@ export async function DELETE(req: NextRequest) {
     const role = config.getEffectiveRole(email, profile?.role);
     const isCR = profile?.isCR || false;
     const isOwner = config.ownerEmails.includes(email.toLowerCase());
-    const canDeleteByRole = ['admin', 'manager', 'teacher'].includes(role) || isCR;
+    const canDeleteByRole = isOwner || ['admin', 'manager', 'teacher'].includes(role) || isCR;
 
     const body = await req.json().catch(() => ({}));
     const { code, semester, department, folderPath: rawFolderPath, title } = body;
@@ -297,7 +224,7 @@ export async function DELETE(req: NextRequest) {
 
     const isCourseOwner = course?.addedBy?.toLowerCase() === email.toLowerCase();
 
-    if (!isOwner && !canDeleteByRole && !isCourseOwner) {
+    if (!canDeleteByRole && !isCourseOwner) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
 
@@ -313,26 +240,33 @@ export async function DELETE(req: NextRequest) {
       folderPath = `${config.uploadPath}/${courseDept}/${courseSem}/${courseCode} - ${cleanTitle}`;
     }
 
-    // Admin/owner/course creator → direct delete, no notification needed
-    if (isOwner || role === 'admin' || isCourseOwner) {
-      let githubDeleted = 0;
-      try {
-        const botToken = await getAppBotToken();
-        if (botToken) {
-          const allFiles = await getAllFilesInFolder(botToken, folderPath);
-          githubDeleted = await batchDeleteFiles(botToken, allFiles);
-        }
-      } catch {}
+    // Admin/owner/manager/teacher/CR → direct delete, no confirmation
+    if (canDeleteByRole) {
+      const githubDeleted = await deleteCourseFolder(folderPath).catch(() => 0);
 
       // Delete from DB if exists
       if (course) {
         try { await prisma.course.delete({ where: { id: course.id } }); } catch {}
       }
+      try {
+        await prisma.activityLog.create({
+          data: {
+            action: 'course_delete',
+            userId: email,
+            userName: profile?.name || email.split('@')[0],
+            details: JSON.stringify({ code: courseCode, title: courseTitle, department: courseDept, semester: courseSem, folderPath }),
+          },
+        });
+      } catch {}
 
       return NextResponse.json({ success: true, githubDeleted, directDelete: true });
     }
 
-    // NON-ADMIN: Get file list for notification, then send Telegram confirm
+    // Regular user deleting their own upload → pending admin approval
+    const semLabel = config.semesters.find(s => s.id === courseSem)?.label || courseSem;
+    const requesterName = profile?.name || email.split('@')[0];
+
+    // Get file list for the notification
     let fileList = '';
     let fileCount = 0;
     try {
@@ -353,14 +287,31 @@ export async function DELETE(req: NextRequest) {
       }
     } catch {}
 
+    // Persist the pending request so admins can also approve it from the panel
+    let activityId = '';
+    try {
+      const logEntry = await prisma.activityLog.create({
+        data: {
+          action: 'course_delete_request',
+          userId: email,
+          userName: requesterName,
+          details: JSON.stringify({
+            code: courseCode, title: courseTitle, department: courseDept, semester: courseSem,
+            folderPath, fileCount, fileList, status: 'pending_approval',
+          }),
+        },
+      });
+      activityId = logEntry.id;
+    } catch {}
+
     // Send to all configured approvers (owner + admins with telegramChatId)
     const approverChatIds: number[] = [];
     if (OWNER_CHAT_ID) approverChatIds.push(OWNER_CHAT_ID);
 
-    // Find admin users with telegramChatId set
     try {
       const adminProfiles = await prisma.profile.findMany({
         where: { role: 'admin' },
+        select: { telegramChatId: true },
       });
       for (const ap of adminProfiles) {
         const chatId = (ap as any).telegramChatId;
@@ -370,38 +321,49 @@ export async function DELETE(req: NextRequest) {
       }
     } catch {}
 
-    const semLabel = config.semesters.find(s => s.id === courseSem)?.label || courseSem;
-    const requesterName = profile?.name || email.split('@')[0];
-    const pageLink = buildBrowseLink({ dept: courseDept, sem: courseSem });
-    const deleteKey = `${courseDept}/${courseSem}/${courseCode}`;
-
+    const pageLink = buildCourseLink(courseCode, courseDept, courseSem);
     const tgMsg = [
       `⚠️ <b>Course Delete Request</b>`, ``,
       `<b>Code:</b> <code>${courseCode}</code>`,
       `<b>Title:</b> ${courseTitle}`,
       `<b>Department:</b> ${getDeptFullName(courseDept)} (${courseDept})`,
       `<b>Semester:</b> ${semLabel}`,
-      `<b>Folder:</b> <code>${folderPath}</code>`,
+      `<b>Web app path:</b> <code>${folderPath}</code>`,
       `<b>Files:</b> ${fileCount} file(s)`,
       `<b>Requested by:</b> ${requesterName} (${email})`,
-      fileCount > 0 ? `` : ``,
+      fileList ? `` : ``,
       fileList ? `<b>File structure:</b>\n<pre>${fileList}</pre>` : ``,
       `Approve or reject this deletion:`,
     ].join('\n');
 
+    // Store the sent message ids so panel approvals can update them too
+    const messages: { chatId: number; messageId: number }[] = [];
     for (const chatId of approverChatIds) {
       try {
-        await sendMessageWithButtons(chatId, tgMsg, [
+        const sent = await sendMessageWithButtons(chatId, tgMsg, [
           [
-            { text: '✅ Confirm Delete', callback_data: deleteConfirmData(deleteKey) },
-            { text: '❌ Reject', callback_data: deleteRejectData(deleteKey) },
+            ...(activityId ? [{ text: '✅ Confirm Delete', callback_data: courseDeleteConfirmData(activityId) }] : []),
+            ...(activityId ? [{ text: '❌ Reject', callback_data: courseDeleteRejectData(activityId) }] : []),
           ],
-          [{ text: `📂 View ${courseCode}`, url: pageLink }],
+          [{ text: `📂 Open course in web app`, url: pageLink }],
         ]);
+        const result = await sent.json().catch(() => null);
+        if (result?.ok && result.result?.message_id) {
+          messages.push({ chatId, messageId: result.result.message_id });
+        }
       } catch {}
     }
 
-    return NextResponse.json({ success: false, pendingApproval: true, message: 'Delete request sent to admins for approval.' });
+    if (messages.length > 0 && activityId) {
+      try {
+        const existing = await prisma.activityLog.findUnique({ where: { id: activityId } });
+        const details = JSON.parse(existing?.details || '{}');
+        details.messages = messages;
+        await prisma.activityLog.update({ where: { id: activityId }, data: { details: JSON.stringify(details) } });
+      } catch {}
+    }
+
+    return NextResponse.json({ success: false, pendingApproval: true, activityId, message: 'Delete request sent to admins for approval.' });
   } catch {
     return NextResponse.json({ error: 'Failed to delete course' }, { status: 500 });
   }

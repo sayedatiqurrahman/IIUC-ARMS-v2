@@ -31,6 +31,7 @@ import {
 } from '@/lib/telegram';
 import { config } from '@/lib/config';
 import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
+import { deleteCourseFolder } from '@/lib/course-delete';
 
 const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
 const GITHUB_API = 'https://api.github.com';
@@ -39,6 +40,16 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function openLink(target: string): string {
   return SITE_URL + '/open?url=' + encodeURIComponent(target);
+}
+
+// Resolve a connected admin/requester chat id from a user id (email).
+async function resolveRequesterChat(userId: string): Promise<number | null> {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findUnique({ where: { userId } });
+    const chatId = (profile as any)?.telegramChatId;
+    return chatId ? Number(chatId) : null;
+  } catch { return null; }
 }
 
 async function getAppBotToken(): Promise<string | null> {
@@ -839,6 +850,138 @@ async function handleCallbackQuery(cq: any) {
           ],
         },
       });
+    }
+
+    // ─── Course delete request confirm (pending owner deletes) ───
+    if (parsed.type === 'course_del_confirm') {
+      const activityId = parsed.args[0];
+      if (!activityId) return;
+
+      const { prisma } = await import('@/lib/prisma');
+      let logEntry: any = null;
+      try {
+        logEntry = await prisma.activityLog.findUnique({ where: { id: activityId } });
+      } catch {}
+
+      if (!logEntry || logEntry.action !== 'course_delete_request') {
+        await editMessageText(chatId, messageId, `❌ Delete request not found or already processed.`);
+        return;
+      }
+
+      const details = JSON.parse(logEntry.details || '{}');
+      if (details.status !== 'pending_approval') {
+        await editMessageText(chatId, messageId, `❌ This delete request was already ${details.status || 'processed'}.`);
+        return;
+      }
+
+      const folderPath: string = details.folderPath || '';
+      if (!folderPath) {
+        await editMessageText(chatId, messageId, `❌ Invalid delete request — no folder path found.`);
+        return;
+      }
+
+      const githubDeleted = await deleteCourseFolder(folderPath).catch(() => 0);
+
+      let course: any = null;
+      try {
+        course = await prisma.course.findFirst({
+          where: { code: String(details.code || '').toUpperCase(), semester: details.semester, department: details.department },
+        });
+      } catch {}
+      if (course) {
+        try { await prisma.course.delete({ where: { id: course.id } }); } catch {}
+      }
+
+      // Mark approved (also syncs the panel, which reads status from details)
+      try {
+        const parsedDetails = JSON.parse(logEntry.details || '{}');
+        parsedDetails.status = 'approved';
+        parsedDetails.approvedBy = `chat:${chatId}`;
+        parsedDetails.resolvedAt = new Date().toISOString();
+        await prisma.activityLog.update({
+          where: { id: activityId },
+          data: { action: 'course_delete_approved', details: JSON.stringify(parsedDetails) },
+        });
+      } catch {}
+
+      // Notify the requester if connected
+      const requesterChatId = await resolveRequesterChat(logEntry.userId);
+      if (requesterChatId) {
+        try {
+          await sendMessage(requesterChatId,
+            `✅ <b>Delete approved</b>\n\n` +
+            `<b>Course:</b> <code>${details.code || ''}</code> — ${details.title || ''}\n` +
+            `<b>Path:</b> <code>${folderPath}</code>\n\n` +
+            `Your delete request has been <b>approved</b> by an admin.`
+          );
+        } catch {}
+      }
+
+      const semLabel = details.semester ? (config.semesters.find(s => s.id === details.semester)?.label || details.semester) : '';
+      const pageLink = buildCourseLink(details.code || '', details.department, details.semester);
+      await editMessageText(chatId, messageId, [
+        `✅ <b>Course Deleted</b>`, ``,
+        `<b>Code:</b> <code>${details.code || ''}</code>`,
+        `<b>Title:</b> ${details.title || ''}`,
+        `<b>Semester:</b> ${semLabel}`,
+        `<b>Path:</b> <code>${folderPath}</code>`,
+        `<b>GitHub files removed:</b> ${githubDeleted}`, ``,
+        `<i>Approved by admin</i>`,
+      ].join('\n'), {
+        reply_markup: { inline_keyboard: pageLink ? [[{ text: `📂 Open course in web app`, url: pageLink }]] : [] },
+      });
+    }
+
+    // ─── Course delete request reject ───
+    if (parsed.type === 'course_del_reject') {
+      const activityId = parsed.args[0];
+      if (!activityId) return;
+
+      const { prisma } = await import('@/lib/prisma');
+      let logEntry: any = null;
+      try {
+        logEntry = await prisma.activityLog.findUnique({ where: { id: activityId } });
+      } catch {}
+
+      if (!logEntry || logEntry.action !== 'course_delete_request') {
+        await editMessageText(chatId, messageId, `❌ Delete request not found or already processed.`);
+        return;
+      }
+
+      const details = JSON.parse(logEntry.details || '{}');
+      if (details.status !== 'pending_approval') {
+        await editMessageText(chatId, messageId, `❌ This delete request was already ${details.status || 'processed'}.`);
+        return;
+      }
+
+      try {
+        const parsedDetails = JSON.parse(logEntry.details || '{}');
+        parsedDetails.status = 'rejected';
+        parsedDetails.approvedBy = `chat:${chatId}`;
+        parsedDetails.resolvedAt = new Date().toISOString();
+        await prisma.activityLog.update({
+          where: { id: activityId },
+          data: { action: 'course_delete_rejected', details: JSON.stringify(parsedDetails) },
+        });
+      } catch {}
+
+      const requesterChatId = await resolveRequesterChat(logEntry.userId);
+      if (requesterChatId) {
+        try {
+          await sendMessage(requesterChatId,
+            `❌ <b>Delete rejected</b>\n\n` +
+            `<b>Course:</b> <code>${details.code || ''}</code> — ${details.title || ''}\n` +
+            `Your delete request was <b>rejected</b> by an admin.`
+          );
+        } catch {}
+      }
+
+      await editMessageText(chatId, messageId, [
+        `❌ <b>Delete Rejected</b>`, ``,
+        `<b>Code:</b> <code>${details.code || ''}</code>`,
+        `<b>Title:</b> ${details.title || ''}`, ``,
+        `<i>Rejected by admin</i>`,
+      ].join('\n'));
     }
 
     // ─── Delete confirm ───

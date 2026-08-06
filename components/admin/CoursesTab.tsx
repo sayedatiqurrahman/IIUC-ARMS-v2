@@ -29,6 +29,8 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
   const [canDelete, setCanDelete] = useState(false);
   const [dbCourses, setDbCourses] = useState<any[]>([]);
   const [showMyCourses, setShowMyCourses] = useState(false);
+  const [deleteRequests, setDeleteRequests] = useState<any[]>([]);
+  const [handlingRequest, setHandlingRequest] = useState<string | null>(null);
 
   const courses = getSemesterCourses(selectedSem, selectedDept);
   const myEmail = (profile?.email || '').toLowerCase();
@@ -85,6 +87,38 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       .catch(() => {});
   }, [selectedDept, selectedSem, tree]);
 
+  // Fetch pending course-delete requests (regular users deleting their own uploads)
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/courses/delete-requests');
+        const data = await res.json();
+        if (data.success) setDeleteRequests(data.requests || []);
+      } catch {}
+    })();
+  }, [tree]);
+
+  async function handleDeleteRequest(id: string, action: 'approve' | 'reject') {
+    setHandlingRequest(id);
+    try {
+      const res = await fetch('/api/courses/delete-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setDeleteRequests(prev => prev.filter(r => r.id !== id));
+      useAppStore.getState().invalidateTreeCache();
+      await loadTree();
+    } catch (e: any) {
+      alert(e.message);
+      await fetch('/api/courses/delete-requests').then(r => r.json()).then(d => { if (d.success) setDeleteRequests(d.requests || []); }).catch(() => {});
+    } finally {
+      setHandlingRequest(null);
+    }
+  }
+
   async function handleAdd() {
     if (!addCode.trim() || !addTitle.trim()) { setAddError('Code and title required'); return; }
     setAddLoading(true); setAddError('');
@@ -133,7 +167,7 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       if (data.pendingApproval) {
-        alert('Delete request sent to owner for approval.');
+        alert('Delete request sent to admins for approval.');
       }
       setDeleteCourse(null);
       useAppStore.getState().invalidateTreeCache();
@@ -165,6 +199,41 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
           <i className={`fas fa-user ${showMyCourses ? 'mr-1' : 'mr-1'}`}></i>My Courses
         </button>
       </div>
+
+      {/* Pending delete requests (regular users deleting their own uploads) */}
+      {canDelete && deleteRequests.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20">
+            <i className="fas fa-clock text-amber-400"></i>
+            <h4 className="text-[0.78rem] font-semibold text-amber-300">Pending Delete Requests ({deleteRequests.length})</h4>
+          </div>
+          <div className="divide-y divide-dark-border/60">
+            {deleteRequests.map(r => (
+              <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[0.8rem] text-dark-text truncate">
+                    <span className="font-mono font-bold text-amber-300">{r.details.code || '?'}</span>
+                    {r.details.title ? ` — ${r.details.title}` : ''}
+                  </p>
+                  <p className="text-[0.65rem] text-dark-text3 truncate">
+                    {r.details.department}/{r.details.semester} · requested by {r.userName || r.userId || '?'} · {r.details.folderPath || ''}
+                  </p>
+                </div>
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <button onClick={() => handleDeleteRequest(r.id, 'approve')} disabled={handlingRequest === r.id}
+                    className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-[0.7rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
+                    {handlingRequest === r.id ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-trash mr-1"></i>Approve Delete</>}
+                  </button>
+                  <button onClick={() => handleDeleteRequest(r.id, 'reject')} disabled={handlingRequest === r.id}
+                    className="px-3 py-1.5 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.7rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2 disabled:opacity-50">
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Add Course Modal — portal to body so re-renders don't kill it */}
       {showAdd && createPortal(
@@ -218,7 +287,7 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
             <h3 className="text-sm font-bold text-red-400 mb-2"><i className="fas fa-trash mr-2"></i>Delete Course</h3>
             <p className="text-dark-text2 text-[0.82rem] mb-1">Are you sure you want to delete:</p>
             <p className="font-mono text-qsis text-sm font-bold mb-3">{deleteCourse.code} — {deleteCourse.title}</p>
-            <p className="text-red-400 text-[0.72rem] mb-3"><i className="fas fa-exclamation-triangle mr-1"></i>This will permanently delete the course folder from GitHub and the database. The owner will be notified.</p>
+            <p className="text-red-400 text-[0.72rem] mb-3"><i className="fas fa-exclamation-triangle mr-1"></i>This will permanently delete the course folder from GitHub and the database.</p>
             <div className="flex gap-2">
               <button onClick={handleDelete} disabled={deleteLoading}
                 className="flex-1 py-2 rounded-lg bg-red-500 text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">

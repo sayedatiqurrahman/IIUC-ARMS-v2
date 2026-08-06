@@ -89,6 +89,10 @@ export default function CoursesView({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       setDeleteTarget(null);
+      if (data.pendingApproval) {
+        alert('Delete request sent to admins for approval. The course will be removed once an admin confirms it.');
+        return;
+      }
       invalidateCoursesCache();
       await useAppStore.getState().loadCourses();
       useAppStore.getState().invalidateTreeCache();
@@ -241,7 +245,7 @@ export default function CoursesView({
             <p className="text-dark-text2 text-[0.82rem] mb-1">Are you sure you want to delete:</p>
             <p className="font-mono text-qsis text-sm font-bold mb-3">{deleteTarget.code} — {deleteTarget.title}</p>
             {deleteError && <p className="text-red-400 text-[0.72rem] mb-2">{deleteError}</p>}
-            <p className="text-red-400 text-[0.72rem] mb-3"><i className="fas fa-exclamation-triangle mr-1"></i>This will permanently delete the course folder from GitHub and the database. The owner will be notified.</p>
+            <p className="text-red-400 text-[0.72rem] mb-3"><i className="fas fa-exclamation-triangle mr-1"></i>{coursePerms.canDelete ? 'This will permanently delete the course folder from GitHub and the database.' : 'This will send a delete request to the admins for approval. The course will be removed once an admin confirms it.'}</p>
             <div className="flex gap-2">
               <button onClick={handleDelete} disabled={deleteLoading}
                 className="flex-1 py-2 rounded-lg bg-red-500 text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
