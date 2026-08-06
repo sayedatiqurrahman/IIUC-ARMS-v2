@@ -1,5 +1,6 @@
 'use client';
 
+import { detectQuadOpenCV } from './opencv-detect';
 import {
   detectQuadOnCanvas,
   orderQuad,
@@ -89,10 +90,22 @@ function quadValid(q: Quad, w: number, h: number): boolean {
   return angOk === 4;
 }
 
-// Detect a document quad in the given canvas's own pixel space. The built-in CV
-// runs first — its line-intersection corner refinement hugs the paper corners
-// precisely. Scanic's WASM detector is only a fallback when the CV finds nothing.
+// Detect a document quad in the given canvas's own pixel space. OpenCV's
+// contour detection runs first (most robust at separating the paper from
+// background objects — the paper is the largest *rectangular* quad in the
+// frame). The built-in CV and Scanic's WASM detector are fallbacks.
 export async function detectQuadSmart(canvas: HTMLCanvasElement, previewW: number, previewH: number): Promise<Quad | null> {
+  try {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (ctx) {
+      const img = ctx.getImageData(0, 0, previewW, previewH);
+      const q = await detectQuadOpenCV({ data: img.data, w: previewW, h: previewH });
+      if (q) return q;
+    }
+  } catch {
+    // fall through to the built-in detector
+  }
+
   const cv = detectQuadOnCanvas(canvas, previewW, previewH);
   if (cv) return cv;
 

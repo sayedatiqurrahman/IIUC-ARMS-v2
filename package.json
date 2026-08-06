@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "prisma generate && node scripts/fix-profile-columns.js && next build",
     "start": "next start",
-    "postinstall": "prisma generate && node -e \"const fs=require('fs');const p='node_modules/@pdftron/pdfjs-express/public';if(fs.existsSync(p)){fs.cpSync(p,'public/webviewer/lib',{recursive:true,force:true})}\"",
+    "postinstall": "prisma generate && node -e \"const fs=require('fs');const p='node_modules/@pdftron/pdfjs-express/public';if(fs.existsSync(p)){fs.cpSync(p,'public/webviewer/lib',{recursive:true,force:true})}const o='node_modules/@techstark/opencv-js/dist/opencv.js';if(fs.existsSync(o)){fs.mkdirSync('public',{recursive:true});fs.copyFileSync(o,'public/opencv.js')}\"",
     "db:migrate": "node scripts/fix-profile-columns.js"
   },
   "dependencies": {
@@ -15,6 +15,7 @@
     "@pdftron/pdfjs-express": "^8.7.5",
     "@prisma/adapter-pg": "^7.9.0",
     "@prisma/client": "^7.9.0",
+    "@techstark/opencv-js": "^5.0.0-release.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "docx-preview": "^0.4.0",

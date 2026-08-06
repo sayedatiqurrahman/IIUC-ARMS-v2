@@ -1,28 +1,50 @@
-// Regression test for the document-quad detector (lib/image-utils.ts).
+// Regression test for the document-quad detectors and the B&W binarizer.
 //
-// Builds synthetic grayscale "camera frames" — a paper quadrilateral on a
-// background, with text lines, distractors, low contrast, rotation, etc. — and
-// verifies detectQuadCore recovers the paper corners accurately.
+// Detectors:  detectQuadCore (built-in CV, lib/image-utils.ts) and
+//             detectQuadOpenCV (OpenCV.js contour pipeline, lib/opencv-detect.ts)
+// Binarizer:  binarizeGray (shadow-aware B&W, lib/image-utils.ts)
 //
-// Run:  npx tsc lib/image-utils.ts scripts/detection-test.ts
+// Builds synthetic "camera frames" — a paper quadrilateral on a background, with
+// text lines, distractors, shadows, rotation, low contrast, etc. — and verifies
+// each detector recovers the paper corners and the B&W filter preserves text
+// while keeping shadows white.
+//
+// Run:  npx tsc lib/image-utils.ts lib/opencv-detect.ts scripts/detection-test.ts
 //         --outDir .tmp-detection-test --module commonjs --target es2020 --skipLibCheck
 //       node .tmp-detection-test/scripts/detection-test.js
 //
 // Exits non-zero if any scenario fails.
 
-import { detectQuadCore, orderQuad, type GrayImage, type Point, type Quad } from '../lib/image-utils';
+import { binarizeGray, detectQuadCore, orderQuad, type GrayImage, type Point, type Quad } from '../lib/image-utils';
+import { detectQuadOpenCV, type RgbaFrame } from '../lib/opencv-detect';
 
 interface Scenario {
   name: string;
   build: (w: number, h: number) => { gray: GrayImage; truth: Quad | null };
   maxMean: number; // max allowed mean corner error (px)
   expectNull?: boolean;
+  // skipCV: the built-in detector merges touching objects into the paper; the
+  // OpenCV contour path (the primary detector) handles it. Only fallback.
+  skipCV?: boolean;
 }
 
 function makeGray(w: number, h: number, fill: number): GrayImage {
   const data = new Uint8ClampedArray(w * h);
   for (let i = 0; i < data.length; i++) data[i] = fill;
   return { data, w, h };
+}
+
+function grayToRgba(gray: GrayImage): RgbaFrame {
+  const data = new Uint8ClampedArray(gray.w * gray.h * 4);
+  for (let i = 0; i < gray.w * gray.h; i++) {
+    const v = gray.data[i];
+    const o = i * 4;
+    data[o] = v;
+    data[o + 1] = v;
+    data[o + 2] = v;
+    data[o + 3] = 255;
+  }
+  return { data, w: gray.w, h: gray.h };
 }
 
 function pointInQuad(p: Point, q: Quad): boolean {
@@ -162,12 +184,27 @@ const scenarios: Scenario[] = [
     },
   },
   {
+    name: 'Paper with a dark object touching its edge',
+    maxMean: 8,
+    skipCV: true,
+    build: (w, h) => {
+      const gray = makeGray(w, h, 75);
+      const truth = quadFromRect(180, 100, 500, 400);
+      fillQuad(gray, truth, 235);
+      drawTextLines(gray, truth, 12, 45);
+      // Dark object glued to the paper's right edge — the union has >4 corners,
+      // so the brightness path must still isolate the paper itself.
+      fillQuad(gray, quadFromRect(496, 150, 560, 320), 45);
+      return { gray, truth };
+    },
+  },
+  {
     name: 'Off-center paper + background table edge',
     maxMean: 5,
     build: (w, h) => {
       const gray = makeGray(w, h, 85);
       // Bright horizontal band across the top that touches the borders — a
-      // classic false-positive that must be skipped by interior-only search.
+      // classic false-positive that must lose to the real paper.
       for (let y = 0; y < 120; y++) for (let x = 0; x < w; x++) gray.data[y * w + x] = 215;
       const truth = quadFromRect(80, 220, 520, 460);
       fillQuad(gray, truth, 238);
@@ -183,33 +220,145 @@ const scenarios: Scenario[] = [
   },
 ];
 
-let failed = 0;
-for (const s of scenarios) {
-  const { gray, truth } = s.build(W, H);
-  const result = detectQuadCore(gray);
-  const resQuad = result ? orderQuad(result) : null;
-
-  if (s.expectNull) {
-    if (resQuad) {
-      failed++;
-      console.log(`FAIL  ${s.name}: expected null but got corners ${JSON.stringify(resQuad)}`);
-    } else {
-      console.log(`PASS  ${s.name}`);
+function runDetector(label: string, detect: (g: GrayImage) => Quad | null): number {
+  let failed = 0;
+  for (const s of scenarios) {
+    if (s.skipCV) {
+      console.log(`SKIP  [${label}] ${s.name} (touching-object case is OpenCV-only)`);
+      continue;
     }
-    continue;
-  }
+    const { gray, truth } = s.build(W, H);
+    const result = detect(gray);
+    const resQuad = result ? orderQuad(result) : null;
 
-  if (!resQuad || !truth) {
-    failed++;
-    console.log(`FAIL  ${s.name}: detection returned null (no document found)`);
-    continue;
-  }
+    if (s.expectNull) {
+      if (resQuad) {
+        failed++;
+        console.log(`FAIL  [${label}] ${s.name}: expected null but got corners ${JSON.stringify(resQuad)}`);
+      } else {
+        console.log(`PASS  [${label}] ${s.name}`);
+      }
+      continue;
+    }
 
-  const err = cornerError(resQuad, truth);
-  const ok = err <= s.maxMean;
-  if (!ok) failed++;
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${s.name}: mean corner error ${err.toFixed(2)}px (limit ${s.maxMean}px)`);
+    if (!resQuad || !truth) {
+      failed++;
+      console.log(`FAIL  [${label}] ${s.name}: detection returned null (no document found)`);
+      continue;
+    }
+
+    const err = cornerError(resQuad, truth);
+    const ok = err <= s.maxMean;
+    if (!ok) failed++;
+    console.log(`${ok ? 'PASS' : 'FAIL'}  [${label}] ${s.name}: mean corner error ${err.toFixed(2)}px (limit ${s.maxMean}px)`);
+  }
+  return failed;
 }
 
-console.log(failed === 0 ? `\nAll ${scenarios.length} scenarios passed.` : `\n${failed} scenario(s) FAILED.`);
-process.exit(failed === 0 ? 0 : 1);
+// ---- Binarization (B&W) checks -------------------------------------------------
+
+function inkRatio(gray: GrayImage, bw: Uint8ClampedArray, predicate: (x: number, y: number) => boolean): number {
+  let black = 0;
+  let total = 0;
+  for (let y = 0; y < gray.h; y++) {
+    for (let x = 0; x < gray.w; x++) {
+      if (!predicate(x, y)) continue;
+      total++;
+      if (bw[y * gray.w + x] === 0) black++;
+    }
+  }
+  return total === 0 ? 0 : black / total;
+}
+
+function runBinarize(): number {
+  let failed = 0;
+  const check = (name: string, ok: boolean, detail: string) => {
+    if (!ok) failed++;
+    console.log(`${ok ? 'PASS' : 'FAIL'}  [B&W] ${name}: ${detail}`);
+  };
+
+  // Build a full-frame page: paper 235, text bars 60, plus a soft shadow that
+  // darkens the right half down to ~55% brightness (a crease/fold gradient).
+  const gray = makeGray(W, H, 235);
+  const truth = quadFromRect(0, 0, W, H);
+  drawTextLines(gray, truth, 14, 60);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const t = Math.max(0, Math.min(1, (x - W * 0.35) / (W * 0.35)));
+      const v = Math.round(gray.data[y * W + x] * (1 - 0.45 * t));
+      gray.data[y * W + x] = v;
+    }
+  }
+  const bw = binarizeGray(gray);
+
+  // Text bands: the 5px-tall bars (every ~23px). Ink must survive on both the
+  // bright side and the shadowed side.
+  const barY = (y: number) => {
+    const cy = H / 2;
+    const spread = H * 0.7;
+    for (let i = 0; i < 14; i++) {
+      const y0 = Math.round(cy - spread / 2 + (i / 13) * spread);
+      if (y >= y0 && y <= y0 + 5) return true;
+    }
+    return false;
+  };
+  const inkInBarsBright = inkRatio(gray, bw, (x, y) => barY(y) && x < W * 0.3);
+  const inkInBarsShadow = inkRatio(gray, bw, (x, y) => barY(y) && x > W * 0.7);
+  check('text ink preserved on bright side', inkInBarsBright > 0.5, `bar ink ${(inkInBarsBright * 100).toFixed(0)}%`);
+  check('text ink preserved inside shadow', inkInBarsShadow > 0.5, `bar ink in shadow ${(inkInBarsShadow * 100).toFixed(0)}%`);
+
+  // Paper (non-text) areas must stay white — including inside the shadow.
+  const inkPaperBright = inkRatio(gray, bw, (x, y) => !barY(y) && x < W * 0.3);
+  const inkPaperShadow = inkRatio(gray, bw, (x, y) => !barY(y) && x > W * 0.7);
+  check('no blackening on bright paper', inkPaperBright < 0.01, `noise ${(inkPaperBright * 100).toFixed(2)}%`);
+  check('shadow stays white (no black blob)', inkPaperShadow < 0.01, `shadow noise ${(inkPaperShadow * 100).toFixed(2)}%`);
+
+  // A flat page with no shadow must be perfectly clean outside text.
+  const clean = makeGray(W, H, 235);
+  drawTextLines(clean, quadFromRect(0, 0, W, H), 14, 60);
+  const bwClean = binarizeGray(clean);
+  const inkCleanPaper = inkRatio(clean, bwClean, (x, y) => !barY(y));
+  check('clean page stays white outside text', inkCleanPaper < 0.01, `noise ${(inkCleanPaper * 100).toFixed(2)}%`);
+
+  return failed;
+}
+
+// ---- Run everything --------------------------------------------------------------
+
+async function main() {
+  let failed = 0;
+  failed += runDetector('CV', detectQuadCore);
+  failed += await (async () => {
+    let f = 0;
+    for (const s of scenarios) {
+      const { gray, truth } = s.build(W, H);
+      const result = await detectQuadOpenCV(grayToRgba(gray));
+      const resQuad = result ? orderQuad(result) : null;
+      if (s.expectNull) {
+        if (resQuad) {
+          f++;
+          console.log(`FAIL  [OpenCV] ${s.name}: expected null but got corners ${JSON.stringify(resQuad)}`);
+        } else {
+          console.log(`PASS  [OpenCV] ${s.name}`);
+        }
+        continue;
+      }
+      if (!resQuad || !truth) {
+        f++;
+        console.log(`FAIL  [OpenCV] ${s.name}: detection returned null`);
+        continue;
+      }
+      const err = cornerError(resQuad, truth);
+      const ok = err <= s.maxMean;
+      if (!ok) f++;
+      console.log(`${ok ? 'PASS' : 'FAIL'}  [OpenCV] ${s.name}: mean corner error ${err.toFixed(2)}px (limit ${s.maxMean}px)`);
+    }
+    return f;
+  })();
+  failed += runBinarize();
+
+  console.log(failed === 0 ? '\nAll scenarios passed.' : `\n${failed} check(s) FAILED.`);
+  process.exit(failed === 0 ? 0 : 1);
+}
+
+main();

@@ -191,7 +191,7 @@ function stretchContrast(g: GrayImage): GrayImage {
 }
 
 // Otsu threshold: returns a threshold that separates bright/dark pixels.
-function otsuThreshold(hist: number[], total: number): number {
+export function otsuThreshold(hist: number[], total: number): number {
   let sum = 0;
   for (let t = 0; t < 256; t++) sum += t * hist[t];
   let sumB = 0;
@@ -536,6 +536,14 @@ export function detectQuadOnCanvas(canvas: HTMLCanvasElement, previewW: number, 
   return detectDocumentQuad(canvas, previewW, previewH);
 }
 
+// Snap the corners of a quad onto the strongest nearby edges (orthogonal line
+// fit per side, corner = line intersection). Used to polish the OpenCV contour
+// result so the crop follows the paper's real corners, not the coarse polygon.
+export function refineQuadCorners(gray: GrayImage, quad: Quad): Quad {
+  const edges = sobelEdges(gray);
+  return refineCorners(quad, edges, gray.w, gray.h);
+}
+
 // Fit a line (a*x + b*y + c = 0) through points by orthogonal least squares.
 function fitLine(pts: Point[]): { a: number; b: number; c: number } | null {
   const n = pts.length;
@@ -769,6 +777,61 @@ export function warpPerspective(source: HTMLCanvasElement | HTMLVideoElement, qu
 // Scan filters: Original / Enhance / Black & White
 // ---------------------------------------------------------------------------
 
+// Box blur of a gray image via an integral image (O(1) per pixel).
+function boxBlurGray(data: Uint8ClampedArray, w: number, h: number, radius: number): Float64Array {
+  const integral = new Float64Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let rowSum = 0;
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      rowSum += data[row + x];
+      integral[(y + 1) * (w + 1) + x + 1] = integral[y * (w + 1) + x + 1] + rowSum;
+    }
+  }
+  const out = new Float64Array(w * h);
+  const r = Math.max(1, radius);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r);
+    const y1 = Math.min(h - 1, y + r) + 1;
+    const rows = y1 - y0;
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r);
+      const x1 = Math.min(w - 1, x + r) + 1;
+      const cols = x1 - x0;
+      const sum =
+        integral[y1 * (w + 1) + x1] -
+        integral[y0 * (w + 1) + x1] -
+        integral[y1 * (w + 1) + x0] +
+        integral[y0 * (w + 1) + x0];
+      out[y * w + x] = sum / (rows * cols);
+    }
+  }
+  return out;
+}
+
+// Smart B&W binarization that is tolerant to shadows, creases and uneven
+// lighting. Instead of a fixed offset from the local mean (which turns a shadow
+// into a black blob and swallows the text inside it), it estimates the local
+// paper illumination with a large low-pass blur — the "shadow model" — and only
+// marks a pixel as ink when it is significantly darker than that local
+// background. Shadows lower the background level and stay white; ink inside a
+// shadow is still black because it is dark relative to its own background.
+export function binarizeGray(gray: GrayImage): Uint8ClampedArray {
+  const { data, w, h } = gray;
+  const minDim = Math.min(w, h);
+  const r1 = Math.max(16, Math.round(minDim / 18));
+  const r2 = Math.max(8, Math.round(r1 / 2));
+  const bg1 = boxBlurGray(data, w, h, r1);
+  const bg = boxBlurGray(Uint8ClampedArray.from(bg1), w, h, r2);
+  const out = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const b = bg[i];
+    const rel = Math.max(0.16, b > 0 ? 14 / b : 0.16);
+    out[i] = data[i] < b * (1 - rel) ? 0 : 255;
+  }
+  return out;
+}
+
 export function applyScanFilter(canvas: HTMLCanvasElement, mode: ScanMode): HTMLCanvasElement {
   if (mode === 'original') return canvas;
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
@@ -793,41 +856,17 @@ export function applyScanFilter(canvas: HTMLCanvasElement, mode: ScanMode): HTML
       d[i + 2] = clamp255((d[i + 2] - min) * gain);
     }
   } else {
-    // B&W: grayscale + Otsu-like adaptive threshold (rolling block for uneven lighting)
-    const gray = new Uint8ClampedArray(w * h);
+    // B&W: shadow-aware adaptive binarization (see binarizeGray).
+    const gray: GrayImage = { w, h, data: new Uint8ClampedArray(w * h) };
     for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-      gray[p] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+      gray.data[p] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
     }
-    const block = Math.max(16, Math.round(Math.min(w, h) / 16));
-    const integral = new Float64Array((w + 1) * (h + 1));
-    for (let y = 0; y < h; y++) {
-      let rowSum = 0;
-      for (let x = 0; x < w; x++) {
-        rowSum += gray[y * w + x];
-        integral[(y + 1) * (w + 1) + x + 1] = integral[y * (w + 1) + x + 1] + rowSum;
-      }
-    }
-    const half = block >> 1;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const x0 = Math.max(0, x - half);
-        const y0 = Math.max(0, y - half);
-        const x1 = Math.min(w, x + half);
-        const y1 = Math.min(h, y + half);
-        const count = (x1 - x0) * (y1 - y0);
-        const sum =
-          integral[y1 * (w + 1) + x1] -
-          integral[y0 * (w + 1) + x1] -
-          integral[y1 * (w + 1) + x0] +
-          integral[y0 * (w + 1) + x0];
-        const localMean = sum / count;
-        const p = y * w + x;
-        const val = gray[p] < localMean - 8 ? 0 : 255;
-        const o = p * 4;
-        d[o] = val;
-        d[o + 1] = val;
-        d[o + 2] = val;
-      }
+    const bw = binarizeGray(gray);
+    for (let p = 0; p < w * h; p++) {
+      const o = p * 4;
+      d[o] = bw[p];
+      d[o + 1] = bw[p];
+      d[o + 2] = bw[p];
     }
   }
   ctx.putImageData(imgData, 0, 0);
