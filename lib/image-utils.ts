@@ -89,6 +89,8 @@ interface GrayImage {
   h: number;
 }
 
+export type { GrayImage };
+
 function toGray(canvas: HTMLCanvasElement): GrayImage {
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
   const { width: w, height: h } = canvas;
@@ -155,6 +157,37 @@ function sobelEdges(g: GrayImage): Uint8ClampedArray {
     }
   }
   return out;
+}
+
+// Histogram stretch between 2% and 98% percentiles. Boosts low-contrast scenes
+// (paper in shadow, off-white pages) so both the edge detector and the Otsu
+// brightness split can separate the paper from the background reliably.
+function stretchContrast(g: GrayImage): GrayImage {
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < g.data.length; i++) hist[g.data[i]]++;
+  const total = g.data.length;
+  let lo = 0;
+  let hi = 255;
+  let cum = 0;
+  const loTarget = total * 0.02;
+  for (let t = 0; t < 256; t++) {
+    cum += hist[t];
+    if (cum >= loTarget) { lo = t; break; }
+  }
+  cum = 0;
+  const hiTarget = total * 0.98;
+  for (let t = 255; t >= 0; t--) {
+    cum += hist[t];
+    if (cum >= hiTarget) { hi = t; break; }
+  }
+  if (hi - lo < 8) return g;
+  const out = new Uint8ClampedArray(g.data.length);
+  const scale = 255 / (hi - lo);
+  for (let i = 0; i < g.data.length; i++) {
+    const v = (g.data[i] - lo) * scale;
+    out[i] = v < 0 ? 0 : v > 255 ? 255 : v;
+  }
+  return { data: out, w: g.w, h: g.h };
 }
 
 // Otsu threshold: returns a threshold that separates bright/dark pixels.
@@ -295,6 +328,31 @@ function pointToSegmentDistance(p: Point, a: Point, b: Point): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
+// Merge consecutive points that simplification left closer than minDist,
+// keeping their midpoint. Also closes the wrap-around gap between the first
+// and last point when they are the same vertex.
+function mergeNearbyPoints(pts: Point[], minDist: number): Point[] {
+  if (pts.length < 2) return pts.slice();
+  const out: Point[] = [];
+  for (const p of pts) {
+    const last = out[out.length - 1];
+    if (last && Math.hypot(p.x - last.x, p.y - last.y) <= minDist) {
+      out[out.length - 1] = { x: (last.x + p.x) / 2, y: (last.y + p.y) / 2 };
+    } else {
+      out.push(p);
+    }
+  }
+  if (out.length >= 2) {
+    const f = out[0];
+    const l = out[out.length - 1];
+    if (Math.hypot(f.x - l.x, f.y - l.y) <= minDist) {
+      out[out.length - 1] = { x: (f.x + l.x) / 2, y: (f.y + l.y) / 2 };
+      out.shift();
+    }
+  }
+  return out;
+}
+
 function polygonArea(points: Point[]): number {
   let area = 0;
   for (let i = 0; i < points.length; i++) {
@@ -348,15 +406,21 @@ function quadFromMask(mask: Uint8Array, w: number, h: number, minArea: number): 
   if (hull.length < 4) return null;
 
   const eps = Math.max(3, Math.min(w, h) * 0.02);
-  let poly = simplifyPolygon(hull.concat([hull[0]]), eps);
+  // Simplify the hull as an OPEN polyline (no duplicated closing vertex).
+  let poly = simplifyPolygon(hull, eps);
 
-  // Reduce to exactly 4 corners by dropping the sharpest angle repeatedly.
+  // Merge points that simplification left on top of each other.
+  poly = mergeNearbyPoints(poly, Math.max(2, eps * 0.6));
+
+  // Reduce to exactly 4 corners by repeatedly dropping the MOST COLLINEAR
+  // vertex (interior angle closest to 180°). Dropping the sharpest angle
+  // instead would remove real paper corners and keep useless side points.
   while (poly.length > 4) {
     let worst = 1;
-    let worstVal = Infinity;
+    let worstVal = -1;
     for (let i = 1; i < poly.length - 1; i++) {
       const ang = angleBetween(poly[i - 1], poly[i], poly[i + 1]);
-      if (ang < worstVal) {
+      if (ang > worstVal) {
         worstVal = ang;
         worst = i;
       }
@@ -369,6 +433,14 @@ function quadFromMask(mask: Uint8Array, w: number, h: number, minArea: number): 
 
   const area = polygonArea(poly);
   if (area < minArea || area > w * h * 0.97) return null;
+  // Reject long, thin slivers of background that happen to survive thresholding.
+  const sides = poly.map((p, i) => {
+    const n = poly[(i + 1) % poly.length];
+    return Math.hypot(n.x - p.x, n.y - p.y);
+  });
+  const maxSide = Math.max(...sides);
+  const minSide = Math.min(...sides);
+  if (maxSide / Math.max(1, minSide) > 5) return null;
   for (let i = 0; i < 4; i++) {
     const ang = angleBetween(poly[i], poly[(i + 1) % 4], poly[(i + 2) % 4]);
     if (ang < 25 || ang > 155) return null;
@@ -376,21 +448,18 @@ function quadFromMask(mask: Uint8Array, w: number, h: number, minArea: number): 
   return orderQuad(poly);
 }
 
-export function detectDocumentQuad(source: HTMLCanvasElement | HTMLVideoElement, previewW: number, previewH: number): Quad | null {
-  const raw = document.createElement('canvas');
-  raw.width = previewW;
-  raw.height = previewH;
-  const rctx = raw.getContext('2d', { willReadFrequently: true })!;
-  rctx.drawImage(source, 0, 0, previewW, previewH);
-
-  let gray = toGray(raw);
-  gray = gaussianBlur(gray, 1);
-  const { w, h } = gray;
-  const minArea = previewW * previewH * 0.05;
+// Pure detection core: operates on a gray image only (no DOM), so it can be
+// exercised from the browser (detectDocumentQuad) and from the Node regression
+// test (scripts/detection-test.ts) with the exact same code path.
+export function detectQuadCore(gray: GrayImage): Quad | null {
+  const blurred = gaussianBlur(gray, 1);
+  const g = stretchContrast(blurred);
+  const { w, h } = g;
+  const minArea = w * h * 0.05;
   const candidates: Quad[] = [];
 
   // ---- Path 1: strong edges (works on textured/contrast backgrounds) ----
-  const edges = sobelEdges(gray);
+  const edges = sobelEdges(g);
   const thr = Math.max(percentileThreshold(edges, 0.10), 40);
   const edgeMask = new Uint8Array(edges.length);
   for (let i = 0; i < edges.length; i++) if (edges[i] >= thr) edgeMask[i] = 1;
@@ -415,16 +484,16 @@ export function detectDocumentQuad(source: HTMLCanvasElement | HTMLVideoElement,
   // Fallback: document nearly fills the frame and touches the border.
   if (!q1) {
     comp = largestComponent(dilated, w, h, false);
-    const q = comp ? quadFromMask(comp, w, h, previewW * previewH * 0.15) : null;
+    const q = comp ? quadFromMask(comp, w, h, w * h * 0.15) : null;
     if (q) candidates.push(q);
   }
 
   // ---- Path 2: brightness (paper is usually the brightest big region) ----
   const hist = new Array(256).fill(0);
-  for (let i = 0; i < gray.data.length; i++) hist[gray.data[i]]++;
-  const otsu = otsuThreshold(hist, gray.data.length);
+  for (let i = 0; i < g.data.length; i++) hist[g.data[i]]++;
+  const otsu = otsuThreshold(hist, g.data.length);
   const bright = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) bright[i] = gray.data[i] > otsu ? 1 : 0;
+  for (let i = 0; i < w * h; i++) bright[i] = g.data[i] > otsu ? 1 : 0;
   const brightComp = largestComponent(bright, w, h, true);
   const q2 = brightComp ? quadFromMask(brightComp, w, h, minArea) : null;
   if (q2) candidates.push(q2);
@@ -432,24 +501,33 @@ export function detectDocumentQuad(source: HTMLCanvasElement | HTMLVideoElement,
   // Bright paper that nearly fills the frame.
   if (!q2) {
     const comp2 = largestComponent(bright, w, h, false);
-    const q = comp2 ? quadFromMask(comp2, w, h, previewW * previewH * 0.15) : null;
+    const q = comp2 ? quadFromMask(comp2, w, h, w * h * 0.15) : null;
     if (q) candidates.push(q);
   }
 
   // ---- Path 3: dark document on a bright background (notebooks, blackboards) ----
   const dark = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) dark[i] = gray.data[i] < otsu ? 1 : 0;
+  for (let i = 0; i < w * h; i++) dark[i] = g.data[i] < otsu ? 1 : 0;
   const darkComp = largestComponent(dark, w, h, true);
   const q3 = darkComp ? quadFromMask(darkComp, w, h, minArea) : null;
   if (q3) candidates.push(q3);
 
   if (candidates.length === 0) return null;
-  candidates.sort((a, b) => quadScore(b, previewW, previewH) - quadScore(a, previewW, previewH));
+  candidates.sort((a, b) => quadScore(b, w, h) - quadScore(a, w, h));
   const best = candidates[0];
 
   // Snap corners onto the strongest nearby edge so the crop follows the real
   // paper corners instead of the coarse convex-hull estimate.
   return refineCorners(best, edges, w, h);
+}
+
+export function detectDocumentQuad(source: HTMLCanvasElement | HTMLVideoElement, previewW: number, previewH: number): Quad | null {
+  const raw = document.createElement('canvas');
+  raw.width = previewW;
+  raw.height = previewH;
+  const rctx = raw.getContext('2d', { willReadFrequently: true })!;
+  rctx.drawImage(source, 0, 0, previewW, previewH);
+  return detectQuadCore(toGray(raw));
 }
 
 // Re-run detection on a captured still frame (higher resolution than the live
@@ -458,30 +536,100 @@ export function detectQuadOnCanvas(canvas: HTMLCanvasElement, previewW: number, 
   return detectDocumentQuad(canvas, previewW, previewH);
 }
 
-// Move each corner a few pixels to the strongest edge nearby.
+// Fit a line (a*x + b*y + c = 0) through points by orthogonal least squares.
+function fitLine(pts: Point[]): { a: number; b: number; c: number } | null {
+  const n = pts.length;
+  if (n < 2) return null;
+  let mx = 0;
+  let my = 0;
+  for (const p of pts) { mx += p.x; my += p.y; }
+  mx /= n;
+  my /= n;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const p of pts) {
+    const dx = p.x - mx;
+    const dy = p.y - my;
+    sxx += dx * dx;
+    syy += dy * dy;
+    sxy += dx * dy;
+  }
+  if (sxx + syy < 1e-6) return null;
+  const theta = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  const a = Math.sin(theta);
+  const b = -Math.cos(theta);
+  const c = -(a * mx + b * my);
+  return { a, b, c };
+}
+
+function lineIntersect(l1: { a: number; b: number; c: number }, l2: { a: number; b: number; c: number }): Point | null {
+  const det = l1.a * l2.b - l2.a * l1.b;
+  if (Math.abs(det) < 1e-9) return null;
+  return {
+    x: (l1.b * l2.c - l2.b * l1.c) / det,
+    y: (l2.a * l1.c - l1.a * l2.c) / det,
+  };
+}
+
+// Walk along the segment a->b and keep, for each step, the strongest edge pixel
+// inside a small perpendicular band. These points trace the real paper edge.
+function collectEdgePointsNearSide(a: Point, b: Point, edges: Uint8ClampedArray, thr: number, w: number, h: number): Point[] {
+  const pts: Point[] = [];
+  const band = 6;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 2) return pts;
+  const steps = Math.max(10, Math.round(len));
+  const nx = -dy / len;
+  const ny = dx / len;
+  for (let s = 1; s < steps; s++) {
+    const t = s / steps;
+    const cx = a.x + dx * t;
+    const cy = a.y + dy * t;
+    let bestVal = 0;
+    let bestP: Point | null = null;
+    for (let o = -band; o <= band; o++) {
+      const x = Math.round(cx + nx * o);
+      const y = Math.round(cy + ny * o);
+      if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) continue;
+      const v = edges[y * w + x];
+      if (v > bestVal) {
+        bestVal = v;
+        bestP = { x, y };
+      }
+    }
+    if (bestP && bestVal >= thr) pts.push(bestP);
+  }
+  return pts;
+}
+
+// Snap each corner to the intersection of the two real paper edges meeting
+// there (fit two lines from the nearby edge pixels and intersect them). This is
+// far more accurate than grabbing the strongest edge pixel in a box around the
+// coarse corner estimate.
 function refineCorners(q: Quad, edges: Uint8ClampedArray, w: number, h: number): Quad {
-  const radius = 8;
+  const thr = Math.max(percentileThreshold(edges, 0.15), 30);
+  const maxMove = Math.max(w, h) * 0.15;
   const out = q.map(p => ({ ...p }));
   for (let i = 0; i < 4; i++) {
-    const cx = Math.round(out[i].x);
-    const cy = Math.round(out[i].y);
-    let bestX = cx;
-    let bestY = cy;
-    let bestVal = -1;
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        const x = cx + dx;
-        const y = cy + dy;
-        if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) continue;
-        const v = edges[y * w + x];
-        if (v > bestVal) {
-          bestVal = v;
-          bestX = x;
-          bestY = y;
+    const prev = q[(i + 3) % 4];
+    const cur = q[i];
+    const next = q[(i + 1) % 4];
+    const side1 = collectEdgePointsNearSide(prev, cur, edges, thr, w, h);
+    const side2 = collectEdgePointsNearSide(cur, next, edges, thr, w, h);
+    const l1 = fitLine(side1);
+    const l2 = fitLine(side2);
+    if (l1 && l2) {
+      const ip = lineIntersect(l1, l2);
+      if (ip && isFinite(ip.x) && isFinite(ip.y)) {
+        const dist = Math.hypot(ip.x - cur.x, ip.y - cur.y);
+        if (dist <= maxMove) {
+          out[i] = { x: Math.max(0, Math.min(w - 1, Math.round(ip.x))), y: Math.max(0, Math.min(h - 1, Math.round(ip.y))) };
         }
       }
     }
-    out[i] = { x: bestX, y: bestY };
   }
   return orderQuad(out);
 }

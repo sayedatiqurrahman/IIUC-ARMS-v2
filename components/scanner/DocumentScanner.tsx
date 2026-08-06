@@ -13,7 +13,8 @@ import {
   MAX_DIM_DEFAULT,
 } from '@/lib/image-utils';
 import { detectQuadSmart, processFrameSmart } from '@/lib/scanic-bridge';
-import { buildSearchablePdf } from '@/lib/ocr';
+import { buildSearchablePdf, blobToCanvas } from '@/lib/ocr';
+import { showToast } from '@/lib/utils';
 
 interface CapturedPage {
   blob: Blob;
@@ -35,12 +36,36 @@ interface DocumentScannerProps {
   docOnly?: boolean;
 }
 
-const MAX_PAGES = 8;
+const MAX_PAGES = 99;
 
 // Scale + offset used to map between a full-res image and its CSS "contain" box.
 function fitRect(vw: number, vh: number, cw: number, ch: number) {
   const scale = Math.min(cw / vw, ch / vh);
   return { scale, offX: (cw - vw * scale) / 2, offY: (ch - vh * scale) / 2 };
+}
+
+// Re-encode a captured page for a compact PDF. Pages already at or below the
+// target dimension pass through untouched; larger pages are downscaled and
+// re-compressed at a slightly lower JPEG quality — readable content is kept
+// while the final file shrinks noticeably.
+async function compressPageBlob(blob: Blob, width: number, height: number, maxDim = 1650, quality = 0.85) {
+  const scale = Math.min(1, maxDim / Math.max(width, height));
+  if (scale >= 1) return { blob, width, height };
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  try {
+    const img = await blobToCanvas(blob);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  } catch {
+    return { blob, width, height };
+  }
+  const outBlob = await canvasToBlob(canvas, 'image/jpeg', quality);
+  if (!outBlob || outBlob.size === 0) return { blob, width, height };
+  return { blob: outBlob, width: canvas.width, height: canvas.height };
 }
 
 export default function DocumentScanner({ onDone, onCancel, onResult, maxPages = MAX_PAGES, docOnly = false }: DocumentScannerProps) {
@@ -229,7 +254,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
       }
 
       detectRunning = true;
-      const scale = Math.min(1, 480 / Math.max(vw, vh));
+      const scale = Math.min(1, 640 / Math.max(vw, vh));
       const dw = Math.round(vw * scale);
       const dh = Math.round(vh * scale);
       const raw = document.createElement('canvas');
@@ -741,36 +766,62 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     };
   }, [editingSrc]);
 
-  // ---- Finish: 1 image -> image; multiple -> merged PDF (OCR if enabled) ----
+  // ---- Build the final file: 1 image -> image; multiple -> merged PDF (OCR if enabled) ----
+  const buildResult = useCallback(async () => {
+    if (pages.length === 1 && !docOnly) {
+      const page = pages[0];
+      const name = `scan_${Date.now()}.jpg`;
+      return { file: new File([page.blob], name, { type: 'image/jpeg' }), usedOcr: false };
+    }
+    // Compact the pages (downscale + re-encode) so the PDF stays small without
+    // visibly hurting content quality.
+    const compressed = await Promise.all(pages.map(p => compressPageBlob(p.blob, p.width, p.height)));
+    const file = await buildSearchablePdf(
+      compressed,
+      ocrEnabled,
+      `scan_${Date.now()}.pdf`,
+      p => setProgressMsg(`Building PDF... ${Math.round(p * 100)}%`)
+    );
+    return { file, usedOcr: ocrEnabled };
+  }, [pages, ocrEnabled, docOnly]);
+
   const finish = useCallback(async () => {
     if (pages.length === 0) return;
     setBusy(true);
     setProgressMsg('Finalizing...');
     try {
-      if (pages.length === 1 && !docOnly) {
-        const page = pages[0];
-        const blob = page.blob;
-        const name = `scan_${Date.now()}.jpg`;
-        onResult?.(new File([blob], name, { type: 'image/jpeg' }), false);
-        onDone(pages);
-        return;
-      }
-      if (ocrEnabled) {
-        setProgressMsg('Running OCR — this may take a while...');
-      }
-      const file = await buildSearchablePdf(
-        pages.map(p => ({ blob: p.blob, width: p.width, height: p.height })),
-        ocrEnabled,
-        `scan_${Date.now()}.pdf`,
-        p => setProgressMsg(`Building PDF... ${Math.round(p * 100)}%`)
-      );
-      onResult?.(file, ocrEnabled);
+      if (ocrEnabled && pages.length > 1) setProgressMsg('Running OCR — this may take a while...');
+      const { file, usedOcr } = await buildResult();
+      onResult?.(file, usedOcr);
       onDone(pages);
     } catch (err: any) {
       setError('Failed to finalize: ' + (err?.message || 'Unknown error'));
     }
     setBusy(false);
-  }, [pages, ocrEnabled, onDone, onResult, docOnly]);
+  }, [buildResult, onDone, onResult]);
+
+  // ---- Download the finished file to the device (no upload) ----
+  const downloadLocal = useCallback(async () => {
+    if (pages.length === 0) return;
+    setBusy(true);
+    setProgressMsg('Preparing download...');
+    try {
+      const { file } = await buildResult();
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      setProgressMsg('');
+      showToast(`Downloaded ${file.name}`, 'success');
+    } catch (err: any) {
+      setError('Download failed: ' + (err?.message || 'Unknown error'));
+    }
+    setBusy(false);
+  }, [buildResult, pages.length]);
 
   const noDetect = () => {
     const next = !autoCropRef.current;
@@ -788,7 +839,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
   // ---- Edit screen ----
   if (editingSrc) {
     return (
-      <div className="fixed inset-0 z-[210] bg-black flex flex-col">
+      <div className="fixed inset-0 z-[210] bg-black flex flex-col scan-edit-surface" onContextMenu={e => e.preventDefault()}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-black/90 border-b border-white/10">
           <button className="w-9 h-9 rounded-lg bg-white/10 text-white flex items-center justify-center cursor-pointer border-none" onClick={retake}>
@@ -804,8 +855,9 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
             ref={editingImgRef}
             src={editingSrc}
             alt="captured"
-            className="absolute inset-0 w-full h-full object-contain touch-none"
+            className="absolute inset-0 w-full h-full object-contain touch-none select-none"
             draggable={false}
+            onContextMenu={e => e.preventDefault()}
             onPointerDown={onEditPointerDown}
             onPointerMove={onEditPointerMove}
             onPointerUp={onEditPointerUp}
@@ -814,6 +866,23 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-[0.72rem] bg-black/60 px-3 py-1.5 rounded-lg whitespace-nowrap">
             <i className="fas fa-hand-pointer mr-1"></i>Drag the green corners to fit the document
           </div>
+        </div>
+
+        {/* Mode toggle */}
+        <div className="px-4 py-2.5 bg-black/80 border-t border-white/10 flex justify-center gap-2">
+          {([
+            ['bw', 'B&W'],
+            ['enhance', 'Enhance'],
+            ['original', 'Original'],
+          ] as [ScanMode, string][]).map(([val, label]) => (
+            <button
+              key={val}
+              className={`px-3 py-1.5 text-[0.72rem] font-semibold cursor-pointer border-none rounded-lg transition-colors ${mode === val ? 'bg-qsis text-white' : 'bg-white/10 text-white/70'}`}
+              onClick={() => setMode(val)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Bottom controls */}
@@ -931,7 +1000,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
         </div>
 
         {/* Bottom bar */}
-        <div className="px-4 py-4 bg-black/90 border-t border-white/10 flex items-center justify-center gap-8">
+        <div className="px-4 py-4 bg-black/90 border-t border-white/10 flex items-center justify-center gap-10">
           <button
             className="flex flex-col items-center gap-1 text-white/60 text-[0.68rem] bg-transparent border-none cursor-pointer"
             onClick={() => setPreviewIndex(null)}
@@ -940,20 +1009,21 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
             Add page
           </button>
           <button
-            className="w-16 h-16 rounded-full bg-qsis text-white flex items-center justify-center cursor-pointer hover:opacity-90 border-none disabled:opacity-40"
-            onClick={finish}
+            className="w-16 h-16 rounded-full bg-white/10 border border-white/25 text-white flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors disabled:opacity-40"
+            onClick={downloadLocal}
             disabled={busy || pages.length === 0}
-            title="Finish"
+            title="Download to your device"
           >
-            <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-check'} text-xl`}></i>
+            <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-download'} text-xl`}></i>
           </button>
           <button
             className="flex flex-col items-center gap-1 text-qsis text-[0.68rem] bg-transparent border-none cursor-pointer disabled:opacity-40"
             onClick={finish}
             disabled={busy || pages.length === 0}
+            title="Proceed to the upload panel"
           >
-            <i className="fas fa-file-pdf text-lg"></i>
-            {pages.length > 1 ? 'Merge to PDF' : 'Done'}
+            <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-arrow-right'} text-lg`}></i>
+            {pages.length > 1 ? 'Merge & Upload' : 'Upload'}
           </button>
         </div>
       </div>
@@ -983,7 +1053,8 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
           autoPlay
           playsInline
           muted
-          className="absolute inset-0 w-full h-full object-contain"
+          className="absolute inset-0 w-full h-full object-contain select-none"
+          onContextMenu={e => e.preventDefault()}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}

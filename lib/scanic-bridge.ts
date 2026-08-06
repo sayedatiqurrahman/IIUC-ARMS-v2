@@ -54,22 +54,61 @@ function quadToCorners(q: Quad): CornerPoints {
   return { topLeft: q[0], topRight: q[1], bottomRight: q[2], bottomLeft: q[3] };
 }
 
-// Detect a document quad in the given canvas's own pixel space. Uses Scanic's
-// WASM-accelerated Canny pipeline first and falls back to the built-in CV.
+// Sanity-check a detected quad so a garbage region (background blob, sliver of
+// an edge, half the frame) is rejected instead of being used for the crop.
+function quadValid(q: Quad, w: number, h: number): boolean {
+  let area = 0;
+  for (let i = 0; i < 4; i++) {
+    const p = q[i];
+    const n = q[(i + 1) % 4];
+    area += p.x * n.y - n.x * p.y;
+  }
+  area = Math.abs(area) / 2;
+  const areaFrac = area / (w * h);
+  if (areaFrac < 0.03 || areaFrac > 0.98) return false;
+
+  const sides = q.map((p, i) => {
+    const n = q[(i + 1) % 4];
+    return Math.hypot(n.x - p.x, n.y - p.y);
+  });
+  const maxSide = Math.max(...sides);
+  const minSide = Math.min(...sides);
+  if (maxSide / Math.max(1, minSide) > 6) return false;
+
+  let angOk = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = q[(i + 3) % 4];
+    const b = q[i];
+    const c = q[(i + 1) % 4];
+    const dot = (a.x - b.x) * (c.x - b.x) + (a.y - b.y) * (c.y - b.y);
+    const mag = Math.hypot(a.x - b.x, a.y - b.y) * Math.hypot(c.x - b.x, c.y - b.y);
+    const cos = Math.max(-1, Math.min(1, dot / Math.max(1e-6, mag)));
+    const ang = (Math.acos(cos) * 180) / Math.PI;
+    if (ang >= 25 && ang <= 155) angOk++;
+  }
+  return angOk === 4;
+}
+
+// Detect a document quad in the given canvas's own pixel space. The built-in CV
+// runs first — its line-intersection corner refinement hugs the paper corners
+// precisely. Scanic's WASM detector is only a fallback when the CV finds nothing.
 export async function detectQuadSmart(canvas: HTMLCanvasElement, previewW: number, previewH: number): Promise<Quad | null> {
+  const cv = detectQuadOnCanvas(canvas, previewW, previewH);
+  if (cv) return cv;
+
   const scanic = await loadScanic();
   if (scanic) {
     try {
       const res = await scanic.scanDocument(canvas, { mode: 'detect', maxProcessingDimension: 800 });
       if (res.success && res.corners) {
         const q = cornersToQuad(res.corners);
-        if (q.length === 4) return q;
+        if (q.length === 4 && quadValid(q, canvas.width, canvas.height)) return q;
       }
     } catch {
-      // fall through to built-in detector
+      // ignore
     }
   }
-  return detectQuadOnCanvas(canvas, previewW, previewH);
+  return null;
 }
 
 // Perspective-correct a canvas using a quad in the canvas's pixel space.

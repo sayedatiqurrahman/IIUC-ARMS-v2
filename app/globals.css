@@ -65,6 +65,16 @@ button { font-family: inherit; }
   border-radius:2px;
 }
 
+/* Scanner edit surface: suppress the long-press image context menu / save-image
+   callout while the user is dragging corners on a captured frame. */
+.scan-edit-surface,
+.scan-edit-surface img {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
 
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
