@@ -106,6 +106,9 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
   // Auto-capture stability tracking.
   const lastQuadRef = useRef<Quad | null>(null);
   const stableFramesRef = useRef(0);
+  // Consecutive frames where detection found nothing; the last good frame is
+  // held for a short grace period instead of flickering off.
+  const missesRef = useRef(0);
 
   // ---- Edit overlay (captured frame with adjustable corners) ----
   const editingSrcRef = useRef<string | null>(null);
@@ -262,12 +265,18 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
       raw.height = dh;
       const rctx = raw.getContext('2d', { willReadFrequently: true })!;
       rctx.drawImage(video, 0, 0, dw, dh);
-      detectQuadSmart(raw, dw, dh)
+      // Previous frame's quad (scaled into the small space) is a tracking prior
+      // for the detector, so the frame follows the paper instead of jumping.
+      const prevScaled: Quad | null = lastQuadRef.current
+        ? lastQuadRef.current.map(p => ({ x: p.x * scale, y: p.y * scale })) as Quad
+        : null;
+      detectQuadSmart(raw, dw, dh, prevScaled)
         .then(detected => {
           detectRunning = false;
           if (disposed) return;
           const full = detected ? detected.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad : null;
           if (full) {
+            missesRef.current = 0;
             // Adaptive temporal smoothing: snap hard while the paper is moving so
             // the frame tracks in real time, ease gently once it settles.
             const prev = lastQuadRef.current;
@@ -328,21 +337,33 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
               freezeFrame();
             }
           } else {
+            // Transient miss: hold the last good frame briefly instead of
+            // flickering it away (one noisy frame shouldn't lose the scan).
+            missesRef.current++;
+            if (lastQuadRef.current && missesRef.current <= 10) {
+              quadRef.current = lastQuadRef.current;
+            } else {
+              quadRef.current = null;
+              lastQuadRef.current = null;
+              stableFramesRef.current = 0;
+              setStable(0);
+              setDetected(false);
+            }
+          }
+        })
+        .catch(() => {
+          detectRunning = false;
+          if (disposed) return;
+          missesRef.current++;
+          if (lastQuadRef.current && missesRef.current <= 10) {
+            quadRef.current = lastQuadRef.current;
+          } else {
             quadRef.current = null;
             lastQuadRef.current = null;
             stableFramesRef.current = 0;
             setStable(0);
             setDetected(false);
           }
-        })
-        .catch(() => {
-          detectRunning = false;
-          if (disposed) return;
-          quadRef.current = null;
-          lastQuadRef.current = null;
-          stableFramesRef.current = 0;
-          setStable(0);
-          setDetected(false);
         });
     }
 

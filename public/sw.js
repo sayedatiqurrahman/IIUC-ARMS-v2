@@ -118,7 +118,14 @@ self.addEventListener('fetch', (event) => {
   // Static viewer apps (pdf.js, pdfjs-express/WebViewer): never intercept.
   // Their HTML pages are loaded in an iframe — serving the PWA shell here
   // breaks them (the shell sets X-Frame-Options: deny).
-  if (url.pathname.startsWith('/pdfjs/') || url.pathname.startsWith('/webviewer/')) {
+  // opencv.js is a 13MB lazy asset; the browser HTTP cache handles it best,
+  // and an SW cache-first hit could return an empty 504 response that would
+  // permanently disable the detection engine. Let it go straight to network.
+  if (
+    url.pathname.startsWith('/pdfjs/') ||
+    url.pathname.startsWith('/webviewer/') ||
+    url.pathname === '/opencv.js'
+  ) {
     return;
   }
 

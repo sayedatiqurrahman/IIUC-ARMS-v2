@@ -213,6 +213,81 @@ const scenarios: Scenario[] = [
     },
   },
   {
+    name: 'A4 paper + JPEG-style noise',
+    maxMean: 6,
+    skipCV: true,
+    build: (w, h) => {
+      const gray = makeGray(w, h, 70);
+      const truth = quadFromRect(170, 28, 470, 452);
+      fillQuad(gray, truth, 235);
+      drawTextLines(gray, truth, 14, 40);
+      // Deterministic salt-and-pepper-ish noise (camera sensor / JPEG artifacts).
+      let seed = 42;
+      const rnd = () => {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        return seed / 2147483648;
+      };
+      for (let i = 0; i < gray.data.length; i++) {
+        const v = gray.data[i] + Math.round((rnd() - 0.5) * 28);
+        gray.data[i] = v < 0 ? 0 : v > 255 ? 255 : v;
+      }
+      return { gray, truth };
+    },
+  },
+  {
+    name: 'White paper on white desk (near-invisible edge)',
+    maxMean: 8,
+    skipCV: true,
+    build: (w, h) => {
+      const gray = makeGray(w, h, 178);
+      const truth = quadFromRect(120, 60, 520, 420);
+      fillQuad(gray, truth, 196);
+      drawTextLines(gray, truth, 10, 90);
+      return { gray, truth };
+    },
+  },
+  {
+    name: 'Textured background + paper',
+    maxMean: 8,
+    skipCV: true,
+    build: (w, h) => {
+      const gray = makeGray(w, h, 120);
+      let seed = 7;
+      const rnd = () => {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        return seed / 2147483648;
+      };
+      // Wood-grain / carpet texture: random speckle everywhere.
+      for (let i = 0; i < gray.data.length; i++) {
+        gray.data[i] = 80 + Math.round(rnd() * 140);
+      }
+      const truth = quadFromRect(140, 90, 520, 400);
+      fillQuad(gray, truth, 236);
+      drawTextLines(gray, truth, 12, 60);
+      return { gray, truth };
+    },
+  },
+  {
+    name: 'Uneven illumination (shadow gradient over everything)',
+    maxMean: 10,
+    skipCV: true,
+    build: (w, h) => {
+      const gray = makeGray(w, h, 95);
+      const truth = quadFromRect(120, 50, 520, 430);
+      fillQuad(gray, truth, 240);
+      drawTextLines(gray, truth, 12, 55);
+      // Diagonal light falloff: left bright, right ~55% brightness.
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const t = (x + y) / (w + h);
+          const v = Math.round(gray.data[y * w + x] * (1 - 0.45 * t));
+          gray.data[y * w + x] = v;
+        }
+      }
+      return { gray, truth };
+    },
+  },
+  {
     name: 'No paper (flat background) -> null',
     maxMean: 0,
     expectNull: true,
