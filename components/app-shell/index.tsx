@@ -18,6 +18,7 @@ import { isStandalone, isInBrowser, isIOSBrowser, type BeforeInstallPromptEvent 
 import { useTurnstile } from '@/lib/useTurnstile';
 import { handleGoogleRedirectResult } from '@/lib/firebase';
 import ImageViewer from './ImageViewer';
+import DocViewer from './DocViewer';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -746,7 +747,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {viewerOpen && viewerItem && (
         <div className="viewer-overlay active">
           <div className="viewer-container">
-            {viewerItem.mimeType !== 'pdf' && viewerItem.mimeType !== 'image' && (
+            {viewerItem.mimeType !== 'pdf' && viewerItem.mimeType !== 'image' && !(viewerItem.mimeType === 'doc' && viewerItem.path?.toLowerCase().endsWith('.docx')) && (
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-dark-border bg-dark-bg3">
                 <div className="flex items-center gap-2 font-semibold text-sm truncate flex-1">
                   <i className="fas fa-file"></i>
@@ -760,7 +761,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex-1 overflow-hidden">
               {viewerItem.mimeType === 'pdf' && <PdfViewer url={viewerItem.rawUrl} name={viewerItem.name} filePath={viewerItem.path} onClose={closeViewer} />}
               {viewerItem.mimeType === 'image' && <ImageViewer item={viewerItem} onClose={closeViewer} />}
-              {(viewerItem.mimeType === 'doc' || viewerItem.mimeType === 'sheet' || viewerItem.mimeType === 'ppt') && (
+              {viewerItem.mimeType === 'doc' && viewerItem.path?.toLowerCase().endsWith('.docx') && <DocViewer item={viewerItem} onClose={closeViewer} />}
+              {((viewerItem.mimeType === 'doc' && !viewerItem.path?.toLowerCase().endsWith('.docx')) || viewerItem.mimeType === 'sheet' || viewerItem.mimeType === 'ppt') && (
                 <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(viewerItem.rawUrl)}`} className="w-full border-none" style={{minHeight:'calc(100vh - 50px)'}}></iframe>
               )}
               {viewerItem.mimeType === 'other' && (

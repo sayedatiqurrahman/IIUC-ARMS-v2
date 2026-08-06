@@ -1,4 +1,27 @@
 import { config } from './config';
+import { FACULTIES } from './departments';
+
+export interface SelectOption {
+  value: string;
+  label: string;
+  icon: string;
+  group?: string;
+}
+
+export function getSemesterOptions(): SelectOption[] {
+  return config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }));
+}
+
+export function getDepartmentOptions(): SelectOption[] {
+  return FACULTIES.flatMap(f =>
+    f.departments.map(d => ({
+      value: d.id,
+      label: `${d.shortName} — ${d.name}`,
+      icon: d.icon || 'fa-building',
+      group: f.shortName,
+    }))
+  );
+}
 
 export async function safeJson(res: Response): Promise<any> {
   const ct = res.headers.get('content-type') || '';

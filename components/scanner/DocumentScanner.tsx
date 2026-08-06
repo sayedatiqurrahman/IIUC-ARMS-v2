@@ -12,6 +12,7 @@ import {
   type ScanMode,
   MAX_DIM_DEFAULT,
 } from '@/lib/image-utils';
+import { detectQuadSmart, processFrameSmart } from '@/lib/scanic-bridge';
 import { buildSearchablePdf } from '@/lib/ocr';
 
 interface CapturedPage {
@@ -195,7 +196,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     small.height = dh;
     const sctx = small.getContext('2d')!;
     sctx.drawImage(canvas, 0, 0, dw, dh);
-    const quad = detectQuadOnCanvas(small, dw, dh);
+    const quad = await detectQuadSmart(small, dw, dh);
     if (!quad) return null;
     return quad.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad;
   }
@@ -204,11 +205,13 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
   useEffect(() => {
     if (!ready) return;
     let disposed = false;
-    const DETECT_MS = 120;
-    let lastDetect = 0;
+    const DETECT_MS = 150;
+    let detectRunning = false;
 
-    function tick() {
-      if (disposed || editingRef.current) return;
+    // Runs detection once (no overlap), then feeds the result into the
+    // smoothing + auto-capture pipeline.
+    function runDetect() {
+      if (disposed || detectRunning || editingRef.current) return;
       const video = videoRef.current;
       if (!video || video.readyState < 2) return;
       const vw = video.videoWidth;
@@ -225,90 +228,101 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
         return;
       }
 
-      const now = Date.now();
-      if (now - lastDetect < DETECT_MS) return;
-      lastDetect = now;
-
+      detectRunning = true;
       const scale = Math.min(1, 480 / Math.max(vw, vh));
       const dw = Math.round(vw * scale);
       const dh = Math.round(vh * scale);
-      let quad: Quad | null = null;
-      try {
-        quad = detectDocumentQuad(video, dw, dh);
-      } catch {
-        quad = null;
-      }
-      const full = quad ? quad.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad : null;
-
-      if (full) {
-        // Adaptive temporal smoothing: snap hard while the paper is moving so
-        // the frame tracks in real time, ease gently once it settles.
-        const prev = lastQuadRef.current;
-        let alpha = 0.75;
-        if (prev) {
-          let drift = 0;
-          for (let i = 0; i < 4; i++) {
-            drift += Math.hypot(full[i].x - prev[i].x, full[i].y - prev[i].y);
-          }
-          const diag = Math.hypot(vw, vh);
-          alpha = drift / 4 < diag * 0.008 ? 0.35 : drift / 4 < diag * 0.02 ? 0.6 : 1;
-        }
-        const smoothed: Quad = prev
-          ? orderQuad(full.map((p, i) => ({
-              x: prev[i].x * (1 - alpha) + p.x * alpha,
-              y: prev[i].y * (1 - alpha) + p.y * alpha,
-            })) as Quad)
-          : full;
-        quadRef.current = smoothed;
-        setDetected(true);
-
-        // Stability: same-ish quad for several frames triggers auto-capture.
-        if (lastQuadRef.current) {
-          let jitter = 0;
-          for (let i = 0; i < 4; i++) {
-            jitter += Math.hypot(full[i].x - lastQuadRef.current[i].x, full[i].y - lastQuadRef.current[i].y);
-          }
-          const diag = Math.hypot(vw, vh);
-          const area = Math.abs((() => {
-            let a = 0;
-            for (let i = 0; i < 4; i++) {
-              const p = full[i], q = full[(i + 1) % 4];
-              a += p.x * q.y - q.x * p.y;
+      const raw = document.createElement('canvas');
+      raw.width = dw;
+      raw.height = dh;
+      const rctx = raw.getContext('2d', { willReadFrequently: true })!;
+      rctx.drawImage(video, 0, 0, dw, dh);
+      detectQuadSmart(raw, dw, dh)
+        .then(detected => {
+          detectRunning = false;
+          if (disposed) return;
+          const full = detected ? detected.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad : null;
+          if (full) {
+            // Adaptive temporal smoothing: snap hard while the paper is moving so
+            // the frame tracks in real time, ease gently once it settles.
+            const prev = lastQuadRef.current;
+            let alpha = 0.75;
+            if (prev) {
+              let drift = 0;
+              for (let i = 0; i < 4; i++) {
+                drift += Math.hypot(full[i].x - prev[i].x, full[i].y - prev[i].y);
+              }
+              const diag = Math.hypot(vw, vh);
+              alpha = drift / 4 < diag * 0.008 ? 0.35 : drift / 4 < diag * 0.02 ? 0.6 : 1;
             }
-            return a / 2;
-          })());
-          const areaFrac = area / (vw * vh);
-          if (jitter / 4 < diag * 0.02 && areaFrac > 0.15) {
-            stableFramesRef.current++;
-          } else {
-            stableFramesRef.current = 0;
-          }
-        } else {
-          stableFramesRef.current = 0;
-        }
-        lastQuadRef.current = full;
-        setStable(stableFramesRef.current);
+            const smoothed: Quad = prev
+              ? orderQuad(full.map((p, i) => ({
+                  x: prev[i].x * (1 - alpha) + p.x * alpha,
+                  y: prev[i].y * (1 - alpha) + p.y * alpha,
+                })) as Quad)
+              : full;
 
-        if (
-          autoRef.current &&
-          !busyRef.current &&
-          stableFramesRef.current >= 5 &&
-          pagesLenRef.current < maxPages
-        ) {
-          stableFramesRef.current = 0;
+            quadRef.current = smoothed;
+            setDetected(true);
+
+            // Stability: same-ish quad for several frames triggers auto-capture.
+            if (lastQuadRef.current) {
+              let jitter = 0;
+              for (let i = 0; i < 4; i++) {
+                jitter += Math.hypot(full[i].x - lastQuadRef.current[i].x, full[i].y - lastQuadRef.current[i].y);
+              }
+              const diag = Math.hypot(vw, vh);
+              const area = Math.abs((() => {
+                let a = 0;
+                for (let i = 0; i < 4; i++) {
+                  const p = full[i], q = full[(i + 1) % 4];
+                  a += p.x * q.y - q.x * p.y;
+                }
+                return a / 2;
+              })());
+              const areaFrac = area / (vw * vh);
+              if (jitter / 4 < diag * 0.02 && areaFrac > 0.15) {
+                stableFramesRef.current++;
+              } else {
+                stableFramesRef.current = 0;
+              }
+            } else {
+              stableFramesRef.current = 0;
+            }
+            lastQuadRef.current = full;
+            setStable(stableFramesRef.current);
+
+            if (
+              autoRef.current &&
+              !busyRef.current &&
+              stableFramesRef.current >= 5 &&
+              pagesLenRef.current < maxPages
+            ) {
+              stableFramesRef.current = 0;
+              lastQuadRef.current = null;
+              freezeFrame();
+            }
+          } else {
+            quadRef.current = null;
+            lastQuadRef.current = null;
+            stableFramesRef.current = 0;
+            setStable(0);
+            setDetected(false);
+          }
+        })
+        .catch(() => {
+          detectRunning = false;
+          if (disposed) return;
+          quadRef.current = null;
           lastQuadRef.current = null;
-          freezeFrame();
-        }
-      } else {
-        quadRef.current = null;
-        lastQuadRef.current = null;
-        stableFramesRef.current = 0;
-        setStable(0);
-        setDetected(false);
-      }
+          stableFramesRef.current = 0;
+          setStable(0);
+          setDetected(false);
+        });
     }
 
-    const id = window.setInterval(tick, DETECT_MS);
+    const id = window.setInterval(runDetect, DETECT_MS);
+    runDetect();
     return () => {
       disposed = true;
       window.clearInterval(id);
@@ -551,7 +565,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     setBusy(true);
     setProgressMsg('Processing...');
     try {
-      const result = processFrame(canvas, quad, modeRef.current, MAX_DIM_DEFAULT);
+      const result = await processFrameSmart(canvas, quad, modeRef.current, MAX_DIM_DEFAULT);
       const blob = await canvasToBlob(result.canvas, 'image/jpeg', 0.9);
       const thumb = result.canvas.toDataURL('image/jpeg', 0.5);
       const preview = result.canvas.toDataURL('image/jpeg', 0.75);

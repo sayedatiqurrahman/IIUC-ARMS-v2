@@ -115,6 +115,13 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
+  // Static viewer apps (pdf.js, pdfjs-express/WebViewer): never intercept.
+  // Their HTML pages are loaded in an iframe — serving the PWA shell here
+  // breaks them (the shell sets X-Frame-Options: deny).
+  if (url.pathname.startsWith('/pdfjs/') || url.pathname.startsWith('/webviewer/')) {
+    return;
+  }
+
   // File content from the files repo — cache-first so previously opened
   // files reopen offline (from history) without internet.
   if (url.hostname === 'raw.githubusercontent.com') {

@@ -299,7 +299,7 @@ body {
 import * as pdfjsLib from './pdf.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
 
-const AnnotationLayerBuilder = (await import('./pdf_viewer.mjs')).AnnotationLayerBuilder;
+const { AnnotationLayerBuilder, TextLayerBuilder } = await import('./pdf_viewer.mjs');
 const NullL10n = { getDirectionality: () => 'ltr', get: (id, def) => Promise.resolve(def), translate: (el) => Promise.resolve(el) };
 
 const params = new URLSearchParams(window.location.search);
@@ -370,8 +370,12 @@ async function renderAllPages() {
     div.appendChild(textLayerDiv);
 
     try {
-      const textContent = await page.getTextContent();
-      pdfjsLib.renderTextLayer({ textContent, container: textLayerDiv, viewport: vp, textDivs: [] });
+      const textLayerBuilder = new TextLayerBuilder({
+        pdfPage: page,
+        enablePermissions: true,
+      });
+      textLayerDiv.appendChild(textLayerBuilder.div);
+      await textLayerBuilder.render({ viewport: vp });
     } catch {}
 
     // Annotation layer

@@ -52,6 +52,19 @@ button { font-family: inherit; }
 .image-scroll-area { flex:1; overflow:hidden; display:flex; justify-content:center; align-items:center; padding:12px; background:#0a0f1e; touch-action:none; }
 .image-scroll-area img { max-width:100%; max-height:100%; object-fit:contain; border-radius:4px; transition:transform .15s ease-out; user-select:none; }
 
+/* Custom document (DOCX) viewer */
+.doc-scroll-area { flex:1; overflow:auto; padding:16px; background:#0a0f1e; }
+.doc-zoom-wrap { transform-origin:top center; padding:8px 0; display:flex; justify-content:center; }
+.docx-container-inner { background:transparent; }
+.docx-container-inner .docx-wrapper { padding:0; }
+.docx-container-inner .docx-container { margin:0 auto; }
+.docx-container-inner .docx-page {
+  background:#ffffff !important;
+  box-shadow:0 2px 14px rgba(0,0,0,0.45);
+  margin-bottom:18px;
+  border-radius:2px;
+}
+
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
 
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
