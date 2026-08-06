@@ -23,8 +23,8 @@ interface UsersTabProps {
   setSearchQuery: (q: string) => void;
   showCreateUser: boolean;
   setShowCreateUser: (show: boolean) => void;
-  createUserForm: { email: string; name: string; role: string; department: string; semester: string; section: string; password: string };
-  setCreateUserForm: React.Dispatch<React.SetStateAction<{ email: string; name: string; role: string; department: string; semester: string; section: string; password: string }>>;
+  createUserForm: { email: string; role: string; department: string; password: string };
+  setCreateUserForm: React.Dispatch<React.SetStateAction<{ email: string; role: string; department: string; password: string }>>;
   createUserLoading: boolean;
   createUserError: string;
   createUserSuccess: string;
@@ -235,10 +235,6 @@ export default function UsersTab({
               <p className="text-[0.65rem] text-dark-text3 mt-1">Any email works — university (<span className="text-dark-text2">@ugrad.iiuc.ac.bd</span>, <span className="text-dark-text2">@iiuc.ac.bd</span>) or personal (Gmail, Outlook, etc.).</p>
             </div>
             <div>
-              <label className="text-[0.72rem] text-dark-text2 block mb-1">Full Name</label>
-              <input type="text" value={createUserForm.name} onChange={e => setCreateUserForm(p => ({ ...p, name: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="John Doe" />
-            </div>
-            <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1">Password</label>
               <input type="password" value={createUserForm.password} onChange={e => setCreateUserForm(p => ({ ...p, password: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="Leave blank to send setup email" />
             </div>
@@ -265,19 +261,6 @@ export default function UsersTab({
                 searchable
                 options={getDepartmentOptions()}
               />
-            </div>
-            <div>
-              <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester</label>
-              <CustomSelect
-                value={createUserForm.semester}
-                onChange={(val) => setCreateUserForm(p => ({ ...p, semester: val }))}
-                placeholder="None"
-                options={config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }))}
-              />
-            </div>
-            <div>
-              <label className="text-[0.72rem] text-dark-text2 block mb-1">Section</label>
-              <input type="text" value={createUserForm.section} onChange={e => setCreateUserForm(p => ({ ...p, section: e.target.value }))} className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" placeholder="e.g. A" />
             </div>
           </div>
           {createUserError && <p className="text-[0.75rem] text-red-400 mb-2"><i className="fas fa-exclamation-circle mr-1"></i>{createUserError}</p>}

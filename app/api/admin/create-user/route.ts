@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { targetEmail, email: formEmail, name, role, department, semester, section, password } = body;
+    const { targetEmail, email: formEmail, role, department, password } = body;
     const normalizedEmail = (targetEmail || formEmail || '').toLowerCase().trim();
 
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       try {
         const firebaseUser = await auth.createUser({
           email: normalizedEmail,
-          displayName: name || normalizedEmail.split('@')[0],
+          displayName: normalizedEmail.split('@')[0],
           emailVerified: true,
           ...(password ? { password } : {}),
         });
@@ -66,18 +66,12 @@ export async function POST(req: NextRequest) {
       create: {
         userId: normalizedEmail,
         email: normalizedEmail,
-        name: name || normalizedEmail.split('@')[0],
         role: role || 'user',
         department: department || null,
-        semester: semester || null,
-        section: section || null,
       },
       update: {
-        name: name || normalizedEmail.split('@')[0],
         role: role || 'user',
         department: department || undefined,
-        semester: semester || undefined,
-        section: section || undefined,
       },
     });
 
@@ -91,7 +85,6 @@ export async function POST(req: NextRequest) {
           userName: callerProfile?.name || email.split('@')[0],
           details: JSON.stringify({
             targetEmail: normalizedEmail,
-            name: name || normalizedEmail.split('@')[0],
             role: role || 'user',
             department: department || null,
           }),
@@ -102,7 +95,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `User ${normalizedEmail} created with role "${role || 'user'}"`,
-      user: { email: normalizedEmail, name: name || normalizedEmail.split('@')[0], role: role || 'user' },
+      user: { email: normalizedEmail, role: role || 'user' },
     });
   } catch (e: any) {
     console.error('[create-user] error:', e?.message || e);
