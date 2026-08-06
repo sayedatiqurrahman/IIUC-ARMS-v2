@@ -768,10 +768,15 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
 
   // ---- Build the final file: 1 image -> image; multiple -> merged PDF (OCR if enabled) ----
   const buildResult = useCallback(async () => {
+    const name = (ext: string) => {
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+      return `iiuc-arms_doc-scanner_${stamp}.${ext}`;
+    };
     if (pages.length === 1 && !docOnly) {
       const page = pages[0];
-      const name = `scan_${Date.now()}.jpg`;
-      return { file: new File([page.blob], name, { type: 'image/jpeg' }), usedOcr: false };
+      return { file: new File([page.blob], name('jpg'), { type: 'image/jpeg' }), usedOcr: false };
     }
     // Compact the pages (downscale + re-encode) so the PDF stays small without
     // visibly hurting content quality.
@@ -779,7 +784,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     const file = await buildSearchablePdf(
       compressed,
       ocrEnabled,
-      `scan_${Date.now()}.pdf`,
+      name('pdf'),
       p => setProgressMsg(`Building PDF... ${Math.round(p * 100)}%`)
     );
     return { file, usedOcr: ocrEnabled };
