@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { config } from '@/lib/config';
+import { encrypt } from '@/lib/crypto';
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
@@ -36,18 +37,19 @@ export async function GET(req: NextRequest) {
         try {
           const { prisma } = await import('@/lib/prisma');
           const existing = await prisma.profile.findUnique({ where: { userId: email } });
+          const encryptedToken = encrypt(tokenData.access_token);
           await prisma.profile.upsert({
             where: { userId: email },
             update: {
               githubLogin: githubUser.login,
-              githubToken: tokenData.access_token,
+              githubToken: encryptedToken,
               image: existing?.image ? existing.image : (githubUser.avatar_url || null),
             },
             create: {
               userId: email,
               email,
               githubLogin: githubUser.login,
-              githubToken: tokenData.access_token,
+              githubToken: encryptedToken,
               image: githubUser.avatar_url || null,
             },
           });
