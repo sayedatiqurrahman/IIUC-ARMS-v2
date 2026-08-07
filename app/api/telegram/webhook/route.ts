@@ -30,6 +30,7 @@ import {
   getDeptFullName,
 } from '@/lib/telegram';
 import { config } from '@/lib/config';
+import { getDepartmentFolder } from '@/lib/departments';
 import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
 import { deleteCourseFolder } from '@/lib/course-delete';
 
@@ -1005,7 +1006,7 @@ async function handleCallbackQuery(cq: any) {
       const courseCode = course?.code || code.toUpperCase();
 
       const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-      const folderPath = `${config.uploadPath}/${courseDept}/${courseSem}/${courseCode} - ${cleanTitle}`;
+      const folderPath = `${config.uploadPath}/${getDepartmentFolder(courseDept)}/${courseSem}/${courseCode} - ${cleanTitle}`;
 
       let githubDeleted = 0;
       try {

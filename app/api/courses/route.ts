@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
+import { getDepartmentFolder } from '@/lib/departments';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
 import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData, resolveGithubToken, getGithubTree } from '@/lib/telegram';
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest) {
 
     const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
     const courseFolder = `${code.toUpperCase()} - ${cleanTitle}`;
-    const basePath = `${config.uploadPath}/${department}/${semester}/${courseFolder}`;
+    const basePath = `${config.uploadPath}/${getDepartmentFolder(department)}/${semester}/${courseFolder}`;
 
     // GitHub is the source of truth — check if the course folder already exists
     let alreadyExisted = false;
@@ -267,7 +268,7 @@ export async function DELETE(req: NextRequest) {
     let folderPath = rawFolderPath;
     if (!folderPath) {
       const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-      folderPath = `${config.uploadPath}/${courseDept}/${courseSem}/${courseCode} - ${cleanTitle}`;
+      folderPath = `${config.uploadPath}/${getDepartmentFolder(courseDept)}/${courseSem}/${courseCode} - ${cleanTitle}`;
     }
 
     // Admin/owner/manager/teacher/CR → direct delete, no confirmation

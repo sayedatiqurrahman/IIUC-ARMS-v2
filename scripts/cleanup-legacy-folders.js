@@ -10,7 +10,7 @@ const REPO = 'QSIS-ACADEMIC-FILES-MANAFGER';
 const BRANCH = 'main';
 const UPLOAD_PATH = 'upload_academic_files';
 
-const DEPTS = ['all','arts','ba','business','cce','cge','civil','cse','dawah','eb','eee','ell','ete','finance','hadith','law','lis','pharmacy','qsis','science','shariah','social'];
+const DEPTS = ['all','arts','ba','business','cce','cge','civil','cse','dawah','DIS','eb','eee','ell','ete','finance','hadith','SHIS','law','lis','pharmacy','qsis','science','shariah','social'];
 const SEMS = ['1st-semister','2nd-semister','3rd-semister','4th-semister','5th-semister','6th-semister','7th-semister','8th-semister'];
 const LEGACY_FOLDERS = ['NOTES', 'Previous Questions', 'sheet', 'Syllabus', 'Other'];
 const LEGACY_PATTERN = /^Previous Question/i;

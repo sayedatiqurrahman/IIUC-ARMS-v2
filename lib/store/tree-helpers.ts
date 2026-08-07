@@ -1,5 +1,5 @@
 import { config } from '../config';
-import { FACULTIES, getFacultyIdForDepartment, getAllFacultyIds } from '../departments';
+import { FACULTIES, getFacultyIdForDepartment, getAllFacultyIds, getDepartmentIdByFolder, isShariahDepartmentId } from '../departments';
 import { extractYear, getMimeFromExt } from '../utils';
 import { detectCategory, parseCourseFilePath } from './helpers';
 import type { AppState, Category, Semester } from './types';
@@ -34,7 +34,7 @@ export function createTreeHelpers(get: GetState) {
 
           if (config.isDepartmentId(first)) {
             const inner = parts.slice(1).join('/');
-            return { ...item, path: inner || rel, department: first, githubPath: rel };
+            return { ...item, path: inner || rel, department: getDepartmentIdByFolder(first), githubPath: rel };
           }
 
           return { ...item, path: rel, department: 'qsis', githubPath: rel };
@@ -163,7 +163,7 @@ export function createTreeHelpers(get: GetState) {
         }
       });
 
-      const isShariahDept = !departmentId || departmentId === 'shariah' || ['qsis', 'dawah', 'hadith'].includes(departmentId || '');
+      const isShariahDept = !departmentId || isShariahDepartmentId(departmentId);
 
       return Array.from(sems.entries())
         .map(([id, data]) => {

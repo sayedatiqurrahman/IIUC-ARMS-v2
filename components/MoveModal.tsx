@@ -17,7 +17,7 @@ interface MoveModalProps {
   onAction: (from: string, to: string, newName?: string) => Promise<void>;
 }
 
-const DEPTS = ['all','arts','ba','business','cce','cge','civil','cse','dawah','eb','eee','ell','ete','finance','hadith','law','lis','pharmacy','qsis','science','shariah','social'];
+const DEPTS = ['all','arts','ba','business','cce','cge','civil','cse','dawah','DIS','eb','eee','ell','ete','finance','hadith','SHIS','law','lis','pharmacy','qsis','science','shariah','social'];
 
 function getDeptFromPath(path: string): string {
   const parts = path.split('/');

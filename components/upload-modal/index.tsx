@@ -2,7 +2,7 @@
 
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { config } from '@/lib/config';
-import { FACULTIES, getFacultyIdForDepartment } from '@/lib/departments';
+import { FACULTIES, getFacultyIdForDepartment, getDepartmentFolder, resolveDepartmentId } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
@@ -93,7 +93,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const course = p.get('course');
     const mf = p.get('mf');
     const cat = p.get('cat');
-    if (dept) setDepartment(dept);
+    if (dept) setDepartment(resolveDepartmentId(dept));
     if (sem) setSemester(sem);
     if (cat) {
       const catKey = Object.keys(config.categories).find(
@@ -130,7 +130,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   async function loadExistingLinks(courseId: number, courseCode: string, courseTitle: string) {
     if (!courseCode || !department || !semester) return;
-    const folder = `${department}/${semester}/${courseCode} - ${courseTitle}`;
+    const folder = `${getDepartmentFolder(department)}/${semester}/${courseCode} - ${courseTitle}`;
     try {
       const res = await fetch(`/api/github/readme?folder=${encodeURIComponent(folder)}`);
       const data = await res.json();
@@ -447,11 +447,12 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           } else if (isExamSpecific && course.examSession) {
             const yearPart = isPdf(fileMeta.file.name) ? (fileMeta.yearRange || '') : (fileMeta.year || '');
             const renamedFile = `${courseCode} ${course.examSession} ${CURRENT_YEAR} - ${authorName}.${ext}`;
+            const deptFolder = getDepartmentFolder(department);
             filePath = yearPart
-              ? `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${yearPart}/${renamedFile}`
-              : `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${renamedFile}`;
+              ? `${deptFolder}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${yearPart}/${renamedFile}`
+              : `${deptFolder}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${renamedFile}`;
           } else {
-            filePath = `${department}/${semester}/${courseFolder}${midFinalPart}/${category}/${fileMeta.file.name}`;
+            filePath = `${getDepartmentFolder(department)}/${semester}/${courseFolder}${midFinalPart}/${category}/${fileMeta.file.name}`;
           }
           formData.append('files', fileMeta.file, filePath);
           fileMetas.push({ path: filePath, isReadme: false });
@@ -467,7 +468,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             const facId = getFacultyIdForDepartment(department) || department;
             const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
             readmePath = `${facId}/${config.relatedSourcesFolder}/${fn}/README.md`;
-          } else { readmePath = `${department}/${semester}/${courseFolder}/README.md`; }
+          } else { readmePath = `${getDepartmentFolder(department)}/${semester}/${courseFolder}/README.md`; }
           const readmeBlob = new Blob([readmeContent], { type: 'text/markdown' });
           formData.append('files', readmeBlob, readmePath);
           fileMetas.push({ path: readmePath, isReadme: true });

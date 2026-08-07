@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { config } from './config';
+import { getDepartmentFolder } from './departments';
 
 const SEMS = ['1st-semister','2nd-semister','3rd-semister','4th-semister','5th-semister','6th-semister','7th-semister','8th-semister'];
 const BATCH = 25;
@@ -45,7 +46,7 @@ export async function fetchCoursesFromGitHub(deptId: string, semester: string): 
     if (inst.s !== 200) return [];
     const tok = (await api('POST', `/app/installations/${inst.d.id}/access_tokens`, null, jwt)).d.token;
 
-    const folderPath = `${config.uploadPath}/${deptId}/${semester}`;
+    const folderPath = `${config.uploadPath}/${getDepartmentFolder(deptId)}/${semester}`;
     const treeRes = await api('GET', `/repos/${config.owner}/${config.repo}/contents/${folderPath}`, null, tok);
     if (treeRes.s !== 200 || !Array.isArray(treeRes.d)) return [];
 
@@ -78,7 +79,8 @@ export async function createCourseFolder(deptId: string, semester: string, cours
 
     const folderName = `${courseCode} - ${courseTitle}`;
     const subfolders = ['Mid/NOTES', 'Mid/Previous Questions', 'Final/NOTES', 'Final/Previous Questions', 'sheet', 'Syllabus', 'Other'];
-    const paths = subfolders.map(sf => `${config.uploadPath}/${deptId}/${semester}/${folderName}/${sf}/.gitkeep`);
+    const deptFolder = getDepartmentFolder(deptId);
+    const paths = subfolders.map(sf => `${config.uploadPath}/${deptFolder}/${semester}/${folderName}/${sf}/.gitkeep`);
 
     const treeRes = await api('POST', `/repos/${config.owner}/${config.repo}/git/trees`, {
       base_tree: currentSha,
@@ -87,7 +89,7 @@ export async function createCourseFolder(deptId: string, semester: string, cours
     if (treeRes.s !== 201) return { success: false, error: 'Failed to create tree' };
 
     const commitRes = await api('POST', `/repos/${config.owner}/${config.repo}/git/commits`, {
-      message: `Add course folder: ${folderName} in ${deptId}/${semester}`,
+      message: `Add course folder: ${folderName} in ${deptFolder}/${semester}`,
       tree: treeRes.d.sha,
       parents: [currentSha],
     }, tok);
@@ -125,11 +127,12 @@ export async function createDepartmentFolders(deptId: string): Promise<{ success
 
     // Build paths — only semester folders and related-sources (course subfolders are created on demand)
     const paths: string[] = [];
+    const deptFolder = getDepartmentFolder(deptId);
     for (const sem of SEMS) {
-      const p = `${config.uploadPath}/${deptId}/${sem}/.gitkeep`;
+      const p = `${config.uploadPath}/${deptFolder}/${sem}/.gitkeep`;
       if (!existing.has(p)) paths.push(p);
     }
-    const rp = `${config.uploadPath}/${deptId}/${config.relatedSourcesFolder}/.gitkeep`;
+    const rp = `${config.uploadPath}/${deptFolder}/${config.relatedSourcesFolder}/.gitkeep`;
     if (!existing.has(rp)) paths.push(rp);
 
     if (paths.length === 0) {

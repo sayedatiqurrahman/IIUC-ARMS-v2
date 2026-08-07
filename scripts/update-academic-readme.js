@@ -57,8 +57,8 @@ upload_academic_files/qsis/6th-semister/QSM-3601 - Ulumul Quran/
 | Department | Folder ID | Faculty |
 |---|---|---|
 | Qur'anic Sciences & Islamic Studies | \`qsis\` | Shariah & Islamic Studies |
-| Da'wah & Islamic Studies | \`dawah\` | Shariah & Islamic Studies |
-| Science of Hadith & Islamic Studies | \`hadith\` | Shariah & Islamic Studies |
+| Da'wah & Islamic Studies | \`DIS\` | Shariah & Islamic Studies |
+| Science of Hadith & Islamic Studies | \`SHIS\` | Shariah & Islamic Studies |
 | Computer Science & Engineering | \`cse\` | Science & Engineering |
 | Computer & Communication Engineering | \`cce\` | Science & Engineering |
 | Electrical & Electronic Engineering | \`eee\` | Science & Engineering |

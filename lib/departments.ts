@@ -3,6 +3,7 @@ export interface Department {
   name: string;
   shortName: string;
   icon: string;
+  folder?: string;
 }
 
 export interface Faculty {
@@ -21,8 +22,8 @@ export const FACULTIES: Faculty[] = [
     icon: 'fa-book-quran',
     departments: [
       { id: 'qsis', name: "Qur'anic Sciences and Islamic Studies", shortName: 'QSIS', icon: 'fa-book-quran' },
-      { id: 'dawah', name: "Da'wah and Islamic Studies", shortName: 'DIS', icon: 'fa-mosque' },
-      { id: 'hadith', name: 'Science of Hadith and Islamic Studies', shortName: 'SHIS', icon: 'fa-book' },
+      { id: 'dawah', name: "Da'wah and Islamic Studies", shortName: 'DIS', icon: 'fa-mosque', folder: 'DIS' },
+      { id: 'hadith', name: 'Science of Hadith and Islamic Studies', shortName: 'SHIS', icon: 'fa-book', folder: 'SHIS' },
     ],
   },
   {
@@ -116,10 +117,36 @@ export const STAFF_DESIGNATIONS = [
 
 export function findDepartment(deptId: string): { faculty: Faculty; department: Department } | null {
   for (const faculty of FACULTIES) {
-    const dept = faculty.departments.find(d => d.id === deptId);
+    const dept = faculty.departments.find(d => d.id === deptId || (d.folder && d.folder === deptId));
     if (dept) return { faculty, department: dept };
   }
   return null;
+}
+
+// GitHub folder name for a department id (short form is the standard).
+export function getDepartmentFolder(deptId: string): string {
+  if (!deptId) return deptId;
+  const found = findDepartment(deptId);
+  if (found) return found.department.folder || found.department.id;
+  return deptId;
+}
+
+// Resolve a GitHub folder name (or canonical id) back to the canonical department id.
+export function getDepartmentIdByFolder(folder: string): string {
+  if (!folder) return folder;
+  const found = findDepartment(folder);
+  if (found) return found.department.id;
+  return folder;
+}
+
+// Resolve any id/folder to the canonical department id.
+export function resolveDepartmentId(idOrFolder: string): string {
+  return getDepartmentIdByFolder(idOrFolder);
+}
+
+export function isShariahDepartmentId(id: string): boolean {
+  const canonical = resolveDepartmentId(id);
+  return canonical === 'shariah' || canonical === 'qsis' || canonical === 'dawah' || canonical === 'hadith';
 }
 
 export function findFaculty(facultyId: string): Faculty | undefined {

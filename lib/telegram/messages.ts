@@ -1,5 +1,5 @@
 import { config } from '@/lib/config';
-import { FACULTIES } from '@/lib/departments';
+import { FACULTIES, getDepartmentFolder, resolveDepartmentId } from '@/lib/departments';
 import { CATEGORY_META, getDeptFullName, getDeptName, hasSharedLinks, detectCategory } from './categories';
 import { FoundFile, CourseInfo } from './courses';
 import { buildCourseLink, buildBrowseLink } from './links';
@@ -143,7 +143,7 @@ export function buildDeptList(): string {
   for (const fac of FACULTIES) {
     msg += `<b>${esc(fac.name)}</b>\n`;
     for (const d of fac.departments) {
-      const link = buildBrowseLink({ dept: d.id });
+      const link = buildBrowseLink({ dept: getDepartmentFolder(d.id) });
       msg += `  • ${esc(d.shortName)} — <a href="${link}">Browse →</a>\n`;
     }
     msg += '\n';
@@ -165,7 +165,7 @@ export function buildSemesterList(semNumber: string): string {
   for (const fac of FACULTIES) {
     msg += `<b>${esc(fac.shortName)}</b>\n`;
     for (const d of fac.departments) {
-      const link = buildBrowseLink({ dept: d.id, sem: semId });
+      const link = buildBrowseLink({ dept: getDepartmentFolder(d.id), sem: semId });
       msg += `  • ${esc(d.shortName)} — <a href="${link}">Open →</a>\n`;
     }
     msg += '\n';
@@ -304,7 +304,7 @@ export function buildCoursesList(tree: any[], deptId?: string, semId?: string): 
     const sem = parts[1];
     const courseFolder = parts[3];
 
-    if (deptId && dept !== deptId) continue;
+    if (deptId && resolveDepartmentId(dept) !== resolveDepartmentId(deptId)) continue;
     if (semId && sem !== semId) continue;
 
     const codeMatch = courseFolder.match(/^([A-Z]{2,5}-?\d{3,5})\s*-\s*(.+)/i);

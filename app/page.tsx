@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { config } from '@/lib/config';
-import { FACULTIES } from '@/lib/departments';
+import { FACULTIES, getDepartmentFolder } from '@/lib/departments';
 import { useAppStore } from '@/lib/store';
 import { getMimeFromExt, extractYear, showToast } from '@/lib/utils';
 import ReadmeEditor from '@/components/ReadmeEditor';
@@ -176,7 +176,7 @@ export default function BrowsePage() {
         if (course) {
           setTimeout(() => {
             const st2 = useAppStore.getState();
-            const courses = st2.getSemesterCourses(sem, dept);
+            const courses = st2.getSemesterCourses(sem, st2.currentDept || dept);
             const found = courses.find(c => c.code.toUpperCase() === course.toUpperCase());
             if (found) {
               st2.navigateToCourse(found.code, found.title);
@@ -587,8 +587,8 @@ export default function BrowsePage() {
         <div className="mt-6">
           <ReadmeEditor
             folder={view === 'files' && currentMidFinal && currentCat
-              ? `${currentDept}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}/${currentMidFinal}/${config.categories[currentCat]?.folder || currentCat}`
-              : `${currentDept}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}${currentMidFinal ? '/' + currentMidFinal : ''}`
+              ? `${getDepartmentFolder(currentDept)}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}/${currentMidFinal}/${config.categories[currentCat]?.folder || currentCat}`
+              : `${getDepartmentFolder(currentDept)}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}${currentMidFinal ? '/' + currentMidFinal : ''}`
             }
             isOwner={isOwner}
             isLoggedIn={!!session}

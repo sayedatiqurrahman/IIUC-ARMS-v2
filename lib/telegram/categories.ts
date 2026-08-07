@@ -1,5 +1,5 @@
 import { config } from '@/lib/config';
-import { FACULTIES } from '@/lib/departments';
+import { findDepartment } from '@/lib/departments';
 
 // ─── Category detection ───────────────────────────────────────────
 
@@ -48,17 +48,13 @@ export const CATEGORY_META: Record<string, { label: string; icon: string; folder
 // ─── Department name lookup ───────────────────────────────────────
 
 export function getDeptName(deptId: string): string {
-  for (const f of FACULTIES) {
-    const d = f.departments.find(dd => dd.id === deptId);
-    if (d) return d.shortName;
-  }
+  const found = findDepartment(deptId);
+  if (found) return found.department.shortName;
   return deptId.toUpperCase();
 }
 
 export function getDeptFullName(deptId: string): string {
-  for (const f of FACULTIES) {
-    const d = f.departments.find(dd => dd.id === deptId);
-    if (d) return d.name;
-  }
+  const found = findDepartment(deptId);
+  if (found) return found.department.name;
   return deptId;
 }

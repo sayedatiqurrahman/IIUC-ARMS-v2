@@ -118,7 +118,10 @@ export const config = {
     const ids = new Set<string>();
     ids.add('shariah'); // special: Shariah faculty combined folder
     for (const f of FACULTIES) {
-      for (const d of f.departments) ids.add(d.id);
+      for (const d of f.departments) {
+        ids.add(d.id);
+        if (d.folder) ids.add(d.folder); // GitHub folder short forms (e.g. DIS, SHIS)
+      }
     }
     return ids;
   })(),

@@ -17,7 +17,7 @@ function generateJWT() {
 function encodePath(p) { return p.split('/').map(s => encodeURIComponent(s)).join('/'); }
 
 const DEPARTMENTS = [
-  'qsis','dawah','hadith','cse','cce','eee','ete','civil','pharmacy',
+  'qsis','DIS','SHIS','cse','cce','eee','ete','civil','pharmacy',
   'ba','finance','ell','all','lis','law','eb','cge'
 ];
 const SEMESTERS = ['1st-semister','2nd-semister','3rd-semister','4th-semister','5th-semister','6th-semister','7th-semister','8th-semister'];

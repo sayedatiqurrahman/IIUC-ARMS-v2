@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { config } from '@/lib/config';
-import { FACULTIES, getFacultyIdForDepartment } from '@/lib/departments';
+import { FACULTIES, getFacultyIdForDepartment, isShariahDepartmentId } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
@@ -241,7 +241,7 @@ export default function UploadForm({
               { value: '', label: 'Select...' },
               ...config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' })),
               { value: config.relatedSourcesFolder, label: 'Related Sources (Cross-Semester)', icon: 'fa-folder-open' },
-              ...(['qsis', 'dawah', 'hadith'].includes(userDeptId) ? [{ value: config.relatedKitabsFolder, label: 'Related Kitabs (Shariah Faculty)', icon: 'fa-book' }] : []),
+              ...(isShariahDepartmentId(userDeptId) ? [{ value: config.relatedKitabsFolder, label: 'Related Kitabs (Shariah Faculty)', icon: 'fa-book' }] : []),
             ]} />
           </div>
           <div ref={catRef}>

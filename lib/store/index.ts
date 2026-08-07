@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { config } from '../config';
-import { FACULTIES } from '../departments';
+import { FACULTIES, resolveDepartmentId } from '../departments';
 import { safeJson, getRawUrl, getMimeFromExt } from '../utils';
 import { getOnboardingData, setOnboardingData as saveOnboarding, clearOnboardingData as clearOnboardingStorage } from '@/components/OnboardingModal';
 import { getPdfPageKey } from './helpers';
@@ -255,15 +255,16 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     navigateToDepartment: (deptId) => {
+      const canonicalDept = resolveDepartmentId(deptId);
       const dept = (() => {
         for (const f of FACULTIES) {
-          const d = f.departments.find(dd => dd.id === deptId);
+          const d = f.departments.find(dd => dd.id === canonicalDept);
           if (d) return d;
         }
         return null;
       })();
       set({
-        currentDept: deptId,
+        currentDept: canonicalDept,
         currentSem: '',
         currentCat: '',
         currentCourseCode: '',
@@ -271,7 +272,7 @@ export const useAppStore = create<AppState>((set, get) => {
         view: 'semesters',
         breadcrumbs: [
           { label: 'Departments', icon: 'fa-building', onClick: () => get().goHome() },
-          { label: dept?.shortName || deptId, icon: dept?.icon },
+          { label: dept?.shortName || canonicalDept, icon: dept?.icon },
         ],
       });
     },
