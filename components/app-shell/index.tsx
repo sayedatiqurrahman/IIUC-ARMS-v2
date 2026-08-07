@@ -129,9 +129,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // ─── GitHub connect prompt (shown before opening upload panel when not connected) ───
   const githubToken = useAppStore(s => s.githubToken);
   const patToken = githubToken || profile.githubToken || '';
-  // "Connected" = has a PAT (credit path) OR installed the GitHub App (bot-upload path).
-  // Either way they can upload — no need to nag.
-  const isGithubConnected = patToken.startsWith('ghp_') || patToken.startsWith('github_pat_') || !!profile.githubInstallationId;
+  // "Connected" = any GitHub connection (PAT, GitHub App install, login, or session token).
+  // App-install tokens are ghs_ and may lack a saved installationId, so any marker counts.
+  const isGithubConnected = patToken.startsWith('ghp_') || patToken.startsWith('github_pat_') || !!profile.githubInstallationId || !!profile.githubLogin || !!(session as any)?.accessToken;
   const [patPromptOpen, setPatPromptOpen] = useState(false);
   const [patPromptWarn, setPatPromptWarn] = useState(false);
   const [patInputToken, setPatInputToken] = useState('');

@@ -6,9 +6,9 @@ const PRESERVE_KEYS = [
   'next-auth.callback-url',
   'next-auth.csrf-token',
   'emailForSignIn',
-  'qsis_onboarding',
-  'qsis_onboarding_cancel_forever',
-  'qsis_onboarding_cancel_count',
+  'qsis-onboarding',
+  'qsis-onboard-cancel-forever',
+  'qsis-onboard-cancel-count',
 ];
 
 // The SW keeps hashed build assets (/_next/static/*) in this cache forever so

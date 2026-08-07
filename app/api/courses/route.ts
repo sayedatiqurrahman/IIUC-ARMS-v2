@@ -3,8 +3,8 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
-import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData } from '@/lib/telegram';
-import { getAppBotToken, getAllFilesInFolder, deleteCourseFolder } from '@/lib/course-delete';
+import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData, resolveGithubToken } from '@/lib/telegram';
+import { getAllFilesInFolder, deleteCourseFolder } from '@/lib/course-delete';
 
 const GITHUB_API = 'https://api.github.com';
 const OWNER_CHAT_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID || '0');
@@ -93,9 +93,10 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { department, semester, code, title } = body;
-    if (!department || !semester || !code || !title) {
-      return NextResponse.json({ error: 'department, semester, code, title are required' }, { status: 400 });
+    if (!department || !semester || !code) {
+      return NextResponse.json({ error: 'department, semester, code are required' }, { status: 400 });
     }
+    const courseTitle = (title || '').trim() || code.toUpperCase();
 
     if (!config.allDepartmentIds.has(department)) {
       return NextResponse.json({ error: 'Invalid department' }, { status: 400 });
@@ -111,12 +112,12 @@ export async function POST(req: NextRequest) {
     }
 
     const course = await prisma.course.create({
-      data: { department, semester, code: code.toUpperCase(), title, addedBy: email },
+      data: { department, semester, code: code.toUpperCase(), title: courseTitle, addedBy: email },
     });
 
-    const botToken = await getAppBotToken();
+    const botToken = await resolveGithubToken();
     if (botToken) {
-      const cleanTitle = title.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+      const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
       const courseFolder = `${code.toUpperCase()} - ${cleanTitle}`;
       const basePath = `${config.uploadPath}/${department}/${semester}/${courseFolder}`;
       const allPaths: string[] = [];
@@ -134,7 +135,7 @@ export async function POST(req: NextRequest) {
         `📚 <b>New Course Added</b>`,
         ``,
         `<b>Code:</b> <code>${code.toUpperCase()}</code>`,
-        `<b>Title:</b> ${title}`,
+        `<b>Title:</b> ${courseTitle}`,
         `<b>Department:</b> ${deptFullName} (${department})`,
         `<b>Semester:</b> ${semLabel}`,
         `<b>Added by:</b> ${email}`,
@@ -265,7 +266,7 @@ export async function DELETE(req: NextRequest) {
     let fileList = '';
     let fileCount = 0;
     try {
-      const botToken = await getAppBotToken();
+      const botToken = await resolveGithubToken();
       if (botToken) {
         const allFiles = await getAllFilesInFolder(botToken, folderPath);
         fileCount = allFiles.length;
