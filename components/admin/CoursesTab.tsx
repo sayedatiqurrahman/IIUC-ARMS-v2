@@ -6,6 +6,7 @@ import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
 import { FACULTIES } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
+import { CreateCourseModal, type CreateCourseResult } from '@/components/upload';
 
 export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: string; profile: any }) {
   const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
@@ -15,10 +16,6 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
   const [selectedDept, setSelectedDept] = useState(profile?.department || 'qsis');
   const [selectedSem, setSelectedSem] = useState('1st-semister');
   const [showAdd, setShowAdd] = useState(false);
-  const [addCode, setAddCode] = useState('');
-  const [addTitle, setAddTitle] = useState('');
-  const [addLoading, setAddLoading] = useState(false);
-  const [addError, setAddError] = useState('');
   const [editCourse, setEditCourse] = useState<{ code: string; title: string } | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editLoading, setEditLoading] = useState(false);
@@ -119,22 +116,17 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
     }
   }
 
-  async function handleAdd() {
-    if (!addCode.trim() || !addTitle.trim()) { setAddError('Code and title required'); return; }
-    setAddLoading(true); setAddError('');
+  async function handleAddCourse(code: string, title: string): Promise<CreateCourseResult> {
     try {
-      const res = await fetch('/api/courses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ department: selectedDept, semester: selectedSem, code: addCode.trim(), title: addTitle.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok && !data.success) throw new Error(data.error || 'Failed');
-      setShowAdd(false); setAddCode(''); setAddTitle('');
+      const res = await useAppStore.getState().addCourse(selectedDept, selectedSem, code, title);
+      if (!res.success) return { success: false, error: res.error || 'Failed to create course' };
+      setShowAdd(false);
       useAppStore.getState().invalidateTreeCache();
       await loadTree();
-    } catch (e: any) { setAddError(e.message); }
-    finally { setAddLoading(false); }
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Failed to create course' };
+    }
   }
 
   async function handleEdit() {
@@ -181,7 +173,7 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-book text-indigo-400 mr-2"></i>Courses (from GitHub)</h3>
         {canAdd && (
-          <button onClick={() => { setShowAdd(true); setAddCode(''); setAddTitle(''); setAddError(''); }}
+          <button onClick={() => setShowAdd(true)}
             className="px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold cursor-pointer hover:opacity-90 flex items-center gap-1.5">
             <i className="fas fa-plus"></i> Add Course
           </button>
@@ -235,29 +227,16 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
         </div>
       )}
 
-      {/* Add Course Modal — portal to body so re-renders don't kill it */}
-      {showAdd && createPortal(
-        <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4" onClick={() => setShowAdd(false)}>
-          <div className="bg-dark-bg2 w-full max-w-sm rounded-2xl border border-dark-border p-5" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-dark-text mb-3"><i className="fas fa-book-medical text-qsis mr-2"></i>Add Course</h3>
-            {addError && <p className="text-red-400 text-[0.72rem] mb-2">{addError}</p>}
-            <input type="text" placeholder="Course Code (e.g. QSM-3601)" value={addCode} onChange={e => setAddCode(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis mb-2" />
-            <input type="text" placeholder="Course Title (e.g. Ulumul Quran)" value={addTitle} onChange={e => setAddTitle(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis mb-3" />
-            <p className="text-[0.68rem] text-dark-text3 mb-3">
-              Folders created: <code className="bg-dark-bg3 px-1 rounded">Mid/NOTES, Mid/Previous Questions, Final/NOTES, Final/Previous Questions, sheet, Syllabus, Other</code>
-            </p>
-            <div className="flex gap-2">
-              <button onClick={handleAdd} disabled={addLoading || !addCode.trim() || !addTitle.trim()}
-                className="flex-1 py-2 rounded-lg bg-qsis text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
-                {addLoading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Creating...</> : <><i className="fas fa-plus mr-1"></i>Add Course</>}
-              </button>
-              <button onClick={() => setShowAdd(false)} className="flex-1 py-2 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.82rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2">Cancel</button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {/* Add Course Modal — shared reusable modal */}
+      {showAdd && (
+        <CreateCourseModal
+          open
+          department={selectedDept}
+          semester={selectedSem}
+          knownCourses={courses.map(c => ({ code: c.code, title: c.title }))}
+          onSubmit={handleAddCourse}
+          onClose={() => setShowAdd(false)}
+        />
       )}
 
       {/* Edit Course Modal — portal to body */}

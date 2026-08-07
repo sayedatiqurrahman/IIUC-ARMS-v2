@@ -1,9 +1,10 @@
 'use client';
 
-import { useSession } from 'next-auth/react';
+import { useMemo } from 'react';
 import { useAppStore } from '@/lib/store';
 import MoveModal from '@/components/MoveModal';
 import RenameModal from '@/components/RenameModal';
+import { CreateCourseModal, type CreateCourseResult } from '@/components/upload';
 
 interface BrowseModalsProps {
   moveTarget: { path: string; name: string; mode: 'move' | 'copy' } | null;
@@ -14,18 +15,9 @@ interface BrowseModalsProps {
   setDeleteConfirm: (v: { path: string; name: string } | null) => void;
   showAddCourse: boolean;
   setShowAddCourse: (v: boolean) => void;
-  addCourseCode: string;
-  setAddCourseCode: (v: string) => void;
-  addCourseTitle: string;
-  setAddCourseTitle: (v: string) => void;
-  addCourseError: string;
-  setAddCourseError: (v: string) => void;
-  addCourseSuccess: string;
-  setAddCourseSuccess: (v: string) => void;
-  addCourseLoading: boolean;
-  setAddCourseLoading: (v: boolean) => void;
   currentDept: string | null;
   currentSem: string | null;
+  onAddCourse: (code: string, title: string) => Promise<CreateCourseResult>;
   permissionDenied: { show: boolean; message: string; contact: string };
   setPermissionDenied: (v: { show: boolean; message: string; contact: string }) => void;
   handleFileAction: (action: string, from: string, to?: string, newName?: string) => Promise<any>;
@@ -36,17 +28,17 @@ export default function BrowseModals({
   renameTarget, setRenameTarget,
   deleteConfirm, setDeleteConfirm,
   showAddCourse, setShowAddCourse,
-  addCourseCode, setAddCourseCode,
-  addCourseTitle, setAddCourseTitle,
-  addCourseError, setAddCourseError,
-  addCourseSuccess, setAddCourseSuccess,
-  addCourseLoading, setAddCourseLoading,
   currentDept, currentSem,
+  onAddCourse,
   permissionDenied, setPermissionDenied,
   handleFileAction,
 }: BrowseModalsProps) {
-  const { data: session } = useSession();
-  const loadTree = useAppStore(s => s.loadTree);
+  const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
+
+  const knownCourses = useMemo(() => {
+    if (!currentSem || !currentDept) return [];
+    return getSemesterCourses(currentSem, currentDept).map(c => ({ code: c.code, title: c.title }));
+  }, [getSemesterCourses, currentSem, currentDept]);
 
   return (
     <>
@@ -114,105 +106,16 @@ export default function BrowseModals({
         </>
       )}
 
-      {/* Add Course Modal */}
+      {/* Add Course Modal — shared reusable modal */}
       {showAddCourse && (
-        <>
-          <div className="fixed inset-0 bg-black/60 z-[200]" onClick={() => setShowAddCourse(false)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-dark-bg2 border border-dark-border rounded-2xl shadow-2xl w-[400px] max-w-[95vw] p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-[1rem] flex items-center gap-2">
-                <i className="fas fa-book-medical text-qsis"></i> Add Course
-              </h3>
-              <button onClick={() => setShowAddCourse(false)} className="text-dark-text3 hover:text-dark-text text-lg"><i className="fas fa-times"></i></button>
-            </div>
-            <p className="text-[0.78rem] text-dark-text3 mb-4">
-              Add a new course to <span className="text-qsis font-semibold">{currentSem}</span> in <span className="text-qsis font-semibold">{currentDept}</span>.
-              <br/>Subfolders (Mid/Final/NOTES/Previous Questions/sheet/Syllabus/Other) will be created automatically on GitHub.
-            </p>
-
-            {addCourseError && (
-              <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
-                <i className="fas fa-exclamation-triangle mr-1"></i>{addCourseError}
-              </div>
-            )}
-            {addCourseSuccess && (
-              <div className="mb-3 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-xs">
-                <i className="fas fa-check mr-1"></i>{addCourseSuccess}
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-[0.75rem] text-dark-text2 font-medium mb-1 block">Course Code *</label>
-                <input
-                  value={addCourseCode}
-                  onChange={e => setAddCourseCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. QSM-3602"
-                  className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-dark-text text-sm outline-none focus:border-qsis transition-colors"
-                />
-              </div>
-              <div>
-                <label className="text-[0.75rem] text-dark-text2 font-medium mb-1 block">Course Title *</label>
-                <input
-                  value={addCourseTitle}
-                  onChange={e => setAddCourseTitle(e.target.value)}
-                  placeholder="e.g. Tafsir Bir Rayi"
-                  className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-dark-text text-sm outline-none focus:border-qsis transition-colors"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2 mt-5">
-              <button
-                onClick={() => setShowAddCourse(false)}
-                className="flex-1 py-2.5 rounded-xl bg-dark-bg border border-dark-border text-dark-text2 text-[0.82rem] hover:bg-dark-bg3 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  if (!addCourseCode.trim() || !addCourseTitle.trim()) {
-                    setAddCourseError('Both course code and title are required.');
-                    return;
-                  }
-                  setAddCourseLoading(true);
-                  setAddCourseError('');
-                  setAddCourseSuccess('');
-                  try {
-                    const res = await fetch('/api/courses', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ department: currentDept, semester: currentSem, code: addCourseCode.trim(), title: addCourseTitle.trim() }),
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                      setAddCourseSuccess(`Course ${addCourseCode.trim()} created! Folder structure created on GitHub.`);
-                      setAddCourseCode('');
-                      setAddCourseTitle('');
-                      useAppStore.getState().invalidateTreeCache();
-                      loadTree();
-                      setTimeout(() => { setShowAddCourse(false); setAddCourseSuccess(''); }, 2000);
-                    } else {
-                      if (res.status === 403) {
-                        setPermissionDenied({ show: true, message: data.error || 'You do not have permission to add courses.', contact: 'Please contact your CR, ACR, teacher, manager, or admin for access.' });
-                        setShowAddCourse(false);
-                      } else {
-                        setAddCourseError(data.error || 'Failed to create course');
-                      }
-                    }
-                  } catch {
-                    setAddCourseError('Network error. Please try again.');
-                  }
-                  setAddCourseLoading(false);
-                }}
-                disabled={addCourseLoading}
-                className="flex-1 py-2.5 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold hover:bg-qsis/90 transition-colors disabled:opacity-50"
-              >
-                {addCourseLoading ? <><i className="fas fa-spinner fa-spin mr-1.5"></i>Creating...</> : <><i className="fas fa-plus mr-1.5"></i>Add Course</>}
-              </button>
-            </div>
-          </div>
-        </>
+        <CreateCourseModal
+          open
+          department={currentDept || ''}
+          semester={currentSem || ''}
+          knownCourses={knownCourses}
+          onSubmit={onAddCourse}
+          onClose={() => setShowAddCourse(false)}
+        />
       )}
 
       {/* Permission Denied Popup */}

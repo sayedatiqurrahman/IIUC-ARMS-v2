@@ -3,8 +3,10 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
-import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData, resolveGithubToken } from '@/lib/telegram';
+import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData, resolveGithubToken, getGithubTree } from '@/lib/telegram';
 import { getAllFilesInFolder, deleteCourseFolder } from '@/lib/course-delete';
+
+const COURSE_SUBFOLDERS = ['Mid/NOTES', 'Mid/Previous Questions', 'Final/NOTES', 'Final/Previous Questions', 'sheet', 'Syllabus', 'Other'];
 
 const GITHUB_API = 'https://api.github.com';
 const OWNER_CHAT_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID || '0');
@@ -72,7 +74,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST — write DB + create GitHub folders + Telegram
+// POST — create course folders on GitHub (source of truth) + keep logs.
+// The browse list is derived from the GitHub tree, so courses are NOT stored
+// in the DB anymore — this keeps the browse list exactly in sync with GitHub.
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
@@ -111,28 +115,55 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: semesterCheck.reason }, { status: 403 });
     }
 
-    const course = await prisma.course.create({
-      data: { department, semester, code: code.toUpperCase(), title: courseTitle, addedBy: email },
-    });
-
     const botToken = await resolveGithubToken();
-    if (botToken) {
-      const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-      const courseFolder = `${code.toUpperCase()} - ${cleanTitle}`;
-      const basePath = `${config.uploadPath}/${department}/${semester}/${courseFolder}`;
-      const allPaths: string[] = [];
-      for (const mf of ['Mid', 'Final']) {
-        for (const cat of ['NOTES', 'Previous Questions']) allPaths.push(`${basePath}/${mf}/${cat}`);
-      }
-      for (const cat of ['sheet', 'Syllabus', 'Other']) allPaths.push(`${basePath}/${cat}`);
-      await batchCreateGitkeepFiles(botToken, basePath, allPaths);
+    if (!botToken) {
+      return NextResponse.json({ error: 'GitHub uploader is not connected. Please contact an admin.' }, { status: 400 });
     }
+
+    const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const courseFolder = `${code.toUpperCase()} - ${cleanTitle}`;
+    const basePath = `${config.uploadPath}/${department}/${semester}/${courseFolder}`;
+
+    // GitHub is the source of truth — check if the course folder already exists
+    let alreadyExisted = false;
+    try {
+      const tree = await getGithubTree();
+      alreadyExisted = tree.some((item: any) => String(item.path || '').startsWith(basePath + '/'));
+    } catch {}
+
+    if (!alreadyExisted) {
+      const allPaths = COURSE_SUBFOLDERS.map(sf => `${basePath}/${sf}`);
+      const created = await batchCreateGitkeepFiles(botToken, basePath, allPaths);
+      if (created === 0) {
+        // Tree cache may be stale — re-check GitHub directly before failing
+        try {
+          const encoded = basePath.split('/').map(encodeURIComponent).join('/');
+          const checkRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${encoded}`, { headers: ghHeaders(botToken) });
+          alreadyExisted = checkRes.ok;
+        } catch {}
+        if (!alreadyExisted) {
+          return NextResponse.json({ error: 'Failed to create course folders on GitHub' }, { status: 500 });
+        }
+      }
+    }
+
+    // Maintain course-creation logs
+    try {
+      await prisma.activityLog.create({
+        data: {
+          action: 'course_create',
+          userId: email,
+          userName: profile?.name || email.split('@')[0],
+          details: JSON.stringify({ code: code.toUpperCase(), title: courseTitle, department, semester, folderPath: basePath, alreadyExisted }),
+        },
+      });
+    } catch {}
 
     try {
       const deptFullName = getDeptFullName(department);
       const semLabel = config.semesters.find(s => s.id === semester)?.label || semester;
       const tgMsg = [
-        `📚 <b>New Course Added</b>`,
+        `📚 <b>${alreadyExisted ? 'Course Re-selected' : 'New Course Added'}</b>`,
         ``,
         `<b>Code:</b> <code>${code.toUpperCase()}</code>`,
         `<b>Title:</b> ${courseTitle}`,
@@ -144,9 +175,12 @@ export async function POST(req: NextRequest) {
       await sendMessageWithButton(OWNER_CHAT_ID, tgMsg, `📂 View ${code.toUpperCase()} in ${semLabel}`, pageLink);
     } catch {}
 
-    return NextResponse.json({ success: true, course }, { status: 201 });
+    return NextResponse.json({
+      success: true,
+      course: { code: code.toUpperCase(), title: courseTitle, department, semester },
+      alreadyExisted,
+    }, { status: alreadyExisted ? 200 : 201 });
   } catch (e: any) {
-    if (e?.code === 'P2002') return NextResponse.json({ error: 'Course already exists in this semester' }, { status: 409 });
     return NextResponse.json({ error: 'Failed to create course' }, { status: 500 });
   }
 }

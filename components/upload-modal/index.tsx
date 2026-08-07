@@ -7,7 +7,7 @@ import type { Profile } from '@/lib/store';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
 import { jsPDF } from 'jspdf';
-import { UploadForm } from '@/components/upload';
+import { UploadForm, CreateCourseModal, type CreateCourseResult } from '@/components/upload';
 import { CURRENT_YEAR, CURRENT_SEASON, isPdf, isImage, isDocsOnly } from '@/components/upload/types';
 import type { CourseGroup, FileWithMeta, Link, UploadModalProps } from '@/components/upload/types';
 import DocumentScanner, { type CapturedPage } from '@/components/scanner/DocumentScanner';
@@ -19,6 +19,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const setGithubToken = useAppStore(s => s.setGithubToken);
   const onboardData = useAppStore(s => s.onboardingData);
   const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
+  const dbCourses = useAppStore(s => s.dbCourses);
 
   const email = (session as any)?.user?.email || profile.email || '';
 
@@ -38,10 +39,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [category, setCategory] = useState('');
   const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
   const [uploading, setUploading] = useState(false);
-  const [creatingCourse, setCreatingCourse] = useState(false);
-  const [showNewCourse, setShowNewCourse] = useState<Record<number, boolean>>({});
-  const [newCourseCode, setNewCourseCode] = useState<Record<number, string>>({});
-  const [newCourseTitle, setNewCourseTitle] = useState<Record<number, string>>({});
+  const [createCourseFor, setCreateCourseFor] = useState<number | null>(null);
+  const [recentlyCreated, setRecentlyCreated] = useState<{ code: string; title: string }[]>([]);
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
@@ -73,8 +72,18 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       const cs = getSemesterCourses(s.id, department);
       for (const c of cs) { if (!map.has(c.code)) map.set(c.code, c.title); }
     }
+    for (const c of dbCourses) { if (c.department === department && !map.has(c.code)) map.set(c.code, c.title); }
+    for (const c of recentlyCreated) { if (!map.has(c.code)) map.set(c.code, c.title); }
     return Array.from(map.entries()).map(([code, title]) => ({ code, title }));
-  }, [department, getSemesterCourses, treeLength]);
+  }, [department, getSemesterCourses, treeLength, dbCourses, recentlyCreated]);
+
+  useEffect(() => {
+    useAppStore.getState().loadCourses();
+  }, []);
+
+  useEffect(() => {
+    setCreateCourseFor(null);
+  }, [department, semester]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -381,57 +390,35 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     );
   }
 
-  function canSubmit(): boolean {
-    if (!department || !semester || !category) return false;
-    const isExamSpecific = category === config.categories.notes.folder || category === config.categories.questions.folder;
-    return courses.some(c => {
-      const hasCourse = c.selectedCourseCode || (showNewCourse[c.id] && newCourseCode[c.id]?.trim());
-      if (!hasCourse || (c.files.length === 0 && c.links.length === 0)) return false;
-      if (isExamSpecific && !c.midFinal) return false;
-      if (category === config.categories.notes.folder && !c.examSession) return false;
-      return true;
-    });
-  }
-
-  async function handleCreateCourse(courseId: number) {
-    const code = newCourseCode[courseId]?.trim();
-    const title = newCourseTitle[courseId]?.trim();
-    if (!code) { showToast('Course code is required', 'error'); return; }
-    if (!title) { showToast('Course title is required', 'error'); return; }
-    setCreatingCourse(true);
+  async function handleCreateCourse(code: string, title: string): Promise<CreateCourseResult> {
+    if (createCourseFor === null) return { success: false, error: 'Please try again' };
     try {
-      const res = await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ department, semester, code, title }) });
-      const data = await res.json();
-      if (data.success || res.status === 209) {
-        updateCourse(courseId, { selectedCourseCode: code, selectedCourseTitle: title || code });
-        setShowNewCourse(prev => ({ ...prev, [courseId]: false }));
-        setNewCourseCode(prev => ({ ...prev, [courseId]: '' }));
-        setNewCourseTitle(prev => ({ ...prev, [courseId]: '' }));
-        showToast(`Course ${code} created!`, 'success');
-        useAppStore.getState().invalidateTreeCache();
-        useAppStore.getState().loadTree(session?.accessToken || '');
-      } else { showToast(data.error || 'Failed to create course', 'error'); }
-    } catch { showToast('Network error', 'error'); }
-    finally { setCreatingCourse(false); }
+      const res = await useAppStore.getState().addCourse(department, semester, code, title);
+      if (!res.success) return { success: false, error: res.error || 'Failed to create course' };
+      const finalCode = code.toUpperCase();
+      const finalTitle = title.trim() || finalCode;
+      updateCourse(createCourseFor, { selectedCourseCode: finalCode, selectedCourseTitle: finalTitle, links: [] });
+      setRecentlyCreated(prev => [...prev.filter(c => c.code !== finalCode), { code: finalCode, title: finalTitle }]);
+      useAppStore.getState().invalidateCoursesCache();
+      useAppStore.getState().loadCourses();
+      useAppStore.getState().invalidateTreeCache();
+      useAppStore.getState().loadTree(session?.accessToken || '');
+      showToast(res.alreadyExisted ? `Course ${finalCode} already exists — selected` : `Course ${finalCode} created on GitHub`, res.alreadyExisted ? 'info' : 'success');
+      return { success: true };
+    } catch { return { success: false, error: 'Network error' }; }
   }
 
   async function handleSubmit() {
-    if (!department || !semester || !category) { alert('Please select department, semester, and category.'); return; }
-    const validCourses = courses.filter(c => {
-      const hasCourse = c.selectedCourseCode || (showNewCourse[c.id] && newCourseCode[c.id]?.trim());
-      return hasCourse && (c.files.length > 0 || c.links.length > 0);
-    });
-    if (validCourses.length === 0) { alert('At least one course must be selected with files.'); return; }
+    if (!department || !semester || !category) return;
+    const validCourses = courses.filter(c => c.selectedCourseCode && (c.files.length > 0 || c.links.length > 0));
+    if (validCourses.length === 0) return;
 
     await doUpload();
   }
 
   async function doUpload(tokenOverride?: string) {
     const token = tokenOverride || githubToken || profile.githubToken || (session as any)?.accessToken || '';
-    const validCourses = courses.filter(c => {
-      const hasCourse = c.selectedCourseCode || (showNewCourse[c.id] && newCourseCode[c.id]?.trim());
-      return hasCourse && (c.files.length > 0 || c.links.length > 0);
-    });
+    const validCourses = courses.filter(c => c.selectedCourseCode && (c.files.length > 0 || c.links.length > 0));
 
     setUploading(true); setResult(null);
     try {
@@ -525,7 +512,20 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     } finally { setUploading(false); }
   }
 
-  const courseOptions = useMemo(() => existingCourses.map(c => ({ value: c.code, label: `${c.code} — ${c.title}`, icon: 'fa-book' })), [existingCourses]);
+  const courseOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const opts: { value: string; label: string; icon: string }[] = [];
+    const add = (code: string, title: string) => {
+      const key = code.toUpperCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      opts.push({ value: key, label: `${key} — ${title}`, icon: 'fa-book' });
+    };
+    for (const c of existingCourses) add(c.code, c.title);
+    for (const c of dbCourses) { if (c.department === department && c.semester === semester) add(c.code, c.title); }
+    for (const c of recentlyCreated) add(c.code, c.title);
+    return opts;
+  }, [existingCourses, dbCourses, department, semester, recentlyCreated]);
 
   return (
     <>
@@ -550,14 +550,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             category={category} setCategory={setCategory}
             courses={courses} updateCourse={updateCourse} addCourse={addCourse} removeCourse={removeCourse}
             addLink={addLink} removeLink={removeLink} loadExistingLinks={loadExistingLinks}
-            existingCourses={existingCourses} courseOptions={courseOptions} allKnownCourses={allKnownCourses}
-            showNewCourse={showNewCourse} setShowNewCourse={setShowNewCourse}
-            newCourseCode={newCourseCode} setNewCourseCode={setNewCourseCode}
-            newCourseTitle={newCourseTitle} setNewCourseTitle={setNewCourseTitle}
-            handleCreateCourse={handleCreateCourse} creatingCourse={creatingCourse}
+            existingCourses={existingCourses} courseOptions={courseOptions}
+            createCourseFor={createCourseFor} setCreateCourseFor={setCreateCourseFor}
             handleFilesForCourse={handleFilesForCourse} fileInputRefs={fileInputRefs} onOpenScanner={openScanner}
             totalFiles={totalFiles} totalSizeMB={totalSizeMB} uploading={uploading} result={result}
-            handleSubmit={handleSubmit} canSubmit={canSubmit}
+            handleSubmit={handleSubmit}
             patInputToken={patInputToken} setPatInputToken={setPatInputToken} patSaving={patSaving} handleSavePat={handleSavePat}
             mergeDialogCourseId={mergeDialogCourseId} mergeImages={mergeImages} mergeSession={mergeSession} mergeYear={mergeYear}
             mergeMerging={mergeMerging} mergeOcr={mergeOcr} setMergeOcr={setMergeOcr} handleMergeImages={handleMergeImages} dismissMerge={() => { setMergeDialogCourseId(null); setMergeImages([]); setMergeOcr(false); }}
@@ -572,6 +569,16 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         onCancel={() => { setScannerOpen(false); setScannerCourseId(null); }}
         onResult={handleScannerResult}
         docOnly={category === config.categories.notes.folder}
+      />
+    )}
+    {createCourseFor !== null && (
+      <CreateCourseModal
+        open
+        department={department}
+        semester={semester}
+        knownCourses={allKnownCourses}
+        onSubmit={handleCreateCourse}
+        onClose={() => setCreateCourseFor(null)}
       />
     )}
     </>

@@ -99,8 +99,7 @@ export const useAppStore = create<AppState>((set, get) => {
         });
         const data = await res.json();
         if (data.success) {
-          set(s => ({ dbCourses: [...s.dbCourses, data.course] }));
-          return { success: true };
+          return { success: true, alreadyExisted: !!data.alreadyExisted, course: data.course };
         }
         return { success: false, error: data.error || 'Failed' };
       } catch { return { success: false, error: 'Network error' }; }

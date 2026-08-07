@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { config } from '@/lib/config';
 import { FACULTIES, getFacultyIdForDepartment } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
@@ -33,15 +33,8 @@ interface UploadFormProps {
   loadExistingLinks: (courseId: number, courseCode: string, courseTitle: string) => void;
   existingCourses: { code: string; title: string; totalFiles: number }[];
   courseOptions: { value: string; label: string; icon: string }[];
-  allKnownCourses: { code: string; title: string }[];
-  showNewCourse: Record<number, boolean>;
-  setShowNewCourse: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
-  newCourseCode: Record<number, string>;
-  setNewCourseCode: React.Dispatch<React.SetStateAction<Record<number, string>>>;
-  newCourseTitle: Record<number, string>;
-  setNewCourseTitle: React.Dispatch<React.SetStateAction<Record<number, string>>>;
-  handleCreateCourse: (courseId: number) => Promise<void>;
-  creatingCourse: boolean;
+  createCourseFor: number | null;
+  setCreateCourseFor: (v: number | null) => void;
   handleFilesForCourse: (courseId: number, e: React.ChangeEvent<HTMLInputElement>) => void;
   fileInputRefs: React.MutableRefObject<Record<number, HTMLInputElement | null>>;
   onOpenScanner: (courseId: number) => void;
@@ -50,7 +43,6 @@ interface UploadFormProps {
   uploading: boolean;
   result: { success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null;
   handleSubmit: () => void;
-  canSubmit: () => boolean;
   patInputToken: string;
   setPatInputToken: (v: string) => void;
   patSaving: boolean;
@@ -75,15 +67,12 @@ export default function UploadForm({
   category, setCategory,
   courses, updateCourse, addCourse, removeCourse,
   addLink, removeLink, loadExistingLinks,
-  existingCourses, courseOptions, allKnownCourses,
-  showNewCourse, setShowNewCourse,
-  newCourseCode, setNewCourseCode,
-  newCourseTitle, setNewCourseTitle,
-  handleCreateCourse, creatingCourse,
+  existingCourses, courseOptions,
+  createCourseFor, setCreateCourseFor,
   handleFilesForCourse, fileInputRefs, onOpenScanner,
   totalFiles, totalSizeMB,
   uploading, result,
-  handleSubmit, canSubmit,
+  handleSubmit,
   patInputToken, setPatInputToken, patSaving, handleSavePat,
   mergeDialogCourseId, mergeImages, mergeSession, mergeYear,
   mergeMerging, mergeOcr, setMergeOcr, handleMergeImages, dismissMerge,
@@ -116,6 +105,65 @@ export default function UploadForm({
   const canUploadAnyDept = effectiveRole === 'admin';
   const isExamCategory = category === config.categories.notes.folder || category === config.categories.questions.folder;
   const hasPat = !!(profile.githubToken?.startsWith('ghp_') || profile.githubToken?.startsWith('github_pat_') || githubToken?.startsWith('ghp_') || githubToken?.startsWith('github_pat_'));
+
+  const [invalid, setInvalid] = useState<Record<string, boolean>>({});
+  const deptRef = useRef<HTMLDivElement>(null);
+  const semRef = useRef<HTMLDivElement>(null);
+  const catRef = useRef<HTMLDivElement>(null);
+  const courseBoxRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  function clearInvalid(key: string) {
+    setInvalid(prev => (prev[key] ? { ...prev, [key]: false } : prev));
+  }
+
+  function focusInvalidField(errs: Record<string, boolean>): boolean {
+    const order = ['department', 'semester', 'category'];
+    for (const c of courses) order.push(`course-${c.id}`, `midFinal-${c.id}`, `examSession-${c.id}`);
+    const first = order.find(k => errs[k]);
+    if (!first) return false;
+
+    const focusBox = (box: HTMLDivElement | null, selector?: string) => {
+      if (!box) return;
+      box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      const target = selector ? box.querySelector(selector) : box;
+      const btn = (target || box).querySelector('button');
+      if (btn) btn.focus();
+    };
+
+    if (first === 'department') focusBox(deptRef.current);
+    else if (first === 'semester') focusBox(semRef.current);
+    else if (first === 'category') focusBox(catRef.current);
+    else {
+      const m = first.match(/^([a-z]+)-(\d+)$/);
+      if (m) {
+        const box = courseBoxRefs.current[parseInt(m[2])];
+        if (first.startsWith('course-')) focusBox(box, '[data-course-select]');
+        else focusBox(box);
+      }
+    }
+    return true;
+  }
+
+  function handleSubmitClick() {
+    if (uploading) return;
+    const errs: Record<string, boolean> = {};
+    if (!department) errs.department = true;
+    if (!semester) errs.semester = true;
+    if (!category) errs.category = true;
+    for (const c of courses) {
+      if (c.files.length === 0 && c.links.length === 0) continue;
+      if (!c.selectedCourseCode) errs[`course-${c.id}`] = true;
+      if (isExamCategory && !c.midFinal) errs[`midFinal-${c.id}`] = true;
+      if (category === config.categories.notes.folder && !c.examSession) errs[`examSession-${c.id}`] = true;
+    }
+    setInvalid(errs);
+    if (Object.keys(errs).length > 0) {
+      showToast('Please fill the highlighted required fields', 'error');
+      focusInvalidField(errs);
+      return;
+    }
+    handleSubmit();
+  }
 
   if (result?.success) {
     return (
@@ -172,10 +220,10 @@ export default function UploadForm({
       {/* Department, Semester & Category */}
       <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
         <div className="grid grid-cols-3 gap-3">
-           <div>
+           <div ref={deptRef}>
             <label className="text-[0.72rem] text-dark-text2 block mb-1">Department *</label>
             {canUploadAnyDept ? (
-              <CustomSelect value={department} onChange={v => { setDepartment(v); setSemester(''); setCategory(''); }} placeholder="Select..." options={[
+              <CustomSelect value={department} onChange={v => { setDepartment(v); setSemester(''); setCategory(''); clearInvalid('department'); clearInvalid('semester'); clearInvalid('category'); }} error={!!invalid.department} placeholder="Select..." options={[
                 { value: '', label: 'Select...' },
                 ...FACULTIES.flatMap(f => f.departments.map(d => ({ value: d.id, label: `${d.shortName} — ${d.name}`, icon: d.icon || 'fa-building', group: f.shortName })))
               ]} />
@@ -187,18 +235,18 @@ export default function UploadForm({
             )}
             <p className="text-[0.6rem] text-dark-text3 mt-0.5">{canUploadAnyDept ? 'Admin — upload to any department' : 'Files upload to your department only'}</p>
           </div>
-          <div>
+          <div ref={semRef}>
             <label className="text-[0.72rem] text-dark-text2 block mb-1">Semester *</label>
-            <CustomSelect value={semester} onChange={v => { setSemester(v); setCategory(''); }} placeholder="Select..." className={!department ? 'opacity-50 pointer-events-none' : ''} options={[
+            <CustomSelect value={semester} onChange={v => { setSemester(v); setCategory(''); clearInvalid('semester'); clearInvalid('category'); }} error={!!invalid.semester} placeholder="Select..." className={!department ? 'opacity-50 pointer-events-none' : ''} options={[
               { value: '', label: 'Select...' },
               ...config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' })),
               { value: config.relatedSourcesFolder, label: 'Related Sources (Cross-Semester)', icon: 'fa-folder-open' },
               ...(['qsis', 'dawah', 'hadith'].includes(userDeptId) ? [{ value: config.relatedKitabsFolder, label: 'Related Kitabs (Shariah Faculty)', icon: 'fa-book' }] : []),
             ]} />
           </div>
-          <div>
+          <div ref={catRef}>
             <label className="text-[0.72rem] text-dark-text2 block mb-1">Category *</label>
-            <CustomSelect value={category} onChange={setCategory} placeholder="Select..." className={!semester ? 'opacity-50 pointer-events-none' : ''} options={
+            <CustomSelect value={category} onChange={v => { setCategory(v); clearInvalid('category'); }} error={!!invalid.category} placeholder="Select..." className={!semester ? 'opacity-50 pointer-events-none' : ''} options={
               semester === config.relatedKitabsFolder
                 ? Object.entries(config.relatedKitabsCategories).map(([key, cat]) => ({ value: key, label: cat.label, icon: 'fa-book' }))
                 : semester === config.relatedSourcesFolder
@@ -219,14 +267,14 @@ export default function UploadForm({
       {/* Course Groups */}
       {courses.map((course, idx) => {
         const selectedCourse = existingCourses.find(c => c.code === course.selectedCourseCode);
-        const isCreatingNew = !!showNewCourse[course.id];
         const noCoursesAvailable = courseOptions.length === 0;
+        const courseInvalid = !!invalid[`course-${course.id}`];
         const courseFolder = course.selectedCourseCode
           ? (course.selectedCourseTitle ? `${course.selectedCourseCode} - ${course.selectedCourseTitle}` : course.selectedCourseCode)
           : '';
 
         return (
-        <div key={course.id} className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-3">
+        <div key={course.id} ref={el => { courseBoxRefs.current[course.id] = el; }} className={`bg-dark-bg3 border ${courseInvalid ? 'border-red-500' : 'border-dark-border'} rounded-xl p-4 mb-3`}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-[0.78rem] font-semibold text-qsis">
               <i className="fas fa-book mr-1.5"></i>Course {courses.length > 1 ? idx + 1 : ''}
@@ -239,18 +287,20 @@ export default function UploadForm({
           </div>
 
           {/* Course Selector */}
-          {!isCreatingNew && !noCoursesAvailable ? (
+          {!noCoursesAvailable ? (
             <div className="mb-2">
               <label className="text-[0.72rem] text-dark-text2 block mb-1">Select Course *</label>
               <div className="flex gap-2">
-                <div className="flex-1">
+                <div className="flex-1" data-course-select>
                   <CustomSelect
                     value={course.selectedCourseCode}
                     onChange={v => {
                       const found = existingCourses.find(c => c.code === v);
                       updateCourse(course.id, { selectedCourseCode: v, selectedCourseTitle: found?.title || '', links: [] });
+                      clearInvalid(`course-${course.id}`);
                       if (found) loadExistingLinks(course.id, v, found.title);
                     }}
+                    error={courseInvalid}
                     placeholder={department && semester ? "Choose a course..." : "Select dept & semester first"}
                     searchable
                     className={!department || !semester ? 'opacity-50 pointer-events-none' : ''}
@@ -259,7 +309,7 @@ export default function UploadForm({
                 </div>
                 <button
                   className="px-3 py-1.5 rounded-lg border border-qsis/40 bg-qsis/5 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors flex items-center gap-1 whitespace-nowrap"
-                  onClick={() => setShowNewCourse(prev => ({ ...prev, [course.id]: true }))}
+                  onClick={() => setCreateCourseFor(course.id)}
                   disabled={!department || !semester}
                   title="Create new course"
                 >
@@ -277,48 +327,21 @@ export default function UploadForm({
                   </span>
                 </div>
               )}
+              {courseInvalid && (
+                <p className="mt-1 text-[0.68rem] text-red-400"><i className="fas fa-exclamation-triangle mr-1"></i>Select a course or create one to continue</p>
+              )}
             </div>
           ) : (
             <div className="mb-2 p-3 rounded-lg bg-dark-bg border border-qsis/30">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[0.72rem] font-semibold text-dark-text">
-                  {noCoursesAvailable ? 'No course found — create one to upload' : 'Create New Course'}
-                </span>
-                {!noCoursesAvailable && (
-                  <button className="text-dark-text3 hover:text-dark-text text-[0.7rem] cursor-pointer bg-transparent border-none" onClick={() => setShowNewCourse(prev => ({ ...prev, [course.id]: false }))}>
-                    <i className="fas fa-times"></i>
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <input
-                  type="text"
-                  placeholder="Course Code (e.g. FSC-1208)"
-                  className="px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
-                  value={newCourseCode[course.id] || ''}
-                  onChange={e => {
-                    const code = e.target.value;
-                    setNewCourseCode(prev => ({ ...prev, [course.id]: code }));
-                    const match = allKnownCourses.find(c => c.code.toUpperCase() === code.trim().toUpperCase());
-                    if (match) {
-                      setNewCourseTitle(prev => ({ ...prev, [course.id]: match.title }));
-                    }
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="Course Title (required)"
-                  className="px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
-                  value={newCourseTitle[course.id] || ''}
-                  onChange={e => setNewCourseTitle(prev => ({ ...prev, [course.id]: e.target.value }))}
-                />
-              </div>
+              <span className="text-[0.72rem] font-semibold text-dark-text block mb-1">
+                <i className="fas fa-plus-circle text-qsis mr-1"></i>No course found — create one to upload
+              </span>
+              <p className="text-[0.68rem] text-dark-text3 mb-2">The course folder will be created on GitHub and will appear here and in Browse.</p>
               <button
-                className="w-full py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
-                onClick={() => handleCreateCourse(course.id)}
-                disabled={creatingCourse || !newCourseCode[course.id]?.trim() || !newCourseTitle[course.id]?.trim()}
+                className="w-full py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold border-none cursor-pointer hover:opacity-90"
+                onClick={() => setCreateCourseFor(course.id)}
               >
-                {creatingCourse ? <><i className="fas fa-spinner fa-spin mr-1"></i>Creating...</> : <><i className="fas fa-plus mr-1"></i>Create & Select</>}
+                <i className="fas fa-plus mr-1"></i>Create New Course
               </button>
             </div>
           )}
@@ -328,7 +351,7 @@ export default function UploadForm({
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Section *</label>
-                <CustomSelect value={course.midFinal} onChange={v => updateCourse(course.id, { midFinal: v })} placeholder="Select..." options={[
+                <CustomSelect value={course.midFinal} onChange={v => { updateCourse(course.id, { midFinal: v }); clearInvalid(`midFinal-${course.id}`); }} error={!!invalid[`midFinal-${course.id}`]} placeholder="Select..." options={[
                   { value: '', label: 'Select...' },
                   { value: 'Mid', label: 'Mid', icon: 'fa-hourglass-half' },
                   { value: 'Final', label: 'Final', icon: 'fa-check-double' },
@@ -337,13 +360,13 @@ export default function UploadForm({
               <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
                 {category === config.categories.questions.folder ? (
-                  <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} options={[
+                  <CustomSelect value={course.examSession} onChange={v => { updateCourse(course.id, { examSession: v }); clearInvalid(`examSession-${course.id}`); }} error={!!invalid[`examSession-${course.id}`]} options={[
                     { value: 'Both', label: 'Both (Autumn + Spring)', icon: 'fa-layer-group' },
                     { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
                     { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
                   ]} />
                 ) : (
-                  <CustomSelect value={course.examSession} onChange={v => updateCourse(course.id, { examSession: v })} placeholder="Select..." options={[
+                  <CustomSelect value={course.examSession} onChange={v => { updateCourse(course.id, { examSession: v }); clearInvalid(`examSession-${course.id}`); }} error={!!invalid[`examSession-${course.id}`]} placeholder="Select..." options={[
                     { value: '', label: 'Select...' },
                     { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
                     { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
@@ -460,10 +483,10 @@ export default function UploadForm({
             <div className="border-2 border-dashed border-dark-border/60 rounded-lg p-4 text-center">
               <i className="fas fa-info-circle text-xl text-dark-text3 mb-1 block"></i>
               <p className="text-[0.78rem] text-dark-text2">Select a course above or create one to add files</p>
-              {!isCreatingNew && !noCoursesAvailable && (
+              {!noCoursesAvailable && (
                 <button
                   className="mt-2 px-3 py-1.5 rounded-lg border border-qsis/40 bg-qsis/5 text-qsis text-[0.72rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors"
-                  onClick={() => setShowNewCourse(prev => ({ ...prev, [course.id]: true }))}
+                  onClick={() => setCreateCourseFor(course.id)}
                 >
                   <i className="fas fa-plus mr-1"></i> Create New Course
                 </button>
@@ -594,8 +617,8 @@ export default function UploadForm({
 
       <button
         className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-        onClick={handleSubmit}
-        disabled={uploading || !canSubmit()}
+        onClick={handleSubmitClick}
+        disabled={uploading}
       >
         {uploading ? (
           <><i className="fas fa-spinner fa-spin mr-2"></i>Creating PR...</>

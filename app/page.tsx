@@ -7,6 +7,7 @@ import { FACULTIES } from '@/lib/departments';
 import { useAppStore } from '@/lib/store';
 import { getMimeFromExt, extractYear, showToast } from '@/lib/utils';
 import ReadmeEditor from '@/components/ReadmeEditor';
+import { CreateCourseResult } from '@/components/upload';
 import {
   BrowseHeader, BrowseModals, PageHeader, FileGrid, FolderCard,
   DepartmentsView, SemestersView, CoursesView, CategoriesView,
@@ -29,11 +30,6 @@ export default function BrowsePage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ path: string; name: string } | null>(null);
   const [actionLoading, setActionLoading] = useState('');
   const [showAddCourse, setShowAddCourse] = useState(false);
-  const [addCourseCode, setAddCourseCode] = useState('');
-  const [addCourseTitle, setAddCourseTitle] = useState('');
-  const [addCourseLoading, setAddCourseLoading] = useState(false);
-  const [addCourseError, setAddCourseError] = useState('');
-  const [addCourseSuccess, setAddCourseSuccess] = useState('');
   const [permissionDenied, setPermissionDenied] = useState<{ show: boolean; message: string; contact: string }>({ show: false, message: '', contact: '' });
   const loading = useAppStore(s => s.loading);
   const error = useAppStore(s => s.error);
@@ -141,6 +137,26 @@ export default function BrowsePage() {
       setActionLoading('');
     }
   }, [session?.accessToken, loadTree]);
+  const handleAddCourse = useCallback(async (code: string, title: string): Promise<CreateCourseResult> => {
+    try {
+      const res = await useAppStore.getState().addCourse(currentDept || '', currentSem || '', code, title);
+      if (!res.success) {
+        if (/permission|not allowed|forbidden/i.test(res.error || '')) {
+          setPermissionDenied({ show: true, message: res.error || 'You do not have permission to add courses.', contact: 'Please contact your CR, ACR, teacher, manager, or admin for access.' });
+          setShowAddCourse(false);
+        }
+        return { success: false, error: res.error || 'Failed to create course' };
+      }
+      showToast(res.alreadyExisted ? `Course ${code} already exists — selected` : `Course ${code} created on GitHub`, res.alreadyExisted ? 'info' : 'success');
+      useAppStore.getState().invalidateTreeCache();
+      useAppStore.getState().invalidateCoursesCache();
+      useAppStore.getState().loadCourses();
+      loadTree(session?.accessToken || '');
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Failed to create course' };
+    }
+  }, [currentDept, currentSem, session?.accessToken, loadTree]);
   useEffect(() => {
     if (!mounted) return;
     const p = new URLSearchParams(window.location.search);
@@ -471,8 +487,6 @@ export default function BrowsePage() {
           semesterCourses={semesterCourses} filteredCourses={filteredCourses}
           coursePerms={coursePerms} navigateToCourse={navigateToCourse}
           goBack={goBack} setShowAddCourse={setShowAddCourse}
-          setAddCourseCode={setAddCourseCode} setAddCourseTitle={setAddCourseTitle}
-          setAddCourseError={setAddCourseError} setAddCourseSuccess={setAddCourseSuccess}
           dbCourses={dbCourses} userEmail={email}
           currentDept={currentDept} currentSem={currentSem}
         />
@@ -589,12 +603,8 @@ export default function BrowsePage() {
         renameTarget={renameTarget} setRenameTarget={setRenameTarget}
         deleteConfirm={deleteConfirm} setDeleteConfirm={setDeleteConfirm}
         showAddCourse={showAddCourse} setShowAddCourse={setShowAddCourse}
-        addCourseCode={addCourseCode} setAddCourseCode={setAddCourseCode}
-        addCourseTitle={addCourseTitle} setAddCourseTitle={setAddCourseTitle}
-        addCourseError={addCourseError} setAddCourseError={setAddCourseError}
-        addCourseSuccess={addCourseSuccess} setAddCourseSuccess={setAddCourseSuccess}
-        addCourseLoading={addCourseLoading} setAddCourseLoading={setAddCourseLoading}
         currentDept={currentDept} currentSem={currentSem}
+        onAddCourse={handleAddCourse}
         permissionDenied={permissionDenied} setPermissionDenied={setPermissionDenied}
         handleFileAction={handleFileAction}
       />

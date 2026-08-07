@@ -122,7 +122,7 @@ export interface AppState {
   dbCourses: { id: string; department: string; semester: string; code: string; title: string; addedBy: string | null }[];
   loadCourses: () => Promise<void>;
   invalidateCoursesCache: () => void;
-  addCourse: (dept: string, sem: string, code: string, title: string) => Promise<{ success: boolean; error?: string }>;
+  addCourse: (dept: string, sem: string, code: string, title: string) => Promise<{ success: boolean; error?: string; alreadyExisted?: boolean; course?: any }>;
   editCourse: (id: string, title: string) => Promise<{ success: boolean; error?: string }>;
   deleteCourse: (id: string) => Promise<{ success: boolean; error?: string }>;
 

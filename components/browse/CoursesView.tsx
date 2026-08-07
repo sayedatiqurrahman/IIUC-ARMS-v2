@@ -12,10 +12,6 @@ interface CoursesViewProps {
   navigateToCourse: (code: string, title: string) => void;
   goBack: () => void;
   setShowAddCourse: (v: boolean) => void;
-  setAddCourseCode: (v: string) => void;
-  setAddCourseTitle: (v: string) => void;
-  setAddCourseError: (v: string) => void;
-  setAddCourseSuccess: (v: string) => void;
   dbCourses: { id: string; department: string; semester: string; code: string; title: string; addedBy: string | null }[];
   userEmail: string;
   currentDept: string | null;
@@ -25,7 +21,7 @@ interface CoursesViewProps {
 export default function CoursesView({
   semesterCourses, filteredCourses, coursePerms,
   navigateToCourse, goBack,
-  setShowAddCourse, setAddCourseCode, setAddCourseTitle, setAddCourseError, setAddCourseSuccess,
+  setShowAddCourse,
   dbCourses, userEmail, currentDept, currentSem,
 }: CoursesViewProps) {
   const { data: session } = useSession();
@@ -121,10 +117,6 @@ export default function CoursesView({
           <p className="text-dark-text3 text-xs mb-4">Be the first to add a course code and title.</p>
           {session && coursePerms.canAdd && (
             <button onClick={() => {
-              setAddCourseCode('');
-              setAddCourseTitle('');
-              setAddCourseError('');
-              setAddCourseSuccess('');
               setShowAddCourse(true);
             }} className="px-5 py-2.5 bg-qsis text-white rounded-xl text-xs font-semibold hover:bg-qsis/90 transition-colors">
               <i className="fas fa-plus mr-1.5"></i>Add Course
@@ -205,10 +197,6 @@ export default function CoursesView({
         <div className="mt-4 text-center">
           <button
             onClick={() => {
-              setAddCourseCode('');
-              setAddCourseTitle('');
-              setAddCourseError('');
-              setAddCourseSuccess('');
               setShowAddCourse(true);
             }}
             className="px-5 py-2.5 bg-qsis text-white rounded-xl text-xs font-semibold hover:bg-qsis/90 transition-colors"

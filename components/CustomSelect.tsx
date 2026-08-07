@@ -17,9 +17,10 @@ interface CustomSelectProps {
   searchable?: boolean;
   className?: string;
   size?: 'sm' | 'md';
+  error?: boolean;
 }
 
-export default function CustomSelect({ options, value, onChange, placeholder = 'Select...', searchable = false, className = '', size = 'sm' }: CustomSelectProps) {
+export default function CustomSelect({ options, value, onChange, placeholder = 'Select...', searchable = false, className = '', size = 'sm', error = false }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [highlighted, setHighlighted] = useState(-1);
@@ -148,7 +149,7 @@ export default function CustomSelect({ options, value, onChange, placeholder = '
         type="button"
         onClick={() => setOpen(!open)}
         onKeyDown={handleKeyDown}
-        className={`w-full bg-dark-bg border border-dark-border text-dark-text ${sizeClasses} outline-none cursor-pointer transition-colors text-left flex items-center justify-between gap-2 hover:border-dark-border2 ${open ? 'border-qsis' : ''}`}
+        className={`w-full bg-dark-bg border text-dark-text ${sizeClasses} outline-none cursor-pointer transition-colors text-left flex items-center justify-between gap-2 hover:border-dark-border2 ${open ? 'border-qsis' : error ? 'border-red-500' : 'border-dark-border'}`}
       >
         <span className="flex items-center gap-2 truncate min-w-0">
           {selected?.icon && <i className={`fas ${selected.icon} text-qsis text-[0.7rem] flex-shrink-0`}></i>}
