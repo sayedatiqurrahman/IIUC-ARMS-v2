@@ -1041,9 +1041,9 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
         </div>
 
         {/* Bottom bar */}
-        <div className="px-4 py-4 bg-black/90 border-t border-white/10 flex items-center justify-center gap-10">
+        <div className="relative px-4 py-4 bg-black/90 border-t border-white/10 flex items-center justify-center">
           <button
-            className="flex flex-col items-center gap-1 text-white/60 text-[0.68rem] bg-transparent border-none cursor-pointer"
+            className="flex flex-col items-center gap-1 text-white/60 text-[0.68rem] bg-transparent border-none cursor-pointer absolute left-4"
             onClick={() => setPreviewIndex(null)}
           >
             <i className="fas fa-plus text-lg"></i>
@@ -1063,7 +1063,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
             </span>
           </button>
           <button
-            className="flex flex-col items-center gap-1 text-white/50 text-[0.68rem] bg-transparent border-none cursor-pointer disabled:opacity-40"
+            className="flex flex-col items-center gap-1 text-white/50 text-[0.68rem] bg-transparent border-none cursor-pointer disabled:opacity-40 absolute right-4"
             onClick={downloadLocal}
             disabled={busy || pages.length === 0}
             title="Save a copy to your device"
