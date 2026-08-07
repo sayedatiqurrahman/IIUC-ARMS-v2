@@ -220,6 +220,7 @@ export default function UploadForm({
       {courses.map((course, idx) => {
         const selectedCourse = existingCourses.find(c => c.code === course.selectedCourseCode);
         const isCreatingNew = !!showNewCourse[course.id];
+        const noCoursesAvailable = courseOptions.length === 0;
         const courseFolder = course.selectedCourseCode
           ? (course.selectedCourseTitle ? `${course.selectedCourseCode} - ${course.selectedCourseTitle}` : course.selectedCourseCode)
           : '';
@@ -238,7 +239,7 @@ export default function UploadForm({
           </div>
 
           {/* Course Selector */}
-          {!isCreatingNew ? (
+          {!isCreatingNew && !noCoursesAvailable ? (
             <div className="mb-2">
               <label className="text-[0.72rem] text-dark-text2 block mb-1">Select Course *</label>
               <div className="flex gap-2">
@@ -280,10 +281,14 @@ export default function UploadForm({
           ) : (
             <div className="mb-2 p-3 rounded-lg bg-dark-bg border border-qsis/30">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[0.72rem] font-semibold text-dark-text">Create New Course</span>
-                <button className="text-dark-text3 hover:text-dark-text text-[0.7rem] cursor-pointer bg-transparent border-none" onClick={() => setShowNewCourse(prev => ({ ...prev, [course.id]: false }))}>
-                  <i className="fas fa-times"></i>
-                </button>
+                <span className="text-[0.72rem] font-semibold text-dark-text">
+                  {noCoursesAvailable ? 'No course found — create one to upload' : 'Create New Course'}
+                </span>
+                {!noCoursesAvailable && (
+                  <button className="text-dark-text3 hover:text-dark-text text-[0.7rem] cursor-pointer bg-transparent border-none" onClick={() => setShowNewCourse(prev => ({ ...prev, [course.id]: false }))}>
+                    <i className="fas fa-times"></i>
+                  </button>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <input
@@ -383,70 +388,87 @@ export default function UploadForm({
           )}
 
           {/* File Upload Area */}
-          <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept={category === config.categories.notes.folder ? '.pdf,.doc,.docx,.ppt,.pptx' : category === config.categories.questions.folder ? '.pdf,.jpg,.jpeg,.png,.gif,.webp' : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv'} onChange={e => handleFilesForCourse(course.id, e)} />
-          <div className="relative">
-            <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => setChooserCourseId(course.id)}>
-              <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
-              <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
-              <p className="text-[0.65rem] text-dark-text2">
-                {category === config.categories.questions.folder
-                  ? 'Select 2-3 images together (auto-merged into one PDF) or 1 PDF file'
-                  : isExamCategory
-                    ? '1 file only'
-                    : `Max 5 files, ${config.maxUploadSizeMB}MB each`}
-              </p>
-              <span className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-qsis/15 text-qsis text-[0.72rem] font-semibold">
-                <i className="fas fa-camera"></i> Upload from device or scan with camera
-              </span>
-            </div>
-
-          </div>
-          {chooserCourseId === course.id && (
+          {course.selectedCourseCode ? (
             <>
-              <div className="fixed inset-0 z-[250] bg-black/60" onClick={() => setChooserCourseId(null)} />
-              <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[260] w-[calc(100%-3rem)] max-w-[320px] rounded-2xl border border-dark-border bg-dark-bg2 shadow-2xl overflow-hidden">
-                <div className="px-4 pt-4 pb-3">
-                  <h4 className="text-[0.95rem] font-bold text-dark-text flex items-center gap-2">
-                    <i className="fas fa-cloud-upload-alt text-qsis"></i> Add Files
-                  </h4>
-                  <p className="text-[0.72rem] text-dark-text3 mt-0.5">Choose how you want to add files</p>
+              <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept={category === config.categories.notes.folder ? '.pdf,.doc,.docx,.ppt,.pptx' : category === config.categories.questions.folder ? '.pdf,.jpg,.jpeg,.png,.gif,.webp' : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv'} onChange={e => handleFilesForCourse(course.id, e)} />
+              <div className="relative">
+                <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => setChooserCourseId(course.id)}>
+                  <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
+                  <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
+                  <p className="text-[0.65rem] text-dark-text2">
+                    {category === config.categories.questions.folder
+                      ? 'Select 2-3 images together (auto-merged into one PDF) or 1 PDF file'
+                      : isExamCategory
+                        ? '1 file only'
+                        : `Max 5 files, ${config.maxUploadSizeMB}MB each`}
+                  </p>
+                  <span className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-qsis/15 text-qsis text-[0.72rem] font-semibold">
+                    <i className="fas fa-camera"></i> Upload from device or scan with camera
+                  </span>
                 </div>
-                <div className="px-4 pb-2 flex flex-col gap-2.5">
-                  <button
-                    className="w-full flex items-center gap-3 px-4 py-4 text-left rounded-xl border-2 border-qsis/40 bg-qsis/10 hover:bg-qsis/20 hover:border-qsis active:scale-[0.98] transition-all cursor-pointer"
-                    onClick={() => { fileInputRefs.current[course.id]?.click(); setChooserCourseId(null); }}
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-qsis/20 flex items-center justify-center shrink-0">
-                      <i className="fas fa-folder-open text-lg text-qsis"></i>
-                    </div>
-                    <span className="flex flex-col min-w-0">
-                      <span className="text-[0.82rem] font-bold text-dark-text">Files</span>
-                      <span className="text-[0.65rem] text-dark-text2">Upload from device or cloud storage</span>
-                    </span>
-                    <i className="fas fa-chevron-right ml-auto text-qsis/70"></i>
-                  </button>
-                  <button
-                    className="w-full flex items-center gap-3 px-4 py-4 text-left rounded-xl border-2 border-qsis/40 bg-qsis/10 hover:bg-qsis/20 hover:border-qsis active:scale-[0.98] transition-all cursor-pointer"
-                    onClick={() => { onOpenScanner(course.id); setChooserCourseId(null); }}
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-qsis/20 flex items-center justify-center shrink-0">
-                      <i className="fas fa-camera text-lg text-qsis"></i>
-                    </div>
-                    <span className="flex flex-col min-w-0">
-                      <span className="text-[0.82rem] font-bold text-dark-text">Doc Scanner</span>
-                      <span className="text-[0.65rem] text-dark-text2">Detect, auto-crop &amp; straighten pages</span>
-                    </span>
-                    <i className="fas fa-chevron-right ml-auto text-qsis/70"></i>
-                  </button>
-                </div>
-                <button
-                  className="w-full mt-2 py-3.5 border-t border-dark-border bg-dark-bg3/60 hover:bg-dark-bg3 text-dark-text3 hover:text-dark-text text-[0.78rem] font-semibold cursor-pointer transition-colors"
-                  onClick={() => setChooserCourseId(null)}
-                >
-                  Cancel
-                </button>
+
               </div>
+              {chooserCourseId === course.id && (
+                <>
+                  <div className="fixed inset-0 z-[250] bg-black/60" onClick={() => setChooserCourseId(null)} />
+                  <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[260] w-[calc(100%-3rem)] max-w-[320px] rounded-2xl border border-dark-border bg-dark-bg2 shadow-2xl overflow-hidden">
+                    <div className="px-4 pt-4 pb-3">
+                      <h4 className="text-[0.95rem] font-bold text-dark-text flex items-center gap-2">
+                        <i className="fas fa-cloud-upload-alt text-qsis"></i> Add Files
+                      </h4>
+                      <p className="text-[0.72rem] text-dark-text3 mt-0.5">Choose how you want to add files</p>
+                    </div>
+                    <div className="px-4 pb-2 flex flex-col gap-2.5">
+                      <button
+                        className="w-full flex items-center gap-3 px-4 py-4 text-left rounded-xl border-2 border-qsis/40 bg-qsis/10 hover:bg-qsis/20 hover:border-qsis active:scale-[0.98] transition-all cursor-pointer"
+                        onClick={() => { fileInputRefs.current[course.id]?.click(); setChooserCourseId(null); }}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-qsis/20 flex items-center justify-center shrink-0">
+                          <i className="fas fa-folder-open text-lg text-qsis"></i>
+                        </div>
+                        <span className="flex flex-col min-w-0">
+                          <span className="text-[0.82rem] font-bold text-dark-text">Files</span>
+                          <span className="text-[0.65rem] text-dark-text2">Upload from device or cloud storage</span>
+                        </span>
+                        <i className="fas fa-chevron-right ml-auto text-qsis/70"></i>
+                      </button>
+                      <button
+                        className="w-full flex items-center gap-3 px-4 py-4 text-left rounded-xl border-2 border-qsis/40 bg-qsis/10 hover:bg-qsis/20 hover:border-qsis active:scale-[0.98] transition-all cursor-pointer"
+                        onClick={() => { onOpenScanner(course.id); setChooserCourseId(null); }}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-qsis/20 flex items-center justify-center shrink-0">
+                          <i className="fas fa-camera text-lg text-qsis"></i>
+                        </div>
+                        <span className="flex flex-col min-w-0">
+                          <span className="text-[0.82rem] font-bold text-dark-text">Doc Scanner</span>
+                          <span className="text-[0.65rem] text-dark-text2">Detect, auto-crop &amp; straighten pages</span>
+                        </span>
+                        <i className="fas fa-chevron-right ml-auto text-qsis/70"></i>
+                      </button>
+                    </div>
+                    <button
+                      className="w-full mt-2 py-3.5 border-t border-dark-border bg-dark-bg3/60 hover:bg-dark-bg3 text-dark-text3 hover:text-dark-text text-[0.78rem] font-semibold cursor-pointer transition-colors"
+                      onClick={() => setChooserCourseId(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
             </>
+          ) : (
+            <div className="border-2 border-dashed border-dark-border/60 rounded-lg p-4 text-center">
+              <i className="fas fa-info-circle text-xl text-dark-text3 mb-1 block"></i>
+              <p className="text-[0.78rem] text-dark-text2">Select a course above or create one to add files</p>
+              {!isCreatingNew && !noCoursesAvailable && (
+                <button
+                  className="mt-2 px-3 py-1.5 rounded-lg border border-qsis/40 bg-qsis/5 text-qsis text-[0.72rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors"
+                  onClick={() => setShowNewCourse(prev => ({ ...prev, [course.id]: true }))}
+                >
+                  <i className="fas fa-plus mr-1"></i> Create New Course
+                </button>
+              )}
+            </div>
           )}
 
           <FilePreview
