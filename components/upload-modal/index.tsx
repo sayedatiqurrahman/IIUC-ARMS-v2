@@ -397,6 +397,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const code = newCourseCode[courseId]?.trim();
     const title = newCourseTitle[courseId]?.trim();
     if (!code) { showToast('Course code is required', 'error'); return; }
+    if (!title) { showToast('Course title is required', 'error'); return; }
     setCreatingCourse(true);
     try {
       const res = await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ department, semester, code, title }) });

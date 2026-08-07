@@ -93,10 +93,10 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { department, semester, code, title } = body;
-    if (!department || !semester || !code) {
-      return NextResponse.json({ error: 'department, semester, code are required' }, { status: 400 });
+    if (!department || !semester || !code || !title) {
+      return NextResponse.json({ error: 'department, semester, code, title are required' }, { status: 400 });
     }
-    const courseTitle = (title || '').trim() || code.toUpperCase();
+    const courseTitle = title.trim();
 
     if (!config.allDepartmentIds.has(department)) {
       return NextResponse.json({ error: 'Invalid department' }, { status: 400 });

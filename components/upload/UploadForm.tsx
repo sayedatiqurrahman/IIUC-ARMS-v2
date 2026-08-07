@@ -302,7 +302,7 @@ export default function UploadForm({
                 />
                 <input
                   type="text"
-                  placeholder="Course Title (optional)"
+                  placeholder="Course Title (required)"
                   className="px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
                   value={newCourseTitle[course.id] || ''}
                   onChange={e => setNewCourseTitle(prev => ({ ...prev, [course.id]: e.target.value }))}
@@ -311,7 +311,7 @@ export default function UploadForm({
               <button
                 className="w-full py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
                 onClick={() => handleCreateCourse(course.id)}
-                disabled={creatingCourse || !newCourseCode[course.id]?.trim()}
+                disabled={creatingCourse || !newCourseCode[course.id]?.trim() || !newCourseTitle[course.id]?.trim()}
               >
                 {creatingCourse ? <><i className="fas fa-spinner fa-spin mr-1"></i>Creating...</> : <><i className="fas fa-plus mr-1"></i>Create & Select</>}
               </button>
