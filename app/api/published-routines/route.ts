@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-import { verifyTurnstileRequest } from '@/lib/verifyTurnstileRequest';
 
 const ROUTINE_TTL_MONTHS = 7;
 const ACTIVITY_TTL_MONTHS = 3;
@@ -79,10 +78,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
-
-  // Bot protection
-  const turnstile = await verifyTurnstileRequest(req);
-  if (!turnstile.success) return turnstile.response!;
 
   try {
     const email = await getUserEmail(req);

@@ -4,7 +4,6 @@ import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
 import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData } from '@/lib/telegram';
-import { verifyTurnstileRequest } from '@/lib/verifyTurnstileRequest';
 import { getAppBotToken, getAllFilesInFolder, deleteCourseFolder } from '@/lib/course-delete';
 
 const GITHUB_API = 'https://api.github.com';
@@ -77,10 +76,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
-
-  // Bot protection
-  const turnstile = await verifyTurnstileRequest(req);
-  if (!turnstile.success) return turnstile.response!;
 
   try {
     const email = await getUserEmail(req);

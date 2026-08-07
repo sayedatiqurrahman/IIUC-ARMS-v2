@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { encrypt, decrypt, isEncrypted } from '@/lib/crypto';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-import { verifyTurnstileRequest } from '@/lib/verifyTurnstileRequest';
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.profile);
