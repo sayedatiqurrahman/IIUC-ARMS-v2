@@ -24,7 +24,7 @@
 
 import { orderQuad, otsuThreshold, refineQuadCorners, type GrayImage, type Point, type Quad } from './image-utils';
 
-type CVModule = {
+export type CVModule = {
   Mat: any;
   MatVector: any;
   CV_8UC4: number;
@@ -86,7 +86,7 @@ function injectScript(): Promise<CVModule | null> {
   });
 }
 
-function loadOpenCV(): Promise<CVModule | null> {
+export function loadOpenCV(): Promise<CVModule | null> {
   if (!opencvPromise) {
     opencvPromise = (async () => {
       // Node test harness: the package's CJS export is a promise resolving to cv.

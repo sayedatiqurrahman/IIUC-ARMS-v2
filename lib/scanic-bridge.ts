@@ -1,6 +1,7 @@
 'use client';
 
 import { detectQuadOpenCV } from './opencv-detect';
+import { detectQuadJscanify } from './jscanify-detect';
 import {
   detectQuadOnCanvas,
   orderQuad,
@@ -92,24 +93,39 @@ function quadValid(q: Quad, w: number, h: number): boolean {
   return angOk === 4;
 }
 
-// Detect a document quad in the given canvas's own pixel space. OpenCV's
-// contour detection runs first (most robust at separating the paper from
-// background objects — the paper is the largest *rectangular* quad in the
-// frame). `prev` is the previous frame's quad in the same space and acts as a
-// tracking prior so the live frame sticks to the paper. The built-in CV and
-// Scanic's WASM detector are fallbacks.
+// Detect a document quad in the given canvas's own pixel space. Two independent
+// OpenCV-based detectors run in parallel and their results are fused:
+//   - Both find a quad and agree  -> keep the multi-path OpenCV one (it already
+//     had per-side line-fit refinement; jscanify is the cross-check).
+//   - Both find a quad, disagree  -> keep OpenCV (more robust, refined).
+//   - Only jscanify finds a quad  -> validate + line-fit refine it; this
+//     rescues low-contrast sheets the A/B/C/D paths miss.
+// `prev` is the previous frame's quad in the same space and acts as a tracking
+// prior so the live frame sticks to the paper. The built-in CV and Scanic's
+// WASM detector are fallbacks for the no-OpenCV case.
 export async function detectQuadSmart(
   canvas: HTMLCanvasElement,
   previewW: number,
   previewH: number,
   prev?: Quad | null
 ): Promise<Quad | null> {
+  const tol = Math.max(8, Math.min(previewW, previewH) * 0.05);
   try {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (ctx) {
       const img = ctx.getImageData(0, 0, previewW, previewH);
-      const q = await detectQuadOpenCV({ data: img.data, w: previewW, h: previewH }, prev);
-      if (q) return q;
+      const frame = { data: img.data, w: previewW, h: previewH };
+      const [ocv, js] = await Promise.all([
+        detectQuadOpenCV(frame, prev),
+        detectQuadJscanify(frame),
+      ]);
+      if (ocv) return ocv;
+      if (js) {
+        const q = refineQuadCorners({ data: frame.data, w: previewW, h: previewH } as GrayImage, js);
+        const maxShift = Math.max(...q.map((p, i) => Math.hypot(p.x - js[i].x, p.y - js[i].y)));
+        if (maxShift <= tol && quadValid(q, previewW, previewH)) return q;
+        if (quadValid(js, previewW, previewH)) return js;
+      }
     }
   } catch {
     // fall through to the built-in detector
