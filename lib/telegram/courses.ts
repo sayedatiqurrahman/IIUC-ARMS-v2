@@ -1,5 +1,6 @@
 import { config } from '@/lib/config';
 import { detectCategory } from './categories';
+import { matchCourseFolder } from '@/lib/store/helpers';
 
 // ─── Course file search ───────────────────────────────────────────
 
@@ -42,18 +43,20 @@ export function findCourseFiles(tree: any[], courseCode: string): FoundFile[] {
 
     // New structure: dept/sem/COURSE/Mid|Final/cat/file (course at parts[2])
     // Old structure: dept/sem/cat/COURSE/file (course at parts[3])
-    const COURSE_RE = /^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)/i;
     let courseIdx = -1;
-    if (parts[2] && COURSE_RE.test(parts[2])) {
-      courseIdx = 2;
-    } else if (parts[3] && COURSE_RE.test(parts[3])) {
-      courseIdx = 3;
+    let courseMatch: { code: string; title: string } | null = null;
+    if (parts[2]) {
+      const m = matchCourseFolder(parts[2]);
+      if (m) { courseMatch = m; courseIdx = 2; }
+    }
+    if (courseIdx < 0 && parts[3]) {
+      const m = matchCourseFolder(parts[3]);
+      if (m) { courseMatch = m; courseIdx = 3; }
     }
     if (courseIdx < 0) continue;
 
     const courseFolder = parts[courseIdx];
-    const dashIdx = courseFolder.indexOf(' - ');
-    const folderCode = dashIdx > 0 ? courseFolder.substring(0, dashIdx).toUpperCase() : courseFolder.split(' ')[0].toUpperCase();
+    const folderCode = courseMatch!.code;
     const folderCodeNoHyphen = folderCode.replace('-', '');
 
     if (folderCode !== code && folderCodeNoHyphen !== codeNoHyphen) continue;
@@ -107,7 +110,6 @@ export function getCourseInfo(files: FoundFile[]): CourseInfo | null {
 export function findCourseLocations(tree: any[], courseCode: string): { dept: string; sem: string; title: string }[] {
   const code = courseCode.toUpperCase().trim();
   const codeNoHyphen = code.replace('-', '');
-  const COURSE_RE = /^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)/i;
   const results: { dept: string; sem: string; title: string }[] = [];
   const seen = new Set<string>();
 
@@ -119,17 +121,17 @@ export function findCourseLocations(tree: any[], courseCode: string): { dept: st
     if (parts.length < 3) continue;
 
     const courseFolder = parts[2] || '';
-    const m = courseFolder.match(COURSE_RE);
+    const m = matchCourseFolder(courseFolder);
     if (!m) continue;
 
-    const folderCode = m[1].toUpperCase();
+    const folderCode = m.code;
     const folderCodeNoHyphen = folderCode.replace('-', '');
     if (folderCode !== code && folderCodeNoHyphen !== codeNoHyphen) continue;
 
     const key = `${parts[0]}/${parts[1]}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    results.push({ dept: parts[0], sem: parts[1], title: m[2].trim() });
+    results.push({ dept: parts[0], sem: parts[1], title: m.title });
   }
 
   return results;

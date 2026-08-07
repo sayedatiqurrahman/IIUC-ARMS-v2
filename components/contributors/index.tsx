@@ -10,6 +10,7 @@ import { Settings, DEFAULT_SETTINGS } from './types';
 import FounderCard from './FounderCard';
 import RankedCard from './RankedCard';
 import GridCard from './GridCard';
+import HistoryModal from './HistoryModal';
 
 export default function ContributorsView() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export default function ContributorsView() {
   const [activeTab, setActiveTab] = useState<'all' | 'developers' | 'resources'>('all');
   const [deptFilter, setDeptFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [historyFor, setHistoryFor] = useState<any>(null);
 
   useEffect(() => {
     if (contributors.length === 0 && !contributorsLoading) loadContributors();
@@ -138,7 +140,7 @@ export default function ContributorsView() {
       ) : (
         <div>
           {/* Founder */}
-          {founder && <FounderCard c={founder} />}
+          {founder && <FounderCard c={founder} onShowHistory={setHistoryFor} />}
 
           {/* Stats Bar */}
           <div className="grid grid-cols-4 gap-3 mb-5">
@@ -260,7 +262,7 @@ export default function ContributorsView() {
               ) : (
                 <div className="space-y-2">
                   {tabList.map((c: any, idx: number) => (
-                    <RankedCard key={c.id} c={c} rank={idx + 1} settings={settings} />
+                    <RankedCard key={c.id} c={c} rank={idx + 1} settings={settings} onShowHistory={setHistoryFor} />
                   ))}
                 </div>
               )}
@@ -273,7 +275,7 @@ export default function ContributorsView() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {tabList.map((c: any) => (
-                    <GridCard key={c.id} c={c} settings={settings} />
+                    <GridCard key={c.id} c={c} settings={settings} onShowHistory={setHistoryFor} />
                   ))}
                 </div>
               )}
@@ -281,6 +283,9 @@ export default function ContributorsView() {
           )}
         </div>
       )}
+
+      {/* Contribution history modal */}
+      {historyFor && <HistoryModal c={historyFor} onClose={() => setHistoryFor(null)} />}
 
       {/* How to Become a Contributor */}
       {!contributorsLoading && contributors.length > 0 && (

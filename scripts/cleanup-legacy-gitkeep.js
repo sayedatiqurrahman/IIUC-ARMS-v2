@@ -81,7 +81,7 @@ async function main() {
     const sem = parts[1];
     if (!semFolders.includes(sem)) continue;
     const third = parts[2] || '';
-    const isCourse = /^[A-Z]{2,5}-\d{3,4}\s*-\s*.+$/i.test(third);
+    const isCourse = /^[A-Z]{2,5}\s*[-–]?\s*\d{3,4}[A-Z]?\s*[-–]\s*.*$/i.test(third);
     if (!isCourse) {
       toDelete.push({ path: item.path, sha: item.sha, name: item.name });
     }

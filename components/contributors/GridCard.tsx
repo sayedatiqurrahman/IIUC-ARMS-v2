@@ -1,8 +1,10 @@
+'use client';
+
 import Image from 'next/image';
 import { config } from '@/lib/config';
 import { Settings } from './types';
 
-export default function GridCard({ c, settings }: { c: any; settings: Settings }) {
+export default function GridCard({ c, settings, onShowHistory }: { c: any; settings: Settings; onShowHistory?: (c: any) => void }) {
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
   const isFounder = c.role === 'Founder & Lead';
@@ -144,6 +146,14 @@ export default function GridCard({ c, settings }: { c: any; settings: Settings }
             <span className="text-[0.65rem] font-bold text-yellow-500" title="Total contributions">
               {c.v2Contributions + c.dataContributions}
             </span>
+            <button
+              onClick={() => onShowHistory?.(c)}
+              className="w-6 h-6 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all"
+              title="Contribution history"
+              aria-label="Contribution history"
+            >
+              <i className="fas fa-circle-info text-[0.7rem]"></i>
+            </button>
             <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-6 h-6 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="GitHub Profile">
               <i className="fab fa-github text-[0.7rem]"></i>
             </a>

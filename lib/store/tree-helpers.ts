@@ -1,7 +1,7 @@
 import { config } from '../config';
 import { FACULTIES, getFacultyIdForDepartment, getAllFacultyIds, getDepartmentIdByFolder, isShariahDepartmentId } from '../departments';
 import { extractYear, getMimeFromExt } from '../utils';
-import { detectCategory, parseCourseFilePath } from './helpers';
+import { detectCategory, matchCourseFolder, normalizeCourseCode, parseCourseFilePath } from './helpers';
 import type { AppState, Category, Semester } from './types';
 
 type GetState = () => AppState;
@@ -61,7 +61,7 @@ export function createTreeHelpers(get: GetState) {
           const parts = item.path.split('/');
           const sem = parts[0];
           const courseFolder = parts[1] || '';
-          const isCourseFolder = config.semesters.some(s => s.id === sem) && /^[A-Z]{2,5}-\d{3,5}\s*-\s*.+$/i.test(courseFolder);
+          const isCourseFolder = config.semesters.some(s => s.id === sem) && !!matchCourseFolder(courseFolder);
           if (isCourseFolder) {
             const fileName = parts[parts.length - 1];
             if (fileName !== '.gitkeep') d.files++;
@@ -153,9 +153,9 @@ export function createTreeHelpers(get: GetState) {
         const s = sems.get(sem)!;
 
         const second = parts[1] || '';
-        const dashMatch = second.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
-        if (dashMatch) {
-          s.courses.add(dashMatch[1].toUpperCase());
+        const courseMatch = matchCourseFolder(second);
+        if (courseMatch) {
+          s.courses.add(courseMatch.code);
           if (item.type === 'blob') {
             const fileName = parts[parts.length - 1];
             if (fileName !== '.gitkeep') s.files++;
@@ -220,9 +220,9 @@ export function createTreeHelpers(get: GetState) {
         if (parts.length < 2) return;
 
         const firstFolder = parts[1];
-        const dashMatch = firstFolder.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
+        const courseMatch = matchCourseFolder(firstFolder);
 
-        if (dashMatch) {
+        if (courseMatch) {
           hasCourseFolders = true;
           const third = parts[2];
           const isMidFinal = third === 'Mid' || third === 'Final';
@@ -313,10 +313,10 @@ export function createTreeHelpers(get: GetState) {
         if (parts.length < 3) return;
 
         const firstFolder = parts[1];
-        const dashMatch = firstFolder.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
-        if (!dashMatch) return;
+        const courseMatch = matchCourseFolder(firstFolder);
+        if (!courseMatch) return;
 
-        const courseName = dashMatch[1].toUpperCase();
+        const courseName = courseMatch.code;
         const third = parts[2];
         const isMidFinal = third === 'Mid' || third === 'Final';
         const catFolder = isMidFinal ? parts[3] : third;
@@ -348,10 +348,10 @@ export function createTreeHelpers(get: GetState) {
         const parts = rel.split('/');
 
         const first = parts[0] || '';
-        const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
-        if (dashMatch) {
-          const code = dashMatch[1].toUpperCase();
-          const title = dashMatch[2].trim();
+        const courseMatch = matchCourseFolder(first);
+        if (courseMatch) {
+          const code = courseMatch.code;
+          const title = courseMatch.title || code;
           if (!courseMap.has(code)) {
             courseMap.set(code, { title, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0, readmes: new Set(), mdFiles: new Set() });
           } else {
@@ -405,9 +405,9 @@ export function createTreeHelpers(get: GetState) {
         const rel = item.path.substring(prefix.length);
         const parts = rel.split('/');
         const first = parts[0] || '';
-        const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
-        if (!dashMatch) return;
-        const code = dashMatch[1].toUpperCase();
+        const courseMatch = matchCourseFolder(first);
+        if (!courseMatch) return;
+        const code = courseMatch.code;
         const c = courseMap.get(code);
         if (c) {
           const folderPath = parts.slice(1).join('/').replace(/\/[^/]+$/i, '').toLowerCase();
@@ -438,7 +438,8 @@ export function createTreeHelpers(get: GetState) {
     getCourseCategories: (semId: string, courseCode: string, departmentId?: string | null, midFinal?: string | null) => {
       const uploadTree = get().getUploadTree();
       const prefix = semId + '/';
-      const code = courseCode.toUpperCase();
+      const code = normalizeCourseCode(courseCode);
+
       const catMap = new Map<string, { files: any[] }>();
       const folderSet = new Set<string>();
       const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
@@ -453,8 +454,8 @@ export function createTreeHelpers(get: GetState) {
         const rel = item.path.substring(prefix.length);
         const parts = rel.split('/');
         const first = parts[0] || '';
-        const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
-        if (!dashMatch || dashMatch[1].toUpperCase() !== code) return;
+        const courseMatch = matchCourseFolder(first);
+        if (!courseMatch || courseMatch.code !== code) return;
 
         let mf: string | null = null;
         let catFolder: string | null = null;
@@ -652,8 +653,8 @@ export function createTreeHelpers(get: GetState) {
         const rel = item.path.substring(prefix.length);
         const parts = rel.split('/');
         const first = parts[0] || '';
-        const dashMatch = first.match(/^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i);
-        if (!dashMatch || dashMatch[1].toUpperCase() !== code) return;
+        const courseMatch = matchCourseFolder(first);
+        if (!courseMatch || courseMatch.code !== code) return;
       });
 
       return result;
@@ -667,8 +668,6 @@ export function createTreeHelpers(get: GetState) {
       const matchedFiles: any[] = [];
       const matchedFolders = new Map<string, { id: string; label: string; type: string; path: string; count: number }>();
 
-      const COURSE_RE = /^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i;
-
       uploadTree.forEach((item: any) => {
         if (item.type !== 'blob') return;
         if (departmentId && item.department !== departmentId && item.department !== null) return;
@@ -681,7 +680,7 @@ export function createTreeHelpers(get: GetState) {
         let catFolder = '';
         let courseName = '';
         const second = parts[1] || '';
-        const courseMatch = second.match(COURSE_RE);
+        const courseMatch = matchCourseFolder(second);
         if (courseMatch) {
           courseName = second;
           catFolder = parts[2] || '';

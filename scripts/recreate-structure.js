@@ -90,7 +90,7 @@ async function main() {
     if (parts.length < 3) continue;
     const [dept, sem, third] = parts;
     if (!semSet.has(sem)) continue;
-    if (/^[A-Z]{2,5}-\d{3,4}\s*-\s*.+$/i.test(third)) {
+    if (/^[A-Z]{2,5}\s*[-–]?\s*\d{3,4}[A-Z]?\s*[-–]\s*.*$/i.test(third)) {
       const key = `${dept}/${sem}/${third}`;
       courseFolders.set(key, `upload_academic_files/${dept}/${sem}/${third}`);
     }

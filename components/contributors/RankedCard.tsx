@@ -1,8 +1,10 @@
+'use client';
+
 import Image from 'next/image';
 import { config } from '@/lib/config';
 import { Settings } from './types';
 
-export default function RankedCard({ c, rank, settings }: { c: any; rank: number; settings: Settings }) {
+export default function RankedCard({ c, rank, settings, onShowHistory }: { c: any; rank: number; settings: Settings; onShowHistory?: (c: any) => void }) {
   const rankColors: Record<number, string> = {
     1: 'bg-yellow-500 text-white',
     2: 'bg-gray-400 text-white',
@@ -56,6 +58,14 @@ export default function RankedCard({ c, rank, settings }: { c: any; rank: number
             <div className="text-center border-l border-dark-border pl-3 ml-1"><div className="text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions}</div><div className="text-[0.58rem] text-dark-text3">Total</div></div>
           </div>
         )}
+        <button
+          onClick={() => onShowHistory?.(c)}
+          className="w-9 h-9 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0"
+          title="Contribution history"
+          aria-label="Contribution history"
+        >
+          <i className="fas fa-circle-info text-[0.75rem]"></i>
+        </button>
         <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0">
           <i className="fab fa-github"></i>
         </a>
@@ -79,6 +89,14 @@ export default function RankedCard({ c, rank, settings }: { c: any; rank: number
               <i className="fab fa-github mr-1"></i>@{c.login}
             </a>
           </div>
+          <button
+            onClick={() => onShowHistory?.(c)}
+            className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0"
+            title="Contribution history"
+            aria-label="Contribution history"
+          >
+            <i className="fas fa-circle-info text-[0.65rem]"></i>
+          </button>
         </div>
         {/* Badges */}
         <div className="flex flex-wrap gap-1 mb-2.5">

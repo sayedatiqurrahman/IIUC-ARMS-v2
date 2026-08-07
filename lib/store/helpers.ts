@@ -11,11 +11,18 @@ export function detectCategory(name: string) {
   return 'other';
 }
 
-const COURSE_FOLDER_RE = /^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)$/i;
+const COURSE_FOLDER_RE = /^([A-Z]{2,5}\s*[-–]?\s*\d{3,5}[A-Z]?)\s*[-–]\s*(.*)$/i;
+
+export function normalizeCourseCode(code: string): string {
+  return code.replace(/\s+/g, '').replace(/[–—]/g, '-').toUpperCase();
+}
 
 export function matchCourseFolder(name: string): { code: string; title: string } | null {
   const m = name.match(COURSE_FOLDER_RE);
-  return m ? { code: m[1].toUpperCase(), title: m[2].trim() } : null;
+  if (!m) return null;
+  const code = normalizeCourseCode(m[1]);
+  const title = (m[2] || '').trim() || code;
+  return { code, title };
 }
 
 export function detectMidFinalFromPath(path: string): string | null {

@@ -63,7 +63,7 @@ async function main() {
     const folder = parts[2];
     if (!DEPTS.includes(dept) || !SEMS.includes(sem)) return false;
     const isLegacy = LEGACY_FOLDERS.includes(folder) || LEGACY_PATTERN.test(folder);
-    const isCourse = /^[A-Z]{2,5}-\d{3,4}\s*-\s*.+$/i.test(folder);
+    const isCourse = /^[A-Z]{2,5}\s*[-–]?\s*\d{3,4}[A-Z]?\s*[-–]\s*.*$/i.test(folder);
     return isLegacy && !isCourse && item.type === 'blob';
   });
 

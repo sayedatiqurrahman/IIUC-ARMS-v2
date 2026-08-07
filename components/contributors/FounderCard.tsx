@@ -1,7 +1,9 @@
+'use client';
+
 import Image from 'next/image';
 import { config } from '@/lib/config';
 
-export default function FounderCard({ c }: { c: any }) {
+export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistory?: (c: any) => void }) {
   return (
     <div className="bg-gradient-to-br from-qsis/10 to-accent/10 border-2 border-qsis/40 rounded-2xl p-4 sm:p-5 mb-5 ring-1 ring-qsis/20">
       {/* Mobile: vertical centered layout */}
@@ -17,6 +19,16 @@ export default function FounderCard({ c }: { c: any }) {
         <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors no-underline inline-block mb-2.5">
           <i className="fab fa-github mr-1"></i>@{c.login}
         </a>
+        <div className="flex items-center justify-center mb-1">
+          <button
+            onClick={() => onShowHistory?.(c)}
+            className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all"
+            title="Contribution history"
+            aria-label="Contribution history"
+          >
+            <i className="fas fa-circle-info text-[0.7rem]"></i>
+          </button>
+        </div>
         <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
           <span className="px-2 py-0.5 rounded-full bg-qsis/25 text-qsis text-[0.6rem] font-bold ring-1 ring-qsis/40">
             <i className="fas fa-crown mr-1"></i>Founder & Lead
@@ -53,6 +65,14 @@ export default function FounderCard({ c }: { c: any }) {
             <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
               <i className="fab fa-github mr-1"></i>@{c.login}
             </a>
+            <button
+              onClick={() => onShowHistory?.(c)}
+              className="w-6 h-6 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all"
+              title="Contribution history"
+              aria-label="Contribution history"
+            >
+              <i className="fas fa-circle-info text-[0.65rem]"></i>
+            </button>
             <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
               <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions} Code
             </span>

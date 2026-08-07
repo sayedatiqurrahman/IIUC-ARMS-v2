@@ -4,6 +4,7 @@ import { CATEGORY_META, getDeptFullName, getDeptName, hasSharedLinks, detectCate
 import { FoundFile, CourseInfo } from './courses';
 import { buildCourseLink, buildBrowseLink } from './links';
 import { SITE_URL } from './api';
+import { matchCourseFolder } from '@/lib/store/helpers';
 
 // ─── Message builders ─────────────────────────────────────────────
 
@@ -176,7 +177,6 @@ export function buildSemesterList(semNumber: string): string {
 
 export function buildSearchResults(query: string, tree: any[]): string {
   const q = query.toLowerCase();
-  const COURSE_RE = /^([A-Z]{2,5}-\d{3,5})\s*-\s*(.+)/i;
 
   // 1) Search file names
   const fileMatches: { path: string; parts: string[] }[] = [];
@@ -200,10 +200,10 @@ export function buildSearchResults(query: string, tree: any[]): string {
     const parts = rel.split('/');
     if (parts.length < 3) continue;
     const courseFolder = parts[2] || '';
-    if (!COURSE_RE.test(courseFolder)) continue;
-    const m = courseFolder.match(COURSE_RE)!;
-    const code = m[1].toUpperCase();
-    const title = m[2].trim();
+    const m = matchCourseFolder(courseFolder);
+    if (!m) continue;
+    const code = m.code;
+    const title = m.title;
     const key = `${parts[0]}/${parts[1]}/${code}`;
     if (!courseMatches.has(key)) {
       courseMatches.set(key, { dept: parts[0], sem: parts[1], folder: courseFolder, code, title });
@@ -269,8 +269,8 @@ export function buildSearchResults(query: string, tree: any[]): string {
       const sem = m.parts[1];
       let courseCode = '';
       for (let i = 2; i < m.parts.length; i++) {
-        const cm = m.parts[i].match(COURSE_RE);
-        if (cm) { courseCode = cm[1].toUpperCase(); break; }
+        const cm = matchCourseFolder(m.parts[i]);
+        if (cm) { courseCode = cm.code; break; }
       }
       const fileName = m.path.split('/').pop() || '';
       const directUrl = `${SITE_URL}/?dept=${dept}&sem=${sem}&course=${courseCode}`;
@@ -307,11 +307,11 @@ export function buildCoursesList(tree: any[], deptId?: string, semId?: string): 
     if (deptId && resolveDepartmentId(dept) !== resolveDepartmentId(deptId)) continue;
     if (semId && sem !== semId) continue;
 
-    const codeMatch = courseFolder.match(/^([A-Z]{2,5}-?\d{3,5})\s*-\s*(.+)/i);
+    const codeMatch = matchCourseFolder(courseFolder);
     if (!codeMatch) continue;
 
-    const code = codeMatch[1].toUpperCase();
-    const title = codeMatch[2].trim();
+    const code = codeMatch.code;
+    const title = codeMatch.title;
 
     if (!tree2.has(dept)) tree2.set(dept, new Map());
     const semMap = tree2.get(dept)!;
@@ -395,9 +395,9 @@ export function buildStatsMessage(tree: any[]): string {
     totalFiles++;
 
     const courseFolder = parts[2];
-    const codeMatch = courseFolder.match(/^([A-Z]{2,5}-?\d{3,5})/i);
+    const codeMatch = matchCourseFolder(courseFolder);
     if (codeMatch) {
-      const code = codeMatch[1].toUpperCase();
+      const code = codeMatch.code;
       courseSet.add(code);
       if (!courseDeptMap.has(code)) courseDeptMap.set(code, dept);
     }

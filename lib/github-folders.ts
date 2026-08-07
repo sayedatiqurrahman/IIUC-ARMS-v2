@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { config } from './config';
 import { getDepartmentFolder } from './departments';
+import { matchCourseFolder } from './store/helpers';
 
 const SEMS = ['1st-semister','2nd-semister','3rd-semister','4th-semister','5th-semister','6th-semister','7th-semister','8th-semister'];
 const BATCH = 25;
@@ -30,9 +31,7 @@ async function api(method: string, urlPath: string, body: any, token: string) {
 }
 
 function parseCourseFolder(name: string): { code: string; title: string } | null {
-  const match = name.match(/^([A-Z]{2,5}-?\d{3,5}[A-Z]?)\s*[-–]\s*(.+)$/i);
-  if (!match) return null;
-  return { code: match[1].toUpperCase(), title: match[2].trim() };
+  return matchCourseFolder(name);
 }
 
 export async function fetchCoursesFromGitHub(deptId: string, semester: string): Promise<{ code: string; title: string }[]> {
