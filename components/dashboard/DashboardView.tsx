@@ -416,7 +416,7 @@ export default function DashboardView() {
             />
 
             {/* GitHub Connection Highlight */}
-            {!hasGitHub && effectiveRole !== 'external' && (
+            {!hasGitHub && (
               <div className="bg-gradient-to-br from-gray-500/10 to-gray-600/5 border border-gray-500/20 rounded-2xl p-5">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gray-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
