@@ -5,13 +5,15 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import AdminPanelView from '@/components/views/AdminPanelView';
 import { config } from '@/lib/config';
+import { useAppStore } from '@/lib/store';
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const profile = useAppStore(s => s.profile);
 
-  const email = (session as any)?.user?.email || '';
-  const effectiveRole = config.getEffectiveRole(email);
+  const email = (session as any)?.user?.email || profile.email || '';
+  const effectiveRole = config.getEffectiveRole(email, (profile as any)?.role);
 
   useEffect(() => {
     if (status === 'unauthenticated') {

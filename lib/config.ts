@@ -46,6 +46,9 @@ export const config = {
     if (profileRole === 'admin') return 'admin';
     if (profileRole === 'manager') return 'manager';
     if (profileRole === 'teacher') return 'teacher';
+    // Special/external accounts explicitly marked as students get student access,
+    // but never demote a role detected from the email domain.
+    if (profileRole === 'student' && base !== 'teacher') return 'student';
     return base;
   },
   isManager: (email: string, profileRole?: string): boolean => {

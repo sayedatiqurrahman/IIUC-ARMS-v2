@@ -79,7 +79,7 @@ export default function BrowsePage() {
   }, []);
   useEffect(() => {
     if (!email) return;
-    const role = config.getEffectiveRole(email);
+    const role = config.getEffectiveRole(email, (profile as any).role);
     const isCR = profile.isCR || false;
     const loadPerms = async () => {
       try {
