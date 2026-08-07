@@ -12,7 +12,7 @@ import {
   type ScanMode,
   MAX_DIM_DEFAULT,
 } from '@/lib/image-utils';
-import { detectQuadSmart, processFrameSmart } from '@/lib/scanic-bridge';
+import { detectQuadSmart, processFrameSmart, refineQuadOnCanvas } from '@/lib/scanic-bridge';
 import { buildSearchablePdf, blobToCanvas } from '@/lib/ocr';
 import { showToast } from '@/lib/utils';
 
@@ -212,7 +212,9 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     }).catch(() => {});
   }, []);
 
-  // Re-run detection on a captured still at a reasonable resolution.
+  // Re-run detection on a captured still at a reasonable resolution, then snap
+  // the corners onto the paper at the full-resolution frame so the crop hugs
+  // the real edges (the coarse detect pass is downscaled for speed).
   async function detectQuadOnStill(canvas: HTMLCanvasElement): Promise<Quad | null> {
     const cw = canvas.width;
     const ch = canvas.height;
@@ -226,7 +228,8 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     sctx.drawImage(canvas, 0, 0, dw, dh);
     const quad = await detectQuadSmart(small, dw, dh);
     if (!quad) return null;
-    return quad.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad;
+    const full = quad.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad;
+    return refineQuadOnCanvas(canvas, full, Infinity);
   }
 
   // ---- Edge detection loop (throttled interval) + auto-capture ----
@@ -265,6 +268,16 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
       raw.height = dh;
       const rctx = raw.getContext('2d', { willReadFrequently: true })!;
       rctx.drawImage(video, 0, 0, dw, dh);
+      // Higher-resolution source for corner refinement: the coarse detect pass
+      // is kept small for speed, but its upscaled corners are re-snapped against
+      // ~1280px edges so the live frame lands exactly on the paper. The canvas
+      // is drawn at full video size and the helper downscales internally, so
+      // the quad (in full video space) stays in the right coordinate space.
+      const refineRaw = document.createElement('canvas');
+      refineRaw.width = vw;
+      refineRaw.height = vh;
+      const rcctx = refineRaw.getContext('2d', { willReadFrequently: true })!;
+      rcctx.drawImage(video, 0, 0, vw, vh);
       // Previous frame's quad (scaled into the small space) is a tracking prior
       // for the detector, so the frame follows the paper instead of jumping.
       const prevScaled: Quad | null = lastQuadRef.current
@@ -274,7 +287,9 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
         .then(detected => {
           detectRunning = false;
           if (disposed) return;
-          const full = detected ? detected.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad : null;
+          const full = detected
+            ? refineQuadOnCanvas(refineRaw, detected.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad, 1280)
+            : null;
           if (full) {
             missesRef.current = 0;
             // Adaptive temporal smoothing: snap hard while the paper is moving so
@@ -1035,21 +1050,26 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
             Add page
           </button>
           <button
-            className="w-16 h-16 rounded-full bg-white/10 border border-white/25 text-white flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors disabled:opacity-40"
-            onClick={downloadLocal}
-            disabled={busy || pages.length === 0}
-            title="Download to your device"
-          >
-            <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-download'} text-xl`}></i>
-          </button>
-          <button
-            className="flex flex-col items-center gap-1 text-qsis text-[0.68rem] bg-transparent border-none cursor-pointer disabled:opacity-40"
+            className="flex flex-col items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-40 group"
             onClick={finish}
             disabled={busy || pages.length === 0}
             title="Proceed to the upload panel"
           >
-            <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-arrow-right'} text-lg`}></i>
-            {pages.length > 1 ? 'Merge & Upload' : 'Upload'}
+            <span className="w-16 h-16 rounded-full bg-qsis text-white flex items-center justify-center group-hover:opacity-90 transition-opacity">
+              <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-arrow-right'} text-xl`}></i>
+            </span>
+            <span className="text-qsis text-[0.68rem] font-semibold">
+              {pages.length > 1 ? 'Merge & Upload' : 'Proceed'}
+            </span>
+          </button>
+          <button
+            className="flex flex-col items-center gap-1 text-white/50 text-[0.68rem] bg-transparent border-none cursor-pointer disabled:opacity-40"
+            onClick={downloadLocal}
+            disabled={busy || pages.length === 0}
+            title="Save a copy to your device"
+          >
+            <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-download'} text-lg`}></i>
+            Download
           </button>
         </div>
       </div>

@@ -6,9 +6,11 @@ import {
   orderQuad,
   processFrame,
   applyScanFilter,
+  refineQuadCorners,
   type Quad,
   type ScanMode,
   type ProcessFrameResult,
+  type GrayImage,
 } from './image-utils';
 
 type CornerPoints = {
@@ -129,6 +131,43 @@ export async function detectQuadSmart(
     }
   }
   return null;
+}
+
+// Snap a quad (in the canvas's own pixel space) onto the real paper edges at
+// (optionally) a higher resolution than the coarse 640px detect pass. Detection
+// runs downscaled for speed, so upscaling its quad loses corner precision;
+// re-fitting the edge lines against this (usually full-res) gray fixes that.
+// `maxDim` bounds the refinement size (Infinity = native resolution). Returns
+// the original quad if refinement moves a corner implausibly far.
+export function refineQuadOnCanvas(
+  canvas: HTMLCanvasElement,
+  quad: Quad,
+  maxDim = Infinity
+): Quad {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  if (!cw || !ch) return quad;
+  const scale = Math.min(1, maxDim / Math.max(cw, ch));
+  const dw = Math.max(1, Math.round(cw * scale));
+  const dh = Math.max(1, Math.round(ch * scale));
+  const temp = document.createElement('canvas');
+  temp.width = dw;
+  temp.height = dh;
+  const ctx = temp.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(canvas, 0, 0, dw, dh);
+  const img = ctx.getImageData(0, 0, dw, dh);
+  const gray = new Uint8ClampedArray(dw * dh);
+  const d = img.data;
+  for (let i = 0, j = 0; i < dw * dh; i++, j += 4) {
+    gray[i] = (d[j] * 77 + d[j + 1] * 150 + d[j + 2] * 29) >> 8;
+  }
+  const scaled = quad.map(p => ({ x: p.x * scale, y: p.y * scale })) as Quad;
+  const refined = refineQuadCorners({ data: gray, w: dw, h: dh } as GrayImage, scaled);
+  const maxShift = Math.max(
+    ...refined.map((p, i) => Math.hypot(p.x - scaled[i].x, p.y - scaled[i].y))
+  );
+  if (maxShift > Math.max(12, Math.min(dw, dh) * 0.08)) return quad;
+  return orderQuad(refined.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad);
 }
 
 // Perspective-correct a canvas using a quad in the canvas's pixel space.
