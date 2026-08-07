@@ -968,7 +968,17 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
             <i className="fas fa-plus"></i>
           </button>
           <span className="text-white text-[0.9rem] font-semibold">Review pages</span>
-          <span className="text-white/60 text-[0.75rem] w-9 text-right">{pages.length}/{maxPages}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-white/60 text-[0.75rem] w-9 text-right">{pages.length}/{maxPages}</span>
+            <button
+              className="w-8 h-8 rounded-lg bg-white/10 text-white/70 flex items-center justify-center cursor-pointer border-none hover:bg-white/20 hover:text-white transition-colors disabled:opacity-40"
+              onClick={downloadLocal}
+              disabled={busy || pages.length === 0}
+              title="Save a copy to your device (optional)"
+            >
+              <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-download'} text-sm`}></i>
+            </button>
+          </div>
         </div>
 
         {/* Large preview */}
@@ -1061,15 +1071,6 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
             <span className="text-qsis text-[0.68rem] font-semibold">
               {pages.length > 1 ? 'Merge & Upload' : 'Proceed'}
             </span>
-          </button>
-          <button
-            className="flex flex-col items-center gap-1 text-white/50 text-[0.68rem] bg-transparent border-none cursor-pointer disabled:opacity-40 absolute right-4"
-            onClick={downloadLocal}
-            disabled={busy || pages.length === 0}
-            title="Save a copy to your device"
-          >
-            <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-download'} text-lg`}></i>
-            Download
           </button>
         </div>
       </div>
