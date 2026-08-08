@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      course: { code: code.toUpperCase(), title: courseTitle, department, semester },
+      course: { code: code.toUpperCase(), title: cleanTitle, department, semester },
       alreadyExisted,
     }, { status: alreadyExisted ? 200 : 201 });
   } catch (e: any) {

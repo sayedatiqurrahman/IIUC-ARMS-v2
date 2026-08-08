@@ -395,8 +395,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     try {
       const res = await useAppStore.getState().addCourse(department, semester, code, title);
       if (!res.success) return { success: false, error: res.error || 'Failed to create course' };
-      const finalCode = code.toUpperCase();
-      const finalTitle = title.trim() || finalCode;
+      const finalCode = res.course?.code || code.toUpperCase();
+      const finalTitle = res.course?.title || title.trim() || finalCode;
       updateCourse(createCourseFor, { selectedCourseCode: finalCode, selectedCourseTitle: finalTitle, links: [] });
       setRecentlyCreated(prev => [...prev.filter(c => c.code !== finalCode), { code: finalCode, title: finalTitle }]);
       useAppStore.getState().invalidateCoursesCache();
