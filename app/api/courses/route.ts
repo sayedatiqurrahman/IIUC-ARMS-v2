@@ -81,30 +81,49 @@ async function renameCourseFolderOnGithub(token: string, oldPath: string, newPat
 
   const oldPrefix = oldPath + '/';
   const newPrefix = newPath + '/';
-  const treeItems: any[] = [];
+
+  // A Map keyed by path guarantees the submitted tree never contains duplicate
+  // paths (one of the main causes of "createtree:422").
+  const treeMap = new Map<string, any>();
+
   let moved = 0;
   for (const item of fullTree) {
     const p = String(item.path || '');
     if (item.type !== 'blob' || !p.startsWith(oldPrefix)) continue;
     const rel = p.slice(oldPrefix.length);
     if (!rel) continue;
-    treeItems.push({ path: `${newPrefix}${rel}`, mode: item.mode, type: 'blob', sha: item.sha });
-    treeItems.push({ path: p, sha: null }); // remove the old path
+    treeMap.set(`${newPrefix}${rel}`, { path: `${newPrefix}${rel}`, mode: item.mode, type: 'blob', sha: item.sha });
+    treeMap.set(p, { path: p, sha: null }); // remove the old path
     moved++;
   }
   // Truly empty folder (only empty subdirectories, nothing tracked in git) —
   // recreate the standard skeleton under the new name so it still exists.
   if (moved === 0) {
     for (const sf of COURSE_SUBFOLDERS) {
-      treeItems.push({ path: `${newPath}/${sf}/.gitkeep`, mode: '100644', type: 'blob', content: '' });
+      treeMap.set(`${newPath}/${sf}/.gitkeep`, { path: `${newPath}/${sf}/.gitkeep`, mode: '100644', type: 'blob', content: '' });
     }
   }
 
+  // If the destination folder already exists (e.g. from a previous partial
+  // rename), prune its existing entries first so the moved content replaces it
+  // cleanly instead of colliding with inherited base-tree entries.
+  for (const item of fullTree) {
+    const p = String(item.path || '');
+    if ((p === newPath || p.startsWith(newPrefix)) && !treeMap.has(p)) {
+      treeMap.set(p, { path: p, sha: null });
+    }
+  }
+
+  const treeItems = Array.from(treeMap.values());
   const createTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
     method: 'POST', headers: ghHeaders(token),
     body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems }),
   });
-  if (!createTreeRes.ok) return `createtree:${createTreeRes.status}`;
+  if (!createTreeRes.ok) {
+    const detail = await createTreeRes.text().catch(() => '');
+    const trimmed = detail.replace(/\s+/g, ' ').trim().slice(0, 300);
+    return `createtree:${createTreeRes.status}${trimmed ? ` — ${trimmed}` : ''}`;
+  }
   const newTreeSha = (await createTreeRes.json()).sha;
 
   const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
@@ -269,7 +288,7 @@ export async function PUT(req: NextRequest) {
     const isCR = profile?.isCR || false;
 
     const body = await req.json();
-    let { code, semester, department, title, githubToken } = body;
+    let { code, semester, department, title, githubToken, folderPath: bodyFolderPath } = body;
 
     // Legacy callers send { id, title } — resolve folder info from the DB.
     if (!code && body.id) {
@@ -317,12 +336,19 @@ export async function PUT(req: NextRequest) {
     const baseDir = `${config.uploadPath}/${deptFolder}/${semester}`;
     const newFolderPath = `${baseDir}/${code.toUpperCase()} - ${cleanTitle}`;
 
-    // Find the real folder (tolerating spacing/language), trying the user's
-    // token first and falling back to the bot's.
+    // Find the real folder. The client sends the course's full GitHub path
+    // (taken from the GitHub tree, the source of truth) as the unique ID, so
+    // prefer it verbatim; only fall back to searching GitHub by code when it's
+    // missing (legacy callers).
     let oldFolderPath: string | null = null;
-    for (const t of tokens) {
-      oldFolderPath = await findCourseFolderPathInRepo(t, baseDir, code);
-      if (oldFolderPath) break;
+    if (typeof bodyFolderPath === 'string' && bodyFolderPath.startsWith(config.uploadPath + '/') && bodyFolderPath.length > config.uploadPath.length + 1) {
+      oldFolderPath = bodyFolderPath;
+    }
+    if (!oldFolderPath) {
+      for (const t of tokens) {
+        oldFolderPath = await findCourseFolderPathInRepo(t, baseDir, code);
+        if (oldFolderPath) break;
+      }
     }
     if (!oldFolderPath) {
       return NextResponse.json({ error: 'Course folder not found on GitHub' }, { status: 404 });

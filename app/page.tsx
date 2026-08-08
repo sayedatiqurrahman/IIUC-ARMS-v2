@@ -290,19 +290,39 @@ export default function BrowsePage() {
       }, 200);
     }
   }, [mounted, loading, onboardData, navigateToDepartment, navigateToSemester]);
-  const prevSemesterRef = useRef(profile.semester);
+  // Auto-navigate when the user updates their semester from the dashboard.
+  // The profile is fetched from the network (slower than the cached tree), so
+  // its initial load must NEVER redirect — otherwise it would yank the user to
+  // profile.semester (e.g. the 6th semester) right after the personalization
+  // redirect landed on the chosen semester. Only later, user-initiated changes
+  // navigate, and a deeplink always wins.
+  const profileLoaded = useAppStore(s => s.profileLoaded);
+  const prevSemesterRef = useRef<{ seen: boolean; value: string }>({ seen: false, value: '' });
   useEffect(() => {
-    if (!mounted || loading) return;
+    if (!mounted || loading || !profileLoaded) return;
     const newSem = profile.semester;
-    const oldSem = prevSemesterRef.current;
-    prevSemesterRef.current = newSem;
+    const ref = prevSemesterRef.current;
+    if (!ref.seen) {
+      // First time we see the loaded profile — record it, never navigate from
+      // this alone.
+      ref.seen = true;
+      ref.value = newSem;
+      return;
+    }
+    const oldSem = ref.value;
+    ref.value = newSem;
     if (!newSem || newSem === 'graduated' || newSem === oldSem) return;
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      if (p.has('dept') || p.has('sem') || p.has('course') || p.has('q')) return;
+    }
+    if (deepLinkingRef.current) return;
     const { currentDept, view: currentView } = useAppStore.getState();
     if (currentDept && (currentView === 'courses' || currentView === 'semesters')) {
       const { navigateToSemester } = useAppStore.getState();
       navigateToSemester(newSem);
     }
-  }, [profile.semester, mounted, loading]);
+  }, [profile.semester, profileLoaded, mounted, loading]);
   const userSemesterId = onboardData
     ? config.semesters.find(s => s.label === onboardData.semester)?.id
     : null;

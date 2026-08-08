@@ -139,6 +139,7 @@ export const useAppStore = create<AppState>((set, get) => {
     routineLoading: false,
 
     profile: { ...defaultProfile },
+    profileLoaded: false,
     loadProfile: async () => {
       try {
         const res = await fetch('/api/profile');
@@ -147,7 +148,7 @@ export const useAppStore = create<AppState>((set, get) => {
           const email = data.email || '';
           const emailRole = email ? config.detectRole(email) : 'user';
           const role = data.role && data.role !== 'user' ? data.role : emailRole;
-          const updates: Record<string, any> = { profile: { ...defaultProfile, ...data, role } };
+          const updates: Record<string, any> = { profile: { ...defaultProfile, ...data, role }, profileLoaded: true };
           if (data.githubToken) updates.githubToken = data.githubToken;
           if (data.githubInstallationId) updates.githubInstallationId = data.githubInstallationId;
           if (data.githubLogin) updates.githubLogin = data.githubLogin;
@@ -163,7 +164,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const current = get().profile;
       const snapshot = { ...current };
       const updated = { ...current, ...p };
-      set({ profile: updated });
+      set({ profile: updated, profileLoaded: true });
       try {
         const res = await fetch('/api/profile', {
           method: 'POST',
@@ -172,7 +173,7 @@ export const useAppStore = create<AppState>((set, get) => {
         });
         if (res.ok) {
           const data = await res.json();
-          set({ profile: { ...defaultProfile, ...data } });
+          set({ profile: { ...defaultProfile, ...data }, profileLoaded: true });
         } else {
           const err = await res.json().catch(() => ({ error: res.statusText }));
           set({ profile: snapshot });

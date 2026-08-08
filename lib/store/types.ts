@@ -130,6 +130,7 @@ export interface AppState {
   routineLoading: boolean;
 
   profile: Profile;
+  profileLoaded: boolean;
   updateProfile: (p: Partial<Profile>) => Promise<void>;
   loadProfile: () => Promise<void>;
   githubToken: string;
@@ -180,7 +181,7 @@ export interface AppState {
   getUploadTree: () => any[];
   getUploadDepartments: () => { id: string; name: string; shortName: string; icon: string; facultyName: string; facultyShortName: string; facultyIcon: string; files: number; semesters: number }[];
   getSemesters: (departmentId?: string | null) => Semester[];
-  getSemesterCourses: (semId: string, departmentId?: string | null) => { code: string; title: string; categories: { key: string; label: string; icon: string; count: number }[]; totalFiles: number; hasMidFinal: boolean }[];
+  getSemesterCourses: (semId: string, departmentId?: string | null) => { code: string; title: string; folderPath: string; categories: { key: string; label: string; icon: string; count: number }[]; totalFiles: number; hasMidFinal: boolean }[];
   getCourseCategories: (semId: string, courseCode: string, departmentId?: string | null, midFinal?: string | null) => { key: string; label: string; icon: string; count: number; files: any[] }[];
   getCourseMidFinal: (semId: string, courseCode: string, departmentId?: string | null) => { mid: number; final: number; root: number };
   getCategories: (semId: string, departmentId?: string | null) => Category[];

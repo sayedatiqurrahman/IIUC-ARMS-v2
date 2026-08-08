@@ -336,8 +336,19 @@ export function createTreeHelpers(get: GetState) {
       if (departmentId) departmentId = resolveDepartmentId(departmentId);
       const uploadTree = get().getUploadTree();
       const prefix = semId + '/';
-      const courseMap = new Map<string, { title: string; categories: Map<string, number>; totalFiles: number; midCount: number; finalCount: number; rootCount: number; readmes: Set<string>; mdFiles: Set<string> }>();
+      const courseMap = new Map<string, { title: string; folderPath: string; categories: Map<string, number>; totalFiles: number; midCount: number; finalCount: number; rootCount: number; readmes: Set<string>; mdFiles: Set<string> }>();
       const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
+
+      // The upload items carry the real GitHub path (githubPath) alongside a
+      // display path that strips the department prefix. The course folder's
+      // full GitHub path is therefore the first (diffSegs + 2) segments of
+      // githubPath, where diffSegs is how many leading segments were stripped.
+      const courseFolderPathOf = (item: any): string => {
+        const githubSegs = String(item.githubPath || item.path || '').split('/');
+        const pathSegs = String(item.path || '').split('/');
+        const diffSegs = Math.max(0, githubSegs.length - pathSegs.length);
+        return githubSegs.slice(0, diffSegs + 2).join('/');
+      };
 
       uploadTree.forEach((item: any) => {
         if (departmentId) {
@@ -354,8 +365,9 @@ export function createTreeHelpers(get: GetState) {
         if (courseMatch) {
           const code = courseMatch.code;
           const title = courseMatch.title || code;
+          const folderPath = courseFolderPathOf(item);
           if (!courseMap.has(code)) {
-            courseMap.set(code, { title, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0, readmes: new Set(), mdFiles: new Set() });
+            courseMap.set(code, { title, folderPath, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0, readmes: new Set(), mdFiles: new Set() });
           } else {
             const c = courseMap.get(code)!;
             if (title !== code && c.title === code) c.title = title;
@@ -381,7 +393,7 @@ export function createTreeHelpers(get: GetState) {
         const { code, title, category, midFinal } = parsed;
 
         if (!courseMap.has(code)) {
-          courseMap.set(code, { title: code, categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0, readmes: new Set(), mdFiles: new Set() });
+          courseMap.set(code, { title: code, folderPath: courseFolderPathOf(item), categories: new Map(), totalFiles: 0, midCount: 0, finalCount: 0, rootCount: 0, readmes: new Set(), mdFiles: new Set() });
         }
         const c = courseMap.get(code)!;
         if (title !== code && c.title === code) c.title = title;
@@ -422,6 +434,7 @@ export function createTreeHelpers(get: GetState) {
         .map(([code, data]) => ({
           code,
           title: data.title,
+          folderPath: data.folderPath,
           categories: Array.from(data.categories.entries()).map(([key, count]) => ({
             key,
             label: config.categories[key as keyof typeof config.categories]?.label || key,

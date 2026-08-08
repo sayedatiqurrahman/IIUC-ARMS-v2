@@ -44,12 +44,12 @@ export default function CoursesView({
     return map;
   }, [dbCourses]);
 
-  const [editTarget, setEditTarget] = useState<{ code: string; title: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<{ code: string; title: string; folderPath?: string } | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
 
-  const [deleteTarget, setDeleteTarget] = useState<{ code: string; title: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ code: string; title: string; folderPath?: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
@@ -69,6 +69,7 @@ export default function CoursesView({
           department: currentDept,
           title: editTitle.trim(),
           githubToken: personalToken || undefined,
+          folderPath: editTarget.folderPath || undefined,
         }),
       });
       const data = await res.json();
@@ -94,7 +95,7 @@ export default function CoursesView({
       const res = await fetch('/api/courses', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: deleteTarget.code, semester: currentSem, department: currentDept, title: deleteTarget.title }),
+        body: JSON.stringify({ code: deleteTarget.code, semester: currentSem, department: currentDept, title: deleteTarget.title, folderPath: deleteTarget.folderPath }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
@@ -200,13 +201,13 @@ export default function CoursesView({
                       <div className="fixed inset-0 z-[210]" onClick={(e) => { e.stopPropagation(); setOpenMenu(null); }} />
                       <div className="absolute right-0 top-9 z-[220] w-44 rounded-xl border border-dark-border bg-dark-bg3 shadow-2xl overflow-hidden">
                         {canEditThis && (
-                          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setEditTarget({ code: course.code, title: course.title }); setEditTitle(course.title); setEditError(''); }}
+                          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setEditTarget({ code: course.code, title: course.title, folderPath: course.folderPath }); setEditTitle(course.title); setEditError(''); }}
                             className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-dark-text hover:bg-dark-bg2 cursor-pointer border-none text-left">
                             <i className="fas fa-pen text-blue-400 w-4 text-center"></i> Rename course
                           </button>
                         )}
                         {canDeleteThis && (
-                          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setDeleteTarget({ code: course.code, title: course.title }); setDeleteError(''); }}
+                          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setDeleteTarget({ code: course.code, title: course.title, folderPath: course.folderPath }); setDeleteError(''); }}
                             className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-red-400 hover:bg-red-500/10 cursor-pointer border-none text-left">
                             <i className="fas fa-trash w-4 text-center"></i> Delete course
                           </button>
