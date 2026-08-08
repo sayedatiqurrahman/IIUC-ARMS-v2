@@ -6,6 +6,8 @@ import { authorizeChunkUpload } from '@/lib/github-upload';
 export const maxDuration = 60;
 
 const MAX_CHUNK_BYTES = 4 * 1024 * 1024; // request body must stay under Vercel's 4.5MB cap
+const STAGING_QUOTA_BYTES = 256 * 1024 * 1024; // per-user cap on bytes staged at once
+const STALE_CHUNK_MS = 2 * 60 * 60 * 1000; // abandoned sessions swept after 2h
 
 // POST /api/github/upload-chunk — store one chunk of a large file in the DB.
 // The client uploads each chunk (≤2.5MB) as a separate request, then calls
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
     // Sweep this user's stale sessions (uploads abandoned mid-way)
     try {
       await prisma.uploadChunk.deleteMany({
-        where: { userId: email, createdAt: { lt: new Date(Date.now() - 6 * 60 * 60 * 1000) } },
+        where: { userId: email, createdAt: { lt: new Date(Date.now() - STALE_CHUNK_MS) } },
       });
     } catch {}
 
@@ -65,6 +67,23 @@ export async function POST(req: NextRequest) {
     await prisma.uploadChunk.deleteMany({
       where: { sessionId, userId: email, path: relPath, index },
     });
+
+    // Per-user staging quota so the free DB tier can't be exhausted by a
+    // runaway upload session. Sums actual bytes via LENGTH(data).
+    try {
+      const staged = await prisma.$queryRaw<{ total: bigint }[]>`
+        SELECT COALESCE(SUM(LENGTH(data)), 0) AS total
+        FROM "UploadChunk" WHERE "userId" = ${email}
+      `;
+      const stagedBytes = Number(staged[0]?.total || 0);
+      if (stagedBytes + chunk.size > STAGING_QUOTA_BYTES) {
+        return NextResponse.json(
+          { error: 'Staging quota exceeded — finalize or clear earlier uploads before continuing' },
+          { status: 429 }
+        );
+      }
+    } catch {}
+
     await prisma.uploadChunk.create({
       data: {
         sessionId,

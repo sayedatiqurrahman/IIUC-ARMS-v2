@@ -13,10 +13,11 @@ import type { CourseGroup, FileWithMeta, Link, UploadModalProps } from '@/compon
 import DocumentScanner, { type CapturedPage } from '@/components/scanner/DocumentScanner';
 import { compressUploadFile } from '@/lib/compress';
 import { buildSearchablePdf } from '@/lib/ocr';
+import { uploadFilesToGitHub, type ClientUploadFile } from '@/lib/gh-upload-client';
 
-// Files over this size are uploaded in chunks — each chunk request stays far
-// under Vercel's ~4.5MB request-body cap (raw bytes, no base64 inflation here).
-const CHUNK_BYTES = 2.5 * 1024 * 1024;
+// Files over this size are uploaded straight from the browser to GitHub
+// (client-side, chunk by chunk). Smaller files use the existing server route.
+const CHUNK_BYTES = 0.6 * 1024 * 1024;
 
 export interface UploadProgress {
   percent: number;
@@ -554,6 +555,45 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     return readUploadResponse(res);
   }
 
+  // Client-side (browser → GitHub API directly) upload for chunked files.
+  // Bytes never touch the Vercel server or the database.
+  async function clientChunkedUpload(
+    uploads: { course: CourseGroup; files: { path: string; meta: FileWithMeta }[]; readmePath: string }[],
+    message: string,
+    tokenData: { token: string; directCommit?: boolean }
+  ): Promise<any> {
+    const files: ClientUploadFile[] = [];
+    for (const u of uploads) {
+      for (const f of u.files) {
+        files.push({ path: `${config.uploadPath}/${f.path}`, file: f.meta.file });
+      }
+      if (u.readmePath) {
+        files.push({ path: `${config.uploadPath}/${u.readmePath}`, text: linksToReadmeContent(u.course.links) });
+      }
+    }
+
+    const result = await uploadFilesToGitHub({
+      token: tokenData.token,
+      owner: config.owner,
+      repo: config.repo,
+      directCommit: !!tokenData.directCommit,
+      files,
+      message,
+      onProgress: (percent, label) => setUploadProgress({ percent, label }),
+    });
+
+    if (result.success) {
+      try {
+        await fetch('/api/github/log-activity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: files.map(f => f.path), prUrl: result.pr?.url || null }),
+        });
+      } catch {}
+    }
+    return result;
+  }
+
   async function doUpload(tokenOverride?: string) {
     const token = tokenOverride || githubToken || profile.githubToken || (session as any)?.accessToken || '';
     const validCourses = courses.filter(c => c.selectedCourseCode && (c.files.length > 0 || c.links.length > 0));
@@ -573,7 +613,28 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
       let data: any;
       if (needsChunking) {
-        data = await uploadChunked(uploads, totalBytes, message, token);
+        // Browser-safe token from the server: PAT / NextAuth session / short-lived
+        // App bot token. When only the server-level GITHUB_TOKEN env secret exists,
+        // the server returns needsServer and we fall back to the server-side chunked
+        // path so the secret never reaches the browser.
+        const tokenRes = await fetch('/api/github/upload-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ githubToken: token || undefined }),
+        });
+        const tokenData = await tokenRes.json().catch(() => ({}));
+        if (!tokenRes.ok || tokenData.error) {
+          if (tokenData.code === 'AUTH_REQUIRED') {
+            setResult({ success: false, error: tokenData.error, tokenExpired: true });
+            return;
+          }
+          throw new Error(tokenData.error || 'Failed to prepare upload');
+        }
+        if (tokenData.needsServer) {
+          data = await uploadChunked(uploads, totalBytes, message, token);
+        } else {
+          data = await clientChunkedUpload(uploads, message, tokenData);
+        }
       } else {
         const formData = new FormData();
         for (const u of uploads) {

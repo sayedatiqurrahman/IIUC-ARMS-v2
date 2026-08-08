@@ -6,6 +6,10 @@
  */
 require('dotenv/config');
 async function main() {
+  if (!process.env.DATABASE_URL) {
+    console.log('⚠ No DATABASE_URL found — skipping column fixes (local build only).');
+    return;
+  }
   const { PrismaPg } = require('@prisma/adapter-pg');
   const { PrismaClient } = require('@prisma/client');
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -35,6 +39,8 @@ async function main() {
 
   const settingsColumns = [
     { name: 'extraDepartments', table: 'SiteSettings', type: "JSONB DEFAULT '{}'" },
+    { name: 'blockedTelegramChats', table: 'SiteSettings', type: "JSONB DEFAULT '[]'" },
+    { name: 'blockedTelegramUsernames', table: 'SiteSettings', type: "JSONB DEFAULT '[]'" },
   ];
 
   for (const col of settingsColumns) {

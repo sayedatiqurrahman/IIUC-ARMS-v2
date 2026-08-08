@@ -33,6 +33,7 @@ import { config } from '@/lib/config';
 import { getDepartmentFolder } from '@/lib/departments';
 import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
 import { deleteCourseFolder, findCourseFolderPathInRepo } from '@/lib/course-delete';
+import { isBlockedChat, updateBlocklist } from '@/lib/telegram/block';
 
 const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
 const GITHUB_API = 'https://api.github.com';
@@ -252,6 +253,12 @@ const WEBHOOK_SECRET = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || process.env.TE
 export async function POST(req: NextRequest) {
   const headerToken = req.headers.get('x-telegram-bot-api-secret-token');
   if (!WEBHOOK_SECRET || headerToken !== WEBHOOK_SECRET) {
+    console.warn(
+      `[TG] Webhook REJECTED: header=${headerToken ? 'present(mismatch)' : 'MISSING'}, ` +
+      `configured=${WEBHOOK_SECRET ? 'yes' : 'NO_SECRET'}. ` +
+      `Fix: set TELEGRAM_BOT_TOKEN (and optionally TELEGRAM_BOT_WEBHOOK_SECRET) in Vercel, ` +
+      `then visit /api/telegram/setup to re-register the webhook.`
+    );
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -378,6 +385,49 @@ async function isVerifiedChat(chatId: number): Promise<boolean> {
   } catch { return false; }
 }
 
+// Owner-only spam blocklist management: /block @user|chatid, /unblock …, /blocklist.
+async function handleBlockCommand(chatId: number, cmd: string) {
+  const ownerChats = await resolveOwnerChatIds();
+  if (!ownerChats.has(String(chatId))) {
+    await sendMessage(chatId, '⛔ Only the owner can manage the blocklist.');
+    return;
+  }
+
+  const [name, ...rest] = cmd.split(/\s+/);
+  const arg = rest.join(' ').trim();
+
+  if (name === '/blocklist') {
+    const { prisma } = await import('@/lib/prisma');
+    const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
+    const chats = (settings as any)?.blockedTelegramChats || [];
+    const users = (settings as any)?.blockedTelegramUsernames || [];
+    await sendMessage(chatId,
+      `🚫 <b>Blocklist</b>\n\n` +
+      `Chats: ${chats.length ? chats.map((c: any) => `<code>${c}</code>`).join(', ') : 'none'}\n` +
+      `Users: ${users.length ? users.map((u: any) => `<code>@${u}</code>`).join(', ') : 'none'}\n\n` +
+      `• <code>/block @username</code> or <code>/block 123456789</code>\n` +
+      `• <code>/unblock @username</code> or <code>/unblock 123456789</code>`
+    );
+    return;
+  }
+
+  if (!arg) {
+    await sendMessage(chatId, `Usage: <code>/${name} @username</code> or <code>/${name} 123456789</code>`);
+    return;
+  }
+
+  const isUsername = arg.startsWith('@');
+  if (name === '/block') {
+    if (isUsername) await updateBlocklist({ addUsername: arg.slice(1) });
+    else await updateBlocklist({ addChat: arg });
+    await sendMessage(chatId, `🚫 <b>Blocked</b> ${isUsername ? `@${arg.slice(1)}` : `<code>${arg}</code>`} — they will be ignored.`);
+  } else {
+    if (isUsername) await updateBlocklist({ removeUsername: arg.slice(1) });
+    else await updateBlocklist({ removeChat: arg });
+    await sendMessage(chatId, `✅ <b>Unblocked</b> ${isUsername ? `@${arg.slice(1)}` : `<code>${arg}</code>`}.`);
+  }
+}
+
 async function handleMessage(msg: any) {
   const chatId = msg.chat.id;
   const text = (msg.text || '').trim();
@@ -386,6 +436,22 @@ async function handleMessage(msg: any) {
 
   // Flood protection — silently drop messages when a chat hammers the bot.
   if (isFlooding(chatId)) return;
+
+  // Blocked chats/usernames (owner-managed /block list) are dropped silently.
+  if (await isBlockedChat(chatId, msg.from?.username)) {
+    console.log(`[TG] Blocked sender ignored: chat_id ${chatId} user ${msg.from?.username || ''}`);
+    return;
+  }
+
+  // Anti-spam: unverified chats that send links are ignored (spam bots almost
+  // always link somewhere). /start and /connect stay open so real users can
+  // still link their account.
+  if (!isGroup && /(https?:\/\/|www\.|t\.me\/|telegram\.me\/)/i.test(text) && !/^\/(start|connect)\b/.test(text)) {
+    if (!(await isVerifiedChat(chatId))) {
+      console.log(`[TG] Unverified link message ignored from chat_id ${chatId}`);
+      return;
+    }
+  }
 
   console.log(`[TG] msg from ${chatId}: "${text}" | TOKEN=${process.env.TELEGRAM_BOT_TOKEN ? 'SET(' + process.env.TELEGRAM_BOT_TOKEN.substring(0, 5) + '...)' : 'MISSING'}`);
 
@@ -409,6 +475,12 @@ async function handleMessage(msg: any) {
     .replace(/^@[A-Za-z]\w*\s+/, '')
     .trim();
   const telegramUsername = msg.from?.username ? `@${msg.from.username}` : null;
+
+  // ─── Owner block management ───
+  if (/^\/(block|unblock|blocklist)\b/.test(cleanText)) {
+    await handleBlockCommand(chatId, cleanText);
+    return;
+  }
 
   try {
     // ─── /start ───

@@ -123,6 +123,7 @@ model UploadChunk {
   createdAt DateTime @default(now())
 
   @@index([sessionId, userId])
+  @@index([userId])
   @@index([createdAt])
 }
 
@@ -133,6 +134,8 @@ model SiteSettings {
   extraDepartments   Json?    @default("{}")
   customFaculties    Json?    @default("[]")
   contributorSettings Json?
+  blockedTelegramChats     Json? @default("[]")
+  blockedTelegramUsernames Json? @default("[]")
 }
 
 model SemesterCourse {
