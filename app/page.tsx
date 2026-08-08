@@ -489,6 +489,7 @@ export default function BrowsePage() {
           goBack={goBack} setShowAddCourse={setShowAddCourse}
           dbCourses={dbCourses} userEmail={email}
           currentDept={currentDept} currentSem={currentSem}
+          userDeptId={userDeptId} isOwner={isOwner}
         />
       )}
       {!loading && !error && !isSearching && view === 'categories' && (

@@ -136,7 +136,7 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       const res = await fetch('/api/courses', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: editCourse.code, semester: selectedSem, department: selectedDept, title: editTitle.trim() }),
+        body: JSON.stringify({ code: editCourse.code, semester: selectedSem, department: selectedDept, title: editTitle.trim(), githubToken: (profile as any)?.githubToken || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');

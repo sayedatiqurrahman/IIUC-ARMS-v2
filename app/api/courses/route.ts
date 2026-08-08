@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
-import { getDepartmentFolder } from '@/lib/departments';
+import { getDepartmentFolder, getDepartmentIdByFolder } from '@/lib/departments';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
 import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData, resolveGithubToken, getGithubTree } from '@/lib/telegram';
@@ -53,6 +53,80 @@ async function batchCreateGitkeepFiles(token: string, folderPath: string, paths:
     body: JSON.stringify({ sha: newCommitData.sha, force: true }),
   });
   return paths.length;
+}
+
+// Find the actual course folder on GitHub for a code inside a dept/semester dir.
+async function findCourseFolderPath(token: string, baseDir: string, code: string): Promise<string | null> {
+  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
+  if (!refRes.ok) return null;
+  const baseCommitSha = (await refRes.json()).object.sha;
+  const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
+  if (!commitRes.ok) return null;
+  const baseTreeSha = (await commitRes.json()).tree.sha;
+  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
+  if (!treeRes.ok) return null;
+  const treeData = await treeRes.json();
+  const prefix = `${baseDir}/`;
+  const codeUpper = code.toUpperCase();
+  for (const item of (treeData.tree || [])) {
+    const p = String(item.path || '');
+    if (!p.startsWith(prefix)) continue;
+    const folderName = (p.slice(prefix.length).split('/')[0] || '').toUpperCase();
+    if (!folderName) continue;
+    if (folderName === codeUpper || folderName.startsWith(`${codeUpper} - `)) return `${baseDir}/${folderName}`;
+  }
+  return null;
+}
+
+// Rename a course folder on GitHub by remapping every blob under the old
+// prefix to the new prefix (single tree commit, using the caller's token).
+async function renameCourseFolderOnGithub(token: string, oldPath: string, newPath: string): Promise<boolean> {
+  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
+  if (!refRes.ok) return false;
+  const baseCommitSha = (await refRes.json()).object.sha;
+
+  const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
+  if (!commitRes.ok) return false;
+  const baseTreeSha = (await commitRes.json()).tree.sha;
+
+  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
+  if (!treeRes.ok) return false;
+  const fullTree = (await treeRes.json()).tree || [];
+
+  const oldPrefix = oldPath + '/';
+  const newPrefix = newPath + '/';
+  const treeItems: any[] = [];
+  let moved = 0;
+  for (const item of fullTree) {
+    const p = String(item.path || '');
+    if (item.type !== 'blob' || !p.startsWith(oldPrefix)) continue;
+    const rel = p.slice(oldPrefix.length);
+    if (!rel) continue;
+    treeItems.push({ path: `${newPrefix}${rel}`, mode: item.mode, type: 'blob', sha: item.sha });
+    treeItems.push({ path: p, sha: null }); // remove the old path
+    moved++;
+  }
+  if (moved === 0) return false;
+
+  const createTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
+    method: 'POST', headers: ghHeaders(token),
+    body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems }),
+  });
+  if (!createTreeRes.ok) return false;
+  const newTreeSha = (await createTreeRes.json()).sha;
+
+  const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
+    method: 'POST', headers: ghHeaders(token),
+    body: JSON.stringify({ message: `Rename course: ${oldPath} → ${newPath}`, tree: newTreeSha, parents: [baseCommitSha] }),
+  });
+  if (!newCommitRes.ok) return false;
+  const newCommitSha = (await newCommitRes.json()).sha;
+
+  const refUpdateRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
+    method: 'PATCH', headers: ghHeaders(token),
+    body: JSON.stringify({ sha: newCommitSha, force: true }),
+  });
+  return refUpdateRes.ok;
 }
 
 // GET — fast DB read
@@ -186,7 +260,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PUT — update DB title + rename GitHub folder
+// PUT — rename a course title AND its GitHub folder (source of truth).
+// The GitHub folder is renamed using the caller's personal PAT (githubToken),
+// falling back to the app's bot token when the user hasn't connected one.
 export async function PUT(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
@@ -201,22 +277,110 @@ export async function PUT(req: NextRequest) {
     const isCR = profile?.isCR || false;
 
     const body = await req.json();
-    const { id, title } = body;
-    if (!id || !title) return NextResponse.json({ error: 'id and title are required' }, { status: 400 });
+    let { code, semester, department, title, githubToken } = body;
 
+    // Legacy callers send { id, title } — resolve folder info from the DB.
+    if (!code && body.id) {
+      try {
+        const course = await prisma.course.findUnique({ where: { id: body.id }, select: { code: true, semester: true, department: true } });
+        if (course) { code = course.code; semester = course.semester; department = course.department; }
+      } catch {}
+    }
+
+    if (!code || !semester || !department || !title) {
+      return NextResponse.json({ error: 'code, semester, department, title are required' }, { status: 400 });
+    }
+    const courseTitle = String(title).trim();
+    if (!courseTitle) return NextResponse.json({ error: 'title is required' }, { status: 400 });
+
+    if (!config.allDepartmentIds.has(department)) {
+      return NextResponse.json({ error: 'Invalid department' }, { status: 400 });
+    }
+
+    // Permission: role-based editCourse, or the DB course owner.
     const hasRolePermission = await hasPermission('editCourse', role, isCR, email);
-
     if (!hasRolePermission) {
-      const course = await prisma.course.findUnique({ where: { id }, select: { addedBy: true } });
-      if (!course || course.addedBy?.toLowerCase() !== email.toLowerCase()) {
+      let owner = '';
+      try {
+        const course = await prisma.course.findFirst({
+          where: { code: code.toUpperCase(), semester, department: getDepartmentIdByFolder(department) },
+          select: { addedBy: true },
+        });
+        owner = course?.addedBy || '';
+      } catch {}
+      if (owner.toLowerCase() !== email.toLowerCase()) {
         return NextResponse.json({ error: 'You do not have permission to edit this course' }, { status: 403 });
       }
     }
 
-    const updated = await prisma.course.update({ where: { id }, data: { title } });
-    return NextResponse.json({ success: true, course: updated });
+    const botToken = await resolveGithubToken();
+    const token = githubToken || botToken;
+    if (!token) {
+      return NextResponse.json({ error: 'GitHub is not connected. Connect your GitHub to rename courses.' }, { status: 400 });
+    }
+
+    const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const deptFolder = getDepartmentFolder(department);
+    const baseDir = `${config.uploadPath}/${deptFolder}/${semester}`;
+    const newFolderPath = `${baseDir}/${code.toUpperCase()} - ${cleanTitle}`;
+
+    const oldFolderPath = await findCourseFolderPath(token, baseDir, code);
+    if (!oldFolderPath) {
+      return NextResponse.json({ error: 'Course folder not found on GitHub' }, { status: 404 });
+    }
+    const oldTitle = oldFolderPath.split('/').pop()?.replace(`${code.toUpperCase()} - `, '') || '';
+
+    if (oldFolderPath !== newFolderPath) {
+      const renamed = await renameCourseFolderOnGithub(token, oldFolderPath, newFolderPath);
+      if (!renamed) {
+        return NextResponse.json({ error: 'Failed to rename the course folder on GitHub. Check that your GitHub token has write access to the repository.' }, { status: 500 });
+      }
+    }
+
+    // Update the DB log if a record still exists
+    try {
+      const existing = await prisma.course.findFirst({
+        where: { code: code.toUpperCase(), semester, department: getDepartmentIdByFolder(department) },
+      });
+      if (existing) {
+        await prisma.course.update({ where: { id: existing.id }, data: { title: courseTitle } });
+      }
+    } catch {}
+
+    try {
+      await prisma.activityLog.create({
+        data: {
+          action: 'course_edit',
+          userId: email,
+          userName: profile?.name || email.split('@')[0],
+          details: JSON.stringify({ code: code.toUpperCase(), oldTitle, newTitle: courseTitle, department, semester, oldFolderPath, newFolderPath }),
+        },
+      });
+    } catch {}
+
+    try {
+      const deptFullName = getDeptFullName(department);
+      const semLabel = config.semesters.find(s => s.id === semester)?.label || semester;
+      const tgMsg = [
+        `✏️ <b>Course Renamed</b>`,
+        ``,
+        `<b>Code:</b> <code>${code.toUpperCase()}</code>`,
+        `<b>Title:</b> ${oldTitle} → ${courseTitle}`,
+        `<b>Department:</b> ${deptFullName} (${department})`,
+        `<b>Semester:</b> ${semLabel}`,
+        `<b>By:</b> ${email}`,
+      ].join('\n');
+      const pageLink = buildBrowseLink({ dept: department, sem: semester });
+      await sendMessageWithButton(OWNER_CHAT_ID, tgMsg, `📂 View ${code.toUpperCase()}`, pageLink);
+    } catch {}
+
+    return NextResponse.json({
+      success: true,
+      renamed: oldFolderPath !== newFolderPath,
+      course: { code: code.toUpperCase(), title: courseTitle, department, semester },
+    });
   } catch {
-    return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to rename course' }, { status: 500 });
   }
 }
 

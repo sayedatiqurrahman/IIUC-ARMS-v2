@@ -16,6 +16,8 @@ interface CoursesViewProps {
   userEmail: string;
   currentDept: string | null;
   currentSem: string | null;
+  userDeptId?: string | null;
+  isOwner?: boolean;
 }
 
 export default function CoursesView({
@@ -23,10 +25,15 @@ export default function CoursesView({
   navigateToCourse, goBack,
   setShowAddCourse,
   dbCourses, userEmail, currentDept, currentSem,
+  userDeptId = null, isOwner = false,
 }: CoursesViewProps) {
   const { data: session } = useSession();
   const loadTree = useAppStore(s => s.loadTree);
   const invalidateCoursesCache = useAppStore(s => s.invalidateCoursesCache);
+  const storeGithubToken = useAppStore(s => s.githubToken);
+  const profile = useAppStore(s => s.profile);
+
+  const personalToken = storeGithubToken || (profile as any)?.githubToken || '';
 
   const myEmail = userEmail.toLowerCase();
 
@@ -38,14 +45,16 @@ export default function CoursesView({
     return map;
   }, [dbCourses]);
 
-  const [editTarget, setEditTarget] = useState<{ code: string; title: string; id: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<{ code: string; title: string } | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
 
-  const [deleteTarget, setDeleteTarget] = useState<{ code: string; title: string; id: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ code: string; title: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   async function handleEdit() {
     if (!editTarget || !editTitle.trim()) return;
@@ -55,7 +64,13 @@ export default function CoursesView({
       const res = await fetch('/api/courses', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editTarget.id, title: editTitle.trim() }),
+        body: JSON.stringify({
+          code: editTarget.code,
+          semester: currentSem,
+          department: currentDept,
+          title: editTitle.trim(),
+          githubToken: personalToken || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
@@ -137,6 +152,8 @@ export default function CoursesView({
           const isMyCourse = addedBy.toLowerCase() === myEmail;
           const canEditThis = isMyCourse || coursePerms.canEdit;
           const canDeleteThis = isMyCourse || coursePerms.canDelete;
+          const inMyDept = isOwner || (!!userDeptId && currentDept === userDeptId);
+          const showMenu = (canEditThis || canDeleteThis) && inMyDept;
 
           return (
           <div key={course.code} className="p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl hover:border-qsis hover:shadow-[0_0_12px_rgba(34,197,94,0.3)] transition-all group">
@@ -171,19 +188,30 @@ export default function CoursesView({
                   </div>
                 )}
               </div>
-              {(canEditThis || canDeleteThis) && dbInfo && (
-                <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {canEditThis && (
-                    <button onClick={(e) => { e.stopPropagation(); setEditTarget({ code: course.code, title: course.title, id: dbInfo.id }); setEditTitle(course.title); setEditError(''); }}
-                      className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 border-none cursor-pointer flex items-center justify-center text-[0.7rem] hover:bg-blue-500/20" title="Edit course title">
-                      <i className="fas fa-pen"></i>
-                    </button>
-                  )}
-                  {canDeleteThis && (
-                    <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({ code: course.code, title: course.title, id: dbInfo.id }); setDeleteError(''); }}
-                      className="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.7rem] hover:bg-red-500/20" title="Delete course">
-                      <i className="fas fa-trash"></i>
-                    </button>
+              {showMenu && (
+                <div className="relative flex-shrink-0">
+                  <button onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === course.code ? null : course.code); }}
+                    className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 hover:text-dark-text hover:border-qsis/40 flex items-center justify-center cursor-pointer transition-colors" title="Course actions">
+                    <i className="fas fa-ellipsis-v text-sm"></i>
+                  </button>
+                  {openMenu === course.code && (
+                    <>
+                      <div className="fixed inset-0 z-[210]" onClick={(e) => { e.stopPropagation(); setOpenMenu(null); }} />
+                      <div className="absolute right-0 top-9 z-[220] w-44 rounded-xl border border-dark-border bg-dark-bg3 shadow-2xl overflow-hidden">
+                        {canEditThis && (
+                          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setEditTarget({ code: course.code, title: course.title }); setEditTitle(course.title); setEditError(''); }}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-dark-text hover:bg-dark-bg2 cursor-pointer border-none text-left">
+                            <i className="fas fa-pen text-blue-400 w-4 text-center"></i> Rename course
+                          </button>
+                        )}
+                        {canDeleteThis && (
+                          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setDeleteTarget({ code: course.code, title: course.title }); setDeleteError(''); }}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-red-400 hover:bg-red-500/10 cursor-pointer border-none text-left">
+                            <i className="fas fa-trash w-4 text-center"></i> Delete course
+                          </button>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               )}
@@ -209,8 +237,9 @@ export default function CoursesView({
       {editTarget && createPortal(
         <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center p-4" onClick={() => setEditTarget(null)}>
           <div className="bg-dark-bg2 w-full max-w-sm rounded-2xl border border-dark-border p-5" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-dark-text mb-1"><i className="fas fa-edit text-blue-400 mr-2"></i>Edit Course</h3>
-            <p className="text-dark-text3 text-[0.72rem] mb-3">Editing <span className="font-mono text-qsis">{editTarget.code}</span></p>
+            <h3 className="text-sm font-bold text-dark-text mb-1"><i className="fas fa-edit text-blue-400 mr-2"></i>Rename Course</h3>
+            <p className="text-dark-text3 text-[0.72rem] mb-2">Editing <span className="font-mono text-qsis">{editTarget.code}</span> — this renames the GitHub folder too.</p>
+            <p className="text-dark-text3 text-[0.68rem] mb-3"><i className="fas fa-info-circle mr-1 text-qsis"></i>Uses your connected GitHub (PAT) to move the folder and all files inside it.</p>
             {editError && <p className="text-red-400 text-[0.72rem] mb-2">{editError}</p>}
             <input type="text" placeholder="New course title" value={editTitle} onChange={e => setEditTitle(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis mb-3" />
