@@ -35,6 +35,7 @@ export default function DashboardView() {
   const recentReads = useAppStore(s => s.recentReads);
   const openRecentFile = useAppStore(s => s.openRecentFile);
   const setUploadOpen = useAppStore(s => s.setUploadOpen);
+  const clearOnboarding = useAppStore(s => s.clearOnboarding);
   const loadProfile = useAppStore(s => s.loadProfile);
 
   const [activeSection, setActiveSection] = useState('overview');
@@ -479,6 +480,9 @@ export default function DashboardView() {
                 </button>
                 <button className="flex flex-col items-center gap-2 p-4 rounded-xl border border-dark-border bg-dark-bg3 hover:border-qsis hover:bg-qsis/5 transition-all cursor-pointer" onClick={() => router.push('/contributors')}>
                   <i className="fas fa-users text-[1.2rem] text-blue-500"></i><span className="text-[0.75rem] font-semibold">Team</span>
+                </button>
+                <button className="flex flex-col items-center gap-2 p-4 rounded-xl border border-dark-border bg-dark-bg3 hover:border-qsis hover:bg-qsis/5 transition-all cursor-pointer" onClick={() => { clearOnboarding(); window.location.reload(); }}>
+                  <i className="fas fa-user-cog text-[1.2rem] text-purple-500"></i><span className="text-[0.75rem] font-semibold">Edit Personalize</span>
                 </button>
               </div>
             </div>

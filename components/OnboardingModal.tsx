@@ -7,8 +7,7 @@ import { FACULTIES, getAllDepartments } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
 
 const ONBOARDING_KEY = 'iiuc_arms-onboarding';
-const CANCEL_COUNT_KEY = 'iiuc_arms-onboard-cancel-count';
-const CANCEL_FOREVER_KEY = 'iiuc_arms-onboard-cancel-forever';
+const DISMISSED_KEY = 'iiuc_arms-onboard-dismissed';
 
 // Legacy keys used before the iiuc_arms- prefix (never used for redirects again).
 const LEGACY_KEYS = {
@@ -17,7 +16,9 @@ const LEGACY_KEYS = {
   cancelForever: 'qsis-onboard-cancel-forever',
 };
 
-// One-time migration so users keep their personalization from the old keys.
+// One-time migration so users keep their personalization from the old keys,
+// and anyone who previously skipped/closed the modal is treated as dismissed
+// (so they are never nagged again after a deployment/update).
 function migrateLegacyOnboarding() {
   if (typeof window === 'undefined') return;
   try {
@@ -25,13 +26,11 @@ function migrateLegacyOnboarding() {
       const legacy = localStorage.getItem(LEGACY_KEYS.onboarding);
       if (legacy) localStorage.setItem(ONBOARDING_KEY, legacy);
     }
-    if (!localStorage.getItem(CANCEL_FOREVER_KEY)) {
-      const legacy = localStorage.getItem(LEGACY_KEYS.cancelForever);
-      if (legacy) localStorage.setItem(CANCEL_FOREVER_KEY, legacy);
-    }
-    if (!localStorage.getItem(CANCEL_COUNT_KEY)) {
-      const legacy = localStorage.getItem(LEGACY_KEYS.cancelCount);
-      if (legacy) localStorage.setItem(CANCEL_COUNT_KEY, legacy);
+    const hadLegacySkip =
+      localStorage.getItem(LEGACY_KEYS.cancelForever) === 'true' ||
+      parseInt(localStorage.getItem(LEGACY_KEYS.cancelCount) || '0', 10) > 0;
+    if (hadLegacySkip && !localStorage.getItem(DISMISSED_KEY)) {
+      localStorage.setItem(DISMISSED_KEY, 'true');
     }
   } catch {}
 }
@@ -53,34 +52,28 @@ export function getOnboardingData(): OnboardingData | null {
   } catch { return null; }
 }
 
-export function hasSkippedForever(): boolean {
+export function hasDismissedOnboarding(): boolean {
   if (typeof window === 'undefined') return false;
   migrateLegacyOnboarding();
-  return localStorage.getItem(CANCEL_FOREVER_KEY) === 'true';
+  return localStorage.getItem(DISMISSED_KEY) === 'true';
+}
+
+export function dismissOnboarding(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(DISMISSED_KEY, 'true');
 }
 
 export function setOnboardingData(data: OnboardingData) {
   localStorage.setItem(ONBOARDING_KEY, JSON.stringify(data));
+  localStorage.removeItem(DISMISSED_KEY);
 }
 
 export function clearOnboardingData() {
   localStorage.removeItem(ONBOARDING_KEY);
-  localStorage.removeItem(CANCEL_COUNT_KEY);
-  localStorage.removeItem(CANCEL_FOREVER_KEY);
+  localStorage.removeItem(DISMISSED_KEY);
   localStorage.removeItem(LEGACY_KEYS.onboarding);
   localStorage.removeItem(LEGACY_KEYS.cancelCount);
   localStorage.removeItem(LEGACY_KEYS.cancelForever);
-}
-
-function getCancelCount(): number {
-  if (typeof window === 'undefined') return 0;
-  return parseInt(localStorage.getItem(CANCEL_COUNT_KEY) || '0', 10);
-}
-
-function incrementCancelCount(): number {
-  const c = getCancelCount() + 1;
-  localStorage.setItem(CANCEL_COUNT_KEY, String(c));
-  return c;
 }
 
 export default function OnboardingModal({ onComplete, onClose }: { onComplete: (data: OnboardingData) => void; onClose: () => void }) {
@@ -92,22 +85,7 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
   const [fileView, setFileView] = useState<'all-prioritized' | 'my-semester-only'>('all-prioritized');
   const [step, setStep] = useState(0);
   const [selectedDeptId, setSelectedDeptId] = useState(defaultDept?.department.id || 'qsis');
-  const [showCancelForever, setShowCancelForever] = useState(false);
   const [showDeptPicker, setShowDeptPicker] = useState(false);
-
-  const handleClose = () => {
-    const count = incrementCancelCount();
-    if (count >= 3) {
-      setShowCancelForever(true);
-    } else {
-      onClose();
-    }
-  };
-
-  const handleCancelForever = () => {
-    localStorage.setItem(CANCEL_FOREVER_KEY, 'true');
-    onClose();
-  };
 
   const selectedDept = allDepts.find(d => d.department.id === selectedDeptId);
 
@@ -127,29 +105,11 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 p-4">
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative max-h-[90vh] flex flex-col">
         {/* Close button */}
-        <button onClick={handleClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-dark-bg3/80 hover:bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-dark-text border-none cursor-pointer z-10 transition-colors" title="Close">
+        <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-dark-bg3/80 hover:bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-dark-text border-none cursor-pointer z-10 transition-colors" title="Close">
           <i className="fas fa-times text-sm"></i>
         </button>
 
-        {showCancelForever && (
-          <div className="px-6 py-8 text-center">
-            <div className="w-14 h-14 rounded-full bg-yellow-500/15 flex items-center justify-center mx-auto mb-4">
-              <i className="fas fa-hand-paper text-2xl text-yellow-500"></i>
-            </div>
-            <h3 className="text-lg font-bold text-dark-text mb-2">Skip permanently?</h3>
-            <p className="text-[0.8rem] text-dark-text2 mb-6">You&apos;ve skipped this 3 times. Want to never see this again? You can always reset it from your browser settings.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowCancelForever(false)} className="flex-1 py-2.5 rounded-xl border border-dark-border bg-dark-bg text-dark-text2 text-[0.85rem] font-medium cursor-pointer hover:bg-dark-bg3 transition-colors">
-                Go Back
-              </button>
-              <button onClick={handleCancelForever} className="flex-1 py-2.5 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-[0.85rem] font-semibold cursor-pointer hover:bg-yellow-500/25 transition-colors">
-                Skip Forever
-              </button>
-            </div>
-          </div>
-        )}
-
-        {!showCancelForever && step === 0 && (
+        {step === 0 && (
           <>
             <div className="bg-gradient-to-br from-qsis/20 to-accent/10 px-6 py-8 text-center">
               <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={64} height={64} className="w-16 h-16 p-1 rounded-xl border-2 border-qsis object-contain bg-white mx-auto mb-4" />
@@ -203,7 +163,7 @@ export default function OnboardingModal({ onComplete, onClose }: { onComplete: (
           </>
         )}
 
-        {!showCancelForever && step === 1 && (
+        {step === 1 && (
           <>
             <div className="px-6 pt-6 pb-2">
               <h3 className="text-lg font-bold text-dark-text mb-1">File Visibility</h3>

@@ -7,6 +7,7 @@ const PRESERVE_KEYS = [
   'next-auth.csrf-token',
   'emailForSignIn',
   'iiuc_arms-onboarding',
+  'iiuc_arms-onboard-dismissed',
   'iiuc_arms-onboard-cancel-forever',
   'iiuc_arms-onboard-cancel-count',
   'qsis-onboarding',
