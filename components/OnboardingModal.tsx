@@ -20,11 +20,15 @@ export interface OnboardingData {
 
 export function getOnboardingData(): OnboardingData | null {
   if (typeof window === 'undefined') return null;
-  if (localStorage.getItem(CANCEL_FOREVER_KEY) === 'true') return { gender: 'male', department: "Qur'anic Sciences and Islamic Studies", semester: '1st Semester', fileView: 'all-prioritized', completedAt: 0 };
   try {
     const raw = localStorage.getItem(ONBOARDING_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
+}
+
+export function hasSkippedForever(): boolean {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem(CANCEL_FOREVER_KEY) === 'true';
 }
 
 export function setOnboardingData(data: OnboardingData) {
@@ -33,6 +37,8 @@ export function setOnboardingData(data: OnboardingData) {
 
 export function clearOnboardingData() {
   localStorage.removeItem(ONBOARDING_KEY);
+  localStorage.removeItem(CANCEL_COUNT_KEY);
+  localStorage.removeItem(CANCEL_FOREVER_KEY);
 }
 
 function getCancelCount(): number {

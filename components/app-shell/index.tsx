@@ -8,7 +8,7 @@ import { useAppStore, getSavedPdfPage } from '@/lib/store';
 import LoginModal from '@/components/LoginModal';
 import UploadModal from '@/components/upload-modal';
 import PdfViewer from '@/components/PdfViewer';
-import OnboardingModal, { getOnboardingData, type OnboardingData } from '@/components/OnboardingModal';
+import OnboardingModal, { getOnboardingData, hasSkippedForever, type OnboardingData } from '@/components/OnboardingModal';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut, signIn } from 'next-auth/react';
 import { config } from '@/lib/config';
@@ -203,7 +203,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     loadOnboarding();
     // Check onboarding
     const data = getOnboardingData();
-    if (!data) {
+    if (!data && !hasSkippedForever()) {
       setShowOnboarding(true);
     } else {
       setOnboardingDone(true);

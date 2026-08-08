@@ -35,7 +35,6 @@ export default function BrowsePage() {
   const error = useAppStore(s => s.error);
   const onboardData = useAppStore(s => s.onboardingData);
   const clearOnboarding = useAppStore(s => s.clearOnboarding);
-  const prevOnboardDataRef = useRef(onboardData);
   const view = useAppStore(s => s.view);
   const currentSem = useAppStore(s => s.currentSem);
   const currentCat = useAppStore(s => s.currentCat);
@@ -251,44 +250,34 @@ export default function BrowsePage() {
     }
   }, [mounted, loading]);
 
-  useEffect(() => {
-    if (!mounted) return;
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dept')) return;
-    const prevData = prevOnboardDataRef.current;
-    prevOnboardDataRef.current = onboardData;
-    if (!prevData && onboardData && view === 'departments') {
-      if (userDeptId) {
-        navigateToDepartment(userDeptId);
-        const semId = onboardData.semester
-          ? config.semesters.find(s => s.label === onboardData.semester)?.id
-          : null;
-        if (semId && semId !== 'graduated') {
-          setTimeout(() => {
-            useAppStore.getState().navigateToSemester(semId);
-          }, 150);
-        }
-      }
-    }
-  }, [onboardData, mounted]);
+  // Auto-redirect ONCE to the personalized department + semester, and only when
+  // there is no deeplink in the URL. A deeplink (dept/sem/course/q) always wins.
+  // Manual navigation afterwards is never overridden, and no personalization
+  // means no redirect (never fall back to a default department like qsis).
+  const autoRedirectedRef = useRef(false);
   useEffect(() => {
     if (!mounted || loading) return;
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dept')) return;
-    const dept = onboardData?.department || profile.department || '';
-    if (!dept || view !== 'departments') return;
-    const target = FACULTIES.flatMap(f => f.departments).find(d => d.name === dept || d.id === dept);
-    if (target) {
-      navigateToDepartment(target.id);
-      const semId = onboardData?.semester
-        ? config.semesters.find(s => s.label === onboardData.semester)?.id
-        : profile.semester;
-      if (semId && semId !== 'graduated') {
-        setTimeout(() => {
-          const { navigateToSemester } = useAppStore.getState();
-          navigateToSemester(semId);
-        }, 200);
-      }
+    if (autoRedirectedRef.current) return;
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      if (p.has('dept') || p.has('sem') || p.has('course') || p.has('q')) return;
     }
-  }, [mounted, loading]);
+    if (useAppStore.getState().view !== 'departments') return;
+    const deptName = onboardData?.department || '';
+    if (!deptName) return;
+    const target = FACULTIES.flatMap(f => f.departments).find(d => d.name === deptName || d.id === deptName);
+    if (!target) return;
+    autoRedirectedRef.current = true;
+    navigateToDepartment(target.id);
+    const semId = onboardData?.semester
+      ? config.semesters.find(s => s.label === onboardData.semester)?.id
+      : null;
+    if (semId && semId !== 'graduated') {
+      setTimeout(() => {
+        useAppStore.getState().navigateToSemester(semId);
+      }, 200);
+    }
+  }, [mounted, loading, onboardData, navigateToDepartment, navigateToSemester]);
   const prevSemesterRef = useRef(profile.semester);
   useEffect(() => {
     if (!mounted || loading) return;
