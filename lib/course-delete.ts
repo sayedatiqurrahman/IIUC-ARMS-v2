@@ -53,73 +53,109 @@ export async function getAppBotToken(): Promise<string | null> {
   } catch { return null; }
 }
 
-export async function getAllFilesInFolder(token: string, folderPath: string): Promise<{ path: string; sha: string }[]> {
-  const url = `${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${folderPath}`;
-  const res = await fetch(url, { headers: ghHeaders(token) });
-  if (!res.ok) return [];
-  const items = await res.json();
-  if (!Array.isArray(items)) return [];
-  const files: { path: string; sha: string }[] = [];
-  for (const item of items) {
-    if (item.type === 'file') files.push({ path: item.path, sha: item.sha });
-    else if (item.type === 'dir') {
-      const sub = await getAllFilesInFolder(token, item.path);
-      files.push(...sub);
-    }
-  }
-  return files;
+async function getBranchBase(baseToken: string): Promise<{ baseCommitSha: string; baseTreeSha: string } | null> {
+  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(baseToken) });
+  if (!refRes.ok) return null;
+  const baseCommitSha = (await refRes.json()).object.sha;
+  const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(baseToken) });
+  if (!commitRes.ok) return null;
+  return { baseCommitSha, baseTreeSha: (await commitRes.json()).tree.sha };
 }
 
-async function batchDeleteFiles(token: string, files: { path: string; sha: string }[]): Promise<number> {
-  if (files.length === 0) return 0;
-  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
-  if (!refRes.ok) return 0;
-  const refData = await refRes.json();
-  const baseCommitSha = refData.object.sha;
+async function getFullTree(baseToken: string, baseTreeSha: string): Promise<any[]> {
+  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(baseToken) });
+  if (!treeRes.ok) return [];
+  return (await treeRes.json()).tree || [];
+}
 
-  const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
-  if (!commitRes.ok) return 0;
-  const commitData = await commitRes.json();
-  const baseTreeSha = commitData.tree.sha;
+function withPrefix(folderPath: string): string {
+  return folderPath.endsWith('/') ? folderPath : folderPath + '/';
+}
 
-  const fullTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
-  if (!fullTreeRes.ok) return 0;
-  const fullTreeData = await fullTreeRes.json();
+// List every blob under a folder — one recursive-tree request instead of the
+// old per-subfolder contents walk (which made deletes very slow).
+export async function getAllFilesInFolder(token: string, folderPath: string): Promise<{ path: string; sha: string }[]> {
+  const prefix = withPrefix(folderPath);
+  try {
+    const base = await getBranchBase(token);
+    if (base) {
+      const fullTree = await getFullTree(token, base.baseTreeSha);
+      const files = fullTree
+        .filter((item: any) => item.type === 'blob' && String(item.path || '').startsWith(prefix))
+        .map((item: any) => ({ path: item.path, sha: item.sha }));
+      if (files.length > 0 || fullTree.length > 0) return files;
+    }
+  } catch {}
 
-  const deletePaths = new Set(files.map(f => f.path));
-  const keepItems = (fullTreeData.tree || []).filter((item: any) => !deletePaths.has(item.path));
-  if (keepItems.length === 0) return 0;
+  // Fallback: recursive contents walk (older API path)
+  const walk = async (dir: string): Promise<{ path: string; sha: string }[]> => {
+    const url = `${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${dir}`;
+    const res = await fetch(url, { headers: ghHeaders(token) });
+    if (!res.ok) return [];
+    const items = await res.json();
+    if (!Array.isArray(items)) return [];
+    const out: { path: string; sha: string }[] = [];
+    for (const item of items) {
+      if (item.type === 'file') out.push({ path: item.path, sha: item.sha });
+      else if (item.type === 'dir') out.push(...(await walk(item.path)));
+    }
+    return out;
+  };
+  return walk(folderPath);
+}
 
-  const treeItems = keepItems.map((item: any) => ({
-    path: item.path, mode: item.mode, type: item.type,
-    sha: item.type === 'blob' ? item.sha : undefined,
-  }));
+// Delete a list of tree entries (blobs and/or subtrees) in ONE commit by
+// setting each entry's sha to null. This is the only way the git trees API
+// actually removes entries — merely omitting them from the submitted tree makes
+// GitHub inherit them from base_tree again (the bug that made course deletion
+// silently do nothing).
+async function batchDeleteEntries(token: string, entries: { path: string; mode: string; type: string }[]): Promise<number> {
+  if (entries.length === 0) return 0;
+  const base = await getBranchBase(token);
+  if (!base) return 0;
 
+  const treeItems = entries.map(e => ({ path: e.path, mode: e.mode, type: e.type, sha: null }));
   const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
     method: 'POST', headers: ghHeaders(token),
-    body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems }),
+    body: JSON.stringify({ base_tree: base.baseTreeSha, tree: treeItems }),
   });
   if (!treeRes.ok) return 0;
   const treeData = await treeRes.json();
 
   const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
     method: 'POST', headers: ghHeaders(token),
-    body: JSON.stringify({ message: `Delete course: ${files.length} files removed`, tree: treeData.sha, parents: [baseCommitSha] }),
+    body: JSON.stringify({ message: `Delete course: ${entries.length} file(s) removed`, tree: treeData.sha, parents: [base.baseCommitSha] }),
   });
   if (!newCommitRes.ok) return 0;
   const newCommitData = await newCommitRes.json();
 
-  await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
+  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
     method: 'PATCH', headers: ghHeaders(token),
     body: JSON.stringify({ sha: newCommitData.sha, force: true }),
   });
-  return files.length;
+  return refRes.ok ? entries.length : 0;
 }
 
-// Removes the course's GitHub folder and returns the number of files deleted.
+// Removes the course's GitHub folder and returns the number of entries deleted.
 export async function deleteCourseFolder(folderPath: string): Promise<number> {
   const token = await getAppBotToken();
   if (!token) return 0;
-  const allFiles = await getAllFilesInFolder(token, folderPath);
-  return batchDeleteFiles(token, allFiles);
+
+  const prefix = withPrefix(folderPath);
+  const base = await getBranchBase(token);
+  if (!base) return 0;
+  const fullTree = await getFullTree(token, base.baseTreeSha);
+  if (fullTree.length === 0) return 0;
+
+  // Collect the folder's tree entry plus everything nested under it. Deleting
+  // the folder's own tree entry alone would normally be enough, but collecting
+  // nested entries too keeps it robust if the folder path spacing ever differs
+  // from the tree path while the nested blobs still match.
+  const entries = fullTree.filter((item: any) => {
+    const p = String(item.path || '');
+    return p === folderPath || p.startsWith(prefix);
+  });
+  if (entries.length === 0) return 0;
+
+  return batchDeleteEntries(token, entries.map((item: any) => ({ path: item.path, mode: item.mode, type: item.type })));
 }

@@ -4,7 +4,7 @@ import { config } from '@/lib/config';
 import { getDepartmentFolder, getDepartmentIdByFolder } from '@/lib/departments';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
-import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData, resolveGithubToken, getGithubTree } from '@/lib/telegram';
+import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData, resolveGithubToken } from '@/lib/telegram';
 import { getAllFilesInFolder, deleteCourseFolder, findCourseFolderPathInRepo } from '@/lib/course-delete';
 
 const COURSE_SUBFOLDERS = ['Mid/NOTES', 'Mid/Previous Questions', 'Final/NOTES', 'Final/Previous Questions', 'sheet', 'Syllabus', 'Other'];
@@ -210,11 +210,14 @@ export async function POST(req: NextRequest) {
     const courseFolder = `${code.toUpperCase()} - ${cleanTitle}`;
     const basePath = `${config.uploadPath}/${getDepartmentFolder(department)}/${semester}/${courseFolder}`;
 
-    // GitHub is the source of truth — check if the course folder already exists
+    // GitHub is the source of truth — check if the course folder already exists.
+    // A targeted contents check is much cheaper than a full recursive tree fetch.
     let alreadyExisted = false;
     try {
-      const tree = await getGithubTree();
-      alreadyExisted = tree.some((item: any) => String(item.path || '').startsWith(basePath + '/'));
+      const probePath = `${basePath}/Mid/NOTES/.gitkeep`;
+      const probeEncoded = probePath.split('/').map(encodeURIComponent).join('/');
+      const probeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${probeEncoded}`, { headers: ghHeaders(botToken) });
+      alreadyExisted = probeRes.ok;
     } catch {}
 
     if (!alreadyExisted) {
