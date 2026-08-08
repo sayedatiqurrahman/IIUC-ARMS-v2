@@ -1,5 +1,5 @@
-// SW BUILD: 2026-08-08-rfv — react-file-viewer switch; never cache this file
-// (see next.config.js /sw.js Cache-Control: no-store).
+// SW BUILD: 2026-08-08-auto-update — never cache this file (see next.config.js
+// /sw.js Cache-Control: no-store). Updates auto-install via skipWaiting + claim.
 // IMMUTABLE: Next.js hashed build output (/_next/static/*). These files are
 // content-addressed — the hash changes when the file changes — so they can be
 // cached forever and NEVER deleted. Keeping them across updates is what makes
@@ -58,6 +58,10 @@ self.addEventListener('install', (event) => {
       })
   );
   self.skipWaiting();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

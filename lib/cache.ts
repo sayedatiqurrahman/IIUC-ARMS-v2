@@ -104,7 +104,7 @@ export async function checkForAppUpdate(): Promise<boolean> {
     if (worker) {
       if (worker.state === 'installed' || worker.state === 'activated') return true;
       return await new Promise<boolean>((resolve) => {
-        const t = window.setTimeout(() => resolve(true), 10000);
+        const t = window.setTimeout(() => resolve(false), 10000);
         const onState = () => {
           if (worker.state === 'installed' || worker.state === 'activated') {
             worker.removeEventListener('statechange', onState);
@@ -159,4 +159,72 @@ export function forceResetApp(): void {
   }
 
   window.location.href = '/';
+}
+
+// Watch for app updates automatically: check right away, again whenever the tab
+// regains focus/visibility, and every 5 minutes. Calls onUpdate(true) whenever a
+// newer deploy is live. Returns a cleanup function.
+export function startUpdateWatcher(onUpdate: (hasUpdate: boolean) => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  let stopped = false;
+  let checking = false;
+
+  const check = async () => {
+    if (stopped || checking) return;
+    checking = true;
+    try {
+      const has = await checkForAppUpdate();
+      if (!stopped) onUpdate(has);
+    } catch {} finally {
+      checking = false;
+    }
+  };
+
+  const onFocus = () => check();
+  const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+
+  check();
+  const interval = window.setInterval(check, 5 * 60 * 1000);
+  window.addEventListener('focus', onFocus);
+  document.addEventListener('visibilitychange', onVisible);
+
+  return () => {
+    stopped = true;
+    window.clearInterval(interval);
+    window.removeEventListener('focus', onFocus);
+    document.removeEventListener('visibilitychange', onVisible);
+  };
+}
+
+// Install the latest build and reload the page. Lets a newly-installed service
+// worker (which skip-waits + claims clients) take over, then reloads so the page
+// actually runs the fresh code. Falls back to a hard refresh when no SW exists.
+export async function applyAppUpdate(): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        const newWorker = reg.waiting || reg.installing;
+        if (newWorker && newWorker.postMessage) newWorker.postMessage({ type: 'SKIP_WAITING' });
+        else await reg.update();
+
+        await new Promise<void>((resolve) => {
+          const t = window.setTimeout(resolve, 2500);
+          const done = () => { window.clearTimeout(t); resolve(); };
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.addEventListener('controllerchange', done, { once: true });
+          } else {
+            window.setTimeout(done, 800);
+          }
+        });
+        window.location.reload();
+        return;
+      }
+    } catch {}
+  }
+
+  await hardRefresh();
 }
