@@ -93,7 +93,7 @@ async function renameCourseFolderOnGithub(token: string, oldPath: string, newPat
     const rel = p.slice(oldPrefix.length);
     if (!rel) continue;
     treeMap.set(`${newPrefix}${rel}`, { path: `${newPrefix}${rel}`, mode: item.mode, type: 'blob', sha: item.sha });
-    treeMap.set(p, { path: p, sha: null }); // remove the old path
+    treeMap.set(p, { path: p, sha: null, mode: item.mode, type: 'blob' }); // remove the old path
     moved++;
   }
   // Truly empty folder (only empty subdirectories, nothing tracked in git) —
@@ -110,7 +110,7 @@ async function renameCourseFolderOnGithub(token: string, oldPath: string, newPat
   for (const item of fullTree) {
     const p = String(item.path || '');
     if ((p === newPath || p.startsWith(newPrefix)) && !treeMap.has(p)) {
-      treeMap.set(p, { path: p, sha: null });
+      treeMap.set(p, { path: p, sha: null, mode: item.mode, type: item.type });
     }
   }
 
