@@ -43,7 +43,7 @@ interface UploadFormProps {
   uploading: boolean;
   uploadProgress?: { percent: number; label: string } | null;
   compressing?: string | null;
-  result: { success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null;
+  result: { success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean; merged?: boolean; direct?: boolean } | null;
   handleSubmit: () => void;
   patInputToken: string;
   setPatInputToken: (v: string) => void;
@@ -168,14 +168,21 @@ export default function UploadForm({
   }
 
   if (result?.success) {
+    const autoMerged = result.direct || result.merged;
     return (
       <div className="text-center py-8">
         <div className="mb-4">
-          <i className="fas fa-check-circle text-2xl text-green-500"></i>
+          <i className={`fas ${autoMerged ? 'fa-check-circle text-green-500' : 'fa-clock text-amber-500'} text-2xl`}></i>
         </div>
-        <h3 className="text-[1rem] font-bold mb-2">PR Created Successfully!</h3>
-        <p className="text-[0.82rem] text-dark-text2 mb-4">Your files are pending review.</p>
-        {!hasPat && (
+        <h3 className="text-[1rem] font-bold mb-2">{autoMerged ? 'Uploaded Successfully!' : 'PR Created Successfully!'}</h3>
+        <p className="text-[0.82rem] text-dark-text2 mb-4">
+          {autoMerged
+            ? result.direct
+              ? 'Your files were committed to the repository.'
+              : 'Your files were merged into the repository.'
+            : 'Your files are pending review.'}
+        </p>
+        {!hasPat && result.direct && (
           <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-left">
             <p className="text-[0.75rem] font-semibold text-blue-400 mb-1"><i className="fas fa-info-circle mr-1"></i>Want contribution credit?</p>
             <p className="text-[0.7rem] text-dark-text2">
@@ -187,7 +194,7 @@ export default function UploadForm({
           </div>
         )}
         <a href={result.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-qsis text-white font-semibold text-[0.85rem] hover:opacity-90 transition-opacity">
-          <i className="fab fa-github"></i> View Pull Request
+          <i className="fab fa-github"></i> {result.direct ? 'View Commit' : 'View Pull Request'}
         </a>
         <button className="block mx-auto mt-3 px-4 py-2 text-qsis text-[0.82rem] font-semibold bg-transparent border-none cursor-pointer hover:underline" onClick={onClose}>Close</button>
       </div>

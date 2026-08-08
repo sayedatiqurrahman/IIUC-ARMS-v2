@@ -33,7 +33,7 @@ export interface ClientUploadOptions {
 
 export interface ClientUploadResult {
   success: boolean;
-  pr?: { url: string; number: number };
+  pr?: { url: string; number: number; merged?: boolean };
   direct?: boolean;
   error?: string;
   status?: number;

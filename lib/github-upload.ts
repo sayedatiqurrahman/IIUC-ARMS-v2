@@ -7,6 +7,7 @@ import { getRepoBotToken } from '@/lib/github-app';
 import { decrypt, isEncrypted } from '@/lib/crypto';
 import { hasPermission } from '@/lib/permissions';
 import { commitFilesToBranch, ghFetch, type FileToCommit } from '@/lib/github-commit';
+import { mergePullRequest } from '@/lib/github-merge';
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -22,7 +23,7 @@ export interface UploadContext {
 
 export interface UploadResult {
   success: boolean;
-  pr?: { url: string; number: number };
+  pr?: { url: string; number: number; merged?: boolean };
   direct?: boolean;
   error?: string;
   status?: number;
@@ -271,7 +272,12 @@ export async function commitUpload(ctx: UploadContext, files: FileToCommit[], me
   }
   const prData = await prRes.json();
 
-  return { success: true, pr: { url: prData.html_url, number: prData.number }, direct: false };
+  // Auto-merge with the app bot so contributor uploads land on main right away
+  // (the PR record stays for contribution credit). Best effort — on failure the
+  // PR is left open for manual review.
+  const { merged } = await mergePullRequest(prData.number);
+
+  return { success: true, pr: { url: prData.html_url, number: prData.number, merged }, direct: false };
 }
 
 // Log a file_upload activity row (best effort).

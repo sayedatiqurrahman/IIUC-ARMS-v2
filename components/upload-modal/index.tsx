@@ -120,7 +120,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [uploading, setUploading] = useState(false);
   const [createCourseFor, setCreateCourseFor] = useState<number | null>(null);
   const [recentlyCreated, setRecentlyCreated] = useState<{ code: string; title: string }[]>([]);
-  const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean; merged?: boolean; direct?: boolean } | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [compressing, setCompressing] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -590,6 +590,19 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           body: JSON.stringify({ files: files.map(f => f.path), prUrl: result.pr?.url || null }),
         });
       } catch {}
+
+      // Auto-merge contributor PRs with the app bot (best effort).
+      if (result.pr && result.pr.number && !result.direct) {
+        try {
+          const mres = await fetch('/api/github/merge-pr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prNumber: result.pr.number }),
+          });
+          const mdata = await mres.json().catch(() => ({}));
+          if (result.pr) result.pr.merged = mdata.merged === true;
+        } catch {}
+      }
     }
     return result;
   }
@@ -657,7 +670,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       }
 
       if (data.success) {
-        setResult({ success: true, prUrl: data.pr?.url });
+        setResult({ success: true, prUrl: data.pr?.url, direct: data.direct, merged: data.pr?.merged });
         setUploadProgress({ percent: 100, label: 'Done' });
         setCourses([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
         useAppStore.getState().invalidateTreeCache();
