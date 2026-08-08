@@ -48,6 +48,27 @@ async function main() {
 
   const count = await prisma.profile.count();
   console.log(`\nTotal profiles: ${count}`);
+
+  // UploadChunk table for chunked large-file uploads (see prisma/schema.prisma).
+  try {
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "UploadChunk" (
+      "id" TEXT NOT NULL,
+      "sessionId" TEXT NOT NULL,
+      "userId" TEXT NOT NULL,
+      "path" TEXT NOT NULL,
+      "index" INTEGER NOT NULL,
+      "total" INTEGER NOT NULL,
+      "data" BYTEA NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "UploadChunk_pkey" PRIMARY KEY ("id")
+    )`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "UploadChunk_sessionId_userId_idx" ON "UploadChunk"("sessionId", "userId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "UploadChunk_createdAt_idx" ON "UploadChunk"("createdAt")`);
+    console.log('✅ UploadChunk');
+  } catch (e) {
+    console.log(`⏭ UploadChunk: ${e.message?.substring(0, 60)}`);
+  }
+
   await prisma.$disconnect();
   console.log('Done!');
 }

@@ -1,219 +1,312 @@
+import { NextRequest } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
+import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
+import { getRepoBotToken } from '@/lib/github-app';
+import { decrypt, isEncrypted } from '@/lib/crypto';
+import { hasPermission } from '@/lib/permissions';
+import { commitFilesToBranch, ghFetch, type FileToCommit } from '@/lib/github-commit';
 
 const GITHUB_API = 'https://api.github.com';
 
-function ghHeaders(token: string) {
-  return {
-    Authorization: `token ${token}`,
-    Accept: 'application/vnd.github.v3+json',
-    'Content-Type': 'application/json',
-  };
-}
-
-async function ghFetch(url: string, token: string, retries = 2): Promise<Response> {
-  for (let i = 0; i <= retries; i++) {
-    try {
-      const res = await fetch(url, { headers: ghHeaders(token) });
-      if ((res.status === 403 || res.status === 429) && i < retries) {
-        const wait = 2000 * (i + 1);
-        await new Promise(r => setTimeout(r, wait));
-        continue;
-      }
-      return res;
-    } catch (err) {
-      if (i < retries) {
-        await new Promise(r => setTimeout(r, 1000));
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error('Network error after retries');
-}
-
-async function ghPost(url: string, token: string, body: any, retries = 2): Promise<Response> {
-  for (let i = 0; i <= retries; i++) {
-    try {
-      const res = await fetch(url, { method: 'POST', headers: ghHeaders(token), body: JSON.stringify(body) });
-      if ((res.status === 403 || res.status === 429) && i < retries) {
-        const wait = 2000 * (i + 1);
-        await new Promise(r => setTimeout(r, wait));
-        continue;
-      }
-      return res;
-    } catch (err) {
-      if (i < retries) {
-        await new Promise(r => setTimeout(r, 1000));
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error('Network error after retries');
-}
-
-export interface UploadFile {
-  path: string;
-  content: string;
+export interface UploadContext {
+  userEmail: string;
+  isOwner: boolean;
+  isBanned: boolean;
+  canUpload: boolean;
+  installationId: number | null;
+  token: string;
+  tokenKind: 'pat' | 'session' | 'bot' | 'env';
 }
 
 export interface UploadResult {
   success: boolean;
-  prUrl?: string;
+  pr?: { url: string; number: number };
+  direct?: boolean;
   error?: string;
-  tokenExpired?: boolean;
+  status?: number;
+  code?: string;
 }
 
-export async function uploadFilesToGitHub(
-  token: string,
-  files: UploadFile[],
-  message: string
-): Promise<UploadResult> {
-  if (!token) return { success: false, error: 'GitHub not connected. Please connect GitHub first.' };
-  if (!files.length) return { success: false, error: 'No files provided' };
+// Resolve the authenticated user + a write-capable GitHub token (server
+// authoritative). Returns { ctx } on success or { error, status, code }.
+// bodyToken is the raw PAT pasted in the upload modal (from FormData or JSON).
+export async function resolveUploadContext(req: NextRequest, bodyToken = ''): Promise<{ ctx: UploadContext } | { error: string; status: number; code?: string }> {
+  let userEmail = '';
+  let storedPat = '';                 // decrypted PAT stored in DB (credit path)
+  let installationId: number | null = null;
+  let isOwner = false;
+  let isBanned = false;
+  let canUpload = false;
 
   try {
-    // Step 1: Verify token
-    const userRes = await ghFetch(`${GITHUB_API}/user`, token, 1);
-    if (userRes.status === 401) {
-      return { success: false, error: 'GitHub token expired. Please reconnect from Dashboard.', tokenExpired: true };
-    }
-    if (!userRes.ok) {
-      const errBody = await userRes.json().catch(() => ({}));
-      return { success: false, error: `GitHub auth failed (${userRes.status}): ${errBody.message || 'Unknown error'}` };
-    }
-
-    const githubUser = await userRes.json();
-    const isOwner = githubUser.login === config.owner;
-
-    let targetOwner = config.owner;
-    let targetRepo = config.repo;
-
-    // Step 2: Fork if contributor
-    if (!isOwner) {
-      const forkFullName = `${githubUser.login}/${config.repo}`;
-      const forkCheck = await ghFetch(`${GITHUB_API}/repos/${forkFullName}`, token, 0);
-
-      if (forkCheck.status === 404) {
-        const forkRes = await ghPost(`${GITHUB_API}/repos/${config.owner}/${config.repo}/forks`, token, { default_branch_only: true });
-
-        if (!forkRes.ok) {
-          const err = await forkRes.json().catch(() => ({}));
-          return { success: false, error: `Failed to fork repository: ${err.message || forkRes.status}` };
-        }
-        // Poll until fork is ready (up to 20s)
-        for (let i = 0; i < 10; i++) {
-          await new Promise(r => setTimeout(r, 2000));
-          const check = await ghFetch(`${GITHUB_API}/repos/${forkFullName}`, token, 0);
-          if (check.ok) break;
-          if (i === 9) return { success: false, error: 'Fork is taking too long. Please try again in a moment.' };
-        }
-      } else if (!forkCheck.ok) {
-        return { success: false, error: `Cannot access your fork (${forkCheck.status}). Make sure you have a fork of the repository.` };
+    const email = await getUserEmail(req);
+    userEmail = email || '';
+    if (email) {
+      const { prisma } = await import('@/lib/prisma');
+      const profile = await prisma.profile.findUnique({ where: { userId: email } });
+      isBanned = !!profile?.isBanned;
+      if (profile?.githubToken) {
+        const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
+        // Only PATs are usable for PR-based credit; installation tokens (ghs_) expire in ~1h
+        // so they are never trusted here — we mint a fresh one via the GitHub App instead.
+        if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) storedPat = decrypted;
       }
-      targetOwner = githubUser.login;
-    }
-
-    // Step 3: Get default branch from the original repo
-    const repoRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}`, token);
-    if (!repoRes.ok) return { success: false, error: `Cannot access repository (${repoRes.status})` };
-    const repoData = await repoRes.json();
-    const defaultBranch = repoData.default_branch;
-
-    // Step 4: Get base SHA from target repo
-    const baseRefRes = await ghFetch(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/git/refs/heads/${defaultBranch}`, token);
-    if (!baseRefRes.ok) {
-      const errBody = await baseRefRes.json().catch(() => ({}));
-      return { success: false, error: `Cannot read branch "${defaultBranch}" on ${targetOwner}/${targetRepo}: ${errBody.message || baseRefRes.status}` };
-    }
-    const baseRefData = await baseRefRes.json();
-    const baseSha = baseRefData.object.sha;
-
-    // Step 5: Create branch
-    const branch = `upload/${Date.now()}`;
-
-    const createBranchRes = await ghPost(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/git/refs`, token, {
-      ref: `refs/heads/${branch}`,
-      sha: baseSha,
-    });
-
-    if (!createBranchRes.ok && createBranchRes.status !== 422) {
-      const errBody = await createBranchRes.json().catch(() => ({}));
-
-      // Check if it's a permission issue
-      if (createBranchRes.status === 403) {
-        return {
-          success: false,
-          error: `Permission denied (403). Your GitHub token may need "repo" scope. Please disconnect and reconnect GitHub from Dashboard.`,
-          tokenExpired: true,
-        };
+      if (profile?.githubInstallationId) {
+        installationId = Number(profile.githubInstallationId);
       }
-      return { success: false, error: `Failed to create branch: ${errBody.message || createBranchRes.status}` };
+      isOwner = config.ownerEmails.includes(email) || profile?.githubLogin === config.owner;
     }
+  } catch {}
 
-    // Step 6: Upload files one by one
-    let uploadedCount = 0;
-    for (const file of files) {
-      const filePath = `${config.uploadPath}/${file.path}`;
+  if (isBanned) {
+    return { error: 'Account banned — upload not allowed', status: 403 };
+  }
 
-      let fileSha: string | undefined;
-      try {
-        const existingRes = await ghFetch(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/contents/${filePath}?ref=${branch}`, token, 0);
-        if (existingRes.ok) {
-          const existingData = await existingRes.json();
-          fileSha = existingData.sha;
-        }
-      } catch {}
+  if (userEmail) {
+    canUpload = await hasPermission('uploadFile', config.getEffectiveRole(userEmail), false, userEmail);
+  }
 
-      const putBody: any = {
-        message: `Add ${file.path}`,
-        content: file.content,
-        branch,
-      };
-      if (fileSha) putBody.sha = fileSha;
+  // ── Resolve a write-capable token (server-authoritative) ─────────────
+  // Priority: stored PAT → PAT pasted in the modal → NextAuth session token
+  //           → GitHub App bot token for THIS repo → server GITHUB_TOKEN.
+  // The App bot token lets users upload with NO GitHub connection at all,
+  // committing directly to main (fast). Stored ghs_ tokens are ignored.
+  let token = '';
+  let tokenKind: 'pat' | 'session' | 'bot' | 'env' = 'pat';
 
-      const putRes = await fetch(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/contents/${filePath}`, {
-        method: 'PUT',
-        headers: ghHeaders(token),
-        body: JSON.stringify(putBody),
+  if (storedPat) {
+    token = storedPat;
+  } else if (bodyToken && (bodyToken.startsWith('ghp_') || bodyToken.startsWith('github_pat_'))) {
+    token = bodyToken;
+  } else {
+    try {
+      const session = await getServerSession(authOptions);
+      if (session?.accessToken) {
+        token = session.accessToken;
+        tokenKind = 'session';
+      }
+    } catch {}
+  }
+
+  if (!token && (canUpload || installationId)) {
+    const botToken = await getRepoBotToken(config.owner, config.repo);
+    if (botToken) {
+      token = botToken;
+      tokenKind = 'bot';
+    }
+  }
+  if (!token && (canUpload || installationId) && process.env.GITHUB_TOKEN) {
+    token = process.env.GITHUB_TOKEN;
+    tokenKind = 'env';
+  }
+
+  if (!token) {
+    return {
+      error: 'GitHub not connected. Go to Dashboard → Connect with GitHub to set up, or ask admin for upload access.',
+      status: 401,
+      code: 'AUTH_REQUIRED',
+    };
+  }
+
+  return {
+    ctx: { userEmail, isOwner, isBanned, canUpload, installationId, token, tokenKind },
+  };
+}
+
+// Commit a set of files to GitHub: owners/bots commit straight to main; other
+// contributors go through a fork + PR for credit. `files` paths are relative to
+// config.uploadPath (matching how the client builds them).
+export async function commitUpload(ctx: UploadContext, files: FileToCommit[], message: string): Promise<UploadResult> {
+  const isBotToken = ctx.token.startsWith('ghs_') || ctx.tokenKind === 'bot' || ctx.tokenKind === 'env';
+  const directCommit = ctx.isOwner || isBotToken;
+  const fullFiles = files.map(f => ({ ...f, path: `${config.uploadPath}/${f.path}` }));
+  const commitMessage = `Add ${fullFiles.map(f => f.path).join(', ')}`;
+
+  if (directCommit) {
+    const repoRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}`, ctx.token);
+    if (repoRes.status === 401 || repoRes.status === 403) {
+      return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
+    }
+    if (!repoRes.ok) return { success: false, error: `Cannot access repo: ${repoRes.status}`, status: 500 };
+    const defaultBranch = (await repoRes.json()).default_branch;
+
+    const refRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${defaultBranch}`, ctx.token);
+    if (!refRes.ok) return { success: false, error: `Cannot read branch: ${refRes.status}`, status: 500 };
+    const baseSha = (await refRes.json()).object.sha;
+
+    try {
+      await commitFilesToBranch({
+        token: ctx.token,
+        owner: config.owner,
+        repo: config.repo,
+        branch: defaultBranch,
+        baseSha,
+        files: fullFiles,
+        message: commitMessage,
       });
-
-      if (!putRes.ok) {
-        const err = await putRes.json().catch(() => ({}));
-        return { success: false, error: err.message || `Failed to upload ${file.path} (${putRes.status})` };
+    } catch (e: any) {
+      const msg = e?.message || '';
+      if (msg.includes('401') || msg.includes('403') || msg.includes('Bad credentials') || msg.includes('Requires authentication')) {
+        return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
       }
-      uploadedCount++;
+      return { success: false, error: `Failed to commit to GitHub (${msg})`, status: 500 };
     }
 
-    // Step 7: Create PR
-    const prHead = isOwner ? branch : `${githubUser.login}:${branch}`;
+    return {
+      success: true,
+      pr: { url: `https://github.com/${config.owner}/${config.repo}/commit/${defaultBranch}`, number: 0 },
+      direct: true,
+    };
+  }
 
-    const prRes = await ghPost(`${GITHUB_API}/repos/${config.owner}/${config.repo}/pulls`, token, {
-      title: message,
+  // ── CONTRIBUTOR with a user token: fork + PR (gives contribution credit) ──
+  const token = ctx.token;
+  const userRes = await ghFetch(`${GITHUB_API}/user`, token);
+  if (userRes.status === 401) {
+    return { success: false, error: 'Token expired or invalid. Go to Dashboard → GitHub Connection → paste a new PAT.', status: 401, code: 'TOKEN_EXPIRED' };
+  }
+  if (userRes.status === 403) {
+    return { success: false, error: 'Token lacks permissions. Create a new PAT at https://github.com/settings/tokens/new with "repo" scope, then paste it in Dashboard.', status: 403, code: 'TOKEN_NO_ACCESS' };
+  }
+  if (!userRes.ok) {
+    return { success: false, error: 'Invalid token. Go to Dashboard → GitHub Connection → paste a valid PAT.', status: 401, code: 'TOKEN_INVALID' };
+  }
+  const githubUser = await userRes.json();
+
+  const forkFullName = `${githubUser.login}/${config.repo}`;
+  const forkCheckRes = await ghFetch(`${GITHUB_API}/repos/${forkFullName}`, token);
+  if (forkCheckRes.status === 404) {
+    const forkRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/forks`, token, {
+      method: 'POST',
+      body: JSON.stringify({ default_branch_only: true }),
+    });
+    if (!forkRes.ok) {
+      const err = await forkRes.json().catch(() => ({}));
+      return { success: false, error: err.message || 'Failed to fork repository. Make sure your PAT has "repo" scope.', status: 500 };
+    }
+    for (let i = 0; i < 6; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const check = await ghFetch(`${GITHUB_API}/repos/${forkFullName}`, token);
+      if (check.ok) break;
+      if (i === 5) return { success: false, error: 'Fork is taking too long. Please try again.', status: 500 };
+    }
+  } else if (!forkCheckRes.ok) {
+    return { success: false, error: 'Cannot access your fork', status: 500 };
+  }
+
+  const targetOwner = githubUser.login;
+  const targetRepo = config.repo;
+
+  const repoRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}`, token);
+  if (repoRes.status === 401 || repoRes.status === 403) {
+    return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
+  }
+  if (!repoRes.ok) return { success: false, error: 'Cannot access repo', status: 500 };
+  const defaultBranch = (await repoRes.json()).default_branch;
+
+  const baseRefRes = await ghFetch(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/git/refs/heads/${defaultBranch}`, token);
+  if (baseRefRes.status === 401 || baseRefRes.status === 403) {
+    return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
+  }
+  if (!baseRefRes.ok) return { success: false, error: 'Cannot read branch', status: 500 };
+  const baseBranchSha = (await baseRefRes.json()).object.sha;
+
+  const branch = `upload/${Date.now()}`;
+  const createBranchRes = await ghFetch(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/git/refs`, token, {
+    method: 'POST',
+    body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: baseBranchSha }),
+  });
+  if (!createBranchRes.ok && createBranchRes.status !== 422) {
+    const errBody = await createBranchRes.json().catch(() => ({}));
+    if (createBranchRes.status === 403) {
+      return { success: false, error: 'Permission denied (403). Token needs Contents + Pull requests access. Create a classic PAT at: https://github.com/settings/tokens/new?description=IIUC-ARMS&scopes=repo', status: 403, code: 'TOKEN_NO_ACCESS' };
+    }
+    return { success: false, error: errBody.message || 'Failed to create branch', status: 500 };
+  }
+
+  try {
+    await commitFilesToBranch({
+      token,
+      owner: targetOwner,
+      repo: targetRepo,
+      branch,
+      baseSha: baseBranchSha,
+      files: fullFiles,
+      message: commitMessage,
+    });
+  } catch (e: any) {
+    const msg = e?.message || '';
+    if (msg.includes('401') || msg.includes('403') || msg.includes('Bad credentials') || msg.includes('Requires authentication')) {
+      return { success: false, error: 'GitHub token expired. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
+    }
+    return { success: false, error: msg || 'Failed to upload files', status: 500 };
+  }
+
+  const prRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/pulls`, token, {
+    method: 'POST',
+    body: JSON.stringify({
+      title: message || `Upload: ${fullFiles.map((f: any) => f.path.split('/').pop()).join(', ')}`,
       body: [
         `## IIUC-ARMS File Upload`,
         ``,
         `**Contributor:** ${githubUser.name || githubUser.login} (@${githubUser.login})`,
+        `**Email:** ${githubUser.email || 'N/A'}`,
         ``,
         `### Files`,
-        files.map(f => `- \`${f.path}\``).join('\n'),
+        files.map((f: any) => `- \`${f.path}\``).join('\n'),
         ``,
         `---`,
         `*Submitted via IIUC-ARMS v2*`,
       ].join('\n'),
-      head: prHead,
+      head: `${githubUser.login}:${branch}`,
       base: defaultBranch,
-    });
+    }),
+  });
 
-    if (!prRes.ok) {
-      const err = await prRes.json().catch(() => ({}));
-      return { success: false, error: err.message || `Failed to create Pull Request (${prRes.status})` };
-    }
-
-    const prData = await prRes.json();
-    return { success: true, prUrl: prData.html_url };
-
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Network error. Please check your connection and try again.' };
+  if (!prRes.ok) {
+    const err = await prRes.json().catch(() => ({}));
+    return { success: false, error: err.message || 'Failed to create Pull Request', status: 500 };
   }
+  const prData = await prRes.json();
+
+  return { success: true, pr: { url: prData.html_url, number: prData.number }, direct: false };
+}
+
+// Log a file_upload activity row (best effort).
+export async function logUploadActivity(userEmail: string, files: string[], prUrl: string | null): Promise<void> {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findUnique({ where: { userId: userEmail } });
+    await prisma.activityLog.create({
+      data: {
+        action: 'file_upload',
+        userId: userEmail,
+        userName: profile?.name || userEmail.split('@')[0],
+        details: JSON.stringify({ files, count: files.length, prUrl }),
+      },
+    });
+  } catch {}
+}
+
+// Lightweight authorization for chunk-staging requests (they don't carry file
+// content that needs GitHub write access, just need to be an allowed uploader).
+export async function authorizeChunkUpload(req: NextRequest): Promise<{ email: string } | { error: string; status: number }> {
+  let email = '';
+  try {
+    email = (await getUserEmail(req)) || '';
+  } catch {}
+
+  if (!email) return { error: 'Unauthorized — please login', status: 401 };
+
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findUnique({ where: { userId: email } });
+    if (profile?.isBanned) return { error: 'Account banned — upload not allowed', status: 403 };
+    const allowed = await hasPermission('uploadFile', config.getEffectiveRole(email), false, email);
+    if (!allowed && !profile?.githubInstallationId) return { error: 'You do not have permission to upload files', status: 403 };
+  } catch {}
+
+  return { email };
 }

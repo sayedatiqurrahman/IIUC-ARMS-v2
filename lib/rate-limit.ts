@@ -69,6 +69,8 @@ export function rateLimit(req: NextRequest, config: RateLimitConfig): { success:
 export const RATE_LIMITS = {
   auth: { windowMs: 15 * 60 * 1000, max: 10, message: 'Too many auth attempts. Try again in 15 minutes.' },
   upload: { windowMs: 60 * 1000, max: 10, message: 'Too many uploads. Wait a moment.' },
+  // Chunk uploads make one request per 2.5MB, so a 50MB file is ~21 requests.
+  chunk: { windowMs: 60 * 1000, max: 120, message: 'Too many chunk requests. Slow down.' },
   profile: { windowMs: 60 * 1000, max: 30, message: 'Too many profile requests. Slow down.' },
   admin: { windowMs: 60 * 1000, max: 60, message: 'Too many admin requests. Slow down.' },
   faculty: { windowMs: 60 * 1000, max: 30, message: 'Too many faculty requests. Slow down.' },

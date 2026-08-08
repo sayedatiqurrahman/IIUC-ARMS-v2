@@ -109,6 +109,23 @@ model Course {
   @@index([semester])
 }
 
+// Temporary storage for large-file uploads. The client splits files bigger
+// than a few MB into chunks (each request stays under Vercel's 4.5MB body
+// limit), stores them here, then finalizes into a single git commit.
+model UploadChunk {
+  id        String   @id @default(cuid())
+  sessionId String
+  userId    String
+  path      String
+  index     Int
+  total     Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, userId])
+  @@index([createdAt])
+}
+
 model SiteSettings {
   id                 String   @id @default("site-settings")
   permissions        Json     @default("{}")
