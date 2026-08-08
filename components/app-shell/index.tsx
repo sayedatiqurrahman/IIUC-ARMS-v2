@@ -16,7 +16,8 @@ import { useConfirm } from '@/components/ConfirmModal';
 import { isStandalone, isInBrowser, isIOSBrowser, type BeforeInstallPromptEvent } from '@/lib/standalone';
 import { useTurnstile } from '@/lib/useTurnstile';
 import { handleGoogleRedirectResult } from '@/lib/firebase';
-import DocumentViewer from './DocumentViewer';
+import dynamic from 'next/dynamic';
+const DocumentViewer = dynamic(() => import('./DocumentViewer'), { ssr: false });
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();

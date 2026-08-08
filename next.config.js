@@ -11,8 +11,26 @@ const nextConfig = {
   },
   async headers() {
     return [
+      // Never cache the service worker, otherwise browsers hold a stale SW for
+      // up to the max-age (the old SW broke /pdfjs/ and produced X-Frame-Options
+      // and "Failed to convert value to 'Response'" errors).
       {
-        source: '/(.*)',
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+        ],
+      },
+      // The pdf.js viewer page runs inside an <iframe>; it must not be
+      // blocked by X-Frame-Options (the catch-all below skips /pdfjs/*).
+      {
+        source: '/pdfjs/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+      {
+        source: '/((?!pdfjs/).*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },

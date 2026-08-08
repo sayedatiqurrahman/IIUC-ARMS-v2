@@ -52,6 +52,26 @@ button { font-family: inherit; }
 .image-scroll-area { flex:1; overflow:hidden; display:flex; justify-content:center; align-items:center; padding:12px; background:#0a0f1e; touch-action:none; }
 .image-scroll-area img { max-width:100%; max-height:100%; object-fit:contain; border-radius:4px; transition:transform .15s ease-out; user-select:none; }
 
+/* react-file-viewer unified viewer */
+.rfv-container { display:flex; flex-direction:column; height:100%; background:#0a0f1e; }
+.rfv-toolbar { display:flex; align-items:center; gap:6px; padding:8px 12px; background:#1a2236; border-bottom:1px solid #2a3a5c; flex-wrap:wrap; }
+.rfv-toolbar a.rfv-link { text-decoration:none; color:inherit; }
+.rfv-body { flex:1; overflow:auto; background:#0a0f1e; }
+.rfv-body .pg-viewer-wrapper { min-height:100%; background:#0a0f1e; }
+.rfv-body .pg-viewer { width:100%; height:100%; min-height:400px; background:#0a0f1e; display:flex; justify-content:center; align-items:flex-start; }
+.rfv-body .pg-driver-view { width:100%; }
+.rfv-body .pg-driver-view img { max-width:100%; max-height:calc(100vh - 100px); object-fit:contain; display:block; margin:0 auto; }
+.rfv-body .pdf-viewer { background:#0a0f1e; padding:16px 0; }
+.rfv-body canvas { max-width:100%; height:auto !important; margin:0 auto; display:block; background:#ffffff; box-shadow:0 2px 12px rgba(0,0,0,.5); }
+.rfv-body video, .rfv-body audio { max-width:100%; display:block; margin:0 auto; }
+.rfv-error { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; height:100%; min-height:50vh; color:#94a3b8; text-align:center; padding:24px; }
+.rfv-error > i { font-size:3rem; color:#f87171; }
+.rfv-error p { font-size:.95rem; margin:0; }
+.rfv-error-actions { display:flex; gap:10px; }
+.rfv-btn { background:rgba(128,128,128,.15); border:1px solid rgba(128,128,128,.3); color:inherit; padding:8px 14px; border-radius:8px; cursor:pointer; text-decoration:none; font-size:.85rem; display:inline-flex; align-items:center; gap:6px; }
+.rfv-btn:hover { background:rgba(128,128,128,.25); }
+
+
 /* Custom document (DOCX) viewer */
 .doc-scroll-area { flex:1; overflow:auto; padding:16px; background:#0a0f1e; }
 .doc-zoom-wrap { transform-origin:top center; padding:8px 0; display:flex; justify-content:center; }

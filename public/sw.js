@@ -1,3 +1,5 @@
+// SW BUILD: 2026-08-08-rfv — react-file-viewer switch; never cache this file
+// (see next.config.js /sw.js Cache-Control: no-store).
 // IMMUTABLE: Next.js hashed build output (/_next/static/*). These files are
 // content-addressed — the hash changes when the file changes — so they can be
 // cached forever and NEVER deleted. Keeping them across updates is what makes
