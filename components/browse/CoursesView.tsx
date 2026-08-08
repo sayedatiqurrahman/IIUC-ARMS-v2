@@ -25,7 +25,6 @@ export default function CoursesView({
   navigateToCourse, goBack,
   setShowAddCourse,
   dbCourses, userEmail, currentDept, currentSem,
-  userDeptId = null, isOwner = false,
 }: CoursesViewProps) {
   const { data: session } = useSession();
   const loadTree = useAppStore(s => s.loadTree);
@@ -149,11 +148,13 @@ export default function CoursesView({
         {filteredCourses.map(course => {
           const dbInfo = addedByMap[course.code.toUpperCase()];
           const addedBy = dbInfo?.addedBy || '';
-          const isMyCourse = addedBy.toLowerCase() === myEmail;
+          const isMyCourse = !!session && addedBy.toLowerCase() === myEmail;
           const canEditThis = isMyCourse || coursePerms.canEdit;
           const canDeleteThis = isMyCourse || coursePerms.canDelete;
-          const inMyDept = isOwner || (!!userDeptId && currentDept === userDeptId);
-          const showMenu = canEditThis && inMyDept;
+          // The 3-dot menu is only for signed-in users, and only when they hold
+          // at least one course action (rename or delete). Each action is shown
+          // on its own based on the matching permission.
+          const showMenu = !!session && (canEditThis || canDeleteThis);
 
           return (
           <div key={course.code} className="p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl hover:border-qsis hover:shadow-[0_0_12px_rgba(34,197,94,0.3)] transition-all group">
