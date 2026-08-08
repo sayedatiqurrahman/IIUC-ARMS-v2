@@ -6,9 +6,35 @@ import Image from 'next/image';
 import { FACULTIES, getAllDepartments } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
 
-const ONBOARDING_KEY = 'qsis-onboarding';
-const CANCEL_COUNT_KEY = 'qsis-onboard-cancel-count';
-const CANCEL_FOREVER_KEY = 'qsis-onboard-cancel-forever';
+const ONBOARDING_KEY = 'iiuc_arms-onboarding';
+const CANCEL_COUNT_KEY = 'iiuc_arms-onboard-cancel-count';
+const CANCEL_FOREVER_KEY = 'iiuc_arms-onboard-cancel-forever';
+
+// Legacy keys used before the iiuc_arms- prefix (never used for redirects again).
+const LEGACY_KEYS = {
+  onboarding: 'qsis-onboarding',
+  cancelCount: 'qsis-onboard-cancel-count',
+  cancelForever: 'qsis-onboard-cancel-forever',
+};
+
+// One-time migration so users keep their personalization from the old keys.
+function migrateLegacyOnboarding() {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!localStorage.getItem(ONBOARDING_KEY)) {
+      const legacy = localStorage.getItem(LEGACY_KEYS.onboarding);
+      if (legacy) localStorage.setItem(ONBOARDING_KEY, legacy);
+    }
+    if (!localStorage.getItem(CANCEL_FOREVER_KEY)) {
+      const legacy = localStorage.getItem(LEGACY_KEYS.cancelForever);
+      if (legacy) localStorage.setItem(CANCEL_FOREVER_KEY, legacy);
+    }
+    if (!localStorage.getItem(CANCEL_COUNT_KEY)) {
+      const legacy = localStorage.getItem(LEGACY_KEYS.cancelCount);
+      if (legacy) localStorage.setItem(CANCEL_COUNT_KEY, legacy);
+    }
+  } catch {}
+}
 
 export interface OnboardingData {
   gender: 'male' | 'female';
@@ -20,6 +46,7 @@ export interface OnboardingData {
 
 export function getOnboardingData(): OnboardingData | null {
   if (typeof window === 'undefined') return null;
+  migrateLegacyOnboarding();
   try {
     const raw = localStorage.getItem(ONBOARDING_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -28,6 +55,7 @@ export function getOnboardingData(): OnboardingData | null {
 
 export function hasSkippedForever(): boolean {
   if (typeof window === 'undefined') return false;
+  migrateLegacyOnboarding();
   return localStorage.getItem(CANCEL_FOREVER_KEY) === 'true';
 }
 
@@ -39,6 +67,9 @@ export function clearOnboardingData() {
   localStorage.removeItem(ONBOARDING_KEY);
   localStorage.removeItem(CANCEL_COUNT_KEY);
   localStorage.removeItem(CANCEL_FOREVER_KEY);
+  localStorage.removeItem(LEGACY_KEYS.onboarding);
+  localStorage.removeItem(LEGACY_KEYS.cancelCount);
+  localStorage.removeItem(LEGACY_KEYS.cancelForever);
 }
 
 function getCancelCount(): number {
