@@ -165,6 +165,12 @@ export default function BrowsePage() {
     const course = p.get('course') || '';
     const mf = p.get('mf') || '';
     const cat = p.get('cat') || '';
+    // A shallow dept/sem URL on a personalized user is almost always a stale
+    // position (e.g. the old profile-load bug left ?sem=6th-semister in the
+    // URL), not an intentional share. Only deep links (course/category/file/
+    // search) override personalization; otherwise the personalization redirect
+    // below handles navigation and normalizes the URL.
+    if (!(course || mf || cat || p.get('q')) && useAppStore.getState().onboardingData) return;
     deepLinkingRef.current = true;
     if (loading) return;
     if (view !== 'departments') return;
@@ -272,9 +278,13 @@ export default function BrowsePage() {
 
     const freshCompletion = prevData == null && onboardData != null;
     if (!freshCompletion) {
+      // Deep links (course/category/file/search) override personalization; a
+      // shallow dept/sem URL is just a stale position that this redirect should
+      // replace with the personalized semester (and the URL-sync effect then
+      // rewrites the address bar).
       if (typeof window !== 'undefined') {
         const p = new URLSearchParams(window.location.search);
-        if (p.has('dept') || p.has('sem') || p.has('course') || p.has('q')) return;
+        if (p.has('course') || p.has('cat') || p.has('mf') || p.has('q')) return;
       }
       if (useAppStore.getState().view !== 'departments') return;
     }
