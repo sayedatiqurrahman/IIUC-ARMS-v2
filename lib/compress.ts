@@ -47,19 +47,20 @@ export async function compressUploadFile(file: File): Promise<CompressResult> {
 }
 
 // Bigger images get a harsher re-encode so a 5MB photo still lands well under
-// its original size, while small images stay near-lossless.
+// its original size, while small images stay near-lossless. Kept generous so
+// lecture notes / handwritten pages stay readable on screen.
 function imageOptsFor(size: number) {
-  if (size > 4 * 1024 * 1024) return { quality: 0.72, maxDim: 1800 };
-  if (size > 2 * 1024 * 1024) return { quality: 0.8, maxDim: 2000 };
-  return { quality: 0.85, maxDim: 2200 };
+  if (size > 4 * 1024 * 1024) return { quality: 0.78, maxDim: 2000 };
+  if (size > 2 * 1024 * 1024) return { quality: 0.85, maxDim: 2200 };
+  return { quality: 0.9, maxDim: 2400 };
 }
 
-// Rebuild a PDF page-by-page as JPEGs. Uses the already-served pdf.js build from
-// /pdfjs (no new dependency). Rasterizing is great for SCANNED/photo PDFs (the
-// common case for exam questions & notes) — they lose 40-70% and look identical
-// on screen. For text/vector PDFs the estimate after page 1 bails out early so
-// we never waste time rasterizing a file that can't shrink. The result is only
-// kept when it is genuinely smaller (quality can't get worse than the original).
+// Rebuild a PDF page-by-page. Used ONLY for scanned/photo PDFs (the common case
+// for exam questions & notes) where they lose 40-70% and still look sharp.
+// PDFs with real text content are left untouched — rasterizing them would wreck
+// their crispness. Raster output is supersampled at 2x and re-encoded at high
+// JPEG quality, preserving each page's original aspect ratio instead of forcing
+// A4. The result is only kept when it is genuinely smaller (never upsized).
 async function compressPdf(file: File): Promise<File | null> {
   const pdfjs: any = await import(/* webpackIgnore: true */ '/pdfjs/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
@@ -67,33 +68,54 @@ async function compressPdf(file: File): Promise<File | null> {
   const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
   if (!pdf.numPages || pdf.numPages > 80) return null;
 
+  // Text/vector PDFs stay lossless: if page 1 has real text we bail immediately
+  // instead of rasterizing.
+  try {
+    const t = await (await pdf.getPage(1)).getTextContent();
+    if (t.items && t.items.length >= 5) return null;
+  } catch {}
+
   const { jsPDF } = await import('jspdf');
-  const out = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageW = out.internal.pageSize.getWidth();
-  const pageH = out.internal.pageSize.getHeight();
+  const RENDER_SCALE = 2; // supersample so raster text/images stay sharp
+  const JPEG_Q = 0.9;
+
+  const pageSize = (vpW: number, vpH: number) => {
+    const A4W = 210, A4H = 297;
+    const scale = Math.min(A4W / vpW, A4H / vpH);
+    return { w: +(vpW * scale).toFixed(1), h: +(vpH * scale).toFixed(1) };
+  };
+
+  const firstPage = await pdf.getPage(1);
+  const firstVp = firstPage.getViewport({ scale: 1 });
+  const firstSize = pageSize(firstVp.width, firstVp.height);
+  const out = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [firstSize.w, firstSize.h] });
 
   let firstPageBytes = 0;
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 1.25 });
+    const viewport = page.getViewport({ scale: RENDER_SCALE });
     const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
+    canvas.width = Math.max(1, Math.floor(viewport.width));
+    canvas.height = Math.max(1, Math.floor(viewport.height));
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     await page.render({ canvasContext: ctx, viewport }).promise;
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    const dataUrl = canvas.toDataURL('image/jpeg', JPEG_Q);
 
     if (i === 1) {
       firstPageBytes = Math.ceil(dataUrl.length * 0.75); // base64 → raw bytes
       // If even the estimate of every page at this density can't beat the
-      // original by ~15%, this is a text/vector PDF — bail before doing any more.
+      // original by ~15%, this is mostly a vector/outline PDF — bail early.
       if (firstPageBytes * pdf.numPages * 0.85 >= file.size) return null;
     }
 
-    if (i > 1) out.addPage();
-    out.addImage(dataUrl, 'JPEG', 0, 0, pageW, pageH, undefined, 'FAST');
+    if (i > 1) {
+      const vp1 = page.getViewport({ scale: 1 });
+      const s = pageSize(vp1.width, vp1.height);
+      out.addPage([s.w, s.h], 'portrait');
+    }
+    out.addImage(dataUrl, 'JPEG', 0, 0, out.internal.pageSize.getWidth(), out.internal.pageSize.getHeight(), undefined, 'MEDIUM');
     await new Promise(r => setTimeout(r, 0)); // yield so the UI stays responsive
   }
 

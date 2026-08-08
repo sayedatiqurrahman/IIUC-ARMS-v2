@@ -492,6 +492,7 @@ async function loadPdf(url) {
   } catch (e) {
     $('loadingOverlay').innerHTML =
       '<div style="color:#f87171;font-size:14px;text-align:center;padding:20px">Failed to load PDF.<br>' + e.message + '</div>';
+    try { window.parent.postMessage({ type: 'pdf-error', error: String(e.message || '') }, '*'); } catch {}
   }
 }
 

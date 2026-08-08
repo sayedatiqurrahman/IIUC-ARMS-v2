@@ -6,6 +6,7 @@ import { toggleFullscreen } from '@/lib/fullscreen';
 export default function OfficeViewer({ item, onClose }: { item: any; onClose: () => void }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
+  const [fallback, setFallback] = useState(false);
 
   const typeLabel = item.mimeType === 'doc' ? 'Word' : item.mimeType === 'sheet' ? 'Excel' : 'PowerPoint';
   const typeIcon = item.mimeType === 'doc' ? 'fa-file-word' : item.mimeType === 'sheet' ? 'fa-file-excel' : 'fa-file-powerpoint';
@@ -20,14 +21,19 @@ export default function OfficeViewer({ item, onClose }: { item: any; onClose: ()
           <i className={`fas ${typeIcon}`} style={{ color: typeColor, flexShrink: 0 }}></i>
           <span className="text-[0.85rem] font-semibold truncate">{item.name}</span>
         </div>
+        <button className="pdf-btn" onClick={() => setFallback(!fallback)} title={fallback ? 'Switch to online preview' : 'Switch to default browser view (plain iframe)'}>
+          <i className="fas fa-window-maximize"></i>
+        </button>
         <button className="pdf-btn" onClick={() => toggleFullscreen(rootRef.current)} title="Fullscreen"><i className="fas fa-expand"></i></button>
         <a className="pdf-btn no-underline" href={item.rawUrl} target="_blank" rel="noreferrer" title="Download"><i className="fas fa-download"></i></a>
         <button className="pdf-btn" onClick={onClose} title="Close" style={{ background: '#ef4444', color: 'white', borderRadius: '7px' }}><i className="fas fa-times"></i></button>
       </div>
       <div className="flex-1 overflow-hidden relative bg-[#0a0f1e]">
-        {!failed ? (
+        {fallback ? (
+          <iframe src={item.rawUrl} title={item.name} className="w-full h-full border-none bg-white" style={{ overflow: 'auto' }} />
+        ) : !failed ? (
           <>
-            <iframe src={embedUrl} className="w-full border-none" style={{ minHeight: 'calc(100vh - 50px)' }} onError={() => setFailed(true)} />
+            <iframe src={embedUrl} className="w-full border-none" style={{ minHeight: 'calc(100vh - 50px)' }} onError={() => { setFailed(true); setFallback(true); }} />
             <div className="absolute bottom-2 right-3 z-10">
               <a href={item.rawUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold no-underline">
                 <i className="fas fa-external-link-alt mr-1"></i>Open in new tab
