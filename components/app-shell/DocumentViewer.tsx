@@ -1,8 +1,8 @@
 'use client';
 
 import ReactFileViewer from './ReactFileViewer';
-import ReactDocViewer from './ReactDocViewer';
 import PdfViewer from '@/components/PdfViewer';
+import OfficeViewer from './OfficeViewer';
 import ImageViewer from './ImageViewer';
 import EpubViewer from './EpubViewer';
 import TextViewer from './TextViewer';
@@ -15,18 +15,17 @@ const RFV_TYPES: Record<string, string> = {
   webm: 'webm',
 };
 
-const DOC_TYPES = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+const OFFICE_TYPES = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
 
 export default function DocumentViewer({ item, onClose }: { item: any; onClose: () => void }) {
   const mime = item.mimeType;
   const ext = item.path?.split('.').pop()?.toLowerCase() || '';
   const rfvType = RFV_TYPES[ext];
 
-  // pdf / doc / docx / xls / xlsx / ppt / pptx render inline via react-doc-viewer
-  // (pdf.js for PDFs, Microsoft Office embed for the rest) — no downloads.
-  if (DOC_TYPES.includes(ext)) {
-    return <ReactDocViewer item={item} onClose={onClose} />;
-  }
+  // pdf renders in a plain full-height iframe (browser's own PDF viewer);
+  // office docs render in the Microsoft Office embed (full height, page nav).
+  if (ext === 'pdf') return <PdfViewer url={item.rawUrl} name={item.name} onClose={onClose} />;
+  if (OFFICE_TYPES.includes(ext)) return <OfficeViewer item={item} onClose={onClose} />;
   if (mime === 'image') return <ImageViewer item={item} onClose={onClose} />;
   if (rfvType) {
     return (

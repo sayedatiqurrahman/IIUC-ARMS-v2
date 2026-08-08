@@ -1,8 +1,5 @@
 'use client';
 
-import { useRef } from 'react';
-import { toggleFullscreen } from '@/lib/fullscreen';
-
 interface PdfViewerProps {
   url: string;
   name: string;
@@ -10,21 +7,17 @@ interface PdfViewerProps {
   onClose: () => void;
 }
 
-// Plain browser-native iframe PDF viewer (scrolling). The browser renders the
-// PDF inline at full quality — no downloads unless the user clicks Download.
+// Plain browser-native iframe PDF viewer (scrolling). The file is served through
+// the inline proxy so GitHub's attachment header doesn't trigger a download — the
+// browser renders the PDF inline at full quality. No custom design: just a close
+// button and the browser's own PDF toolbar (scroll/zoom/page).
 export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
+  const src = `${window.location.origin}/api/github/raw?url=${encodeURIComponent(url)}`;
 
   return (
-    <div ref={rootRef} className="fixed inset-0 z-[1500] bg-black flex flex-col">
+    <div className="fixed inset-0 z-[1500] bg-black flex flex-col">
       <div className="flex items-center gap-2 px-3 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0">
         <span className="text-neutral-300 text-[0.8rem] font-semibold truncate flex-1">{name}</span>
-        <button className="pdf-btn" onClick={() => toggleFullscreen(rootRef.current)} title="Fullscreen">
-          <i className="fas fa-expand"></i>
-        </button>
-        <a className="pdf-btn no-underline" href={url} download={name} title="Download" style={{ textDecoration: 'none' }}>
-          <i className="fas fa-download"></i>
-        </a>
         <button
           className="pdf-btn"
           onClick={onClose}
@@ -34,7 +27,7 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
           <i className="fas fa-times"></i>
         </button>
       </div>
-      <iframe src={url} title={name} className="flex-1 w-full border-none bg-white" style={{ overflow: 'auto' }} />
+      <iframe src={src} title={name} className="flex-1 w-full border-none bg-white" style={{ overflow: 'auto' }} />
     </div>
   );
 }
