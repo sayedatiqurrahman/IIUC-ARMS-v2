@@ -86,6 +86,16 @@ function injectScript(): Promise<CVModule | null> {
   });
 }
 
+// True once OpenCV.js has finished initializing in the browser (or in Node when
+// the package is already imported). Unlike loadOpenCV() this never blocks on the
+// ~13MB wasm download, so callers can serve instant pure-JS detection results
+// while the heavyweight engine warms up in the background.
+export function isOpenCVReady(): boolean {
+  if (typeof window === 'undefined') return false;
+  const w = window as any;
+  return !!(w.cv && typeof w.cv.Mat === 'function' && typeof w.cv.findContours === 'function');
+}
+
 export function loadOpenCV(): Promise<CVModule | null> {
   if (!opencvPromise) {
     opencvPromise = (async () => {

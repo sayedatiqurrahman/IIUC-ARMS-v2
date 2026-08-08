@@ -110,6 +110,11 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
   // held for a short grace period instead of flickering off.
   const missesRef = useRef(0);
 
+  // Live-view corner dragging. `anchor` is the last position of the corner
+  // being dragged; the detector reorders the quad array on every frame, so the
+  // corner is tracked by identity (nearest point) instead of a fixed index.
+  const dragRef = useRef<{ anchor: Point } | null>(null);
+
   // ---- Edit overlay (captured frame with adjustable corners) ----
   const editingSrcRef = useRef<string | null>(null);
   const editingCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -242,7 +247,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     // Runs detection once (no overlap), then feeds the result into the
     // smoothing + auto-capture pipeline.
     function runDetect() {
-      if (disposed || detectRunning || editingRef.current) return;
+      if (disposed || detectRunning || editingRef.current || dragRef.current) return;
       const video = videoRef.current;
       if (!video || video.readyState < 2) return;
       const vw = video.videoWidth;
@@ -487,8 +492,6 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
   }, [ready]);
 
   // ---- Live view corner dragging ----
-  const dragRef = useRef<{ idx: number; start: Point } | null>(null);
-
   function onPointerDown(e: React.PointerEvent) {
     if (!quadRef.current) return;
     const video = videoRef.current!;
@@ -507,7 +510,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
       }
     });
     if (best >= 0) {
-      dragRef.current = { idx: best, start: p };
+      dragRef.current = { anchor: { ...quadRef.current[best] } };
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     }
   }
@@ -520,9 +523,21 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     const vh = videoRef.current!.videoHeight;
     const { scale, offX, offY } = fitRect(vw, vh, rect.width, rect.height);
     const np = { x: (e.clientX - rect.left - offX) / scale, y: (e.clientY - rect.top - offY) / scale };
-    const quad = quadRef.current.map(p => ({ ...p }));
-    quad[drag.idx] = { x: Math.max(0, Math.min(vw, np.x)), y: Math.max(0, Math.min(vh, np.y)) };
-    quadRef.current = orderQuad(quad);
+    // orderQuad() re-sorts the array every frame, so a fixed index would jump
+    // to a different corner mid-drag; locate the dragged corner by position.
+    const quad = orderQuad(quadRef.current.map(p => ({ ...p })));
+    let idx = 0;
+    let best = Infinity;
+    for (let i = 0; i < 4; i++) {
+      const d = Math.hypot(quad[i].x - drag.anchor.x, quad[i].y - drag.anchor.y);
+      if (d < best) {
+        best = d;
+        idx = i;
+      }
+    }
+    quad[idx] = { x: Math.max(0, Math.min(vw, np.x)), y: Math.max(0, Math.min(vh, np.y)) };
+    drag.anchor = { ...quad[idx] };
+    quadRef.current = quad;
   }
 
   function onPointerUp() {
@@ -530,7 +545,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
   }
 
   // ---- Edit overlay corner dragging ----
-  const editDragRef = useRef<{ idx: number; start: Point } | null>(null);
+  const editDragRef = useRef<{ anchor: Point } | null>(null);
 
   function drawEditOverlay() {
     const overlay = editOverlayRef.current;
@@ -587,7 +602,7 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
       }
     });
     if (best >= 0) {
-      editDragRef.current = { idx: best, start: p };
+      editDragRef.current = { anchor: { ...editingQuadRef.current[best] } };
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     }
   }
@@ -601,9 +616,21 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     const vh = img.naturalHeight || img.height;
     const { scale, offX, offY } = fitRect(vw, vh, rect.width, rect.height);
     const np = { x: (e.clientX - rect.left - offX) / scale, y: (e.clientY - rect.top - offY) / scale };
-    const quad = editingQuadRef.current.map(p => ({ ...p }));
-    quad[drag.idx] = { x: Math.max(0, Math.min(vw, np.x)), y: Math.max(0, Math.min(vh, np.y)) };
-    editingQuadRef.current = orderQuad(quad);
+    // orderQuad() re-sorts the array every frame, so track the corner by its
+    // last position instead of a fixed index that would jump mid-drag.
+    const quad = orderQuad(editingQuadRef.current.map(p => ({ ...p })));
+    let idx = 0;
+    let best = Infinity;
+    for (let i = 0; i < 4; i++) {
+      const d = Math.hypot(quad[i].x - drag.anchor.x, quad[i].y - drag.anchor.y);
+      if (d < best) {
+        best = d;
+        idx = i;
+      }
+    }
+    quad[idx] = { x: Math.max(0, Math.min(vw, np.x)), y: Math.max(0, Math.min(vh, np.y)) };
+    drag.anchor = { ...quad[idx] };
+    editingQuadRef.current = quad;
     drawEditOverlay();
   }
 

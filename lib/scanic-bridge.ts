@@ -1,6 +1,6 @@
 'use client';
 
-import { detectQuadOpenCV } from './opencv-detect';
+import { detectQuadOpenCV, isOpenCVReady, loadOpenCV } from './opencv-detect';
 import { detectQuadJscanify } from './jscanify-detect';
 import {
   detectQuadOnCanvas,
@@ -93,39 +93,45 @@ function quadValid(q: Quad, w: number, h: number): boolean {
   return angOk === 4;
 }
 
-// Detect a document quad in the given canvas's own pixel space. Two independent
-// OpenCV-based detectors run in parallel and their results are fused:
-//   - Both find a quad and agree  -> keep the multi-path OpenCV one (it already
-//     had per-side line-fit refinement; jscanify is the cross-check).
-//   - Both find a quad, disagree  -> keep OpenCV (more robust, refined).
-//   - Only jscanify finds a quad  -> validate + line-fit refine it; this
-//     rescues low-contrast sheets the A/B/C/D paths miss.
-// `prev` is the previous frame's quad in the same space and acts as a tracking
-// prior so the live frame sticks to the paper. The built-in CV and Scanic's
-// WASM detector are fallbacks for the no-OpenCV case.
+// Detect a document quad in the given canvas's own pixel space. jscanify's
+// Canny -> Otsu -> largest-contour corner finder is the PRIMARY detector (the
+// user's papers are found reliably by it, where the OpenCV multi-path misses
+// them). Its corners are validated and snapped onto the paper edges with a
+// per-side line fit. OpenCV is the fallback when jscanify finds nothing or its
+// quad fails validation. `prev` is the previous frame's quad in the same space
+// and acts as a tracking prior so the live frame sticks to the paper. The
+// built-in CV and Scanic's WASM detector are the last-resort fallbacks.
 export async function detectQuadSmart(
   canvas: HTMLCanvasElement,
   previewW: number,
   previewH: number,
   prev?: Quad | null
 ): Promise<Quad | null> {
+  // OpenCV.js is a ~13MB wasm download. Until it has initialized, don't block
+  // auto-framing on it: kick off the (cached) download in the background and
+  // return an instant pure-JS quad instead. Once the wasm is ready the heavy
+  // detectors below take over, so the framing simply gets more precise.
+  if (!isOpenCVReady()) {
+    loadOpenCV();
+    return detectQuadOnCanvas(canvas, previewW, previewH);
+  }
   const tol = Math.max(8, Math.min(previewW, previewH) * 0.05);
   try {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (ctx) {
       const img = ctx.getImageData(0, 0, previewW, previewH);
       const frame = { data: img.data, w: previewW, h: previewH };
-      const [ocv, js] = await Promise.all([
-        detectQuadOpenCV(frame, prev),
+      const [js, ocv] = await Promise.all([
         detectQuadJscanify(frame),
+        detectQuadOpenCV(frame, prev),
       ]);
-      if (ocv) return ocv;
       if (js) {
         const q = refineQuadCorners({ data: frame.data, w: previewW, h: previewH } as GrayImage, js);
         const maxShift = Math.max(...q.map((p, i) => Math.hypot(p.x - js[i].x, p.y - js[i].y)));
         if (maxShift <= tol && quadValid(q, previewW, previewH)) return q;
         if (quadValid(js, previewW, previewH)) return js;
       }
+      if (ocv) return ocv;
     }
   } catch {
     // fall through to the built-in detector
