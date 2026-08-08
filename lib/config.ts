@@ -2,7 +2,7 @@ import { FACULTIES } from './departments';
 
 export type UserRole = 'admin' | 'manager' | 'teacher' | 'student' | 'user' | 'external';
 
-export const APP_VERSION = '2.5.0';
+export const APP_VERSION = '2.6.0';
 
 // Commit SHA of the build currently running (Vercel injects this at build time).
 export const BUILD_SHA = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || '';

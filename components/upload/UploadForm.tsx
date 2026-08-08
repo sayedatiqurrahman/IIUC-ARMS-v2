@@ -482,14 +482,24 @@ export default function UploadForm({
           ) : (
             <div className="border-2 border-dashed border-dark-border/60 rounded-lg p-4 text-center">
               <i className="fas fa-info-circle text-xl text-dark-text3 mb-1 block"></i>
-              <p className="text-[0.78rem] text-dark-text2">Select a course above or create one to add files</p>
+              <p className="text-[0.78rem] text-dark-text2 mb-2">Select a course to add files</p>
               {!noCoursesAvailable && (
-                <button
-                  className="mt-2 px-3 py-1.5 rounded-lg border border-qsis/40 bg-qsis/5 text-qsis text-[0.72rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors"
-                  onClick={() => setCreateCourseFor(course.id)}
-                >
-                  <i className="fas fa-plus mr-1"></i> Create New Course
-                </button>
+                <div className="text-left" data-course-select>
+                  <CustomSelect
+                    value={course.selectedCourseCode}
+                    onChange={v => {
+                      const found = existingCourses.find(c => c.code === v);
+                      updateCourse(course.id, { selectedCourseCode: v, selectedCourseTitle: found?.title || '', links: [] });
+                      clearInvalid(`course-${course.id}`);
+                      if (found) loadExistingLinks(course.id, v, found.title);
+                    }}
+                    error={courseInvalid}
+                    placeholder={department && semester ? "Choose a course..." : "Select dept & semester first"}
+                    searchable
+                    className={!department || !semester ? 'opacity-50 pointer-events-none' : ''}
+                    options={courseOptions}
+                  />
+                </div>
               )}
             </div>
           )}
