@@ -22,6 +22,7 @@
     "epubjs": "^0.3.93",
     "firebase": "^12.16.0",
     "firebase-admin": "^14.2.0",
+    "fflate": "^0.8.2",
     "jscanify": "^1.4.3",
     "jspdf": "^4.2.1",
     "next": "^14.2.0",

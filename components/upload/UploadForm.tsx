@@ -41,6 +41,8 @@ interface UploadFormProps {
   totalFiles: number;
   totalSizeMB: number;
   uploading: boolean;
+  uploadProgress?: { percent: number; label: string } | null;
+  compressing?: string | null;
   result: { success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null;
   handleSubmit: () => void;
   patInputToken: string;
@@ -71,7 +73,7 @@ export default function UploadForm({
   createCourseFor, setCreateCourseFor,
   handleFilesForCourse, fileInputRefs, onOpenScanner,
   totalFiles, totalSizeMB,
-  uploading, result,
+  uploading, uploadProgress, result, compressing,
   handleSubmit,
   patInputToken, setPatInputToken, patSaving, handleSavePat,
   mergeDialogCourseId, mergeImages, mergeSession, mergeYear,
@@ -145,7 +147,7 @@ export default function UploadForm({
   }
 
   function handleSubmitClick() {
-    if (uploading) return;
+    if (uploading || compressing) return;
     const errs: Record<string, boolean> = {};
     if (!department) errs.department = true;
     if (!semester) errs.semester = true;
@@ -415,7 +417,7 @@ export default function UploadForm({
             <>
               <input ref={el => { fileInputRefs.current[course.id] = el; }} type="file" multiple className="hidden" accept={category === config.categories.notes.folder ? '.pdf,.doc,.docx,.ppt,.pptx' : category === config.categories.questions.folder ? '.pdf,.jpg,.jpeg,.png,.gif,.webp' : '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.csv'} onChange={e => handleFilesForCourse(course.id, e)} />
               <div className="relative">
-                <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => setChooserCourseId(course.id)}>
+                <div className="border-2 border-dashed border-dark-border rounded-lg p-4 text-center cursor-pointer hover:border-qsis transition-colors" onClick={() => !compressing && setChooserCourseId(course.id)}>
                   <i className="fas fa-cloud-upload-alt text-xl text-dark-text2 mb-1 block"></i>
                   <p className="text-[0.78rem] text-dark-text2">Add files for this course</p>
                   <p className="text-[0.65rem] text-dark-text2">
@@ -423,7 +425,7 @@ export default function UploadForm({
                       ? 'Select 2-3 images together (auto-merged into one PDF) or 1 PDF file'
                       : isExamCategory
                         ? '1 file only'
-                        : `Max 5 files, ${config.maxUploadSizeMB}MB each`}
+                        : `Max 5 files, ${config.maxSingleFileUploadMB}MB each`}
                   </p>
                   <span className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-qsis/15 text-qsis text-[0.72rem] font-semibold">
                     <i className="fas fa-camera"></i> Upload from device or scan with camera
@@ -444,7 +446,7 @@ export default function UploadForm({
                     <div className="px-4 pb-2 flex flex-col gap-2.5">
                       <button
                         className="w-full flex items-center gap-3 px-4 py-4 text-left rounded-xl border-2 border-qsis/40 bg-qsis/10 hover:bg-qsis/20 hover:border-qsis active:scale-[0.98] transition-all cursor-pointer"
-                        onClick={() => { fileInputRefs.current[course.id]?.click(); setChooserCourseId(null); }}
+                        onClick={() => { if (compressing) return; fileInputRefs.current[course.id]?.click(); setChooserCourseId(null); }}
                       >
                         <div className="w-10 h-10 rounded-lg bg-qsis/20 flex items-center justify-center shrink-0">
                           <i className="fas fa-folder-open text-lg text-qsis"></i>
@@ -457,7 +459,7 @@ export default function UploadForm({
                       </button>
                       <button
                         className="w-full flex items-center gap-3 px-4 py-4 text-left rounded-xl border-2 border-qsis/40 bg-qsis/10 hover:bg-qsis/20 hover:border-qsis active:scale-[0.98] transition-all cursor-pointer"
-                        onClick={() => { onOpenScanner(course.id); setChooserCourseId(null); }}
+                        onClick={() => { if (compressing) return; onOpenScanner(course.id); setChooserCourseId(null); }}
                       >
                         <div className="w-10 h-10 rounded-lg bg-qsis/20 flex items-center justify-center shrink-0">
                           <i className="fas fa-camera text-lg text-qsis"></i>
@@ -628,10 +630,24 @@ export default function UploadForm({
       <button
         className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={handleSubmitClick}
-        disabled={uploading}
+        disabled={uploading || !!compressing}
       >
-        {uploading ? (
-          <><i className="fas fa-spinner fa-spin mr-2"></i>Creating PR...</>
+        {compressing ? (
+          <span className="flex flex-col items-center gap-1.5">
+            <span className="flex items-center gap-2"><i className="fas fa-compress-arrows-alt mr-1"></i>{compressing}</span>
+            <span className="w-full max-w-[300px] h-1.5 bg-white/20 rounded-full overflow-hidden">
+              <span className="block h-full bg-white rounded-full animate-pulse"></span>
+            </span>
+          </span>
+        ) : uploading ? (
+          <span className="flex flex-col items-center gap-1.5">
+            <span className="flex items-center gap-2"><i className="fas fa-spinner fa-spin mr-1"></i>{uploadProgress?.label || 'Uploading...'}</span>
+            {(uploadProgress && uploadProgress.percent > 0) && (
+              <span className="w-full max-w-[300px] h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <span className="block h-full bg-white rounded-full transition-all" style={{ width: `${Math.max(3, uploadProgress.percent)}%` }}></span>
+              </span>
+            )}
+          </span>
         ) : (
           <><i className="fas fa-paper-plane mr-2"></i>Submit {totalFiles} File{totalFiles !== 1 ? 's' : ''} for Review</>
         )}

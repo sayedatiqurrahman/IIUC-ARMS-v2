@@ -11,8 +11,86 @@ import { UploadForm, CreateCourseModal, type CreateCourseResult } from '@/compon
 import { CURRENT_YEAR, CURRENT_SEASON, isPdf, isImage, isDocsOnly } from '@/components/upload/types';
 import type { CourseGroup, FileWithMeta, Link, UploadModalProps } from '@/components/upload/types';
 import DocumentScanner, { type CapturedPage } from '@/components/scanner/DocumentScanner';
-import { compressImage } from '@/lib/image-utils';
+import { compressUploadFile } from '@/lib/compress';
 import { buildSearchablePdf } from '@/lib/ocr';
+
+// Files over this size are uploaded in chunks — each chunk request stays far
+// under Vercel's ~4.5MB request-body cap (raw bytes, no base64 inflation here).
+const CHUNK_BYTES = 2.5 * 1024 * 1024;
+
+export interface UploadProgress {
+  percent: number;
+  label: string;
+}
+
+function buildUploadPaths(opts: {
+  course: CourseGroup;
+  category: string;
+  semester: string;
+  department: string;
+  profile: Profile;
+  email: string;
+}): { files: { path: string; meta: FileWithMeta }[]; readmePath: string } {
+  const { course, category, semester, department } = opts;
+  const courseCode = course.selectedCourseCode;
+  const courseTitle = course.selectedCourseTitle || courseCode;
+  const courseFolder = `${courseCode} - ${courseTitle}`;
+  const isExamSpecific = category === config.categories.notes.folder || category === config.categories.questions.folder;
+  const midFinalPart = (isExamSpecific && course.midFinal) ? `/${course.midFinal}` : '';
+  const authorName = opts.profile?.name || opts.email.split('@')[0] || 'Unknown';
+
+  const files = course.files.map(fileMeta => {
+    const ext = fileMeta.file.name.split('.').pop() || 'pdf';
+    let filePath: string;
+    if (semester === config.relatedKitabsFolder) {
+      const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
+      filePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${fn}/${fileMeta.file.name}`;
+    } else if (semester === config.relatedSourcesFolder) {
+      const facId = getFacultyIdForDepartment(department) || department;
+      const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
+      filePath = `${facId}/${config.relatedSourcesFolder}/${fn}/${fileMeta.file.name}`;
+    } else if (isExamSpecific && course.examSession) {
+      const yearPart = isPdf(fileMeta.file.name) ? (fileMeta.yearRange || '') : (fileMeta.year || '');
+      const renamedFile = `${courseCode} ${course.examSession} ${CURRENT_YEAR} - ${authorName}.${ext}`;
+      const deptFolder = getDepartmentFolder(department);
+      filePath = yearPart
+        ? `${deptFolder}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${yearPart}/${renamedFile}`
+        : `${deptFolder}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${renamedFile}`;
+    } else {
+      filePath = `${getDepartmentFolder(department)}/${semester}/${courseFolder}${midFinalPart}/${category}/${fileMeta.file.name}`;
+    }
+    return { path: filePath, meta: fileMeta };
+  });
+
+  let readmePath = '';
+  if (course.links.length > 0) {
+    if (semester === config.relatedKitabsFolder) {
+      const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
+      readmePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${fn}/README.md`;
+    } else if (semester === config.relatedSourcesFolder) {
+      const facId = getFacultyIdForDepartment(department) || department;
+      const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
+      readmePath = `${facId}/${config.relatedSourcesFolder}/${fn}/README.md`;
+    } else {
+      readmePath = `${getDepartmentFolder(department)}/${semester}/${courseFolder}/README.md`;
+    }
+  }
+
+  return { files, readmePath };
+}
+
+async function readUploadResponse(res: Response): Promise<any> {
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return res.json();
+  const text = await res.text();
+  throw new Error(
+    text.includes('Too Large') || text.includes('too large')
+      ? 'Files too large. Try fewer or smaller files.'
+      : text.includes('Entity')
+        ? 'Upload failed — server rejected the request.'
+        : `Unexpected server response (${res.status}). Please try again.`
+  );
+}
 
 export default function UploadModal({ session, status, profile, onLogin, onClose }: UploadModalProps) {
   const githubToken = useAppStore(s => s.githubToken);
@@ -42,6 +120,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [createCourseFor, setCreateCourseFor] = useState<number | null>(null);
   const [recentlyCreated, setRecentlyCreated] = useState<{ code: string; title: string }[]>([]);
   const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [compressing, setCompressing] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const [mergeDialogCourseId, setMergeDialogCourseId] = useState<number | null>(null);
@@ -211,24 +291,26 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       if (filtered.length < selected.length) alert('Previous Questions only accept PDF or image files.');
     }
 
-    const valid = filtered.filter(f => f.size <= config.maxUploadSizeMB * 1024 * 1024);
-    if (valid.length < filtered.length) alert(`${filtered.length - valid.length} file(s) exceeded ${config.maxUploadSizeMB}MB and were skipped.`);
+    const valid = filtered.filter(f => f.size <= config.maxSingleFileUploadMB * 1024 * 1024);
+    if (valid.length < filtered.length) alert(`${filtered.length - valid.length} file(s) exceeded ${config.maxSingleFileUploadMB}MB and were skipped.`);
 
-    // Compress images automatically (90% JPEG quality, max 2000px)
-    const compressed: File[] = [];
-    for (const f of valid) {
-      if (isImage(f.name)) {
-        try {
-          const c = await compressImage(f);
-          compressed.push(c);
-        } catch {
-          compressed.push(f);
-        }
-      } else {
-        compressed.push(f);
+    // Compress client-side before upload (images, large PDFs, DOCX/PPTX/EPUB)
+    const valid2: File[] = [];
+    let totalSaved = 0;
+    setCompressing(`Compressing 0/${valid.length}...`);
+    try {
+      for (let i = 0; i < valid.length; i++) {
+        setCompressing(`Compressing ${i + 1}/${valid.length} — ${valid[i].name}...`);
+        const r = await compressUploadFile(valid[i]);
+        valid2.push(r.file);
+        totalSaved += r.saved;
       }
+    } finally {
+      setCompressing(null);
     }
-    const valid2 = compressed;
+    if (totalSaved > 1024 * 1024) {
+      showToast(`Compressed files — saved ${(totalSaved / (1024 * 1024)).toFixed(1)}MB`, 'info');
+    }
 
     const newTotal = totalFiles - currentCourseFiles + valid2.length;
     if (newTotal > 10) { alert(`Max 10 files total across all courses. You can add ${10 - totalFiles + currentCourseFiles} more.`); return; }
@@ -416,89 +498,106 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     await doUpload();
   }
 
+  async function uploadChunked(
+    uploads: { course: CourseGroup; files: { path: string; meta: FileWithMeta }[]; readmePath: string }[],
+    totalBytes: number,
+    message: string,
+    token: string
+  ): Promise<any> {
+    const sessionId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+      ? crypto.randomUUID()
+      : `s-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    let uploadedBytes = 0;
+    for (const u of uploads) {
+      for (const f of u.files) {
+        const file = f.meta.file;
+        const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_BYTES));
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * CHUNK_BYTES;
+          const blob = file.slice(start, Math.min(file.size, start + CHUNK_BYTES));
+          const fd = new FormData();
+          fd.append('sessionId', sessionId);
+          fd.append('path', f.path);
+          fd.append('index', String(i));
+          fd.append('total', String(totalChunks));
+          fd.append('chunk', blob, file.name);
+          const res = await fetch('/api/github/upload-chunk', { method: 'POST', body: fd });
+          const cdata = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(cdata.error || `Failed to upload ${file.name}`);
+          uploadedBytes += blob.size;
+          setUploadProgress({
+            percent: Math.min(90, Math.round((uploadedBytes / totalBytes) * 90)),
+            label: `Uploading ${file.name} (${Math.round(((i + 1) / totalChunks) * 100)}%)...`,
+          });
+        }
+      }
+      if (u.readmePath) {
+        const fd = new FormData();
+        fd.append('sessionId', sessionId);
+        fd.append('path', u.readmePath);
+        fd.append('index', '0');
+        fd.append('total', '1');
+        fd.append('chunk', new Blob([linksToReadmeContent(u.course.links)], { type: 'text/markdown' }), u.readmePath.split('/').pop() || 'README.md');
+        const res = await fetch('/api/github/upload-chunk', { method: 'POST', body: fd });
+        const cdata = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(cdata.error || 'Failed to upload links');
+      }
+    }
+
+    setUploadProgress({ percent: 95, label: 'Committing to GitHub...' });
+    const res = await fetch('/api/github/upload-finalize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, message, githubToken: token || undefined }),
+    });
+    return readUploadResponse(res);
+  }
+
   async function doUpload(tokenOverride?: string) {
     const token = tokenOverride || githubToken || profile.githubToken || (session as any)?.accessToken || '';
     const validCourses = courses.filter(c => c.selectedCourseCode && (c.files.length > 0 || c.links.length > 0));
 
-    setUploading(true); setResult(null);
+    setUploading(true); setResult(null); setUploadProgress(null);
     try {
-      const formData = new FormData();
-      const fileMetas: { path: string; isReadme: boolean }[] = [];
-
-      for (const course of validCourses) {
-        const courseCode = course.selectedCourseCode;
-        const courseTitle = course.selectedCourseTitle || courseCode;
-        const courseFolder = `${courseCode} - ${courseTitle}`;
-
-        for (const fileMeta of course.files) {
-          const isExamSpecific = category === config.categories.notes.folder || category === config.categories.questions.folder;
-          const midFinalPart = (isExamSpecific && course.midFinal) ? `/${course.midFinal}` : '';
-          const authorName = profile?.name || email.split('@')[0] || 'Unknown';
-          const ext = fileMeta.file.name.split('.').pop() || 'pdf';
-          let filePath: string;
-
-          if (semester === config.relatedKitabsFolder) {
-            const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
-            filePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${fn}/${fileMeta.file.name}`;
-          } else if (semester === config.relatedSourcesFolder) {
-            const facId = getFacultyIdForDepartment(department) || department;
-            const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
-            filePath = `${facId}/${config.relatedSourcesFolder}/${fn}/${fileMeta.file.name}`;
-          } else if (isExamSpecific && course.examSession) {
-            const yearPart = isPdf(fileMeta.file.name) ? (fileMeta.yearRange || '') : (fileMeta.year || '');
-            const renamedFile = `${courseCode} ${course.examSession} ${CURRENT_YEAR} - ${authorName}.${ext}`;
-            const deptFolder = getDepartmentFolder(department);
-            filePath = yearPart
-              ? `${deptFolder}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${yearPart}/${renamedFile}`
-              : `${deptFolder}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${renamedFile}`;
-          } else {
-            filePath = `${getDepartmentFolder(department)}/${semester}/${courseFolder}${midFinalPart}/${category}/${fileMeta.file.name}`;
-          }
-          formData.append('files', fileMeta.file, filePath);
-          fileMetas.push({ path: filePath, isReadme: false });
-        }
-
-        if (course.links.length > 0) {
-          const readmeContent = linksToReadmeContent(course.links);
-          let readmePath: string;
-          if (semester === config.relatedKitabsFolder) {
-            const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
-            readmePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${fn}/README.md`;
-          } else if (semester === config.relatedSourcesFolder) {
-            const facId = getFacultyIdForDepartment(department) || department;
-            const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
-            readmePath = `${facId}/${config.relatedSourcesFolder}/${fn}/README.md`;
-          } else { readmePath = `${getDepartmentFolder(department)}/${semester}/${courseFolder}/README.md`; }
-          const readmeBlob = new Blob([readmeContent], { type: 'text/markdown' });
-          formData.append('files', readmeBlob, readmePath);
-          fileMetas.push({ path: readmePath, isReadme: true });
-        }
-      }
-
       const message = `Add ${validCourses.map(c => `${c.selectedCourseCode} - ${c.selectedCourseTitle || c.selectedCourseCode}`).join(', ')} (${category}) — ${semester}`;
-      formData.append('message', message);
-      if (token) formData.append('githubToken', token);
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 85000);
-      const res = await fetch('/api/github/upload', { method: 'POST', body: formData, signal: controller.signal });
-      clearTimeout(timeout);
+      const uploads = validCourses.map(course => {
+        const built = buildUploadPaths({ course, category, semester, department, profile, email });
+        return { course, files: built.files, readmePath: built.readmePath };
+      });
+
+      const allFiles = uploads.flatMap(u => u.files);
+      const totalBytes = allFiles.reduce((sum, f) => sum + f.meta.file.size, 0);
+      const needsChunking = totalBytes > 0 && (allFiles.some(f => f.meta.file.size > CHUNK_BYTES) || totalBytes > CHUNK_BYTES * 2);
 
       let data: any;
-      const ct = res.headers.get('content-type') || '';
-      if (ct.includes('application/json')) {
-        data = await res.json();
+      if (needsChunking) {
+        data = await uploadChunked(uploads, totalBytes, message, token);
       } else {
-        const text = await res.text();
-        throw new Error(text.includes('Too Large') || text.includes('too large')
-          ? 'Files too large. Try fewer or smaller files.'
-          : text.includes('Entity')
-            ? 'Upload failed — server rejected the request.'
-            : `Unexpected server response (${res.status}). Please try again.`);
+        const formData = new FormData();
+        for (const u of uploads) {
+          for (const f of u.files) {
+            formData.append('files', f.meta.file, f.path);
+          }
+          if (u.readmePath) {
+            formData.append('files', new Blob([linksToReadmeContent(u.course.links)], { type: 'text/markdown' }), u.readmePath);
+          }
+        }
+        formData.append('message', message);
+        if (token) formData.append('githubToken', token);
+
+        setUploadProgress({ percent: 40, label: 'Uploading to GitHub...' });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 85000);
+        const res = await fetch('/api/github/upload', { method: 'POST', body: formData, signal: controller.signal });
+        clearTimeout(timeout);
+        data = await readUploadResponse(res);
       }
 
       if (data.success) {
         setResult({ success: true, prUrl: data.pr?.url });
+        setUploadProgress({ percent: 100, label: 'Done' });
         setCourses([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
         useAppStore.getState().invalidateTreeCache();
         useAppStore.getState().loadTree(session?.accessToken || '');
@@ -555,6 +654,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             createCourseFor={createCourseFor} setCreateCourseFor={setCreateCourseFor}
             handleFilesForCourse={handleFilesForCourse} fileInputRefs={fileInputRefs} onOpenScanner={openScanner}
             totalFiles={totalFiles} totalSizeMB={totalSizeMB} uploading={uploading} result={result}
+            compressing={compressing}
+            uploadProgress={uploadProgress}
             handleSubmit={handleSubmit}
             patInputToken={patInputToken} setPatInputToken={setPatInputToken} patSaving={patSaving} handleSavePat={handleSavePat}
             mergeDialogCourseId={mergeDialogCourseId} mergeImages={mergeImages} mergeSession={mergeSession} mergeYear={mergeYear}

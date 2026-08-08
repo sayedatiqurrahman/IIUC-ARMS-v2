@@ -74,6 +74,9 @@ export const config = {
   maxFilesPerUpload: 10,
   // GitHub Contents API supports files up to 100MB — match that ceiling.
   maxUploadSizeMB: 100,
+  // Per-file cap. Files above a few MB are uploaded in chunks so Vercel's
+  // ~4.5MB request-body limit never blocks them; 50MB is well under GitHub's cap.
+  maxSingleFileUploadMB: 50,
   academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','webp','csv'],
   githubStarRepos: [
     { owner: 'sayedatiqurrahman', repo: 'QSIS-ACADEMIC-FILES-MANAFGER', label: 'QSIS Academic Files' },
