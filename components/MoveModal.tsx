@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { showToast } from '@/lib/utils';
+import { getAllFolderNames } from '@/lib/departments';
 
 interface FolderNode {
   name: string;
@@ -17,12 +18,12 @@ interface MoveModalProps {
   onAction: (from: string, to: string, newName?: string) => Promise<void>;
 }
 
-const DEPTS = ['all','arts','ba','business','cce','cge','civil','cse','dawah','DIS','eb','eee','ell','ete','finance','hadith','SHIS','law','lis','pharmacy','qsis','science','shariah','social'];
+const TOP_LEVEL_FOLDERS = getAllFolderNames();
 
 function getDeptFromPath(path: string): string {
   const parts = path.split('/');
   const dept = parts[0] || '';
-  return DEPTS.includes(dept) ? dept : 'qsis';
+  return TOP_LEVEL_FOLDERS.has(dept) ? dept : 'qsis';
 }
 
 export default function MoveModal({ isOpen, onClose, sourcePath, sourceName, mode, onAction }: MoveModalProps) {

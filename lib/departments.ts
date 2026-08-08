@@ -37,7 +37,7 @@ export const FACULTIES: Faculty[] = [
       { id: 'eee', name: 'Electrical and Electronic Engineering', shortName: 'EEE', icon: 'fa-bolt' },
       { id: 'ete', name: 'Electronic and Telecommunication Engineering', shortName: 'ETE', icon: 'fa-tower-broadcast' },
       { id: 'civil', name: 'Civil Engineering', shortName: 'CE', icon: 'fa-building' },
-      { id: 'pharmacy', name: 'Pharmacy', shortName: 'PHM', icon: 'fa-pills' },
+      { id: 'pharmacy', name: 'Pharmacy', shortName: 'PHM', icon: 'fa-pills', folder: 'PHM' },
     ],
   },
   {
@@ -47,7 +47,7 @@ export const FACULTIES: Faculty[] = [
     icon: 'fa-chart-line',
     departments: [
       { id: 'ba', name: 'Business Administration', shortName: 'BA', icon: 'fa-briefcase' },
-      { id: 'finance', name: 'Department of Finance', shortName: 'FIN', icon: 'fa-coins' },
+      { id: 'finance', name: 'Department of Finance', shortName: 'FIN', icon: 'fa-coins', folder: 'FIN' },
     ],
   },
   {
@@ -176,4 +176,18 @@ export function getFacultyIdForDepartment(deptId: string): string | null {
 
 export function getAllFacultyIds(): string[] {
   return FACULTIES.map(f => f.id);
+}
+
+// All recognized top-level GitHub folder names (faculty ids + dept ids + folder short forms).
+export function getAllFolderNames(): Set<string> {
+  const set = new Set<string>();
+  for (const faculty of FACULTIES) {
+    set.add(faculty.id);
+    for (const dept of faculty.departments) {
+      set.add(dept.id);
+      if (dept.folder) set.add(dept.folder);
+    }
+  }
+  set.add('shariah');
+  return set;
 }
