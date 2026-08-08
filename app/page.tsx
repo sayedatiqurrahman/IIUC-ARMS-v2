@@ -332,17 +332,17 @@ export default function BrowsePage() {
     const params = new URLSearchParams();
     if (view === 'departments') {
     } else if (view === 'semesters' && currentDept) {
-      params.set('dept', currentDept);
+      params.set('dept', getDepartmentFolder(currentDept));
     } else if (view === 'courses' && currentDept && currentSem) {
-      params.set('dept', currentDept);
+      params.set('dept', getDepartmentFolder(currentDept));
       params.set('sem', currentSem);
     } else if (view === 'categories' && currentDept && currentSem && currentCourseCode) {
-      params.set('dept', currentDept);
+      params.set('dept', getDepartmentFolder(currentDept));
       params.set('sem', currentSem);
       params.set('course', currentCourseCode);
       if (currentMidFinal) params.set('mf', currentMidFinal);
     } else if (view === 'files' && currentDept && currentSem && currentCourseCode && currentCat) {
-      params.set('dept', currentDept);
+      params.set('dept', getDepartmentFolder(currentDept));
       params.set('sem', currentSem);
       params.set('course', currentCourseCode);
       if (currentMidFinal) params.set('mf', currentMidFinal);

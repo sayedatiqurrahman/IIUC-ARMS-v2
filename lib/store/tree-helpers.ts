@@ -1,5 +1,5 @@
 import { config } from '../config';
-import { FACULTIES, getFacultyIdForDepartment, getAllFacultyIds, getDepartmentIdByFolder, isShariahDepartmentId } from '../departments';
+import { FACULTIES, getFacultyIdForDepartment, getAllFacultyIds, getDepartmentIdByFolder, isShariahDepartmentId, resolveDepartmentId } from '../departments';
 import { extractYear, getMimeFromExt } from '../utils';
 import { detectCategory, matchCourseFolder, normalizeCourseCode, parseCourseFilePath } from './helpers';
 import type { AppState, Category, Semester } from './types';
@@ -105,6 +105,7 @@ export function createTreeHelpers(get: GetState) {
     },
 
     getSemesters: (departmentId?: string | null): Semester[] => {
+      if (departmentId) departmentId = resolveDepartmentId(departmentId);
       const uploadTree = get().getUploadTree();
       const sems = new Map<string, { files: number; courses: Set<string> }>();
 
@@ -332,6 +333,7 @@ export function createTreeHelpers(get: GetState) {
     },
 
     getSemesterCourses: (semId: string, departmentId?: string | null) => {
+      if (departmentId) departmentId = resolveDepartmentId(departmentId);
       const uploadTree = get().getUploadTree();
       const prefix = semId + '/';
       const courseMap = new Map<string, { title: string; categories: Map<string, number>; totalFiles: number; midCount: number; finalCount: number; rootCount: number; readmes: Set<string>; mdFiles: Set<string> }>();
@@ -436,6 +438,7 @@ export function createTreeHelpers(get: GetState) {
     },
 
     getCourseCategories: (semId: string, courseCode: string, departmentId?: string | null, midFinal?: string | null) => {
+      if (departmentId) departmentId = resolveDepartmentId(departmentId);
       const uploadTree = get().getUploadTree();
       const prefix = semId + '/';
       const code = normalizeCourseCode(courseCode);
@@ -616,6 +619,7 @@ export function createTreeHelpers(get: GetState) {
     },
 
     getCourseMidFinal: (semId: string, courseCode: string, departmentId?: string | null) => {
+      if (departmentId) departmentId = resolveDepartmentId(departmentId);
       const uploadTree = get().getUploadTree();
       const prefix = semId + '/';
       const code = courseCode.toUpperCase();
@@ -661,6 +665,7 @@ export function createTreeHelpers(get: GetState) {
     },
 
     getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string, departmentId?: string | null) => {
+      if (departmentId) departmentId = resolveDepartmentId(departmentId);
       const uploadTree = get().getUploadTree();
       const q = query.toLowerCase().trim();
       if (!q && !typeFilter && !yearFilter && !semFilter) return { files: [], folders: [] };
