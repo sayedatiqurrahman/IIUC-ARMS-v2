@@ -343,11 +343,49 @@ const CONTACT_KEYBOARD = {
   one_time_keyboard: true,
 };
 
+// ─── Anti-spam: flood guard + stranger silence ────────────────────
+const FLOOD_WINDOW_MS = 60 * 1000;
+const FLOOD_MAX = 15;
+const FLOOD_BLOCK_MS = 5 * 60 * 1000;
+const floodCounts = new Map<number, { count: number; resetAt: number; blockedUntil: number }>();
+
+function isFlooding(chatId: number): boolean {
+  const now = Date.now();
+  const entry = floodCounts.get(chatId);
+  if (!entry || now > entry.resetAt) {
+    floodCounts.set(chatId, { count: 1, resetAt: now + FLOOD_WINDOW_MS, blockedUntil: 0 });
+    return false;
+  }
+  entry.count++;
+  if (entry.blockedUntil && now < entry.blockedUntil) return true;
+  if (entry.count > FLOOD_MAX) {
+    entry.blockedUntil = now + FLOOD_BLOCK_MS;
+    console.log(`[TG] Flood blocked chat_id ${chatId}`);
+    return true;
+  }
+  return false;
+}
+
+// True when this chat is linked to a verified IIUC-ARMS account.
+async function isVerifiedChat(chatId: number): Promise<boolean> {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findFirst({
+      where: { telegramChatId: String(chatId), telegramVerified: true },
+      select: { userId: true },
+    });
+    return !!profile;
+  } catch { return false; }
+}
+
 async function handleMessage(msg: any) {
   const chatId = msg.chat.id;
   const text = (msg.text || '').trim();
   const chatType = msg.chat.type;
   const isGroup = chatType === 'group' || chatType === 'supergroup';
+
+  // Flood protection — silently drop messages when a chat hammers the bot.
+  if (isFlooding(chatId)) return;
 
   console.log(`[TG] msg from ${chatId}: "${text}" | TOKEN=${process.env.TELEGRAM_BOT_TOKEN ? 'SET(' + process.env.TELEGRAM_BOT_TOKEN.substring(0, 5) + '...)' : 'MISSING'}`);
 
@@ -774,6 +812,7 @@ async function handleMessage(msg: any) {
 
     // ─── Unknown command ───
     if (cleanText.startsWith('/')) {
+      if (!(await isVerifiedChat(chatId))) return; // ignore strangers
       await sendMessage(chatId,
         `🤔 Unknown command.\n\n` +
         `Try:\n` +
@@ -788,6 +827,9 @@ async function handleMessage(msg: any) {
 
     // ─── Plain text in private chat ───
     if (!isGroup) {
+      // Only respond to unrecognized text from verified accounts.
+      // Strangers (spammers) get silently ignored instead of a reply.
+      if (!(await isVerifiedChat(chatId))) return;
       await sendMessage(chatId,
         `🤔 Send a course code like <code>QSM-3602</code> to search.\n\n` +
         `Or try:\n` +
