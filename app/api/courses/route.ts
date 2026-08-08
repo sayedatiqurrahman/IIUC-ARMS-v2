@@ -64,18 +64,19 @@ async function batchCreateGitkeepFiles(token: string, folderPath: string, paths:
 }
 
 // Rename a course folder on GitHub by remapping every blob under the old
-// prefix to the new prefix (single tree commit, using the caller's token).
-async function renameCourseFolderOnGithub(token: string, oldPath: string, newPath: string): Promise<boolean> {
+// prefix to the new prefix (single tree commit). Returns '' on success or a
+// short reason string on failure so callers can fall back to the bot token.
+async function renameCourseFolderOnGithub(token: string, oldPath: string, newPath: string): Promise<string> {
   const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
-  if (!refRes.ok) return false;
+  if (!refRes.ok) return `ref:${refRes.status}`;
   const baseCommitSha = (await refRes.json()).object.sha;
 
   const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
-  if (!commitRes.ok) return false;
+  if (!commitRes.ok) return `commit:${commitRes.status}`;
   const baseTreeSha = (await commitRes.json()).tree.sha;
 
   const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
-  if (!treeRes.ok) return false;
+  if (!treeRes.ok) return `tree:${treeRes.status}`;
   const fullTree = (await treeRes.json()).tree || [];
 
   const oldPrefix = oldPath + '/';
@@ -91,27 +92,33 @@ async function renameCourseFolderOnGithub(token: string, oldPath: string, newPat
     treeItems.push({ path: p, sha: null }); // remove the old path
     moved++;
   }
-  if (moved === 0) return false;
+  // Truly empty folder (only empty subdirectories, nothing tracked in git) —
+  // recreate the standard skeleton under the new name so it still exists.
+  if (moved === 0) {
+    for (const sf of COURSE_SUBFOLDERS) {
+      treeItems.push({ path: `${newPath}/${sf}/.gitkeep`, mode: '100644', type: 'blob', content: '' });
+    }
+  }
 
   const createTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
     method: 'POST', headers: ghHeaders(token),
     body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems }),
   });
-  if (!createTreeRes.ok) return false;
+  if (!createTreeRes.ok) return `createtree:${createTreeRes.status}`;
   const newTreeSha = (await createTreeRes.json()).sha;
 
   const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
     method: 'POST', headers: ghHeaders(token),
     body: JSON.stringify({ message: `Rename course: ${oldPath} → ${newPath}`, tree: newTreeSha, parents: [baseCommitSha] }),
   });
-  if (!newCommitRes.ok) return false;
+  if (!newCommitRes.ok) return `commit2:${newCommitRes.status}`;
   const newCommitSha = (await newCommitRes.json()).sha;
 
   const refUpdateRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
     method: 'PATCH', headers: ghHeaders(token),
     body: JSON.stringify({ sha: newCommitSha, force: true }),
   });
-  return refUpdateRes.ok;
+  return refUpdateRes.ok ? '' : `refupdate:${refUpdateRes.status}`;
 }
 
 // GET — fast DB read
@@ -299,9 +306,10 @@ export async function PUT(req: NextRequest) {
     }
 
     const botToken = await resolveGithubToken();
-    const token = githubToken || botToken;
-    if (!token) {
-      return NextResponse.json({ error: 'GitHub is not connected. Connect your GitHub to rename courses.' }, { status: 400 });
+    const candidateTokens = [githubToken, botToken].filter((t): t is string => typeof t === 'string' && t.length > 0);
+    const tokens = candidateTokens.filter((t, i) => candidateTokens.indexOf(t) === i);
+    if (tokens.length === 0) {
+      return NextResponse.json({ error: 'GitHub is not connected. Please try again or contact an admin.' }, { status: 400 });
     }
 
     const cleanTitle = cleanCourseTitle(courseTitle);
@@ -309,17 +317,30 @@ export async function PUT(req: NextRequest) {
     const baseDir = `${config.uploadPath}/${deptFolder}/${semester}`;
     const newFolderPath = `${baseDir}/${code.toUpperCase()} - ${cleanTitle}`;
 
-    const oldFolderPath = await findCourseFolderPathInRepo(token, baseDir, code);
+    // Find the real folder (tolerating spacing/language), trying the user's
+    // token first and falling back to the bot's.
+    let oldFolderPath: string | null = null;
+    for (const t of tokens) {
+      oldFolderPath = await findCourseFolderPathInRepo(t, baseDir, code);
+      if (oldFolderPath) break;
+    }
     if (!oldFolderPath) {
       return NextResponse.json({ error: 'Course folder not found on GitHub' }, { status: 404 });
     }
     const codeUpper = code.toUpperCase();
     const oldTitle = (oldFolderPath.split('/').pop() || '').replace(new RegExp(`^${codeUpper.replace(/-/g, '\\s*-\\s*')}\\s*-\\s*`), '').trim();
 
+    // Rename with the user's PAT first; if it can't write, the bot does it.
     if (oldFolderPath !== newFolderPath) {
-      const renamed = await renameCourseFolderOnGithub(token, oldFolderPath, newFolderPath);
+      let reason = 'no write token';
+      let renamed = false;
+      for (const t of tokens) {
+        reason = await renameCourseFolderOnGithub(t, oldFolderPath, newFolderPath);
+        if (!reason) { renamed = true; break; }
+      }
       if (!renamed) {
-        return NextResponse.json({ error: 'Failed to rename the course folder on GitHub. Check that your GitHub token has write access to the repository.' }, { status: 500 });
+        console.error(`[course-rename] failed ${code}: ${reason}`);
+        return NextResponse.json({ error: `Failed to rename the course folder on GitHub (${reason}). Our bot could not move it — please try again or contact an admin.` }, { status: 500 });
       }
     }
 

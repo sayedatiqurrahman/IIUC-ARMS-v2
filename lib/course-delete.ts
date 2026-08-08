@@ -37,7 +37,7 @@ export async function findCourseFolderPathInRepo(token: string, baseDir: string,
   for (const item of (treeData.tree || [])) {
     const p = String(item.path || '');
     if (!p.startsWith(prefix)) continue;
-    const folderName = (p.slice(prefix.length).split('/')[0] || '').toUpperCase();
+    const folderName = p.slice(prefix.length).split('/')[0] || '';
     if (!folderName) continue;
     const folderNorm = normalizeCourseFolderName(folderName);
     if (folderNorm === codeNorm || folderNorm.startsWith(`${codeNorm}-`)) return `${baseDir}/${folderName}`;

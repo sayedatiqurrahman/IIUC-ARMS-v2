@@ -239,7 +239,7 @@ export default function CoursesView({
           <div className="bg-dark-bg2 w-full max-w-sm rounded-2xl border border-dark-border p-5" onClick={e => e.stopPropagation()}>
             <h3 className="text-sm font-bold text-dark-text mb-1"><i className="fas fa-edit text-blue-400 mr-2"></i>Rename Course</h3>
             <p className="text-dark-text3 text-[0.72rem] mb-2">Editing <span className="font-mono text-qsis">{editTarget.code}</span> — this renames the GitHub folder too.</p>
-            <p className="text-dark-text3 text-[0.68rem] mb-3"><i className="fas fa-info-circle mr-1 text-qsis"></i>Uses your connected GitHub (PAT) to move the folder and all files inside it.</p>
+            <p className="text-dark-text3 text-[0.68rem] mb-3"><i className="fas fa-info-circle mr-1 text-qsis"></i>Our bot renames the folder and all files inside it automatically.</p>
             {editError && <p className="text-red-400 text-[0.72rem] mb-2">{editError}</p>}
             <input type="text" placeholder="New course title" value={editTitle} onChange={e => setEditTitle(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis mb-3" />
