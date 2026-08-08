@@ -1,8 +1,10 @@
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { toggleFullscreen } from '@/lib/fullscreen';
 
 export default function DocViewer({ item, onClose }: { item: any; onClose: () => void }) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(100);
@@ -67,7 +69,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   }, [status, fit]);
 
   return (
-    <div className="image-viewer-container">
+    <div ref={rootRef} className="image-viewer-container">
       <div className="image-toolbar">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <i className="fas fa-file-word text-qsis flex-shrink-0"></i>
@@ -76,7 +78,8 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
         <button className="pdf-btn" onClick={() => setZoom(z => Math.max(20, z - 15))} title="Zoom Out"><i className="fas fa-minus"></i></button>
         <span className="text-[0.8rem] font-semibold min-w-[40px] text-center">{zoom}%</span>
         <button className="pdf-btn" onClick={() => setZoom(z => Math.min(200, z + 15))} title="Zoom In"><i className="fas fa-plus"></i></button>
-        <button className="pdf-btn" onClick={fit} title="Fit"><i className="fas fa-expand"></i></button>
+        <button className="pdf-btn" onClick={fit} title="Fit"><i className="fas fa-arrows-to-bounds"></i></button>
+        <button className="pdf-btn" onClick={() => toggleFullscreen(rootRef.current)} title="Fullscreen"><i className="fas fa-expand"></i></button>
         <a className="pdf-btn no-underline" href={item.rawUrl} target="_blank" rel="noreferrer" title="Download" style={{textDecoration:'none'}}><i className="fas fa-download"></i></a>
         <button className="pdf-btn" onClick={onClose} title="Close" style={{background:'#ef4444',color:'white',borderRadius:'7px'}}><i className="fas fa-times"></i></button>
       </div>

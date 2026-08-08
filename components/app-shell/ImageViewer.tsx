@@ -2,8 +2,10 @@
 
 import { useRef, useEffect } from 'react';
 import { useAppStore } from '@/lib/store';
+import { toggleFullscreen } from '@/lib/fullscreen';
 
 export default function ImageViewer({ item, onClose }: { item: any; onClose: () => void }) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const panRef = useRef({x:0,y:0});
@@ -89,7 +91,7 @@ export default function ImageViewer({ item, onClose }: { item: any; onClose: () 
   }, [zoom, rotation]);
 
   return (
-    <div className="image-viewer-container">
+    <div ref={rootRef} className="image-viewer-container">
       <div className="image-toolbar">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <i className="fas fa-image text-qsis flex-shrink-0"></i>
@@ -98,9 +100,10 @@ export default function ImageViewer({ item, onClose }: { item: any; onClose: () 
         <button className="pdf-btn" onClick={zoomOut} title="Zoom Out"><i className="fas fa-minus"></i></button>
         <span className="text-[0.8rem] font-semibold min-w-[40px] text-center">{zoom}%</span>
         <button className="pdf-btn" onClick={zoomIn} title="Zoom In"><i className="fas fa-plus"></i></button>
-        <button className="pdf-btn" onClick={fit} title="Fit"><i className="fas fa-expand"></i></button>
+        <button className="pdf-btn" onClick={fit} title="Fit"><i className="fas fa-arrows-to-bounds"></i></button>
         <button className="pdf-btn" onClick={rotate} title="Rotate"><i className="fas fa-redo"></i></button>
         <button className="pdf-btn" onClick={handToggle} title="Hand/Pan"><i className="fas fa-hand-paper"></i></button>
+        <button className="pdf-btn" onClick={() => toggleFullscreen(rootRef.current)} title="Fullscreen"><i className="fas fa-expand"></i></button>
         <button className="pdf-btn" onClick={onClose} title="Close" style={{background:'#ef4444',color:'white',borderRadius:'7px'}}><i className="fas fa-times"></i></button>
       </div>
       <div className="image-scroll-area" ref={scrollRef} style={{cursor: zoom > 100 ? 'grab' : 'default'}}>

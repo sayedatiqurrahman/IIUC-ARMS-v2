@@ -43,11 +43,16 @@ export function getFileIcon(ext: string) {
 
 export function getMimeFromExt(ext: string) {
   const e = ext.toLowerCase();
-  if (['jpg','jpeg','png','gif','webp'].includes(e)) return 'image';
+  if (['jpg','jpeg','png','gif','webp','svg','bmp','avif','ico'].includes(e)) return 'image';
   if (e === 'pdf') return 'pdf';
   if (['doc','docx'].includes(e)) return 'doc';
   if (['xls','xlsx','csv'].includes(e)) return 'sheet';
   if (['ppt','pptx'].includes(e)) return 'ppt';
+  if (e === 'epub') return 'epub';
+  if (['mobi','azw3','azw','kfx','prc','pdb','lit'].includes(e)) return 'kindle';
+  if (['txt','md','markdown','log','json','ini','yaml','yml'].includes(e)) return 'text';
+  if (['mp4','webm','mkv','mov','avi','m4v','ogv'].includes(e)) return 'video';
+  if (['mp3','wav','ogg','m4a','flac','aac','opus'].includes(e)) return 'audio';
   return 'other';
 }
 
@@ -57,6 +62,11 @@ export function getFileIconByType(mime: string) {
   if (mime === 'doc') return <i className="fas fa-file-word" style={{color:'#3b82f6'}}></i>;
   if (mime === 'sheet') return <i className="fas fa-file-excel" style={{color:'#22c55e'}}></i>;
   if (mime === 'ppt') return <i className="fas fa-file-powerpoint" style={{color:'#f97316'}}></i>;
+  if (mime === 'epub') return <i className="fas fa-book" style={{color:'#a855f7'}}></i>;
+  if (mime === 'kindle') return <i className="fab fa-kindle" style={{color:'#f59e0b'}}></i>;
+  if (mime === 'text') return <i className="fas fa-file-alt" style={{color:'#94a3b8'}}></i>;
+  if (mime === 'video') return <i className="fas fa-file-video" style={{color:'#ec4899'}}></i>;
+  if (mime === 'audio') return <i className="fas fa-file-audio" style={{color:'#14b8a6'}}></i>;
   return <i className="fas fa-file" style={{color:'#94a3b8'}}></i>;
 }
 

@@ -242,15 +242,18 @@ export default function CoursesView({
             <h3 className="text-sm font-bold text-dark-text mb-1"><i className="fas fa-edit text-blue-400 mr-2"></i>Rename Course</h3>
             <p className="text-dark-text3 text-[0.72rem] mb-2">Editing <span className="font-mono text-qsis">{editTarget.code}</span> — this renames the GitHub folder too.</p>
             <p className="text-dark-text3 text-[0.68rem] mb-3"><i className="fas fa-info-circle mr-1 text-qsis"></i>Our bot renames the folder and all files inside it automatically.</p>
+            {editLoading && (
+              <p className="text-[0.68rem] text-dark-text3 mb-3"><i className="fas fa-hourglass-half mr-1 text-yellow-400"></i>Moving the folder on GitHub — this can take a little while. After it finishes, it may take a moment for the new title to show up.</p>
+            )}
             {editError && <p className="text-red-400 text-[0.72rem] mb-2">{editError}</p>}
             <input type="text" placeholder="New course title" value={editTitle} onChange={e => setEditTitle(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis mb-3" />
             <div className="flex gap-2">
               <button onClick={handleEdit} disabled={editLoading || !editTitle.trim()}
                 className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
-                {editLoading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : <><i className="fas fa-check mr-1"></i>Save</>}
+                {editLoading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Renaming...</> : <><i className="fas fa-check mr-1"></i>Save</>}
               </button>
-              <button onClick={() => setEditTarget(null)} className="flex-1 py-2 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.82rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2">Cancel</button>
+              <button onClick={() => setEditTarget(null)} disabled={editLoading} className="flex-1 py-2 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.82rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2 disabled:opacity-50">Cancel</button>
             </div>
           </div>
         </div>,

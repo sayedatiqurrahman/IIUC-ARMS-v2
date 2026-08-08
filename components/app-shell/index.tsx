@@ -7,7 +7,6 @@ import Image from 'next/image';
 import { useAppStore, getSavedPdfPage } from '@/lib/store';
 import LoginModal from '@/components/LoginModal';
 import UploadModal from '@/components/upload-modal';
-import PdfViewer from '@/components/PdfViewer';
 import OnboardingModal, { getOnboardingData, hasDismissedOnboarding, dismissOnboarding, type OnboardingData } from '@/components/OnboardingModal';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut, signIn } from 'next-auth/react';
@@ -17,8 +16,7 @@ import { useConfirm } from '@/components/ConfirmModal';
 import { isStandalone, isInBrowser, isIOSBrowser, type BeforeInstallPromptEvent } from '@/lib/standalone';
 import { useTurnstile } from '@/lib/useTurnstile';
 import { handleGoogleRedirectResult } from '@/lib/firebase';
-import ImageViewer from './ImageViewer';
-import DocViewer from './DocViewer';
+import DocumentViewer from './DocumentViewer';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -747,34 +745,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {viewerOpen && viewerItem && (
         <div className="viewer-overlay active">
           <div className="viewer-container">
-            {viewerItem.mimeType !== 'pdf' && viewerItem.mimeType !== 'image' && !(viewerItem.mimeType === 'doc' && viewerItem.path?.toLowerCase().endsWith('.docx')) && (
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-dark-border bg-dark-bg3">
-                <div className="flex items-center gap-2 font-semibold text-sm truncate flex-1">
-                  <i className="fas fa-file"></i>
-                  <span className="truncate">{viewerItem.name}</span>
-                </div>
-                <button className="ml-3 w-7 h-7 rounded-lg bg-red-500 text-white border-none cursor-pointer flex items-center justify-center text-sm hover:bg-red-600" onClick={closeViewer}>
-                  <i className="fas fa-times"></i>
-                </button>
-              </div>
-            )}
-            <div className="flex-1 overflow-hidden">
-              {viewerItem.mimeType === 'pdf' && <PdfViewer url={viewerItem.rawUrl} name={viewerItem.name} filePath={viewerItem.path} onClose={closeViewer} />}
-              {viewerItem.mimeType === 'image' && <ImageViewer item={viewerItem} onClose={closeViewer} />}
-              {viewerItem.mimeType === 'doc' && viewerItem.path?.toLowerCase().endsWith('.docx') && <DocViewer item={viewerItem} onClose={closeViewer} />}
-              {((viewerItem.mimeType === 'doc' && !viewerItem.path?.toLowerCase().endsWith('.docx')) || viewerItem.mimeType === 'sheet' || viewerItem.mimeType === 'ppt') && (
-                <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(viewerItem.rawUrl)}`} className="w-full border-none" style={{minHeight:'calc(100vh - 50px)'}}></iframe>
-              )}
-              {viewerItem.mimeType === 'other' && (
-                <div className="flex flex-col items-center justify-center min-h-[calc(100vh-50px)] text-dark-text2">
-                  <i className="fas fa-file text-4xl mb-4"></i>
-                  <p>Preview not available for this file type.</p>
-                  <a href={viewerItem.rawUrl} target="_blank" className="mt-3 px-4 py-2 rounded-xl bg-qsis text-white text-sm font-semibold no-underline">
-                    <i className="fas fa-external-link-alt"></i> Open in new tab
-                  </a>
-                </div>
-              )}
-            </div>
+            <DocumentViewer item={viewerItem} onClose={closeViewer} />
           </div>
         </div>
       )}

@@ -279,6 +279,10 @@ body {
 
   <div class="tb-sep"></div>
 
+  <button class="tb-btn" id="fullscreenBtn" title="Fullscreen (F)">
+    <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+  </button>
+
   <button id="closeBtn" title="Close (Esc)">
     <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
   </button>
@@ -309,165 +313,252 @@ const filePath = params.get('path') || '';
 const initialPage = parseInt(hashParams.get('page')) || 1;
 
 let pdfDoc = null, currentPage = 1, totalPages = 0;
-let baseScale = 1, currentScale = 1, rotation = 0;
+let currentScale = 1, rotation = 0;
 let lastSavedPage = 0, saveTimer = null;
 let handTool = false;
+let observer = null;
 const PAGE_KEY = filePath ? 'pdf-page-' + filePath : '';
-const pages = new Map();
+const pageViews = new Map(); // i -> { page, div, canvas, rendered, task }
+
+const $ = (id) => document.getElementById(id);
+
+/* ── Lazy page rendering ──────────────────────────────────────────── */
+
+function renderTextLayer(pv, vp) {
+  try {
+    const old = pv.div.querySelector('.textLayer');
+    if (old) old.remove();
+    const layer = document.createElement('div');
+    layer.className = 'textLayer';
+    layer.style.width = vp.width + 'px';
+    layer.style.height = vp.height + 'px';
+    pv.div.appendChild(layer);
+    const builder = new TextLayerBuilder({ pdfPage: pv.page, enablePermissions: true });
+    layer.appendChild(builder.div);
+    builder.render({ viewport: vp });
+  } catch {}
+}
+
+function renderAnnotations(pv, vp, i) {
+  try {
+    const old = pv.div.querySelector('.annotationLayer');
+    if (old) old.remove();
+    const layer = document.createElement('div');
+    layer.className = 'annotationLayer';
+    layer.style.width = vp.width + 'px';
+    layer.style.height = vp.height + 'px';
+    pv.div.appendChild(layer);
+    pv.page.getAnnotations().then((annotations) => {
+      if (!annotations.length) return;
+      const builder = new AnnotationLayerBuilder({
+        pageDiv: pv.div,
+        pdfPage: pv.page,
+        annotationStorage: pdfDoc.annotationStorage,
+        linkService: {
+          pdfDocument: pdfDoc,
+          pagesCount: totalPages,
+          page: i,
+          currentPageNumber: i,
+          setPage: (n) => goToPage(n),
+          destinationName: null,
+          setDestinationName: (name) => {},
+          setHash: (hash) => {},
+        },
+        l10n: NullL10n,
+      });
+      builder.render(vp, undefined);
+    });
+  } catch {}
+}
+
+function clearPage(i) {
+  const pv = pageViews.get(i);
+  if (!pv) return;
+  if (pv.task) {
+    try { pv.task.cancel(); } catch {}
+    pv.task = null;
+  }
+  if (pv.canvas) {
+    const ctx = pv.canvas.getContext('2d');
+    ctx.clearRect(0, 0, pv.canvas.width, pv.canvas.height);
+  }
+  const tl = pv.div && pv.div.querySelector('.textLayer');
+  if (tl) tl.remove();
+  const al = pv.div && pv.div.querySelector('.annotationLayer');
+  if (al) al.remove();
+  pv.rendered = false;
+}
+
+async function renderPage(i) {
+  const pv = pageViews.get(i);
+  if (!pv || pv.rendered || pv.task) return;
+  try {
+    const page = pv.page;
+    const vp = page.getViewport({ scale: currentScale, rotation });
+    const dpr = window.devicePixelRatio || 1;
+    pv.canvas.width = Math.max(1, Math.floor(vp.width * dpr));
+    pv.canvas.height = Math.max(1, Math.floor(vp.height * dpr));
+    pv.canvas.style.width = vp.width + 'px';
+    pv.canvas.style.height = vp.height + 'px';
+    pv.div.style.width = vp.width + 'px';
+    pv.div.style.height = vp.height + 'px';
+    const ctx = pv.canvas.getContext('2d');
+    const task = page.render({
+      canvasContext: ctx,
+      viewport: vp,
+      transform: [dpr, 0, 0, dpr, 0, 0],
+    });
+    pv.task = task;
+    try {
+      await task.promise;
+    } catch (e) {
+      if (e && e.name !== 'RenderingCancelledException') throw e;
+      return;
+    }
+    pv.task = null;
+    if (!pv.div.isConnected) return;
+    pv.rendered = true;
+    renderTextLayer(pv, vp);
+    renderAnnotations(pv, vp, i);
+  } catch (e) {
+    pv.task = null;
+  }
+}
+
+function isNearViewport(div) {
+  const c = $('viewerContainer').getBoundingClientRect();
+  const r = div.getBoundingClientRect();
+  return r.bottom > c.top - c.height && r.top < c.bottom + c.height;
+}
+
+function renderVisible() {
+  for (const [i, pv] of pageViews) {
+    if (pv.rendered || pv.task) continue;
+    if (isNearViewport(pv.div)) renderPage(i);
+  }
+}
+
+/* ── Build page placeholders (cheap: no rendering) ────────────────── */
+
+async function buildPages() {
+  const viewer = $('viewer');
+  viewer.innerHTML = '';
+  pageViews.clear();
+  const container = $('viewerContainer');
+
+  for (let i = 1; i <= totalPages; i++) {
+    const page = await pdfDoc.getPage(i);
+    const vp = page.getViewport({ scale: 1, rotation });
+    const div = document.createElement('div');
+    div.className = 'page';
+    div.id = 'page-' + i;
+    div.dataset.page = i;
+    const canvas = document.createElement('canvas');
+    div.appendChild(canvas);
+    viewer.appendChild(div);
+    pageViews.set(i, { page, div, canvas, rendered: false, task: null });
+    observer.observe(div);
+  }
+
+  // Size all placeholders up-front so IntersectionObserver sees real geometry.
+  const first = pageViews.get(1);
+  if (first) {
+    const avail = container.clientWidth - 40;
+    currentScale = Math.max(0.25, Math.min(3, avail / first.page.getViewport({ scale: 1, rotation }).width));
+  }
+  for (const [i, pv] of pageViews) {
+    const vp = pv.page.getViewport({ scale: currentScale, rotation });
+    pv.div.style.width = vp.width + 'px';
+    pv.div.style.height = vp.height + 'px';
+  }
+}
 
 /* ── Load PDF ── */
 async function loadPdf(url) {
   try {
-    pdfDoc = await pdfjsLib.getDocument({ url, corsOrigin: 'anonymous', cMapUrl: './cmaps/', cMapPacked: true, enableWebGL: true }).promise;
+    pdfDoc = await pdfjsLib.getDocument({ url, corsOrigin: 'anonymous', cMapUrl: './cmaps/', cMapPacked: true }).promise;
     totalPages = pdfDoc.numPages;
-    document.getElementById('pageTotal').textContent = '/ ' + totalPages;
-    document.getElementById('pageInput').max = totalPages;
+    $('pageTotal').textContent = '/ ' + totalPages;
+    $('pageInput').max = totalPages;
     const fname = decodeURIComponent(url.split('/').pop().replace(/\.pdf$/i, '')) || 'PDF';
     document.title = fname;
-    document.getElementById('titleText').textContent = fname;
-    document.getElementById('loadingOverlay').classList.add('hidden');
-    await fitToWidth();
-  } catch(e) {
-    document.getElementById('loadingOverlay').innerHTML =
+    $('titleText').textContent = fname;
+    await buildPages();
+    $('loadingOverlay').classList.add('hidden');
+    requestAnimationFrame(() => {
+      goToPage(initialPage);
+      renderVisible();
+    });
+  } catch (e) {
+    $('loadingOverlay').innerHTML =
       '<div style="color:#f87171;font-size:14px;text-align:center;padding:20px">Failed to load PDF.<br>' + e.message + '</div>';
   }
 }
 
-/* ── Render ── */
-async function renderAllPages() {
-  const viewer = document.getElementById('viewer');
-  viewer.innerHTML = '';
-  pages.clear();
-
-  for (let i = 1; i <= totalPages; i++) {
-    const page = await pdfDoc.getPage(i);
-    const vp = page.getViewport({ scale: currentScale, rotation });
-    const div = document.createElement('div');
-    div.className = 'page';
-    div.id = 'page-' + i;
-    div.style.width = vp.width + 'px';
-    div.style.height = vp.height + 'px';
-
-    // Canvas
-    const canvas = document.createElement('canvas');
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = vp.width * dpr;
-    canvas.height = vp.height * dpr;
-    canvas.style.width = vp.width + 'px';
-    canvas.style.height = vp.height + 'px';
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-    div.appendChild(canvas);
-    viewer.appendChild(div);
-
-    await page.render({ canvasContext: ctx, viewport: vp }).promise;
-
-    // Text layer
-    const textLayerDiv = document.createElement('div');
-    textLayerDiv.className = 'textLayer';
-    textLayerDiv.style.width = vp.width + 'px';
-    textLayerDiv.style.height = vp.height + 'px';
-    div.appendChild(textLayerDiv);
-
-    try {
-      const textLayerBuilder = new TextLayerBuilder({
-        pdfPage: page,
-        enablePermissions: true,
-      });
-      textLayerDiv.appendChild(textLayerBuilder.div);
-      await textLayerBuilder.render({ viewport: vp });
-    } catch {}
-
-    // Annotation layer
-    const annotationDiv = document.createElement('div');
-    annotationDiv.className = 'annotationLayer';
-    annotationDiv.style.width = vp.width + 'px';
-    annotationDiv.style.height = vp.height + 'px';
-    div.appendChild(annotationDiv);
-
-    try {
-      const annotations = await page.getAnnotations();
-      if (annotations.length > 0) {
-        const annotationLayerBuilder = new AnnotationLayerBuilder({
-          pageDiv: div,
-          pdfPage: page,
-          annotationStorage: pdfDoc.annotationStorage,
-          linkService: {
-            pdfDocument: pdfDoc,
-            pagesCount: totalPages,
-            page: i,
-            currentPageNumber: i,
-            setPage: (n) => goToPage(n),
-            destinationName: null,
-            setDestinationName: (name) => {},
-            setHash: (hash) => {},
-          },
-          l10n: NullL10n,
-        });
-        await annotationLayerBuilder.render(vp, undefined);
-      }
-    } catch (e) {
-      // Annotation rendering failed, continue silently
+/* ── Scale helpers ── */
+async function refitPages() {
+  // Re-render already-rendered pages at the new scale, then fill in visible ones.
+  const tasks = [];
+  for (const [i, pv] of pageViews) {
+    if (pv.rendered) {
+      clearPage(i);
+      tasks.push(renderPage(i));
     }
-
-    pages.set(i, { page, viewport: vp, div });
   }
-  goToPage(Math.max(1, Math.min(totalPages, initialPage)));
+  await Promise.all(tasks);
+  renderVisible();
 }
 
-/* ── Scale helpers ── */
 async function fitToWidth() {
   if (!pdfDoc) return;
-  const container = document.getElementById('viewerContainer');
+  const container = $('viewerContainer');
   const w = container.clientWidth - 40;
-  const page = await pdfDoc.getPage(1);
-  const vp = page.getViewport({ scale: 1, rotation });
-  currentScale = w / vp.width;
-  baseScale = currentScale;
-  document.getElementById('scaleSelect').value = 'auto';
-  await renderAllPages();
+  const vp = pageViews.get(1).page.getViewport({ scale: 1, rotation });
+  currentScale = Math.max(0.25, Math.min(3, w / vp.width));
+  $('scaleSelect').value = 'auto';
+  await refitPages();
+  goToPage(currentPage);
 }
 
 async function fitToPage() {
   if (!pdfDoc) return;
-  const c = document.getElementById('viewerContainer');
+  const c = $('viewerContainer');
   const w = c.clientWidth - 40, h = c.clientHeight - 40;
-  const page = await pdfDoc.getPage(1);
-  const vp = page.getViewport({ scale: 1, rotation });
-  currentScale = Math.min(w / vp.width, h / vp.height);
-  baseScale = currentScale;
-  document.getElementById('scaleSelect').value = 'auto';
-  await renderAllPages();
+  const vp = pageViews.get(1).page.getViewport({ scale: 1, rotation });
+  currentScale = Math.max(0.25, Math.min(3, Math.min(w / vp.width, h / vp.height)));
+  $('scaleSelect').value = 'auto';
+  await refitPages();
+  goToPage(currentPage);
 }
 
 async function setScale(newScale) {
   currentScale = Math.max(0.25, Math.min(5, newScale));
-  document.getElementById('scaleSelect').value = String(currentScale);
-  await renderAllPages();
+  $('scaleSelect').value = String(currentScale);
+  await refitPages();
   goToPage(currentPage);
 }
 
 /* ── Navigation ── */
 function goToPage(p) {
   p = Math.max(1, Math.min(totalPages, p));
-  const el = document.getElementById('page-' + p);
+  const el = $('page-' + p);
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   currentPage = p;
-  document.getElementById('pageInput').value = p;
+  $('pageInput').value = p;
   savePage(p);
 }
 
 function updateCurrentPage() {
-  const viewer = document.getElementById('viewerContainer');
-  const pageEls = document.querySelectorAll('#viewer .page');
+  const viewer = $('viewerContainer');
   let closest = 1, minDist = Infinity;
-  pageEls.forEach((p, i) => {
-    const dist = Math.abs(p.getBoundingClientRect().top - viewer.getBoundingClientRect().top);
-    if (dist < minDist) { minDist = dist; closest = i + 1; }
+  pageViews.forEach((pv, i) => {
+    const rect = pv.div.getBoundingClientRect();
+    const dist = Math.abs(rect.top - viewer.getBoundingClientRect().top);
+    if (dist < minDist) { minDist = dist; closest = i; }
   });
   if (closest !== currentPage) {
     currentPage = closest;
-    document.getElementById('pageInput').value = currentPage;
+    $('pageInput').value = currentPage;
     savePage(currentPage);
   }
 }
@@ -485,8 +576,8 @@ function savePage(page) {
 /* ── Hand tool ── */
 function toggleHandTool() {
   handTool = !handTool;
-  const container = document.getElementById('viewerContainer');
-  const btn = document.getElementById('handToolBtn');
+  const container = $('viewerContainer');
+  const btn = $('handToolBtn');
   if (handTool) {
     container.classList.add('grab');
     container.classList.remove('textSelect');
@@ -501,41 +592,44 @@ function toggleHandTool() {
 }
 
 let dragStart = null;
-document.getElementById('viewerContainer').addEventListener('mousedown', e => {
+$('viewerContainer').addEventListener('mousedown', e => {
   if (!handTool) return;
   dragStart = { x: e.clientX, y: e.clientY, scrollLeft: e.target.closest('#viewerContainer')?.scrollLeft || 0, scrollTop: e.target.closest('#viewerContainer')?.scrollTop || 0 };
 });
 document.addEventListener('mousemove', e => {
   if (!handTool || !dragStart) return;
-  const container = document.getElementById('viewerContainer');
+  const container = $('viewerContainer');
   container.scrollLeft = dragStart.scrollLeft - (e.clientX - dragStart.x);
   container.scrollTop = dragStart.scrollTop - (e.clientY - dragStart.y);
 });
 document.addEventListener('mouseup', () => { dragStart = null; });
 
 /* ── Toolbar events ── */
-document.getElementById('prevBtn').addEventListener('click', () => goToPage(currentPage - 1));
-document.getElementById('nextBtn').addEventListener('click', () => goToPage(currentPage + 1));
-document.getElementById('pageInput').addEventListener('change', e => goToPage(parseInt(e.target.value) || 1));
-document.getElementById('zoomInBtn').addEventListener('click', () => setScale(currentScale + 0.25));
-document.getElementById('zoomOutBtn').addEventListener('click', () => setScale(currentScale - 0.25));
-document.getElementById('scaleSelect').addEventListener('change', e => {
+$('prevBtn').addEventListener('click', () => goToPage(currentPage - 1));
+$('nextBtn').addEventListener('click', () => goToPage(currentPage + 1));
+$('pageInput').addEventListener('change', e => goToPage(parseInt(e.target.value) || 1));
+$('zoomInBtn').addEventListener('click', () => setScale(currentScale + 0.25));
+$('zoomOutBtn').addEventListener('click', () => setScale(currentScale - 0.25));
+$('scaleSelect').addEventListener('change', e => {
   if (e.target.value === 'auto') fitToWidth();
   else setScale(parseFloat(e.target.value));
 });
-document.getElementById('fitWidthBtn').addEventListener('click', fitToWidth);
-document.getElementById('fitPageBtn').addEventListener('click', fitToPage);
-document.getElementById('rotateBtn').addEventListener('click', () => {
+$('fitWidthBtn').addEventListener('click', fitToWidth);
+$('fitPageBtn').addEventListener('click', fitToPage);
+$('rotateBtn').addEventListener('click', () => {
   rotation = (rotation + 90) % 360;
-  renderAllPages().then(() => goToPage(currentPage));
+  refitPages().then(() => goToPage(currentPage));
 });
-document.getElementById('handToolBtn').addEventListener('click', toggleHandTool);
-document.getElementById('printBtn').addEventListener('click', () => window.print());
-document.getElementById('downloadBtn').addEventListener('click', () => {
+$('handToolBtn').addEventListener('click', toggleHandTool);
+$('printBtn').addEventListener('click', () => window.print());
+$('downloadBtn').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = fileUrl; a.download = ''; a.target = '_blank'; a.click();
 });
-document.getElementById('closeBtn').addEventListener('click', () => {
+$('fullscreenBtn').addEventListener('click', () => {
+  try { window.parent.postMessage({ type: 'pdf-fullscreen' }, '*'); } catch {}
+});
+$('closeBtn').addEventListener('click', () => {
   try { window.parent.postMessage({ type: 'pdf-close' }, '*'); } catch {}
 });
 
@@ -548,11 +642,12 @@ document.addEventListener('keydown', e => {
   else if (e.key === '-') { e.preventDefault(); setScale(currentScale - 0.25); }
   else if (e.key === 'Escape') { try { window.parent.postMessage({ type: 'pdf-close' }, '*'); } catch {} }
   else if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHandTool(); }
+  else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); try { window.parent.postMessage({ type: 'pdf-fullscreen' }, '*'); } catch {} }
   else if (e.key === '0' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); fitToWidth(); }
 });
 
 /* ── Ctrl+Scroll zoom ── */
-document.getElementById('viewerContainer').addEventListener('wheel', e => {
+$('viewerContainer').addEventListener('wheel', e => {
   if (e.ctrlKey || e.metaKey) {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -562,7 +657,7 @@ document.getElementById('viewerContainer').addEventListener('wheel', e => {
 
 /* ── Trackpad pinch zoom ── */
 let lastTouchDist = 0;
-document.getElementById('viewerContainer').addEventListener('touchstart', e => {
+$('viewerContainer').addEventListener('touchstart', e => {
   if (e.touches.length === 2) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -570,7 +665,7 @@ document.getElementById('viewerContainer').addEventListener('touchstart', e => {
   }
 }, { passive: true });
 
-document.getElementById('viewerContainer').addEventListener('touchmove', e => {
+$('viewerContainer').addEventListener('touchmove', e => {
   if (e.touches.length === 2) {
     e.preventDefault();
     const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -578,25 +673,34 @@ document.getElementById('viewerContainer').addEventListener('touchmove', e => {
     const dist = Math.hypot(dx, dy);
     if (lastTouchDist > 0) {
       const scaleDelta = (dist - lastTouchDist) * 0.005;
-      currentScale = Math.max(0.25, Math.min(5, currentScale + scaleDelta));
-      document.getElementById('scaleSelect').value = String(currentScale);
-      renderAllPages();
+      setScale(currentScale + scaleDelta);
     }
     lastTouchDist = dist;
   }
 }, { passive: false });
 
-document.getElementById('viewerContainer').addEventListener('touchend', () => { lastTouchDist = 0; }, { passive: true });
+$('viewerContainer').addEventListener('touchend', () => { lastTouchDist = 0; }, { passive: true });
 
-/* ── Scroll tracking ── */
-document.getElementById('viewerContainer').addEventListener('scroll', updateCurrentPage);
+/* ── Scroll tracking + lazy render ── */
+$('viewerContainer').addEventListener('scroll', () => {
+  updateCurrentPage();
+  renderVisible();
+});
+
+observer = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    const i = Number(entry.target.dataset.page);
+    if (entry.isIntersecting) renderPage(i);
+    else if (i !== currentPage) clearPage(i);
+  }
+}, { root: $('viewerContainer'), rootMargin: '250% 0px' });
 
 /* ── Auto-resize ── */
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    if (document.getElementById('scaleSelect').value === 'auto') fitToWidth();
+    if ($('scaleSelect').value === 'auto') fitToWidth();
   }, 200);
 });
 

@@ -2,13 +2,13 @@
 // content-addressed — the hash changes when the file changes — so they can be
 // cached forever and NEVER deleted. Keeping them across updates is what makes
 // the installed app open instantly after a deploy (no re-download of all JS).
-const IMMUTABLE_CACHE = 'iiuc-arms-immutable-v1';
+const IMMUTABLE_CACHE = 'iiuc-arms-immutable-v2';
 
 // SHELL: HTML pages + non-hashed app assets. Revalidated on every navigation.
-const SHELL_CACHE = 'iiuc-arms-shell-v1';
+const SHELL_CACHE = 'iiuc-arms-shell-v2';
 
 // FILE: opened file content from the files repo (offline reopening).
-const FILE_CACHE = 'iiuc-arms-files-v1';
+const FILE_CACHE = 'iiuc-arms-files-v2';
 
 const STATIC_ASSETS = [
   '/',
@@ -148,8 +148,12 @@ self.addEventListener('fetch', (event) => {
           const networkPromise = fetch(request).then((response) => {
             if (response.ok) cache.put(treeUrl, response.clone());
             return response;
-          }).catch(() => cached);
-          return cached || networkPromise;
+          }).catch(() => null);
+          if (cached || networkPromise) return cached || networkPromise;
+          return new Response(JSON.stringify({ error: 'Offline — please try again' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
         })
       );
     } else {
@@ -189,7 +193,18 @@ self.addEventListener('fetch', (event) => {
           networkPromise.then(() => {}).catch(() => {});
           return cached;
         }
-        return (await networkPromise) || caches.match('/');
+        // Never let respondWith() receive undefined — that throws a TypeError.
+        const networkResponse = await networkPromise;
+        if (networkResponse) return networkResponse;
+        const fallback = await caches.match('/');
+        if (fallback) return fallback;
+        return new Response(
+          '<!doctype html><html><head><meta charset="utf-8"><title>Offline</title></head>' +
+          '<body style="font-family:sans-serif;background:#111;color:#eee;display:grid;place-items:center;height:100vh;margin:0">' +
+          '<div style="text-align:center"><h2>You&apos;re offline</h2><p>Connect to the internet and try again.</p></div>' +
+          '</body></html>',
+          { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
       })
     );
     return;
@@ -238,9 +253,10 @@ self.addEventListener('fetch', (event) => {
       const networkPromise = fetch(request).then((response) => {
         if (response.ok) cache.put(request, response.clone());
         return response;
-      }).catch(() => cached);
+      }).catch(() => null);
 
-      return cached || networkPromise;
+      if (cached || networkPromise) return cached || networkPromise;
+      return new Response('', { status: 504 });
     })
   );
 });

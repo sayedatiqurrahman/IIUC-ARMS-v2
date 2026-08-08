@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { toggleFullscreen } from '@/lib/fullscreen';
 
 interface PdfViewerProps {
   url: string;
@@ -10,6 +11,7 @@ interface PdfViewerProps {
 }
 
 export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const [savedPage, setSavedPage] = useState(1);
 
   useEffect(() => {
@@ -25,6 +27,7 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
   useEffect(() => {
     function handleMessage(e: MessageEvent) {
       if (e.data?.type === 'pdf-close') onClose();
+      if (e.data?.type === 'pdf-fullscreen') toggleFullscreen(rootRef.current);
     }
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
@@ -33,7 +36,7 @@ export default function PdfViewer({ url, name, filePath, onClose }: PdfViewerPro
   const viewerUrl = `/pdfjs/viewer.html?file=${encodeURIComponent(url)}&path=${encodeURIComponent(filePath)}#page=${savedPage}`;
 
   return (
-    <div className="fixed inset-0 z-[1500] bg-black">
+    <div ref={rootRef} className="fixed inset-0 z-[1500] bg-black">
       <iframe
         src={viewerUrl}
         className="w-full h-full border-none"
