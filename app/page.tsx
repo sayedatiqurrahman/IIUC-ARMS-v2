@@ -250,23 +250,35 @@ export default function BrowsePage() {
     }
   }, [mounted, loading]);
 
-  // Auto-redirect ONCE to the personalized department + semester, and only when
-  // there is no deeplink in the URL. A deeplink (dept/sem/course/q) always wins.
-  // Manual navigation afterwards is never overridden, and no personalization
-  // means no redirect (never fall back to a default department like qsis).
+  // Auto-redirect to the personalized department + semester.
+  //  - On mount with pre-existing personalization: redirect once from the
+  //    departments view, only when there is no deeplink in the URL (a deeplink
+  //    always wins).
+  //  - When personalization is just completed/edited via the modal (no data
+  //    before, now set): jump straight to the newly chosen department +
+  //    semester, regardless of the current view or URL.
   const autoRedirectedRef = useRef(false);
+  const onboardDataRef = useRef(onboardData);
   useEffect(() => {
     if (!mounted || loading) return;
+    const prevData = onboardDataRef.current;
+    onboardDataRef.current = onboardData;
     if (autoRedirectedRef.current) return;
-    if (typeof window !== 'undefined') {
-      const p = new URLSearchParams(window.location.search);
-      if (p.has('dept') || p.has('sem') || p.has('course') || p.has('q')) return;
-    }
-    if (useAppStore.getState().view !== 'departments') return;
+
     const deptName = onboardData?.department || '';
     if (!deptName) return;
     const target = FACULTIES.flatMap(f => f.departments).find(d => d.name === deptName || d.id === deptName);
     if (!target) return;
+
+    const freshCompletion = prevData == null && onboardData != null;
+    if (!freshCompletion) {
+      if (typeof window !== 'undefined') {
+        const p = new URLSearchParams(window.location.search);
+        if (p.has('dept') || p.has('sem') || p.has('course') || p.has('q')) return;
+      }
+      if (useAppStore.getState().view !== 'departments') return;
+    }
+
     autoRedirectedRef.current = true;
     navigateToDepartment(target.id);
     const semId = onboardData?.semester

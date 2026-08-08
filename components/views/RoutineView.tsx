@@ -405,7 +405,7 @@ export default function RoutineView() {
                 Showing only <strong className="text-dark-text">{onboardData.semester}</strong> routines for <strong className="text-dark-text">{userGender === 'male' ? 'Male' : 'Female'}</strong>.
               </span>
               <button
-                onClick={() => { clearOnboarding(); window.location.reload(); }}
+                onClick={() => { clearOnboarding(); window.history.replaceState({}, '', window.location.pathname); window.location.reload(); }}
                 className="ml-auto px-3 py-1.5 rounded-lg bg-qsis/10 border border-qsis/30 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/20 transition-colors flex-shrink-0"
               >
                 <i className="fas fa-edit mr-1"></i> Change Preference

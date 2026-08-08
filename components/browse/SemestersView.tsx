@@ -48,7 +48,7 @@ export default function SemestersView({
             )}
           </span>
           <button
-            onClick={() => { clearOnboarding(); window.location.reload(); }}
+            onClick={() => { clearOnboarding(); window.history.replaceState({}, '', window.location.pathname); window.location.reload(); }}
             className="ml-auto px-3 py-1.5 rounded-lg bg-qsis/10 border border-qsis/30 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/20 transition-colors flex-shrink-0"
           >
             <i className="fas fa-edit mr-1"></i> Edit Personalize

@@ -481,7 +481,7 @@ export default function DashboardView() {
                 <button className="flex flex-col items-center gap-2 p-4 rounded-xl border border-dark-border bg-dark-bg3 hover:border-qsis hover:bg-qsis/5 transition-all cursor-pointer" onClick={() => router.push('/contributors')}>
                   <i className="fas fa-users text-[1.2rem] text-blue-500"></i><span className="text-[0.75rem] font-semibold">Team</span>
                 </button>
-                <button className="flex flex-col items-center gap-2 p-4 rounded-xl border border-dark-border bg-dark-bg3 hover:border-qsis hover:bg-qsis/5 transition-all cursor-pointer" onClick={() => { clearOnboarding(); window.location.reload(); }}>
+                <button className="flex flex-col items-center gap-2 p-4 rounded-xl border border-dark-border bg-dark-bg3 hover:border-qsis hover:bg-qsis/5 transition-all cursor-pointer" onClick={() => { clearOnboarding(); window.history.replaceState({}, '', window.location.pathname); window.location.reload(); }}>
                   <i className="fas fa-user-cog text-[1.2rem] text-purple-500"></i><span className="text-[0.75rem] font-semibold">Edit Personalize</span>
                 </button>
               </div>
