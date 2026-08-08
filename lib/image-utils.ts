@@ -215,6 +215,30 @@ export function otsuThreshold(hist: number[], total: number): number {
   return threshold;
 }
 
+// Isolate the brightest prominent region (the paper) from everything around it.
+// Paper is usually the brightest large object in the frame; we find its peak and
+// set the threshold in the middle of the empty gap between the page and the
+// next-darker region. This beats plain Otsu for near-white paper on a near-white
+// background (paper 196 vs desk 178): Otsu merges them into one blob, this splits
+// at ~187. Returns null when no clear peak gap exists (e.g. textured paper), so
+// callers can fall back to Otsu.
+export function brightPeakThreshold(hist: number[], total: number): number | null {
+  const peakMin = Math.max(2000, total * 0.02);
+  let peak = -1;
+  for (let v = 255; v >= 1; v--) {
+    if (hist[v] >= peakMin && hist[v] >= hist[v - 1]) {
+      peak = v;
+      break;
+    }
+  }
+  if (peak < 0) return null;
+  const belowMin = total * 0.005;
+  let b = peak - 1;
+  while (b > 0 && hist[b] < belowMin) b--;
+  if (peak - b < 8) return null;
+  return Math.round((peak + b) / 2);
+}
+
 // ---------------------------------------------------------------------------
 // Connected components (largest foreground blob)
 // ---------------------------------------------------------------------------
@@ -222,7 +246,7 @@ export function otsuThreshold(hist: number[], total: number): number {
 // Returns the largest connected component. When interiorOnly is set, components
 // touching the frame border (walls/tables/background clutter) are skipped so a
 // document floating in the middle of the frame wins over background edges.
-function largestComponent(mask: Uint8Array, w: number, h: number, interiorOnly = false): Uint8Array | null {
+export function largestComponent(mask: Uint8Array, w: number, h: number, interiorOnly = false): Uint8Array | null {
   const labels = new Int32Array(w * h).fill(-1);
   const sizes: number[] = [];
   const touchesBorder: boolean[] = [];
@@ -353,7 +377,7 @@ function mergeNearbyPoints(pts: Point[], minDist: number): Point[] {
   return out;
 }
 
-function polygonArea(points: Point[]): number {
+export function polygonArea(points: Point[]): number {
   let area = 0;
   for (let i = 0; i < points.length; i++) {
     const j = (i + 1) % points.length;
@@ -379,21 +403,27 @@ function percentileThreshold(values: Uint8ClampedArray, frac: number): number {
   return 0;
 }
 
-// Score a candidate quad: prefer large area and near-right angles.
+// Score a candidate quad: prefer a paper-sized, interior, near-rectangular quad.
+// Size saturates at ~1/3 of the frame so a frame-filling background blob cannot
+// win by area alone; an interior quad (the paper) strongly beats one that runs
+// into the frame border (a wall/desk that fills to the edges).
 function quadScore(q: Quad, frameW: number, frameH: number): number {
   const area = polygonArea(q);
   const areaFrac = area / (frameW * frameH);
+  const sizeScore = Math.min(1, areaFrac * 3);
   let angleScore = 0;
   for (let i = 0; i < 4; i++) {
     const ang = angleBetween(q[i], q[(i + 1) % 4], q[(i + 2) % 4]);
-    angleScore += 1 - Math.min(1, Math.abs(ang - 90) / 90);
+    angleScore += 1 - Math.min(1, Math.abs(ang - 90) / 45);
   }
   angleScore /= 4;
-  return areaFrac * 0.65 + angleScore * 0.35;
+  const touchesBorder = q.some((p) => p.x <= 2 || p.y <= 2 || p.x >= frameW - 3 || p.y >= frameH - 3);
+  const interior = touchesBorder ? 0.55 : 1.3;
+  return sizeScore * (0.35 + 0.65 * angleScore) * interior;
 }
 
 // Turn a connected-component mask into a valid document quad.
-function quadFromMask(mask: Uint8Array, w: number, h: number, minArea: number): Quad | null {
+export function quadFromMask(mask: Uint8Array, w: number, h: number, minArea: number): Quad | null {
   const pts: Point[] = [];
   for (let y = 0; y < h; y += 2) {
     for (let x = 0; x < w; x += 2) {
@@ -491,9 +521,9 @@ export function detectQuadCore(gray: GrayImage): Quad | null {
   // ---- Path 2: brightness (paper is usually the brightest big region) ----
   const hist = new Array(256).fill(0);
   for (let i = 0; i < g.data.length; i++) hist[g.data[i]]++;
-  const otsu = otsuThreshold(hist, g.data.length);
+  const thrB = brightPeakThreshold(hist, g.data.length) ?? otsuThreshold(hist, g.data.length);
   const bright = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) bright[i] = g.data[i] > otsu ? 1 : 0;
+  for (let i = 0; i < w * h; i++) bright[i] = g.data[i] > thrB ? 1 : 0;
   const brightComp = largestComponent(bright, w, h, true);
   const q2 = brightComp ? quadFromMask(brightComp, w, h, minArea) : null;
   if (q2) candidates.push(q2);
@@ -507,7 +537,7 @@ export function detectQuadCore(gray: GrayImage): Quad | null {
 
   // ---- Path 3: dark document on a bright background (notebooks, blackboards) ----
   const dark = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) dark[i] = g.data[i] < otsu ? 1 : 0;
+  for (let i = 0; i < w * h; i++) dark[i] = g.data[i] < thrB ? 1 : 0;
   const darkComp = largestComponent(dark, w, h, true);
   const q3 = darkComp ? quadFromMask(darkComp, w, h, minArea) : null;
   if (q3) candidates.push(q3);
@@ -582,7 +612,15 @@ function lineIntersect(l1: { a: number; b: number; c: number }, l2: { a: number;
 
 // Walk along the segment a->b and keep, for each step, the strongest edge pixel
 // inside a small perpendicular band. These points trace the real paper edge.
-function collectEdgePointsNearSide(a: Point, b: Point, edges: Uint8ClampedArray, thr: number, w: number, h: number): Point[] {
+function collectEdgePointsNearSide(
+  a: Point,
+  b: Point,
+  center: Point,
+  edges: Uint8ClampedArray,
+  thr: number,
+  w: number,
+  h: number
+): Point[] {
   const pts: Point[] = [];
   const band = 6;
   const dx = b.x - a.x;
@@ -613,6 +651,29 @@ function collectEdgePointsNearSide(a: Point, b: Point, edges: Uint8ClampedArray,
   return pts;
 }
 
+function quadCenter(q: Point[]): Point {
+  return {
+    x: (q[0].x + q[1].x + q[2].x + q[3].x) / 4,
+    y: (q[0].y + q[1].y + q[2].y + q[3].y) / 4,
+  };
+}
+
+// Least-squares line fit with outlier rejection. Text lines near the paper edge
+// produce edge pixels that pull the naive fit inward; dropping points far from
+// the dominant line leaves the true paper edge.
+function fitLineRobust(pts: Point[]): { a: number; b: number; c: number } | null {
+  let cur = pts;
+  for (let pass = 0; pass < 2; pass++) {
+    const line = fitLine(cur);
+    if (!line) return null;
+    if (pass === 1) return line;
+    const keep = cur.filter((p) => Math.abs(line.a * p.x + line.b * p.y + line.c) <= 5);
+    if (keep.length < Math.max(2, cur.length * 0.4)) return line;
+    cur = keep;
+  }
+  return null;
+}
+
 // Snap each corner to the intersection of the two real paper edges meeting
 // there (fit two lines from the nearby edge pixels and intersect them). This is
 // far more accurate than grabbing the strongest edge pixel in a box around the
@@ -620,15 +681,16 @@ function collectEdgePointsNearSide(a: Point, b: Point, edges: Uint8ClampedArray,
 function refineCorners(q: Quad, edges: Uint8ClampedArray, w: number, h: number): Quad {
   const thr = Math.max(percentileThreshold(edges, 0.15), 30);
   const maxMove = Math.max(w, h) * 0.15;
+  const center = quadCenter(q);
   const out = q.map(p => ({ ...p }));
   for (let i = 0; i < 4; i++) {
     const prev = q[(i + 3) % 4];
     const cur = q[i];
     const next = q[(i + 1) % 4];
-    const side1 = collectEdgePointsNearSide(prev, cur, edges, thr, w, h);
-    const side2 = collectEdgePointsNearSide(cur, next, edges, thr, w, h);
-    const l1 = fitLine(side1);
-    const l2 = fitLine(side2);
+    const side1 = collectEdgePointsNearSide(prev, cur, center, edges, thr, w, h);
+    const side2 = collectEdgePointsNearSide(cur, next, center, edges, thr, w, h);
+    const l1 = fitLineRobust(side1);
+    const l2 = fitLineRobust(side2);
     if (l1 && l2) {
       const ip = lineIntersect(l1, l2);
       if (ip && isFinite(ip.x) && isFinite(ip.y)) {
@@ -777,14 +839,15 @@ export function warpPerspective(source: HTMLCanvasElement | HTMLVideoElement, qu
 // Scan filters: Original / Enhance / Black & White
 // ---------------------------------------------------------------------------
 
-// Box blur of a gray image via an integral image (O(1) per pixel).
-function boxBlurGray(data: Uint8ClampedArray, w: number, h: number, radius: number): Float64Array {
+// Box blur of a Float64 pixel buffer via an integral image (O(1) per pixel).
+// Used for the local illumination/statistics estimates in binarization.
+function boxBlur(values: Float64Array, w: number, h: number, radius: number): Float64Array {
   const integral = new Float64Array((w + 1) * (h + 1));
   for (let y = 0; y < h; y++) {
     let rowSum = 0;
     const row = y * w;
     for (let x = 0; x < w; x++) {
-      rowSum += data[row + x];
+      rowSum += values[row + x];
       integral[(y + 1) * (w + 1) + x + 1] = integral[y * (w + 1) + x + 1] + rowSum;
     }
   }
@@ -809,25 +872,87 @@ function boxBlurGray(data: Uint8ClampedArray, w: number, h: number, radius: numb
   return out;
 }
 
-// Smart B&W binarization that is tolerant to shadows, creases and uneven
-// lighting. Instead of a fixed offset from the local mean (which turns a shadow
-// into a black blob and swallows the text inside it), it estimates the local
-// paper illumination with a large low-pass blur — the "shadow model" — and only
-// marks a pixel as ink when it is significantly darker than that local
-// background. Shadows lower the background level and stay white; ink inside a
-// shadow is still black because it is dark relative to its own background.
+function boxBlurGray(data: Uint8ClampedArray, w: number, h: number, radius: number): Float64Array {
+  const vals = new Float64Array(data.length);
+  for (let i = 0; i < data.length; i++) vals[i] = data[i];
+  return boxBlur(vals, w, h, radius);
+}
+
+// PDF-style B&W binarization. The goal is: every readable stroke turns BLACK,
+// everything smooth (paper, soft shadows, fold creases) stays WHITE.
+//
+// The discriminator between ink and a crease/shadow is SHARPNESS:
+//   * real text has a sharp edge — inside a small window around the stroke the
+//     local std-dev is LARGE relative to how dark the stroke is;
+//   * a fold crease or shadow is a slow, smooth ramp — its std-dev is TINY
+//     relative to its depth, even when the crease is quite dark.
+//
+// Two background fields are estimated:
+//   * `bg`  — a very large-scale blur that only captures illumination, so a
+//     crease shows up as a smooth dip in it (never as texture);
+//   * small-scale mean/std — sized to text strokes, so a faint stroke still
+//     spikes the local variance.
+//
+// A pixel becomes ink when it is both noticeably darker than the local paper
+// (>8.5%) AND sharp (std > 22% of its own depth). Very dark pixels that are
+// touching confirmed ink are added too, so the flat interior of thick strokes
+// (titles, solid logos) does not get hollowed out — while an isolated dark
+// crease center, which has no ink neighbor, still stays white.
 export function binarizeGray(gray: GrayImage): Uint8ClampedArray {
   const { data, w, h } = gray;
   const minDim = Math.min(w, h);
-  const r1 = Math.max(16, Math.round(minDim / 18));
-  const r2 = Math.max(8, Math.round(r1 / 2));
-  const bg1 = boxBlurGray(data, w, h, r1);
-  const bg = boxBlurGray(Uint8ClampedArray.from(bg1), w, h, r2);
-  const out = new Uint8ClampedArray(w * h);
+
+  const rBig = Math.max(24, Math.round(minDim / 14));
+  const rSmall = Math.max(2, Math.round(minDim / 160));
+
+  const bg = boxBlurGray(data, w, h, rBig);
+  const smallMean = boxBlurGray(data, w, h, rSmall);
+  const sq = new Float64Array(w * h);
   for (let i = 0; i < w * h; i++) {
-    const b = bg[i];
-    const rel = Math.max(0.16, b > 0 ? 14 / b : 0.16);
-    out[i] = data[i] < b * (1 - rel) ? 0 : 255;
+    const v = data[i];
+    sq[i] = v * v;
+  }
+  const smallSq = boxBlur(sq, w, h, rSmall);
+
+  const out = new Uint8ClampedArray(w * h).fill(255);
+  const core = new Uint8Array(w * h);
+  let coreCount = 0;
+
+  for (let i = 0; i < w * h; i++) {
+    const m = bg[i];
+    if (m <= 8) {
+      out[i] = 0;
+      continue;
+    }
+    const dark = m - data[i];
+    if (dark <= 0) continue;
+    const darkFrac = dark / m;
+    const sm = smallMean[i];
+    let variance = smallSq[i] - sm * sm;
+    if (variance < 0) variance = 0;
+    const std = Math.sqrt(variance);
+    const sharp = std > 0.22 * Math.max(1, dark);
+    if (sharp && darkFrac > 0.085) {
+      out[i] = 0;
+    } else if (darkFrac > 0.45) {
+      core[i] = 1;
+      coreCount++;
+    }
+  }
+
+  if (coreCount > 0) {
+    const dil = new Uint8Array(w * h);
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = y * w + x;
+        if (out[i] === 0 || out[i - w] === 0 || out[i + w] === 0 || out[i - 1] === 0 || out[i + 1] === 0) {
+          dil[i] = 1;
+        }
+      }
+    }
+    for (let i = 0; i < w * h; i++) {
+      if (core[i] && dil[i]) out[i] = 0;
+    }
   }
   return out;
 }

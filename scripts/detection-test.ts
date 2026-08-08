@@ -288,6 +288,50 @@ const scenarios: Scenario[] = [
     },
   },
   {
+    name: 'Bright wall behind paper (near-white background)',
+    maxMean: 8,
+    build: (w, h) => {
+      const gray = makeGray(w, h, 200); // bright wall fills the frame
+      const truth = quadFromRect(180, 100, 460, 380);
+      fillQuad(gray, truth, 238); // paper only slightly brighter
+      drawTextLines(gray, truth, 10, 55);
+      return { gray, truth };
+    },
+  },
+  {
+    name: 'Large bright blob touching border + interior paper',
+    maxMean: 8,
+    build: (w, h) => {
+      const gray = makeGray(w, h, 80);
+      // A huge bright window/poster on the left fills to three borders.
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < 180; x++) gray.data[y * w + x] = 240;
+      }
+      const truth = quadFromRect(220, 120, 520, 400);
+      fillQuad(gray, truth, 235);
+      drawTextLines(gray, truth, 10, 50);
+      return { gray, truth };
+    },
+  },
+  {
+    name: 'Text lines hugging the paper edge (refine must not snap to text)',
+    maxMean: 6,
+    build: (w, h) => {
+      const gray = makeGray(w, h, 70);
+      const truth = quadFromRect(170, 40, 470, 440);
+      fillQuad(gray, truth, 235);
+      // Bars only 2px inside the top/bottom paper edges (mimics text that nearly
+      // touches the border). The naive strongest-edge snap collapses onto these
+      // (their contrast beats the paper edge), cropping off the top strip.
+      for (let x = 170; x < 470; x++) {
+        for (let yy = 42; yy <= 48; yy++) gray.data[yy * w + x] = 40;
+        for (let yy = 434; yy <= 440; yy++) gray.data[yy * w + x] = 40;
+      }
+      drawTextLines(gray, truth, 8, 45);
+      return { gray, truth };
+    },
+  },
+  {
     name: 'No paper (flat background) -> null',
     maxMean: 0,
     expectNull: true,
@@ -345,6 +389,24 @@ function inkRatio(gray: GrayImage, bw: Uint8ClampedArray, predicate: (x: number,
   return total === 0 ? 0 : black / total;
 }
 
+// y-offsets of the text bars drawTextLines() paints for a full-frame quad.
+function barStarts(count: number): number[] {
+  const cy = H / 2;
+  const spread = H * 0.7;
+  const ys: number[] = [];
+  for (let i = 0; i < count; i++) {
+    ys.push(Math.round(cy - spread / 2 + (i / (count - 1)) * spread));
+  }
+  return ys;
+}
+
+function inBars(y: number, ys: number[]): boolean {
+  for (const y0 of ys) {
+    if (y >= y0 && y <= y0 + 5) return true;
+  }
+  return false;
+}
+
 function runBinarize(): number {
   let failed = 0;
   const check = (name: string, ok: boolean, detail: string) => {
@@ -394,6 +456,53 @@ function runBinarize(): number {
   const bwClean = binarizeGray(clean);
   const inkCleanPaper = inkRatio(clean, bwClean, (x, y) => !barY(y));
   check('clean page stays white outside text', inkCleanPaper < 0.01, `noise ${(inkCleanPaper * 100).toFixed(2)}%`);
+
+  // ---- Dim text: faint ink barely darker than the paper (PDF-like). The old
+  // fixed-offset filter and a too-conservative Sauvola both drop strokes that
+  // are only ~10-15% darker than the page; those must still turn black.
+  const dim = makeGray(W, H, 220);
+  const dimYs = barStarts(8);
+  drawTextLines(dim, quadFromRect(0, 0, W, H), 8, 193); // ~12% darker than paper
+  const bwDim = binarizeGray(dim);
+  const inkDim = inkRatio(dim, bwDim, (x, y) => inBars(y, dimYs));
+  check('dim text (~12% contrast) turns black', inkDim > 0.5, `dim bar ink ${(inkDim * 100).toFixed(0)}%`);
+  const inkDimPaper = inkRatio(dim, bwDim, (x, y) => !inBars(y, dimYs));
+  check('dim page stays white outside text', inkDimPaper < 0.01, `noise ${(inkDimPaper * 100).toFixed(2)}%`);
+
+  // ---- Fold crease: a smooth vertical dark band (~30% deep, 80px wide) across
+  // the page. It must stay WHITE — but text crossing it must stay BLACK.
+  const crease = makeGray(W, H, 235);
+  const creaseYs = barStarts(10);
+  drawTextLines(crease, quadFromRect(0, 0, W, H), 10, 55);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const d = Math.abs(x - W * 0.5);
+      const t = Math.max(0, 1 - d / 40);
+      crease.data[y * W + x] = Math.round(crease.data[y * W + x] * (1 - 0.3 * t));
+    }
+  }
+  const bwCrease = binarizeGray(crease);
+  const inkCreasePaper = inkRatio(crease, bwCrease, (x, y) => !inBars(y, creaseYs));
+  check('fold crease (~30% deep) stays white', inkCreasePaper < 0.02, `crease noise ${(inkCreasePaper * 100).toFixed(2)}%`);
+  const inkCreaseText = inkRatio(crease, bwCrease, (x, y) => inBars(y, creaseYs));
+  check('text crossing the crease stays black', inkCreaseText > 0.5, `crease text ink ${(inkCreaseText * 100).toFixed(0)}%`);
+
+  // ---- Shadow edge: a sharp-ish diagonal shadow boundary across the page.
+  // The dark half must stay white outside text.
+  const edge = makeGray(W, H, 235);
+  const edgeYs = barStarts(10);
+  drawTextLines(edge, quadFromRect(0, 0, W, H), 10, 55);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const t = Math.max(0, Math.min(1, (x + y - (W + H) * 0.3) / ((W + H) * 0.3)));
+      edge.data[y * W + x] = Math.round(edge.data[y * W + x] * (1 - 0.5 * t));
+    }
+  }
+  const bwEdge = binarizeGray(edge);
+  const inkEdgeShadow = inkRatio(edge, bwEdge, (x, y) => !inBars(y, edgeYs) && (x + y) > (W + H) * 0.7);
+  check('deep shadow region stays white', inkEdgeShadow < 0.02, `shadow noise ${(inkEdgeShadow * 100).toFixed(2)}%`);
+  const inkEdgeText = inkRatio(edge, bwEdge, (x, y) => inBars(y, edgeYs) && (x + y) > (W + H) * 0.7);
+  check('text in deep shadow stays black', inkEdgeText > 0.5, `shadow text ink ${(inkEdgeText * 100).toFixed(0)}%`);
 
   return failed;
 }

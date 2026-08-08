@@ -22,7 +22,17 @@
 // look-alike objects. The winning quad is refined with a per-side line fit so
 // corners land exactly on the paper edges.
 
-import { orderQuad, otsuThreshold, refineQuadCorners, type GrayImage, type Point, type Quad } from './image-utils';
+import {
+  orderQuad,
+  otsuThreshold,
+  refineQuadCorners,
+  largestComponent,
+  polygonArea,
+  quadFromMask,
+  type GrayImage,
+  type Point,
+  type Quad,
+} from './image-utils';
 
 export type CVModule = {
   Mat: any;
@@ -304,9 +314,13 @@ function collectCandidates(
 
     const rectiness = rectArea > 0 ? area / rectArea : 0;
     const touchesBorder = pts.some((p) => p.x <= 1 || p.y <= 1 || p.x >= w - 2 || p.y >= h - 2);
-    let base = area * (0.4 + 0.6 * rectiness);
-    if (!touchesBorder) base *= 1.25;
-    else if (areaFrac < 0.85) base *= 0.5;
+    // Size saturates at ~1/3 of the frame so a frame-filling background blob
+    // cannot win by area alone; an interior quad (the paper) strongly beats a
+    // background region that runs into the frame border.
+    const areaScore = Math.min(1, areaFrac * 3);
+    let base = areaScore * (0.35 + 0.65 * rectiness);
+    if (!touchesBorder) base *= 1.35;
+    else if (areaFrac < 0.85) base *= 0.35;
     const c: Candidate = { q: pts, baseScore: base, center: quadCenter(pts), areaFrac, rectiness, touchesBorder };
     if (debug) debug({ path, q: pts, areaFrac, rectiness, angleQ: angleQuality(pts), base, touchesBorder });
     candidates.push(c);
@@ -374,6 +388,29 @@ export async function detectQuadOpenCV(
     cv.morphologyEx(mask, maskClosed, cv.MORPH_CLOSE, kernelClose);
     cv.findContours(maskClosed, contours2, hierarchy2, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
     candidates.push(...collectCandidates(cv, contours2, w, h, minArea, 0.93, 'B:bright', onCandidates));
+
+    // B2. Bright-peak interior isolation: RETR_EXTERNAL merges a bright
+    // wall/desk with the paper into one border-touching blob, hiding the paper.
+    // A connected-component pass that skips border-touching components recovers
+    // the paper directly — it is the largest interior bright region.
+    const brightMask = new Uint8Array(w * h);
+    const bmd = maskClosed.data;
+    for (let i = 0; i < w * h; i++) brightMask[i] = bmd[i] ? 1 : 0;
+    const brightInterior = largestComponent(brightMask, w, h, true);
+    if (brightInterior) {
+      const qi = quadFromMask(brightInterior, w, h, minArea);
+      if (qi) {
+        const afi = polygonArea(qi) / (w * h);
+        candidates.push({
+          q: qi.map((p) => ({ ...p })),
+          baseScore: Math.min(1, afi * 3) * 1.35,
+          center: quadCenter(qi),
+          areaFrac: afi,
+          rectiness: angleQuality(qi),
+          touchesBorder: false,
+        });
+      }
+    }
 
     // C. Dark region with a large morphological close: the ink/text clusters
     // merge into a page-sized blob. This recovers the paper even when its
