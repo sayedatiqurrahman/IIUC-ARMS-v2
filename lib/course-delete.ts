@@ -15,6 +15,36 @@ function ghHeaders(token: string) {
   };
 }
 
+export function normalizeCourseFolderName(name: string): string {
+  return String(name).toUpperCase().replace(/\s+/g, '');
+}
+
+// Find the real course folder on GitHub for a code inside a dept/semester dir,
+// tolerating any spacing and non-ASCII titles (e.g. Arabic), by matching the
+// normalized folder name against the code (CODE or CODE - title).
+export async function findCourseFolderPathInRepo(token: string, baseDir: string, code: string): Promise<string | null> {
+  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
+  if (!refRes.ok) return null;
+  const baseCommitSha = (await refRes.json()).object.sha;
+  const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
+  if (!commitRes.ok) return null;
+  const baseTreeSha = (await commitRes.json()).tree.sha;
+  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
+  if (!treeRes.ok) return null;
+  const treeData = await treeRes.json();
+  const prefix = `${baseDir}/`;
+  const codeNorm = normalizeCourseFolderName(code);
+  for (const item of (treeData.tree || [])) {
+    const p = String(item.path || '');
+    if (!p.startsWith(prefix)) continue;
+    const folderName = (p.slice(prefix.length).split('/')[0] || '').toUpperCase();
+    if (!folderName) continue;
+    const folderNorm = normalizeCourseFolderName(folderName);
+    if (folderNorm === codeNorm || folderNorm.startsWith(`${codeNorm}-`)) return `${baseDir}/${folderName}`;
+  }
+  return null;
+}
+
 export async function getAppBotToken(): Promise<string | null> {
   try {
     const installations = await getAppInstallations();

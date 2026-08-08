@@ -684,14 +684,23 @@ export function createTreeHelpers(get: GetState) {
 
         let catFolder = '';
         let courseName = '';
+        let courseCode = '';
+        let courseTitle = '';
         const second = parts[1] || '';
         const courseMatch = matchCourseFolder(second);
         if (courseMatch) {
+          courseCode = courseMatch.code;
+          courseTitle = courseMatch.title;
           courseName = second;
           catFolder = parts[2] || '';
         } else {
           catFolder = second;
-          courseName = parts[2] || '';
+          const cm2 = matchCourseFolder(parts[2] || '');
+          if (cm2) {
+            courseCode = cm2.code;
+            courseTitle = cm2.title;
+            courseName = parts[2] || '';
+          }
         }
 
         if (semFilter && sem !== semFilter) return;
@@ -703,12 +712,14 @@ export function createTreeHelpers(get: GetState) {
           const catCfg = config.categories[catFolder as keyof typeof config.categories];
           const catLabel = catCfg?.label || catFolder;
           const matchFileName = fileName.toLowerCase().includes(q);
+          const matchCode = courseCode.toLowerCase().includes(q);
+          const matchTitle = courseTitle.toLowerCase().includes(q);
           const matchCourse = courseName.toLowerCase().includes(q);
           const matchCat = catLabel.toLowerCase().includes(q);
           const matchSem = semLabel.toLowerCase().includes(q);
           const matchCatFolder = catFolder.toLowerCase().includes(q);
           const matchPath = item.path.toLowerCase().includes(q);
-          if (!matchFileName && !matchCourse && !matchCat && !matchSem && !matchCatFolder && !matchPath) return;
+          if (!matchFileName && !matchCode && !matchTitle && !matchCourse && !matchCat && !matchSem && !matchCatFolder && !matchPath) return;
         }
 
         matchedFiles.push({ ...item, sem, catFolder, courseName, fileName });

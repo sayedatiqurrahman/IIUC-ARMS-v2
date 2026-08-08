@@ -153,7 +153,7 @@ export default function CoursesView({
           const canEditThis = isMyCourse || coursePerms.canEdit;
           const canDeleteThis = isMyCourse || coursePerms.canDelete;
           const inMyDept = isOwner || (!!userDeptId && currentDept === userDeptId);
-          const showMenu = (canEditThis || canDeleteThis) && inMyDept;
+          const showMenu = canEditThis && inMyDept;
 
           return (
           <div key={course.code} className="p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl hover:border-qsis hover:shadow-[0_0_12px_rgba(34,197,94,0.3)] transition-all group">

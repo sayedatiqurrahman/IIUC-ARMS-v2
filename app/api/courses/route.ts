@@ -5,9 +5,17 @@ import { getDepartmentFolder, getDepartmentIdByFolder } from '@/lib/departments'
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
 import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData, resolveGithubToken, getGithubTree } from '@/lib/telegram';
-import { getAllFilesInFolder, deleteCourseFolder } from '@/lib/course-delete';
+import { getAllFilesInFolder, deleteCourseFolder, findCourseFolderPathInRepo } from '@/lib/course-delete';
 
 const COURSE_SUBFOLDERS = ['Mid/NOTES', 'Mid/Previous Questions', 'Final/NOTES', 'Final/Previous Questions', 'sheet', 'Syllabus', 'Other'];
+
+// Keep Unicode letters (e.g. Arabic) in titles — only strip path-unsafe characters.
+function cleanCourseTitle(title: string): string {
+  return String(title)
+    .replace(/[\\/:*?"<>|\r\n\t]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 const GITHUB_API = 'https://api.github.com';
 const OWNER_CHAT_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID || '0');
@@ -53,29 +61,6 @@ async function batchCreateGitkeepFiles(token: string, folderPath: string, paths:
     body: JSON.stringify({ sha: newCommitData.sha, force: true }),
   });
   return paths.length;
-}
-
-// Find the actual course folder on GitHub for a code inside a dept/semester dir.
-async function findCourseFolderPath(token: string, baseDir: string, code: string): Promise<string | null> {
-  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
-  if (!refRes.ok) return null;
-  const baseCommitSha = (await refRes.json()).object.sha;
-  const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
-  if (!commitRes.ok) return null;
-  const baseTreeSha = (await commitRes.json()).tree.sha;
-  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
-  if (!treeRes.ok) return null;
-  const treeData = await treeRes.json();
-  const prefix = `${baseDir}/`;
-  const codeUpper = code.toUpperCase();
-  for (const item of (treeData.tree || [])) {
-    const p = String(item.path || '');
-    if (!p.startsWith(prefix)) continue;
-    const folderName = (p.slice(prefix.length).split('/')[0] || '').toUpperCase();
-    if (!folderName) continue;
-    if (folderName === codeUpper || folderName.startsWith(`${codeUpper} - `)) return `${baseDir}/${folderName}`;
-  }
-  return null;
 }
 
 // Rename a course folder on GitHub by remapping every blob under the old
@@ -195,7 +180,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'GitHub uploader is not connected. Please contact an admin.' }, { status: 400 });
     }
 
-    const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const cleanTitle = cleanCourseTitle(courseTitle);
     const courseFolder = `${code.toUpperCase()} - ${cleanTitle}`;
     const basePath = `${config.uploadPath}/${getDepartmentFolder(department)}/${semester}/${courseFolder}`;
 
@@ -319,16 +304,17 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'GitHub is not connected. Connect your GitHub to rename courses.' }, { status: 400 });
     }
 
-    const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const cleanTitle = cleanCourseTitle(courseTitle);
     const deptFolder = getDepartmentFolder(department);
     const baseDir = `${config.uploadPath}/${deptFolder}/${semester}`;
     const newFolderPath = `${baseDir}/${code.toUpperCase()} - ${cleanTitle}`;
 
-    const oldFolderPath = await findCourseFolderPath(token, baseDir, code);
+    const oldFolderPath = await findCourseFolderPathInRepo(token, baseDir, code);
     if (!oldFolderPath) {
       return NextResponse.json({ error: 'Course folder not found on GitHub' }, { status: 404 });
     }
-    const oldTitle = oldFolderPath.split('/').pop()?.replace(`${code.toUpperCase()} - `, '') || '';
+    const codeUpper = code.toUpperCase();
+    const oldTitle = (oldFolderPath.split('/').pop() || '').replace(new RegExp(`^${codeUpper.replace(/-/g, '\\s*-\\s*')}\\s*-\\s*`), '').trim();
 
     if (oldFolderPath !== newFolderPath) {
       const renamed = await renameCourseFolderOnGithub(token, oldFolderPath, newFolderPath);
@@ -428,11 +414,21 @@ export async function DELETE(req: NextRequest) {
     const courseSem = course?.semester || semester;
     const courseCode = course?.code || code.toUpperCase();
 
-    // Build folder path — try rawFolderPath first, then reconstruct
+    // Build folder path — try rawFolderPath first, then reconstruct. Existing
+    // folders may use different spacing or Arabic titles, so search GitHub by
+    // dept → semester → course code to find the real folder.
     let folderPath = rawFolderPath;
     if (!folderPath) {
-      const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+      const cleanTitle = cleanCourseTitle(courseTitle);
       folderPath = `${config.uploadPath}/${getDepartmentFolder(courseDept)}/${courseSem}/${courseCode} - ${cleanTitle}`;
+      try {
+        const searchToken = await resolveGithubToken();
+        if (searchToken) {
+          const baseDir = `${config.uploadPath}/${getDepartmentFolder(courseDept)}/${courseSem}`;
+          const found = await findCourseFolderPathInRepo(searchToken, baseDir, courseCode);
+          if (found) folderPath = found;
+        }
+      } catch {}
     }
 
     // Admin/owner/manager/teacher/CR → direct delete, no confirmation

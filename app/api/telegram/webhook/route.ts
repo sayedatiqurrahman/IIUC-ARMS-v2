@@ -32,7 +32,7 @@ import {
 import { config } from '@/lib/config';
 import { getDepartmentFolder } from '@/lib/departments';
 import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
-import { deleteCourseFolder } from '@/lib/course-delete';
+import { deleteCourseFolder, findCourseFolderPathInRepo } from '@/lib/course-delete';
 
 const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
 const GITHUB_API = 'https://api.github.com';
@@ -1087,13 +1087,16 @@ async function handleCallbackQuery(cq: any) {
       const courseSem = course?.semester || sem;
       const courseCode = course?.code || code.toUpperCase();
 
-      const cleanTitle = courseTitle.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-      const folderPath = `${config.uploadPath}/${getDepartmentFolder(courseDept)}/${courseSem}/${courseCode} - ${cleanTitle}`;
+      const cleanTitle = courseTitle.replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
+      const baseDir = `${config.uploadPath}/${getDepartmentFolder(courseDept)}/${courseSem}`;
+      let folderPath = `${baseDir}/${courseCode} - ${cleanTitle}`;
 
       let githubDeleted = 0;
       try {
         const botToken = await getAppBotToken();
         if (botToken) {
+          const found = await findCourseFolderPathInRepo(botToken, baseDir, courseCode);
+          if (found) folderPath = found;
           const allFiles = await getAllFilesInFolder(botToken, folderPath);
           githubDeleted = await batchDeleteFiles(botToken, allFiles);
         }
