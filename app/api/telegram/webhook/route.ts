@@ -53,6 +53,24 @@ async function resolveRequesterChat(userId: string): Promise<number | null> {
   } catch { return null; }
 }
 
+// Telegram chat ids allowed to approve/reject destructive actions (deletes, broadcast).
+// Owners are resolved from TELEGRAM_OWNER_CHAT_ID (if set) plus the connected
+// Telegram chats of all owner accounts.
+async function resolveOwnerChatIds(): Promise<Set<string>> {
+  const ids = new Set<string>();
+  const envOwnerChatId = process.env.TELEGRAM_OWNER_CHAT_ID;
+  if (envOwnerChatId) ids.add(String(envOwnerChatId));
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profiles = await prisma.profile.findMany({
+      where: { email: { in: config.ownerEmails }, telegramChatId: { not: null } },
+      select: { telegramChatId: true },
+    });
+    for (const p of profiles) if (p.telegramChatId) ids.add(String(p.telegramChatId));
+  } catch {}
+  return ids;
+}
+
 async function getAppBotToken(): Promise<string | null> {
   try {
     const installations = await getAppInstallations();
@@ -225,7 +243,18 @@ async function processConnectEmail(chatId: number, email: string, telegramUserna
   console.log(`[TG] /connect: ${email} -> chat_id ${chatId} (pending verification)`);
 }
 
+// Telegram includes this header on every webhook update when a secret_token
+// was registered via setWebhook. We require it so forged HTTP requests (e.g.
+// someone POSTing a fake update to spam arbitrary chats or approve deletes)
+// are rejected before any handler runs.
+const WEBHOOK_SECRET = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || process.env.TELEGRAM_BOT_TOKEN || '';
+
 export async function POST(req: NextRequest) {
+  const headerToken = req.headers.get('x-telegram-bot-api-secret-token');
+  if (!WEBHOOK_SECRET || headerToken !== WEBHOOK_SECRET) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     console.log('[TG] Webhook received:', JSON.stringify(body).substring(0, 200));
@@ -790,6 +819,17 @@ async function handleCallbackQuery(cq: any) {
   const parsed = parseCallbackData(data);
   if (!parsed) return;
 
+  // Destructive actions (approving/rejecting course & file deletes) may only be
+  // performed from an owner's Telegram chat.
+  const DESTRUCTIVE_TYPES = ['course_del_confirm', 'course_del_reject', 'del_confirm', 'del_reject', 'del_file_confirm', 'del_file_reject'];
+  if (DESTRUCTIVE_TYPES.includes(parsed.type)) {
+    const ownerChats = await resolveOwnerChatIds();
+    if (!ownerChats.has(String(chatId))) {
+      await answerCallbackQuery(cq.id, '⛔ Only the owner can approve or reject deletes.');
+      return;
+    }
+  }
+
   try {
     // ─── Start menu buttons ───
     if (parsed.type === 'start_faculties') {
@@ -1197,8 +1237,8 @@ async function handleCallbackQuery(cq: any) {
         return;
       }
       if (action === 'confirm') {
-        const isOwner = config.ownerEmails.includes(String(chatId));
-        if (!isOwner) {
+        const ownerChats = await resolveOwnerChatIds();
+        if (!ownerChats.has(String(chatId))) {
           await editMessageText(chatId, messageId, `❌ Only the owner can broadcast.`);
           return;
         }

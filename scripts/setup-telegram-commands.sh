@@ -2,7 +2,7 @@
 # Run this ONCE to register all bot commands with Telegram
 # Usage: bash scripts/setup-telegram-commands.sh
 
-BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-8819136915:AAFwcIVT9KybtpBmCATQfdLTzLKZevdppx4}"
+BOT_TOKEN="${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN env var is required}"
 API="https://api.telegram.org/bot${BOT_TOKEN}"
 
 echo "Setting bot commands..."
