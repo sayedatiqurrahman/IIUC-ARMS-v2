@@ -85,10 +85,14 @@ async function compressPdf(file: File): Promise<File | null> {
     return { w: +(vpW * scale).toFixed(1), h: +(vpH * scale).toFixed(1) };
   };
 
+  // jsPDF swaps page dimensions to match the orientation param, so landscape
+  // pages must be declared landscape or they get forced portrait (squished).
+  const orientationFor = (w: number, h: number) => (w >= h ? 'landscape' : 'portrait') as 'portrait' | 'landscape';
+
   const firstPage = await pdf.getPage(1);
   const firstVp = firstPage.getViewport({ scale: 1 });
   const firstSize = pageSize(firstVp.width, firstVp.height);
-  const out = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [firstSize.w, firstSize.h] });
+  const out = new jsPDF({ orientation: orientationFor(firstSize.w, firstSize.h), unit: 'mm', format: [firstSize.w, firstSize.h] });
 
   let firstPageBytes = 0;
 
@@ -113,7 +117,7 @@ async function compressPdf(file: File): Promise<File | null> {
     if (i > 1) {
       const vp1 = page.getViewport({ scale: 1 });
       const s = pageSize(vp1.width, vp1.height);
-      out.addPage([s.w, s.h], 'portrait');
+      out.addPage([s.w, s.h], orientationFor(s.w, s.h));
     }
     out.addImage(dataUrl, 'JPEG', 0, 0, out.internal.pageSize.getWidth(), out.internal.pageSize.getHeight(), undefined, 'MEDIUM');
     await new Promise(r => setTimeout(r, 0)); // yield so the UI stays responsive
