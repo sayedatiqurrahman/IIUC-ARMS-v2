@@ -9,27 +9,11 @@ interface PdfViewerProps {
   onClose: () => void;
 }
 
-type Tool = 'laser' | 'pen' | 'highlighter' | 'eraser';
-
-interface Stroke {
-  tool: 'pen' | 'highlighter';
-  color: string;
-  size: number;
-  points: { x: number; y: number }[];
-}
-
-interface Cursor {
-  x: number;
-  y: number;
-}
-
-const COLORS = ['#ff2d2d', '#ffd400', '#22c55e', '#3b82f6', '#ffffff'];
-
 // Simple in-app PDF viewer built on pdf.js (v6.1.200, served from /public).
 // The PDF bytes are fetched through the same-origin proxy (no download, no
 // iframe, no X-Frame-Options) and rendered page-by-page into canvases inside a
-// scrollable container. A teaching overlay adds a smooth magic laser pointer
-// plus pen/highlighter/eraser annotations (Excalidraw-style strokes).
+// scrollable container. A laser pointer replaces the OS cursor exactly (no
+// lag), a hand tool allows drag-scrolling, and Ctrl+/- / Ctrl+wheel zoom.
 export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
   const src = `${window.location.origin}/api/github/raw?url=${encodeURIComponent(url)}`;
 
@@ -37,17 +21,18 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
   const [error, setError] = useState('');
   const [scale, setScale] = useState(1);
   const [numPages, setNumPages] = useState(0);
-  const [tool, setTool] = useState<Tool>('laser');
-  const [color, setColor] = useState(COLORS[0]);
+  const [tool, setTool] = useState<'laser' | 'hand'>('laser');
+  const [grabbing, setGrabbing] = useState(false);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const pdfRef = useRef<any>(null);
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
-  const strokesRef = useRef<Stroke[]>([]);
-  const activeStrokeRef = useRef<Stroke | null>(null);
-  const erasingRef = useRef(false);
+
+  const cursorRef = useRef({ x: -100, y: -100, inside: false });
+  const dragRef = useRef({ active: false, x: 0, y: 0, left: 0, top: 0 });
+  const zoomRef = useRef<{ scale: number; status: string }>({ scale: 1, status: 'loading' });
 
   // ---- PDF rendering -----------------------------------------------------
 
@@ -111,7 +96,6 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
       pdfRef.current?.destroy?.();
       pdfRef.current = null;
       canvasRefs.current = [];
-      strokesRef.current = [];
     };
   }, [src]);
 
@@ -119,46 +103,158 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
     if (status === 'ready') renderAllPages();
   }, [status, renderAllPages]);
 
-  // ---- Annotation overlay ------------------------------------------------
+  // ---- Zoom --------------------------------------------------------------
 
-  const drawStrokes = useCallback((ctx: CanvasRenderingContext2D, w: number, h: number) => {
-    ctx.clearRect(0, 0, w, h);
-    for (const s of strokesRef.current) {
-      ctx.save();
-      ctx.strokeStyle = s.color;
-      ctx.fillStyle = s.color;
-      ctx.lineWidth = s.size;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      if (s.tool === 'highlighter') ctx.globalAlpha = 0.35;
-      if (s.points.length === 1) {
-        ctx.beginPath();
-        ctx.arc(s.points[0].x, s.points[0].y, s.size / 2, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(s.points[0].x, s.points[0].y);
-        for (let i = 1; i < s.points.length - 1; i++) {
-          const mx = (s.points[i].x + s.points[i + 1].x) / 2;
-          const my = (s.points[i].y + s.points[i + 1].y) / 2;
-          ctx.quadraticCurveTo(s.points[i].x, s.points[i].y, mx, my);
-        }
-        const last = s.points[s.points.length - 1];
-        ctx.lineTo(last.x, last.y);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
+  const zoom = useCallback((dir: 1 | -1) => {
+    setScale((prev) => {
+      const next = Math.min(3, Math.max(0.5, +(prev + dir * 0.2).toFixed(2)));
+      zoomRef.current.scale = next;
+      return next;
+    });
   }, []);
 
-  const redrawAll = useCallback(() => {
+  const resetZoom = useCallback(() => {
+    setScale(1);
+    zoomRef.current.scale = 1;
+  }, []);
+
+  // Keep a ref mirror so the keyboard handler always reads the latest zoom fn.
+  const zoomFnRef = useRef(zoom);
+  zoomFnRef.current = zoom;
+  const resetFnRef = useRef(resetZoom);
+  resetFnRef.current = resetZoom;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '=' || e.key === '+') {
+          e.preventDefault();
+          zoomFnRef.current(1);
+        } else if (e.key === '-') {
+          e.preventDefault();
+          zoomFnRef.current(-1);
+        } else if (e.key === '0') {
+          e.preventDefault();
+          resetFnRef.current();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const onWheel = useCallback(
+    (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        zoom(e.deltaY < 0 ? 1 : -1);
+      }
+    },
+    [zoom]
+  );
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    stage.addEventListener('wheel', onWheel, { passive: false });
+    return () => stage.removeEventListener('wheel', onWheel);
+  }, [onWheel]);
+
+  // ---- Laser pointer -----------------------------------------------------
+
+  const drawLaser = useCallback(() => {
     const canvas = overlayRef.current;
     const stage = stageRef.current;
     if (!canvas || !stage) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    drawStrokes(ctx, stage.clientWidth, stage.clientHeight);
-  }, [drawStrokes]);
+    ctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
+
+    const { x, y, inside } = cursorRef.current;
+    if (!inside) return;
+
+    const glow = ctx.createRadialGradient(x, y, 1, x, y, 26);
+    glow.addColorStop(0, 'rgba(255,70,70,0.65)');
+    glow.addColorStop(0.4, 'rgba(255,70,70,0.25)');
+    glow.addColorStop(1, 'rgba(255,70,70,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, 26, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ff2d2d';
+    ctx.beginPath();
+    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }, []);
+
+  useEffect(() => {
+    if (tool !== 'laser') return;
+
+    const onMove = (e: MouseEvent) => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const rect = stage.getBoundingClientRect();
+      cursorRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+        inside: true,
+      };
+    };
+    const onLeave = () => {
+      cursorRef.current.inside = false;
+    };
+
+    let raf = 0;
+    const loop = () => {
+      drawLaser();
+      raf = requestAnimationFrame(loop);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    stageRef.current?.addEventListener('mouseleave', onLeave);
+    raf = requestAnimationFrame(loop);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      stageRef.current?.removeEventListener('mouseleave', onLeave);
+      cancelAnimationFrame(raf);
+      const canvas = overlayRef.current;
+      const stage = stageRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (ctx && stage) ctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
+    };
+  }, [tool, drawLaser]);
+
+  // ---- Hand tool (drag to scroll) ---------------------------------------
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (tool !== 'hand') return;
+    const sc = scrollRef.current;
+    if (!sc) return;
+    dragRef.current = { active: true, x: e.clientX, y: e.clientY, left: sc.scrollLeft, top: sc.scrollTop };
+    setGrabbing(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current;
+    const sc = scrollRef.current;
+    if (tool === 'hand' && d.active && sc) {
+      sc.scrollLeft = d.left - (e.clientX - d.x);
+      sc.scrollTop = d.top - (e.clientY - d.y);
+    }
+  };
+
+  const endDrag = () => {
+    dragRef.current.active = false;
+    setGrabbing(false);
+  };
+
+  // ---- Overlay sizing ----------------------------------------------------
 
   useEffect(() => {
     const canvas = overlayRef.current;
@@ -169,188 +265,17 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = stage.clientWidth * dpr;
       canvas.height = stage.clientHeight * dpr;
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      redrawAll();
+      canvas.getContext('2d')?.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawLaser();
     };
     resize();
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
-  }, [redrawAll, status]);
-
-  // Magic laser pointer: lerped follow + glowing dot, drawn on rAF.
-  useEffect(() => {
-    if (tool !== 'laser' || status !== 'ready') return;
-
-    let raf = 0;
-    const target: Cursor = { x: -100, y: -100 };
-    const cur: Cursor = { x: -100, y: -100 };
-    let trail: Cursor[] = [];
-
-    const onMove = (e: MouseEvent) => {
-      target.x = e.clientX;
-      target.y = e.clientY;
-    };
-
-    const loop = () => {
-      cur.x += (target.x - cur.x) * 0.2;
-      cur.y += (target.y - cur.y) * 0.2;
-      trail.push({ x: cur.x, y: cur.y });
-      if (trail.length > 10) trail.shift();
-
-      const canvas = overlayRef.current;
-      const stage = stageRef.current;
-      if (canvas && stage) {
-        const ctx = canvas.getContext('2d');
-        const rect = stage.getBoundingClientRect();
-        if (ctx) {
-          drawStrokes(ctx, stage.clientWidth, stage.clientHeight);
-          const lx = cur.x - rect.left;
-          const ly = cur.y - rect.top;
-
-          ctx.strokeStyle = 'rgba(255,45,45,0.22)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(rect.width / 2, rect.height);
-          ctx.lineTo(lx, ly);
-          ctx.stroke();
-
-          trail.forEach((t, i) => {
-            const a = ((i + 1) / trail.length) * 0.5;
-            ctx.fillStyle = `rgba(255,70,70,${a.toFixed(3)})`;
-            ctx.beginPath();
-            ctx.arc(t.x - rect.left, t.y - rect.top, (i / trail.length) * 8 + 1, 0, Math.PI * 2);
-            ctx.fill();
-          });
-
-          const glow = ctx.createRadialGradient(lx, ly, 2, lx, ly, 32);
-          glow.addColorStop(0, 'rgba(255,70,70,0.5)');
-          glow.addColorStop(1, 'rgba(255,70,70,0)');
-          ctx.fillStyle = glow;
-          ctx.beginPath();
-          ctx.arc(lx, ly, 32, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = '#ff2d2d';
-          ctx.beginPath();
-          ctx.arc(lx, ly, 5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#fff';
-          ctx.beginPath();
-          ctx.arc(lx, ly, 2.2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      raf = requestAnimationFrame(loop);
-    };
-
-    window.addEventListener('mousemove', onMove);
-    raf = requestAnimationFrame(loop);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      cancelAnimationFrame(raf);
-      redrawAll();
-    };
-  }, [tool, status, drawStrokes, redrawAll]);
-
-  const pointOf = (e: React.PointerEvent, rect: DOMRect): Cursor => ({
-    x: e.clientX - rect.left,
-    y: e.clientY - rect.top,
-  });
-
-  const eraseAt = (p: Cursor) => {
-    const RADIUS = 14;
-    strokesRef.current = strokesRef.current.filter(
-      (s) => !s.points.some((pt) => Math.hypot(pt.x - p.x, pt.y - p.y) < RADIUS)
-    );
-    redrawAll();
-  };
-
-  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (tool === 'eraser') {
-      erasingRef.current = true;
-      e.currentTarget.setPointerCapture(e.pointerId);
-      const rect = stageRef.current!.getBoundingClientRect();
-      eraseAt(pointOf(e, rect));
-      return;
-    }
-    if (tool === 'pen' || tool === 'highlighter') {
-      e.currentTarget.setPointerCapture(e.pointerId);
-      const rect = stageRef.current!.getBoundingClientRect();
-      activeStrokeRef.current = {
-        tool,
-        color,
-        size: tool === 'highlighter' ? 18 : 3,
-        points: [pointOf(e, rect)],
-      };
-    }
-  };
-
-  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    const rect = stage.getBoundingClientRect();
-    const p = pointOf(e, rect);
-
-    if (tool === 'eraser' && erasingRef.current) {
-      eraseAt(p);
-      return;
-    }
-    const s = activeStrokeRef.current;
-    if ((tool === 'pen' || tool === 'highlighter') && s) {
-      const last = s.points[s.points.length - 1];
-      if (Math.hypot(p.x - last.x, p.y - last.y) < 1.5) return;
-      s.points.push(p);
-      const ctx = overlayRef.current?.getContext('2d');
-      const c = overlayRef.current;
-      if (ctx && c && stage) {
-        ctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
-        drawStrokes(ctx, stage.clientWidth, stage.clientHeight);
-        ctx.save();
-        ctx.strokeStyle = s.color;
-        ctx.lineWidth = s.size;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        if (s.tool === 'highlighter') ctx.globalAlpha = 0.35;
-        ctx.beginPath();
-        ctx.moveTo(s.points[0].x, s.points[0].y);
-        for (let i = 1; i < s.points.length - 1; i++) {
-          const mx = (s.points[i].x + s.points[i + 1].x) / 2;
-          const my = (s.points[i].y + s.points[i + 1].y) / 2;
-          ctx.quadraticCurveTo(s.points[i].x, s.points[i].y, mx, my);
-        }
-        const lastP = s.points[s.points.length - 1];
-        ctx.lineTo(lastP.x, lastP.y);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-  };
-
-  const endStroke = () => {
-    erasingRef.current = false;
-    const s = activeStrokeRef.current;
-    if (s) {
-      strokesRef.current.push(s);
-      activeStrokeRef.current = null;
-      redrawAll();
-    }
-  };
-
-  const clearAnnotations = () => {
-    strokesRef.current = [];
-    redrawAll();
-  };
-
-  const zoom = (dir: 1 | -1) => {
-    setScale((prev) => Math.min(3, Math.max(0.5, +(prev + dir * 0.2).toFixed(2))));
-  };
-
-  const drawing = tool === 'pen' || tool === 'highlighter' || tool === 'eraser';
+  }, [drawLaser]);
 
   // ---- UI ------------------------------------------------------------------
 
-  const ToolButton = ({ t, icon, title }: { t: Tool; icon: string; title: string }) => (
+  const ToolButton = ({ t, icon, title }: { t: 'laser' | 'hand'; icon: string; title: string }) => (
     <button
       className="pdf-btn"
       onClick={() => setTool(t)}
@@ -370,28 +295,11 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
         </span>
 
         <div className="flex items-center gap-1 ml-auto">
-          <ToolButton t="laser" icon="fas fa-magic" title="Laser pointer" />
-          <ToolButton t="pen" icon="fas fa-pen" title="Pen" />
-          <ToolButton t="highlighter" icon="fas fa-highlighter" title="Highlighter" />
-          <ToolButton t="eraser" icon="fas fa-eraser" title="Eraser" />
-          <button className="pdf-btn" onClick={clearAnnotations} title="Clear annotations" disabled={!drawing && strokesRef.current.length === 0}>
-            <i className="fas fa-trash"></i>
-          </button>
-          {drawing && (
-            <div className="flex items-center gap-1 mx-1 px-2 py-1 rounded-lg bg-black/30">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  title={c}
-                  className="w-4 h-4 rounded-full border border-white/40"
-                  style={{ background: c, boxShadow: color === c ? '0 0 0 2px rgba(251,146,60,0.9)' : undefined }}
-                ></button>
-              ))}
-            </div>
-          )}
-          <button className="pdf-btn" onClick={() => zoom(-1)} title="Zoom out" disabled={status !== 'ready'}><i className="fas fa-minus"></i></button>
-          <button className="pdf-btn" onClick={() => zoom(1)} title="Zoom in" disabled={status !== 'ready'}><i className="fas fa-plus"></i></button>
+          <ToolButton t="laser" icon="fas fa-magic" title="Laser pointer (or use your cursor)" />
+          <ToolButton t="hand" icon="fas fa-hand-paper" title="Hand tool — drag to scroll" />
+          <button className="pdf-btn" onClick={() => zoom(-1)} title="Zoom out (Ctrl + -)" disabled={status !== 'ready'}><i className="fas fa-minus"></i></button>
+          <button className="pdf-btn" onClick={() => zoom(1)} title="Zoom in (Ctrl + +)" disabled={status !== 'ready'}><i className="fas fa-plus"></i></button>
+          <button className="pdf-btn" onClick={resetZoom} title="Reset zoom (Ctrl + 0)" disabled={status !== 'ready'}><i className="fas fa-expand-arrows-alt"></i></button>
           <a className="pdf-btn no-underline" href={url} download={name} title="Download" style={{ textDecoration: 'none' }}><i className="fas fa-download"></i></a>
           <button
             className="pdf-btn"
@@ -404,8 +312,20 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
         </div>
       </div>
 
-      <div ref={stageRef} className="flex-1 relative min-h-0 bg-[#0a0f1e]">
-        <div ref={scrollRef} className="absolute inset-0 overflow-auto">
+      <div
+        ref={stageRef}
+        className="flex-1 relative min-h-0 bg-[#0a0f1e]"
+        style={{ cursor: tool === 'laser' ? 'none' : grabbing ? 'grabbing' : 'grab' }}
+      >
+        <div
+          ref={scrollRef}
+          className="absolute inset-0 overflow-auto"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          style={{ cursor: tool === 'laser' ? 'none' : 'inherit' }}
+        >
           <div className="p-3 flex flex-col items-center gap-3">
             {Array.from({ length: numPages }).map((_, i) => (
               <canvas
@@ -419,15 +339,7 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
           </div>
         </div>
 
-        <canvas
-          ref={overlayRef}
-          className="absolute inset-0"
-          style={{ pointerEvents: drawing ? 'auto' : 'none', touchAction: 'none' }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endStroke}
-          onPointerCancel={endStroke}
-        />
+        <canvas ref={overlayRef} className="absolute inset-0 pointer-events-none" />
 
         {status === 'loading' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-dark-text2 bg-[#0a0f1e]">
