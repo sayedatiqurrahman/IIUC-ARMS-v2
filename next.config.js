@@ -32,7 +32,7 @@ const nextConfig = {
       {
         // Everything except pdf.js viewer and the raw inline proxy (which loads
         // inside an <iframe> for the PDF viewer / Office embed) gets DENY.
-        source: '/((?!pdfjs/|api/github/raw(/|$)).*)',
+        source: '/((?!pdfjs/|api/github/raw(?:/|$)).*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
