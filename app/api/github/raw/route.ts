@@ -68,6 +68,6 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (e: any) {
-    return new NextResponse(`Failed to fetch file: ${e?.message || e}`, { status: 502 });
+    return new NextResponse('Failed to fetch file', { status: 502 });
   }
 }
