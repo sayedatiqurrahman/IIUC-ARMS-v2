@@ -21,7 +21,7 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
   const [error, setError] = useState('');
   const [scale, setScale] = useState(1);
   const [numPages, setNumPages] = useState(0);
-  const [tool, setTool] = useState<'laser' | 'hand'>('laser');
+  const [tool, setTool] = useState<'laser' | 'hand'>('hand');
   const [grabbing, setGrabbing] = useState(false);
 
   const stageRef = useRef<HTMLDivElement>(null);
@@ -51,8 +51,8 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         canvas.width = Math.floor(vp.width * fit * dpr);
         canvas.height = Math.floor(vp.height * fit * dpr);
-        canvas.style.width = '100%';
-        canvas.style.height = 'auto';
+        canvas.style.width = `${Math.floor(vp.width * fit)}px`;
+        canvas.style.height = `${Math.floor(vp.height * fit)}px`;
         await page.render({
           canvasContext: canvas.getContext('2d')!,
           viewport: page.getViewport({ scale: fit * dpr }),
@@ -298,6 +298,7 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
           <ToolButton t="laser" icon="fas fa-magic" title="Laser pointer (or use your cursor)" />
           <ToolButton t="hand" icon="fas fa-hand-paper" title="Hand tool — drag to scroll" />
           <button className="pdf-btn" onClick={() => zoom(-1)} title="Zoom out (Ctrl + -)" disabled={status !== 'ready'}><i className="fas fa-minus"></i></button>
+          <span className="text-neutral-400 text-[0.72rem] font-mono min-w-[38px] text-center select-none">{Math.round(scale * 100)}%</span>
           <button className="pdf-btn" onClick={() => zoom(1)} title="Zoom in (Ctrl + +)" disabled={status !== 'ready'}><i className="fas fa-plus"></i></button>
           <button className="pdf-btn" onClick={resetZoom} title="Reset zoom (Ctrl + 0)" disabled={status !== 'ready'}><i className="fas fa-expand-arrows-alt"></i></button>
           <a className="pdf-btn no-underline" href={url} download={name} title="Download" style={{ textDecoration: 'none' }}><i className="fas fa-download"></i></a>
