@@ -113,7 +113,7 @@ The admin panel includes a granular permissions system:
 If you discover a vulnerability, please report it responsibly. Never commit secrets to the repo.
 
 ## Developer
-Developed with ❤ by **Sayed Atiqur Rahman** — QSIS, IIUC
+Developed with ❤ by **[Sayed Atiqur Rahman](https://atiq.is-a.dev)** — QSIS, IIUC
 
 ## Presented by
 **Programming Light**
