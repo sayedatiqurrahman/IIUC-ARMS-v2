@@ -51,11 +51,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await fetch(raw, { cache: 'no-store', redirect: 'follow' });
-    if (!res.ok || !res.body) {
-      return new NextResponse('File not found', { status: 404 });
+    if (!res.ok) {
+      return new NextResponse(`File not found (${res.status})`, { status: 404 });
     }
+    const buf = await res.arrayBuffer();
     const ct = MIME[ext] || res.headers.get('content-type') || 'application/octet-stream';
-    return new Response(res.body, {
+    return new Response(new Uint8Array(buf), {
       status: 200,
       headers: {
         'Content-Type': ct,
