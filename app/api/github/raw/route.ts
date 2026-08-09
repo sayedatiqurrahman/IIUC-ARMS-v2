@@ -47,7 +47,10 @@ export async function GET(req: NextRequest) {
 
   const clean = raw.split('?')[0].split('#')[0];
   const ext = clean.split('.').pop()?.toLowerCase() || '';
-  const fname = decodeURIComponent(clean.split('/').pop() || 'file').replace(/["\\]/g, '');
+  const fname = decodeURIComponent(clean.split('/').pop() || 'file')
+    .replace(/["\\]/g, '')
+    .replace(/[\u0000-\u001F\u007F]/g, '');
+  const asciiName = fname.replace(/[^\x20-\x7E]/g, '_') || 'file';
 
   try {
     const res = await fetch(raw, { cache: 'no-store', redirect: 'follow' });
@@ -60,7 +63,7 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         'Content-Type': ct,
-        'Content-Disposition': `inline; filename="${fname}"`,
+        'Content-Disposition': `inline; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fname)}`,
         'Cache-Control': 'public, max-age=300, s-maxage=300',
       },
     });
