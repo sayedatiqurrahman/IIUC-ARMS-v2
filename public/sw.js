@@ -151,15 +151,17 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(
         caches.open(SHELL_CACHE).then(async (cache) => {
           const cached = await cache.match(treeUrl);
-          const networkPromise = fetch(request).then((response) => {
+          if (cached) return cached;
+          try {
+            const response = await fetch(request);
             if (response.ok) cache.put(treeUrl, response.clone());
             return response;
-          }).catch(() => null);
-          if (cached || networkPromise) return cached || networkPromise;
-          return new Response(JSON.stringify({ error: 'Offline — please try again' }), {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          } catch {
+            return new Response(JSON.stringify({ error: 'Offline — please try again' }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
         })
       );
     } else {
@@ -261,7 +263,9 @@ self.addEventListener('fetch', (event) => {
         return response;
       }).catch(() => null);
 
-      if (cached || networkPromise) return cached || networkPromise;
+      if (cached) return cached;
+      const networkResponse = await networkPromise;
+      if (networkResponse) return networkResponse;
       return new Response('', { status: 504 });
     })
   );
