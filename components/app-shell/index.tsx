@@ -18,6 +18,7 @@ import { useTurnstile } from '@/lib/useTurnstile';
 import { handleGoogleRedirectResult } from '@/lib/firebase';
 import dynamic from 'next/dynamic';
 const DocumentViewer = dynamic(() => import('./DocumentViewer'), { ssr: false });
+const InstallAppButton = dynamic(() => import('@/components/dashboard/InstallAppButton'), { ssr: false });
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -664,6 +665,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="border-t border-dark-border mt-6 pt-5 pb-8  flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-[0.72rem] text-dark-text2">&copy; {new Date().getFullYear()} IIUC-ARMS. All rights reserved.</p>
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+              <InstallAppButton />
               <button
                 onClick={async () => { if (await confirm({ message: 'Reset App? This will clear all cached data and reload.', danger: true, title: 'Force Reset' })) forceResetApp(); }}
                 className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-[0.65rem] sm:text-[0.72rem] text-red-400 hover:bg-red-500/20 transition-all cursor-pointer"
