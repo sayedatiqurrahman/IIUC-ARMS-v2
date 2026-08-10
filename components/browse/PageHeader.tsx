@@ -84,9 +84,9 @@ export default function PageHeader({
         </section>
       )}
 
-      {/* Recent Reads */}
+      {/* Recent Reads (hidden on mobile) */}
       {view === 'semesters' && recentReads.length > 0 && (
-        <section className="max-w-[1200px] mx-auto mb-5">
+        <section className="max-w-[1200px] mx-auto mb-5 hidden md:block">
           <h3 className="text-base font-semibold flex items-center gap-2 mb-3"><i className="fas fa-clock"></i> Recent Reads</h3>
           <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
             {recentReads.map((item: any) => (
