@@ -40,6 +40,7 @@ export default function DashboardView() {
 
   const [activeSection, setActiveSection] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [adminTab, setAdminTab] = useState('overview');
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [editingSocials, setEditingSocials] = useState(false);
@@ -78,6 +79,9 @@ export default function DashboardView() {
   const showStudentSection = isNonVersityAdmin ? profileType === 'student' : (isStudent || effectiveRole === 'manager' || (isAdmin && isStudentEmail));
   const showTeacherSection = isNonVersityAdmin ? profileType === 'teacher' : isTeacherUser;
   const hasAdminAccess = config.isAdminOrAbove(email, profile.role) || effectiveRole === 'manager' || effectiveRole === 'teacher';
+  const isManager = effectiveRole === 'manager';
+  const isOwner = config.ownerEmails.includes(email.toLowerCase());
+  const canManageFacultyDepts = isAdmin || isManager || (profile as any).customPermissions?.manageFacultyDepts === true;
   const [ghUser, setGhUser] = useState<any>(null);
   const [ghStats, setGhStats] = useState<any>(null);
   const [personalActivity, setPersonalActivity] = useState<any[]>([]);
@@ -380,6 +384,41 @@ export default function DashboardView() {
     finally { setTotpMethodsLoading(false); }
   };
 
+  const adminMenuItems: { id: string; label: string; icon: string; color?: string }[] = [
+    { id: 'overview', label: 'Overview', icon: 'fa-chart-pie', color: 'text-qsis' },
+    { id: 'users', label: 'All Users', icon: 'fa-users', color: 'text-blue-400' },
+    { id: 'faculty', label: 'Faculty Members', icon: 'fa-chalkboard-teacher', color: 'text-teal-400' },
+    { id: 'facultyDept', label: 'Faculties & Depts', icon: 'fa-building', color: 'text-purple-400' },
+    { id: 'courses', label: 'Courses', icon: 'fa-book', color: 'text-indigo-400' },
+    { id: 'rooms', label: 'Rooms', icon: 'fa-door-open', color: 'text-cyan-400' },
+    { id: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400' },
+    { id: 'permissions', label: 'Permissions', icon: 'fa-key', color: 'text-amber-400' },
+    { id: 'contributors', label: 'Contributors', icon: 'fa-users', color: 'text-teal-400' },
+    { id: 'telegram', label: 'Telegram', icon: 'fa-paper-plane', color: 'text-cyan-400' },
+    { id: 'activity', label: 'Activity Log', icon: 'fa-history', color: 'text-yellow-400' },
+  ].filter(item => {
+    switch (item.id) {
+      case 'overview': return isAdmin || isManager;
+      case 'users': return isAdmin || isManager;
+      case 'faculty': return isAdmin || isManager;
+      case 'facultyDept': return canManageFacultyDepts;
+      case 'courses': return isAdmin || isManager || isTeacherUser || !!profile.isCR;
+      case 'rooms': return isAdmin || isManager || isTeacherUser;
+      case 'batches': return isAdmin || isManager || isTeacherUser || !!profile.isCR;
+      case 'permissions': return isAdmin;
+      case 'contributors': return isAdmin;
+      case 'telegram': return isOwner;
+      case 'activity': return isAdmin || isManager;
+      default: return false;
+    }
+  });
+
+  const handleAdminNavigate = (tab: string) => {
+    setActiveSection('admin-panel');
+    setAdminTab(tab);
+    setSidebarOpen(false);
+  };
+
   function renderContent() {
     switch (activeSection) {
       case 'overview':
@@ -665,7 +704,7 @@ export default function DashboardView() {
         );
 
       case 'admin-panel':
-        return <AdminPanelView />;
+        return <AdminPanelView activeTab={adminTab as any} setActiveTab={setAdminTab as any} showSidebar={false} />;
 
       default:
         return null;
@@ -715,6 +754,9 @@ export default function DashboardView() {
           profile={profile}
           mobileOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
+          adminItems={adminMenuItems}
+          activeAdminTab={adminTab}
+          onAdminNavigate={handleAdminNavigate}
         />
         <div className="flex-1 min-w-0">
           {renderContent()}

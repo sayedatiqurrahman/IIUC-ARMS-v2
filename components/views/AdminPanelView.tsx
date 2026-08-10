@@ -21,13 +21,21 @@ import FacultyTab from '@/components/admin/FacultyTab';
 import ActivityLogTab from '@/components/admin/ActivityLogTab';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 
-export default function AdminPanelView() {
+interface AdminPanelViewProps {
+  activeTab?: Tab;
+  setActiveTab?: (tab: Tab) => void;
+  showSidebar?: boolean;
+}
+
+export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab: setActiveTabProp, showSidebar = true }: AdminPanelViewProps = {}) {
   const { data: session } = useSession();
   const { confirm, confirmDialog } = useConfirm();
   const router = useRouter();
   const profile = useAppStore(s => s.profile);
 
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [internalTab, setInternalTab] = useState<Tab>('overview');
+  const activeTab = activeTabProp ?? internalTab;
+  const setActiveTab = setActiveTabProp ?? setInternalTab;
   const [userSubTab, setUserSubTab] = useState<UserSubTab>('all');
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -91,7 +99,7 @@ export default function AdminPanelView() {
   const canViewExternalUsers = isAdmin || isManager;
   const canManageFacultyDepts = isAdmin || isManager || profile.customPermissions?.manageFacultyDepts === true;
   const isSuperAdmin = config.ownerEmails.includes(email);
-  const useSidebar = isAdmin || isManager;
+  const useSidebar = (isAdmin || isManager) && showSidebar !== false;
 
   useEffect(() => {
     if (!hasAdminAccess) return;

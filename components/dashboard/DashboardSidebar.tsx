@@ -22,6 +22,9 @@ interface DashboardSidebarProps {
   unreadCount?: number;
   mobileOpen?: boolean;
   onClose?: () => void;
+  adminItems?: { id: string; label: string; icon: string; color?: string }[];
+  activeAdminTab?: string;
+  onAdminNavigate?: (tab: string) => void;
 }
 
 const baseMenu: MenuItem[] = [
@@ -44,13 +47,9 @@ const teacherMenu: MenuItem[] = [
   { id: 'teacher-info', label: 'Faculty Info', icon: 'fas fa-chalkboard-teacher', color: 'text-teal-400' },
 ];
 
-const adminMenu: MenuItem[] = [
-  { id: 'admin-panel', label: 'Admin Panel', icon: 'fas fa-cog', color: 'text-amber-400', admin: true },
-];
-
 export default function DashboardSidebar({
   activeSection, onNavigate, effectiveRole, isCR, hasAdminAccess, isTeacherUser, profile, unreadCount,
-  mobileOpen, onClose,
+  mobileOpen, onClose, adminItems = [], activeAdminTab = '', onAdminNavigate,
 }: DashboardSidebarProps) {
   const isStudent = effectiveRole === 'student';
 
@@ -59,8 +58,12 @@ export default function DashboardSidebar({
     ...(isStudent ? studentMenu : []),
     ...(isCR ? crMenu : []),
     ...(isTeacherUser ? teacherMenu : []),
-    ...(hasAdminAccess ? adminMenu : []),
   ];
+
+  const itemClass = (active: boolean) =>
+    active
+      ? 'bg-qsis/10 text-qsis border border-qsis/20'
+      : 'text-dark-text2 hover:text-dark-text hover:bg-dark-bg3 border border-transparent';
 
   const navContent = (
     <nav className="space-y-0.5">
@@ -68,23 +71,54 @@ export default function DashboardSidebar({
         <button
           key={item.id}
           onClick={() => { onNavigate(item.id); onClose?.(); }}
-          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[0.8rem] font-medium transition-all text-left ${
-            activeSection === item.id
-              ? 'bg-qsis/10 text-qsis border border-qsis/20'
-              : 'text-dark-text2 hover:text-dark-text hover:bg-dark-bg3 border border-transparent'
-          }`}
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[0.8rem] font-medium transition-all text-left ${itemClass(activeSection === item.id)}`}
         >
           <i className={`${item.icon} ${item.color || ''} w-4 text-center`}></i>
           <span className="flex-1">{item.label}</span>
           {item.id === 'activity' && unreadCount ? (
             <span className="px-1.5 py-0.5 rounded-full bg-qsis/20 text-qsis text-[0.6rem]">{unreadCount}</span>
           ) : null}
-          {item.admin && (
-            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[0.55rem] font-bold">ADMIN</span>
-          )}
         </button>
       ))}
     </nav>
+  );
+
+  const adminGroup = adminItems.length > 0 ? (
+    <div className="mt-4">
+      <div className="mb-2 px-2">
+        <p className="text-[0.65rem] text-dark-text3 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+          <i className="fas fa-shield-alt text-qsis"></i>Admin
+        </p>
+      </div>
+      <nav className="space-y-0.5">
+        {adminItems.map(item => (
+          <button
+            key={item.id}
+            onClick={() => { onAdminNavigate?.(item.id); onClose?.(); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[0.8rem] font-medium transition-all text-left ${itemClass(activeAdminTab === item.id && activeSection === 'admin-panel')}`}
+          >
+            <i className={`fas ${item.icon} ${item.color || ''} w-4 text-center`}></i>
+            <span className="flex-1">{item.label}</span>
+          </button>
+        ))}
+      </nav>
+    </div>
+  ) : null;
+
+  const roleBadge = (
+    <div className="mt-4 px-2 pt-3 border-t border-dark-border">
+      <div className="flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full ${
+          effectiveRole === 'admin' ? 'bg-red-500' :
+          effectiveRole === 'manager' ? 'bg-amber-500' :
+          effectiveRole === 'teacher' ? 'bg-teal-500' :
+          effectiveRole === 'student' ? 'bg-blue-500' :
+          effectiveRole === 'external' ? 'bg-purple-500' : 'bg-gray-500'
+        }`}></div>
+        <span className="text-[0.7rem] text-dark-text3 capitalize font-medium">{effectiveRole}</span>
+        {isCR && <span className="px-1.5 py-0.5 rounded bg-qsis/10 text-qsis text-[0.55rem] font-bold">CR</span>}
+      </div>
+    </div>
   );
 
   return (
@@ -107,21 +141,9 @@ export default function DashboardSidebar({
           </div>
           <div className="flex-1 overflow-y-auto">
             {navContent}
+            {adminGroup}
           </div>
-          {/* Role Badge */}
-          <div className="mt-4 px-2 pt-3 border-t border-dark-border">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${
-                effectiveRole === 'admin' ? 'bg-red-500' :
-                effectiveRole === 'manager' ? 'bg-amber-500' :
-                effectiveRole === 'teacher' ? 'bg-teal-500' :
-                effectiveRole === 'student' ? 'bg-blue-500' :
-                effectiveRole === 'external' ? 'bg-purple-500' : 'bg-gray-500'
-              }`}></div>
-              <span className="text-[0.7rem] text-dark-text3 capitalize font-medium">{effectiveRole}</span>
-              {isCR && <span className="px-1.5 py-0.5 rounded bg-qsis/10 text-qsis text-[0.55rem] font-bold">CR</span>}
-            </div>
-          </div>
+          {roleBadge}
         </div>
       </div>
 
@@ -131,20 +153,8 @@ export default function DashboardSidebar({
           <p className="text-[0.65rem] text-dark-text3 uppercase tracking-wider font-semibold">Dashboard</p>
         </div>
         {navContent}
-        {/* Role Badge */}
-        <div className="mt-4 px-2 pt-3 border-t border-dark-border">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${
-              effectiveRole === 'admin' ? 'bg-red-500' :
-              effectiveRole === 'manager' ? 'bg-amber-500' :
-              effectiveRole === 'teacher' ? 'bg-teal-500' :
-              effectiveRole === 'student' ? 'bg-blue-500' :
-              effectiveRole === 'external' ? 'bg-purple-500' : 'bg-gray-500'
-            }`}></div>
-            <span className="text-[0.7rem] text-dark-text3 capitalize font-medium">{effectiveRole}</span>
-            {isCR && <span className="px-1.5 py-0.5 rounded bg-qsis/10 text-qsis text-[0.55rem] font-bold">CR</span>}
-          </div>
-        </div>
+        {adminGroup}
+        {roleBadge}
       </div>
     </div>
   );
