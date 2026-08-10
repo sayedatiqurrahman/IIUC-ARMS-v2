@@ -18,8 +18,13 @@ import {
   SecuritySection,
 } from '@/components/dashboard';
 import TelegramVerify from './TelegramVerify';
+import { useUrlTab } from '@/lib/use-url-tabs';
 import InstallAppButton from './InstallAppButton';
 import AdminPanelView from '@/components/views/AdminPanelView';
+
+// Deep-linkable tabs: /dashboard?tab=profile, /dashboard?tab=admin-panel&admin=permissions
+const SECTION_KEYS: readonly string[] = ['overview', 'profile', 'activity', 'github', 'security', 'batch', 'cr-tools', 'teacher-info', 'admin-panel'];
+const ADMIN_KEYS: readonly string[] = ['overview', 'users', 'faculty', 'facultyDept', 'courses', 'rooms', 'batches', 'permissions', 'contributors', 'telegram', 'activity'];
 
 function extractUniversityId(email: string): string {
   const match = email.match(/^(q\d+)/i);
@@ -41,6 +46,10 @@ export default function DashboardView() {
   const [activeSection, setActiveSection] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [adminTab, setAdminTab] = useState('overview');
+
+  // Deep-linkable tabs: /dashboard?tab=profile, /dashboard?tab=admin-panel&admin=permissions
+  const setSectionWithUrl = useUrlTab('tab', activeSection, setActiveSection, SECTION_KEYS);
+  const setAdminTabWithUrl = useUrlTab('admin', adminTab, setAdminTab, ADMIN_KEYS);
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [editingSocials, setEditingSocials] = useState(false);
@@ -414,8 +423,8 @@ export default function DashboardView() {
   });
 
   const handleAdminNavigate = (tab: string) => {
-    setActiveSection('admin-panel');
-    setAdminTab(tab);
+    setSectionWithUrl('admin-panel');
+    setAdminTabWithUrl(tab);
     setSidebarOpen(false);
   };
 
@@ -473,7 +482,7 @@ export default function DashboardView() {
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 text-[0.72rem] font-medium"><i className="fas fa-check-circle"></i> Credit for uploads</span>
                     </div>
                     <button
-                      onClick={() => setActiveSection('github')}
+                      onClick={() => setSectionWithUrl('github')}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-qsis text-white text-[0.8rem] font-semibold cursor-pointer hover:opacity-90 transition-opacity"
                     >
                       <i className="fab fa-github"></i> Connect Now
@@ -704,7 +713,7 @@ export default function DashboardView() {
         );
 
       case 'admin-panel':
-        return <AdminPanelView activeTab={adminTab as any} setActiveTab={setAdminTab as any} showSidebar={false} />;
+        return <AdminPanelView activeTab={adminTab as any} setActiveTab={setAdminTabWithUrl as any} showSidebar={false} />;
 
       default:
         return null;
@@ -746,7 +755,7 @@ export default function DashboardView() {
       <div className="flex flex-col md:flex-row gap-6">
         <DashboardSidebar
           activeSection={activeSection}
-          onNavigate={setActiveSection}
+          onNavigate={setSectionWithUrl}
           effectiveRole={effectiveRole}
           isCR={!!profile.isCR}
           hasAdminAccess={hasAdminAccess}

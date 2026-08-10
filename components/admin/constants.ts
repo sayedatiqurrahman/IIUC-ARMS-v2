@@ -29,6 +29,7 @@ export const PERMISSION_GROUPS = [
     color: 'text-green-400',
     actions: [
       { key: 'uploadFile', label: 'Upload Files', desc: 'Upload notes, sheets, questions', icon: 'fa-cloud-upload-alt', color: 'text-green-400' },
+      { key: 'requireGithubForUpload', label: 'Require GitHub for Upload', desc: 'Uploads require a connected GitHub account', icon: 'fab fa-github', color: 'text-purple-400' },
       { key: 'moveFile', label: 'Move Files', desc: 'Move files & folders', icon: 'fa-arrows-alt', color: 'text-cyan-400' },
       { key: 'copyFile', label: 'Copy Files', desc: 'Copy to other locations', icon: 'fa-copy', color: 'text-teal-400' },
       { key: 'renameFile', label: 'Rename Files', desc: 'Rename files & folders', icon: 'fa-i-cursor', color: 'text-amber-400' },

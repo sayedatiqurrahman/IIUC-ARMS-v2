@@ -20,6 +20,13 @@ import UsersTab from '@/components/admin/UsersTab';
 import FacultyTab from '@/components/admin/FacultyTab';
 import ActivityLogTab from '@/components/admin/ActivityLogTab';
 import AdminSidebar from '@/components/admin/AdminSidebar';
+import { useUrlTab } from '@/lib/use-url-tabs';
+
+// Deep-linkable tabs: /admin?tab=users&sub=pending (the `tab` param is only
+// owned here when the panel is rendered standalone — when embedded inside the
+// dashboard, DashboardView owns the `tab`/`admin` URL params).
+const TAB_KEYS: readonly Tab[] = ['overview', 'users', 'activity', 'faculty', 'facultyDept', 'courses', 'permissions', 'rooms', 'batches', 'telegram', 'contributors'];
+const SUB_KEYS: readonly UserSubTab[] = ['all', 'admin', 'manager', 'teacher', 'student', 'external', 'pending'];
 
 interface AdminPanelViewProps {
   activeTab?: Tab;
@@ -38,6 +45,13 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const setActiveTab = setActiveTabProp ?? setInternalTab;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userSubTab, setUserSubTab] = useState<UserSubTab>('all');
+
+  // Deep-linkable tabs: /admin?tab=users&sub=pending (the `tab` param is only
+  // owned here when the panel is rendered standalone — when embedded inside the
+  // dashboard, DashboardView owns the `tab`/`admin` URL params).
+  const isStandalone = activeTabProp === undefined;
+  const setTabWithUrl = useUrlTab<Tab>('tab', activeTab, setActiveTab, TAB_KEYS, isStandalone);
+  const setSubWithUrl = useUrlTab<UserSubTab>('sub', userSubTab, setUserSubTab, SUB_KEYS);
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -689,7 +703,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
         {useSidebar && (
           <AdminSidebar
             activeTab={activeTab}
-            setActiveTab={setActiveTab}
+            setActiveTab={setTabWithUrl}
             isAdmin={isAdmin}
             isManager={isManager}
             isOwner={isOwner}
@@ -708,7 +722,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
               {TABS.filter(t => t.show).map(tab => (
                 <button
                   key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
+                  onClick={() => setTabWithUrl(tab.key)}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none whitespace-nowrap ${
                     activeTab === tab.key ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
                   }`}
@@ -728,8 +742,8 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           activities={activities}
           overviewFacultyCount={overviewFacultyCount}
           recentLogins={recentLogins}
-          setActiveTab={setActiveTab}
-          setUserSubTab={setUserSubTab}
+          setActiveTab={setTabWithUrl}
+          setUserSubTab={setSubWithUrl}
         />
       )}
 
@@ -744,7 +758,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           loadingMore={loadingMore}
           firebaseNextPageToken={firebaseNextPageToken}
           userSubTab={userSubTab}
-          setUserSubTab={setUserSubTab}
+          setUserSubTab={setSubWithUrl}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           showCreateUser={showCreateUser}
