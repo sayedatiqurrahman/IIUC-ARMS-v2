@@ -93,6 +93,24 @@ export async function detectQuadSmart(
   return detectQuadOnCanvas(canvas, previewW, previewH);
 }
 
+// Lightweight live-framing detector: jscanify only — no heavy OpenCV fallback
+// and no per-frame corner refinement, so the viewfinder can keep up at a few
+// frames per second. `canvas` should be small (~640px max dimension). The
+// corners are coarse on purpose; capture-time detection re-runs at a higher
+// resolution and snaps them onto the real paper edges.
+export async function detectQuadLive(
+  canvas: HTMLCanvasElement,
+  previewW: number,
+  previewH: number
+): Promise<Quad | null> {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  const img = ctx.getImageData(0, 0, previewW, previewH);
+  const js = await detectQuadJscanify({ data: img.data, w: previewW, h: previewH });
+  if (!js || !quadValid(js, previewW, previewH)) return null;
+  return js;
+}
+
 // Snap a quad (in the canvas's own pixel space) onto the real paper edges at
 // (optionally) a higher resolution than the coarse detect pass. Detection runs
 // downscaled for speed, so upscaling its quad loses corner precision; re-fitting

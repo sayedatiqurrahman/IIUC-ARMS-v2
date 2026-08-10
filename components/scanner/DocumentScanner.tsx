@@ -10,7 +10,7 @@ import {
   type ScanMode,
   MAX_DIM_DEFAULT,
 } from '@/lib/image-utils';
-import { detectQuadSmart, processFrameSmart, refineQuadOnCanvas } from '@/lib/scanic-bridge';
+import { detectQuadSmart, detectQuadLive, processFrameSmart, refineQuadOnCanvas } from '@/lib/scanic-bridge';
 import { loadOpenCV } from '@/lib/opencv-detect';
 import { buildSearchablePdf, blobToCanvas } from '@/lib/ocr';
 import { showToast } from '@/lib/utils';
@@ -85,8 +85,16 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
   modeRef.current = mode;
   const pagesRef = useRef<CapturedPage[]>([]);
   pagesRef.current = pages;
+  const busyRef = useRef(false);
+  busyRef.current = busy;
   // Index of the page currently being edited (re-edit) or null for a new capture.
   const editingIndexRef = useRef<number | null>(null);
+
+  // ---- Live framing (jscanify overlay on the viewfinder) ----
+  const [detected, setDetected] = useState(false);
+  const quadRef = useRef<Quad | null>(null);
+  const lastQuadRef = useRef<Quad | null>(null);
+  const missesRef = useRef(0);
 
   // ---- Edit overlay (captured frame with adjustable corners) ----
   const editingSrcRef = useRef<string | null>(null);
@@ -161,6 +169,94 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     if (typeof window === 'undefined') return;
     loadOpenCV();
   }, []);
+
+  // ---- Live framing loop ----
+  // Runs jscanify on a small downscaled frame a few times a second (no heavy
+  // OpenCV fallback, no per-frame refinement), smooths the quad toward the
+  // previous one, and holds the last good frame briefly instead of flickering.
+  // The overlay mirrors exactly what capture-time detection will crop.
+  useEffect(() => {
+    if (!ready) return;
+    let disposed = false;
+    let running = false;
+    const FRAME_MS = 200;
+
+    async function runDetect() {
+      if (disposed || running || busyRef.current) return;
+      const video = videoRef.current;
+      if (!video || video.readyState < 2) return;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (!vw || !vh) return;
+      running = true;
+      const scale = Math.min(1, 640 / Math.max(vw, vh));
+      const dw = Math.max(1, Math.round(vw * scale));
+      const dh = Math.max(1, Math.round(vh * scale));
+      const raw = document.createElement('canvas');
+      raw.width = dw;
+      raw.height = dh;
+      const rctx = raw.getContext('2d', { willReadFrequently: true })!;
+      rctx.drawImage(video, 0, 0, dw, dh);
+      try {
+        const detectedQ = await detectQuadLive(raw, dw, dh);
+        if (disposed) return;
+        if (detectedQ) {
+          missesRef.current = 0;
+          const full = detectedQ.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad;
+          // Adaptive temporal smoothing: snap hard while the paper is moving so
+          // the frame tracks in real time, ease gently once it settles.
+          const prev = lastQuadRef.current;
+          let alpha = 0.7;
+          if (prev) {
+            let drift = 0;
+            for (let i = 0; i < 4; i++) {
+              drift += Math.hypot(full[i].x - prev[i].x, full[i].y - prev[i].y);
+            }
+            const diag = Math.hypot(vw, vh);
+            alpha = drift / 4 < diag * 0.008 ? 0.35 : drift / 4 < diag * 0.02 ? 0.6 : 1;
+          }
+          const smoothed: Quad = prev
+            ? orderQuad(full.map((p, i) => ({
+                x: prev[i].x * (1 - alpha) + p.x * alpha,
+                y: prev[i].y * (1 - alpha) + p.y * alpha,
+              })) as Quad)
+            : full;
+          quadRef.current = smoothed;
+          lastQuadRef.current = full;
+          setDetected(true);
+        } else {
+          // Transient miss: hold the last good frame briefly.
+          missesRef.current++;
+          if (lastQuadRef.current && missesRef.current <= 8) {
+            quadRef.current = lastQuadRef.current;
+          } else {
+            quadRef.current = null;
+            lastQuadRef.current = null;
+            setDetected(false);
+          }
+        }
+      } catch {
+        if (disposed) return;
+        missesRef.current++;
+        if (lastQuadRef.current && missesRef.current <= 8) {
+          quadRef.current = lastQuadRef.current;
+        } else {
+          quadRef.current = null;
+          lastQuadRef.current = null;
+          setDetected(false);
+        }
+      } finally {
+        running = false;
+      }
+    }
+
+    const id = window.setInterval(runDetect, FRAME_MS);
+    runDetect();
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+    };
+  }, [ready]);
 
   // ---- Re-run detection on a captured still ----
   // One-shot (not per-frame) so a reasonably high detect resolution is fine:
@@ -288,6 +384,11 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     const sw = video.videoWidth;
     const sh = video.videoHeight;
     if (!sw || !sh) return;
+    // Clear the live overlay so a fresh capture re-detects from scratch.
+    quadRef.current = null;
+    lastQuadRef.current = null;
+    missesRef.current = 0;
+    setDetected(false);
     setBusy(true);
     setProgressMsg('Detecting document...');
     try {
@@ -372,6 +473,10 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
       editingSrcRef.current = null;
       editingCanvasRef.current = null;
       editingQuadRef.current = null;
+      quadRef.current = null;
+      lastQuadRef.current = null;
+      missesRef.current = 0;
+      setDetected(false);
       setProgressMsg('');
     } catch {
       setError('Failed to process frame');
@@ -472,6 +577,11 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     editingSrcRef.current = null;
     editingCanvasRef.current = null;
     editingQuadRef.current = null;
+    // Start live framing fresh on the way back to the viewfinder.
+    quadRef.current = null;
+    lastQuadRef.current = null;
+    missesRef.current = 0;
+    setDetected(false);
   }, []);
 
   // ---- Auto-fix: re-detect the paper corners on the still frame ----
@@ -573,11 +683,11 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
     setBusy(false);
   }, [buildResult, pages.length]);
 
-  // ---- Live view: static framing guide ----
+  // ---- Live view: framing overlay (detected quad or fallback guide) ----
   useEffect(() => {
     if (!ready) return;
     let disposed = false;
-    function drawGuide() {
+    function drawOverlay() {
       if (disposed) return;
       const video = videoRef.current;
       const overlay = overlayRef.current;
@@ -593,35 +703,72 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
           ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
           ctx.clearRect(0, 0, cssW, cssH);
           const { scale, offX, offY } = fitRect(vw, vh, cssW, cssH);
-          // Default framing guide: inset rectangle with corner brackets.
-          const margin = Math.min(cssW, cssH) * 0.06;
-          const bx = offX + margin;
-          const by = offY + margin;
-          const bw = vw * scale - margin * 2;
-          const bh = vh * scale - margin * 2;
-          if (bw > 20 && bh > 20) {
-            const len = Math.min(cssW, cssH) * 0.09;
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.lineWidth = 3;
-            const corners: [number, number, number, number][] = [
-              [bx, by, 1, 1],
-              [bx + bw, by, -1, 1],
-              [bx + bw, by + bh, -1, -1],
-              [bx, by + bh, 1, -1],
-            ];
-            for (const [cx, cy, dx, dy] of corners) {
+          const quad = quadRef.current;
+          if (quad) {
+            const pts = quad.map(p => ({ x: offX + p.x * scale, y: offY + p.y * scale }));
+            // Dim everything OUTSIDE the document.
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+            ctx.beginPath();
+            ctx.rect(0, 0, cssW, cssH);
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.closePath();
+            ctx.fill('evenodd');
+            ctx.fillStyle = 'rgba(52, 211, 153, 0.08)';
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(52, 211, 153, 0.95)';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.setLineDash([]);
+            for (const p of pts) {
+              ctx.fillStyle = '#fff';
+              ctx.strokeStyle = '#34d399';
+              ctx.lineWidth = 2.5;
               ctx.beginPath();
-              ctx.moveTo(cx + dx * len, cy);
-              ctx.lineTo(cx, cy);
-              ctx.lineTo(cx, cy + dy * len);
+              ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+              ctx.fill();
               ctx.stroke();
+            }
+          } else {
+            // Default framing guide: inset rectangle with corner brackets.
+            const margin = Math.min(cssW, cssH) * 0.06;
+            const bx = offX + margin;
+            const by = offY + margin;
+            const bw = vw * scale - margin * 2;
+            const bh = vh * scale - margin * 2;
+            if (bw > 20 && bh > 20) {
+              const len = Math.min(cssW, cssH) * 0.09;
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+              ctx.lineWidth = 3;
+              const corners: [number, number, number, number][] = [
+                [bx, by, 1, 1],
+                [bx + bw, by, -1, 1],
+                [bx + bw, by + bh, -1, -1],
+                [bx, by + bh, 1, -1],
+              ];
+              for (const [cx, cy, dx, dy] of corners) {
+                ctx.beginPath();
+                ctx.moveTo(cx + dx * len, cy);
+                ctx.lineTo(cx, cy);
+                ctx.lineTo(cx, cy + dy * len);
+                ctx.stroke();
+              }
             }
           }
         }
       }
-      requestAnimationFrame(drawGuide);
+      requestAnimationFrame(drawOverlay);
     }
-    const id = requestAnimationFrame(drawGuide);
+    const id = requestAnimationFrame(drawOverlay);
     return () => {
       disposed = true;
       cancelAnimationFrame(id);
@@ -909,7 +1056,9 @@ export default function DocumentScanner({ onDone, onCancel, onResult, maxPages =
         {/* Instruction hint */}
         {ready && !error && pages.length === 0 && !progressMsg && (
           <div className="absolute bottom-28 left-1/2 -translate-x-1/2 text-white/80 text-[0.7rem] bg-black/50 px-3 py-1 rounded-lg whitespace-nowrap">
-            <i className="fas fa-hand-pointer mr-1"></i>Line up the document, then tap the shutter
+            {detected
+              ? <span className="text-qsis"><i className="fas fa-check-circle mr-1"></i>Document detected — tap to capture</span>
+              : <span><i className="fas fa-hand-pointer mr-1"></i>Line up the document, then tap the shutter</span>}
           </div>
         )}
 

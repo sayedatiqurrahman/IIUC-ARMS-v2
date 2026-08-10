@@ -965,20 +965,48 @@ export function applyScanFilter(canvas: HTMLCanvasElement, mode: ScanMode): HTML
   const d = imgData.data;
 
   if (mode === 'enhance') {
-    // Contrast stretch + slight saturation boost
-    let min = 255;
-    let max = 0;
+    // Percentile contrast stretch (2%–98%). Unlike a naive min/max stretch it
+    // can't be blown out by a single glint or dust spec, and it lifts faded
+    // pages without cooking the highlights.
+    const minDim = Math.min(w, h);
+    const hist = new Array(256).fill(0);
     for (let i = 0; i < d.length; i += 4) {
-      const lum = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
-      if (lum < min) min = lum;
-      if (lum > max) max = lum;
+      hist[(d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0]++;
     }
-    const range = max - min || 1;
-    const gain = 255 / range;
-    for (let i = 0; i < d.length; i += 4) {
-      d[i] = clamp255((d[i] - min) * gain);
-      d[i + 1] = clamp255((d[i + 1] - min) * gain);
-      d[i + 2] = clamp255((d[i + 2] - min) * gain);
+    const total = w * h;
+    let lo = 0;
+    let hi = 255;
+    let cum = 0;
+    for (let t = 0; t < 256; t++) {
+      cum += hist[t];
+      if (cum >= total * 0.02) { lo = t; break; }
+    }
+    cum = 0;
+    for (let t = 255; t >= 0; t--) {
+      cum += hist[t];
+      if (cum >= total * 0.02) { hi = t; break; }
+    }
+    if (hi - lo > 8) {
+      const gain = 255 / (hi - lo);
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = clamp255((d[i] - lo) * gain);
+        d[i + 1] = clamp255((d[i + 1] - lo) * gain);
+        d[i + 2] = clamp255((d[i + 2] - lo) * gain);
+      }
+    }
+    // Light unsharp mask: boosts local contrast so text edges and fine detail
+    // snap crisper after the perspective warp's interpolation softened them.
+    const gray: GrayImage = { w, h, data: new Uint8ClampedArray(w * h) };
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+      gray.data[p] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+    }
+    const blur = boxBlurGray(gray.data, w, h, Math.max(2, Math.round(minDim / 240)));
+    const amount = 1.2;
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+      const f = (gray.data[p] - blur[p]) * amount;
+      d[i] = clamp255(d[i] + f);
+      d[i + 1] = clamp255(d[i + 1] + f);
+      d[i + 2] = clamp255(d[i + 2] + f);
     }
   } else {
     // B&W: shadow-aware adaptive binarization (see binarizeGray).
