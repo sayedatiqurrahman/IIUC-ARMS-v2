@@ -182,34 +182,46 @@ export async function POST(req: NextRequest) {
 
     // ─── DELETE ───
     if (action === 'delete') {
-      const sha = await getFileSha(token, fromFull, branch);
-      if (!sha) return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      // The Contents API returns an ARRAY for a directory and an OBJECT for a
+      // file. getFileSha() returned null for folders → the old 404 bug.
+      const contentsRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${fromFull}?ref=${branch}`, { headers: ghHeaders(token) });
+      if (!contentsRes.ok) {
+        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      }
+      const contents = await contentsRes.json();
+
+      let isFolder = false;
+      let fileCount = 0;
+      if (Array.isArray(contents)) {
+        isFolder = true;
+        fileCount = contents.length;
+      } else if (!contents || contents.type !== 'file') {
+        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      }
 
       const isAdmin = isOwner || effectiveRole === 'admin' || effectiveRole === 'manager';
 
-      // OWNER / ADMIN: direct delete, no confirmation
+      // OWNER / ADMIN: direct atomic delete (single tree commit via the bot)
       if (isAdmin) {
-        const folderFiles = await getAllFilesInFolder(token, fromFull, branch);
-        if (folderFiles.length > 0) {
-          let deleted = 0;
-          for (const f of [...folderFiles].reverse()) {
-            const ok = await deleteFile(token, f.path, `Delete ${f.path.split('/').pop()}`, branch, f.sha);
-            if (ok) deleted++;
-          }
-          try { await prisma.activityLog.create({ data: { action: 'file_delete', userId: email, userName: profile?.name || email.split('@')[0], details: JSON.stringify({ path: from, filesDeleted: deleted, isFolder: true }) } }); } catch {}
-          return NextResponse.json({ success: true, deleted, isFolder: true });
-        }
-        const ok = await deleteFile(token, fromFull, `Delete ${from.split('/').pop()}`, branch, sha);
-        if (!ok) return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
-        try { await prisma.activityLog.create({ data: { action: 'file_delete', userId: email, userName: profile?.name || email.split('@')[0], details: JSON.stringify({ path: from }) } }); } catch {}
-        return NextResponse.json({ success: true });
+        const { deleteRepoEntries } = await import('@/lib/file-delete');
+        const deleted = await deleteRepoEntries([fromFull], token);
+        if (deleted === 0) return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
+        try {
+          await prisma.activityLog.create({
+            data: {
+              action: 'file_delete',
+              userId: email,
+              userName: profile?.name || email.split('@')[0],
+              details: JSON.stringify({ path: from, filesDeleted: deleted, isFolder }),
+            },
+          });
+        } catch {}
+        return NextResponse.json({ success: true, deleted, isFolder });
       }
 
       // NON-ADMIN: send Telegram approval request to all connected admins
       const requesterName = profile?.name || email.split('@')[0];
       const filePathDisplay = from;
-      const fileCount = (await getAllFilesInFolder(token, fromFull, branch)).length || 1;
-      const isFolder = fileCount > 1;
 
       // 1. Store pending request in activity log
       let activityId = '';
@@ -219,7 +231,7 @@ export async function POST(req: NextRequest) {
             action: 'file_delete_request',
             userId: email,
             userName: requesterName,
-            details: JSON.stringify({ path: from, fileCount, isFolder, status: 'pending_approval' }),
+            details: JSON.stringify({ path: from, name: from.split('/').pop(), fileCount, isFolder, status: 'pending_approval', messages: [] }),
           },
         });
         activityId = logEntry.id;
@@ -256,29 +268,34 @@ export async function POST(req: NextRequest) {
         `Approve or reject this deletion:`,
       ].join('\n');
 
+      const sentMessages: { chatId: number; messageId: number }[] = [];
       for (const chatId of approverChatIds) {
         try {
-          await sendMessageWithButtons(chatId, tgMsg, [
+          const res = await sendMessageWithButtons(chatId, tgMsg, [
             [
               ...(activityId ? [{ text: '✅ Confirm Delete', callback_data: delFileConfirmData(activityId) }] : []),
               ...(activityId ? [{ text: '❌ Reject', callback_data: delFileRejectData(activityId) }] : []),
             ],
             [{ text: '📂 Visit Directory', url: browseLink }],
           ]);
+          const data = await res.json().catch(() => ({}));
+          if (data?.ok && data?.result?.message_id) {
+            sentMessages.push({ chatId, messageId: data.result.message_id });
+          }
         } catch {}
       }
 
-      // 3. Log the request
-      try {
-        await prisma.activityLog.create({
-          data: {
-            action: 'delete_request',
-            userId: email,
-            userName: requesterName,
-            details: JSON.stringify({ path: from, fileCount, isFolder, status: 'pending_approval' }),
-          },
-        });
-      } catch {}
+      // Record sent Telegram messages so admin-panel approval can update them
+      if (activityId && sentMessages.length > 0) {
+        try {
+          await prisma.activityLog.update({
+            where: { id: activityId },
+            data: {
+              details: JSON.stringify({ path: from, name: from.split('/').pop(), fileCount, isFolder, status: 'pending_approval', messages: sentMessages }),
+            },
+          });
+        } catch {}
+      }
 
       return NextResponse.json({
         success: false,

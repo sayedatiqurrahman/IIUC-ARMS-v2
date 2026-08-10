@@ -13,11 +13,15 @@ import type { CourseGroup, FileWithMeta, Link, UploadModalProps } from '@/compon
 import DocumentScanner, { type CapturedPage } from '@/components/scanner/DocumentScanner';
 import { compressUploadFile } from '@/lib/compress';
 import { buildSearchablePdf } from '@/lib/ocr';
-import { uploadFilesToGitHub, type ClientUploadFile } from '@/lib/gh-upload-client';
 
-// Files over this size are uploaded straight from the browser to GitHub
-// (client-side, chunk by chunk). Smaller files use the existing server route.
-const CHUNK_BYTES = 0.6 * 1024 * 1024;
+// Files are ALWAYS uploaded from the browser to our backend, which stores the
+// chunks (staging) and commits them to GitHub in one atomic commit. There is no
+// browser → GitHub direct path, so a user's PAT never leaves the server and the
+// bytes are verified before the commit.
+// CHUNK_BYTES is an INTEGER (629145) — float slice boundaries (629145.6) round
+// differently across browsers/Blob.slice() and were the historical cause of
+// files landing truncated exactly at a chunk boundary.
+const CHUNK_BYTES = Math.floor(0.6 * 1024 * 1024);
 
 export interface UploadProgress {
   percent: number;
@@ -503,7 +507,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     uploads: { course: CourseGroup; files: { path: string; meta: FileWithMeta }[]; readmePath: string }[],
     totalBytes: number,
     message: string,
-    token: string
+    token: string,
+    sizes?: Record<string, number>
   ): Promise<any> {
     const sessionId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
       ? crypto.randomUUID()
@@ -550,61 +555,9 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const res = await fetch('/api/github/upload-finalize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, message, githubToken: token || undefined }),
+      body: JSON.stringify({ sessionId, message, githubToken: token || undefined, sizes }),
     });
     return readUploadResponse(res);
-  }
-
-  // Client-side (browser → GitHub API directly) upload for chunked files.
-  // Bytes never touch the Vercel server or the database.
-  async function clientChunkedUpload(
-    uploads: { course: CourseGroup; files: { path: string; meta: FileWithMeta }[]; readmePath: string }[],
-    message: string,
-    tokenData: { token: string; directCommit?: boolean }
-  ): Promise<any> {
-    const files: ClientUploadFile[] = [];
-    for (const u of uploads) {
-      for (const f of u.files) {
-        files.push({ path: `${config.uploadPath}/${f.path}`, file: f.meta.file });
-      }
-      if (u.readmePath) {
-        files.push({ path: `${config.uploadPath}/${u.readmePath}`, text: linksToReadmeContent(u.course.links) });
-      }
-    }
-
-    const result = await uploadFilesToGitHub({
-      token: tokenData.token,
-      owner: config.owner,
-      repo: config.repo,
-      directCommit: !!tokenData.directCommit,
-      files,
-      message,
-      onProgress: (percent, label) => setUploadProgress({ percent, label }),
-    });
-
-    if (result.success) {
-      try {
-        await fetch('/api/github/log-activity', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ files: files.map(f => f.path), prUrl: result.pr?.url || null }),
-        });
-      } catch {}
-
-      // Auto-merge contributor PRs with the app bot (best effort).
-      if (result.pr && result.pr.number && !result.direct) {
-        try {
-          const mres = await fetch('/api/github/merge-pr', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prNumber: result.pr.number }),
-          });
-          const mdata = await mres.json().catch(() => ({}));
-          if (result.pr) result.pr.merged = mdata.merged === true;
-        } catch {}
-      }
-    }
-    return result;
   }
 
   async function doUpload(tokenOverride?: string) {
@@ -620,34 +573,39 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         return { course, files: built.files, readmePath: built.readmePath };
       });
 
+      // Expected sizes per relative path — the server verifies each assembled
+      // file matches this byte count before committing, so a truncated upload
+      // can never reach GitHub.
+      const sizes: Record<string, number> = {};
+      for (const u of uploads) {
+        for (const f of u.files) sizes[f.path] = f.meta.file.size;
+        if (u.readmePath) sizes[u.readmePath] = new Blob([linksToReadmeContent(u.course.links)]).size;
+      }
+
       const allFiles = uploads.flatMap(u => u.files);
       const totalBytes = allFiles.reduce((sum, f) => sum + f.meta.file.size, 0);
       const needsChunking = totalBytes > 0 && (allFiles.some(f => f.meta.file.size > CHUNK_BYTES) || totalBytes > CHUNK_BYTES * 2);
 
+      // Browser-safe token from the server: PAT / NextAuth session / short-lived
+      // App bot token. We only use this for the AUTH_REQUIRED UX — the actual
+      // commit always happens server-side, so the secret never reaches the browser.
+      const tokenRes = await fetch('/api/github/upload-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubToken: token || undefined }),
+      });
+      const tokenData = await tokenRes.json().catch(() => ({}));
+      if (!tokenRes.ok || tokenData.error) {
+        if (tokenData.code === 'AUTH_REQUIRED') {
+          setResult({ success: false, error: tokenData.error, tokenExpired: true });
+          return;
+        }
+        throw new Error(tokenData.error || 'Failed to prepare upload');
+      }
+
       let data: any;
       if (needsChunking) {
-        // Browser-safe token from the server: PAT / NextAuth session / short-lived
-        // App bot token. When only the server-level GITHUB_TOKEN env secret exists,
-        // the server returns needsServer and we fall back to the server-side chunked
-        // path so the secret never reaches the browser.
-        const tokenRes = await fetch('/api/github/upload-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ githubToken: token || undefined }),
-        });
-        const tokenData = await tokenRes.json().catch(() => ({}));
-        if (!tokenRes.ok || tokenData.error) {
-          if (tokenData.code === 'AUTH_REQUIRED') {
-            setResult({ success: false, error: tokenData.error, tokenExpired: true });
-            return;
-          }
-          throw new Error(tokenData.error || 'Failed to prepare upload');
-        }
-        if (tokenData.needsServer) {
-          data = await uploadChunked(uploads, totalBytes, message, token);
-        } else {
-          data = await clientChunkedUpload(uploads, message, tokenData);
-        }
+        data = await uploadChunked(uploads, totalBytes, message, token, sizes);
       } else {
         const formData = new FormData();
         for (const u of uploads) {
@@ -659,6 +617,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           }
         }
         formData.append('message', message);
+        formData.append('sizes', JSON.stringify(sizes));
         if (token) formData.append('githubToken', token);
 
         setUploadProgress({ percent: 40, label: 'Uploading to GitHub...' });

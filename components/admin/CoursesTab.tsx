@@ -28,6 +28,8 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
   const [showMyCourses, setShowMyCourses] = useState(false);
   const [deleteRequests, setDeleteRequests] = useState<any[]>([]);
   const [handlingRequest, setHandlingRequest] = useState<string | null>(null);
+  const [fileDeleteRequests, setFileDeleteRequests] = useState<any[]>([]);
+  const [handlingFileRequest, setHandlingFileRequest] = useState<string | null>(null);
 
   const courses = getSemesterCourses(selectedSem, selectedDept);
   const myEmail = (profile?.email || '').toLowerCase();
@@ -94,6 +96,38 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       } catch {}
     })();
   }, [tree]);
+
+  // Fetch pending file-delete requests (files/folders awaiting admin approval)
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/github/file-delete-requests');
+        const data = await res.json();
+        if (data.success) setFileDeleteRequests(data.requests || []);
+      } catch {}
+    })();
+  }, [tree]);
+
+  async function handleFileDeleteRequest(id: string, action: 'approve' | 'reject') {
+    setHandlingFileRequest(id);
+    try {
+      const res = await fetch('/api/github/file-delete-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setFileDeleteRequests(prev => prev.filter(r => r.id !== id));
+      useAppStore.getState().invalidateTreeCache();
+      await loadTree();
+    } catch (e: any) {
+      alert(e.message);
+      await fetch('/api/github/file-delete-requests').then(r => r.json()).then(d => { if (d.success) setFileDeleteRequests(d.requests || []); }).catch(() => {});
+    } finally {
+      setHandlingFileRequest(null);
+    }
+  }
 
   async function handleDeleteRequest(id: string, action: 'approve' | 'reject') {
     setHandlingRequest(id);
@@ -217,6 +251,42 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
                     {handlingRequest === r.id ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-trash mr-1"></i>Approve Delete</>}
                   </button>
                   <button onClick={() => handleDeleteRequest(r.id, 'reject')} disabled={handlingRequest === r.id}
+                    className="px-3 py-1.5 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.7rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2 disabled:opacity-50">
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pending file-delete requests (files/folders awaiting admin approval) */}
+      {canDelete && fileDeleteRequests.length > 0 && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/5 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 border-b border-red-500/20">
+            <i className="fas fa-trash text-red-400"></i>
+            <h4 className="text-[0.78rem] font-semibold text-red-300">Pending File Delete Requests ({fileDeleteRequests.length})</h4>
+          </div>
+          <div className="divide-y divide-dark-border/60">
+            {fileDeleteRequests.map(r => (
+              <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[0.8rem] text-dark-text truncate">
+                    <i className={`${r.details.isFolder ? 'fas fa-folder text-yellow-400' : 'fas fa-file-pdf text-red-400'} mr-1.5`}></i>
+                    <span className="font-mono font-bold text-red-300">{r.details.name || (r.details.path || '').split('/').pop()}</span>
+                    {r.details.isFolder ? ` (folder)` : ''}
+                  </p>
+                  <p className="text-[0.65rem] text-dark-text3 truncate">
+                    <code>{r.details.path || ''}</code> · requested by {r.userName || r.userId || '?'}
+                  </p>
+                </div>
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <button onClick={() => handleFileDeleteRequest(r.id, 'approve')} disabled={handlingFileRequest === r.id}
+                    className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-[0.7rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
+                    {handlingFileRequest === r.id ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-trash mr-1"></i>Approve Delete</>}
+                  </button>
+                  <button onClick={() => handleFileDeleteRequest(r.id, 'reject')} disabled={handlingFileRequest === r.id}
                     className="px-3 py-1.5 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.7rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2 disabled:opacity-50">
                     Reject
                   </button>

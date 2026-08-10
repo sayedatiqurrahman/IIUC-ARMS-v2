@@ -125,6 +125,18 @@ async function compressPdf(file: File): Promise<File | null> {
 
   const blob = out.output('blob');
   if (blob.size >= file.size) return null;
+  if (blob.size < 1024) return null;
+
+  // Gate: the rebuilt PDF must re-parse cleanly with the same page count as the
+  // original. If it fails to load, has no pages, or lost/gained pages, we keep
+  // the original untouched — compression must never harm the file.
+  try {
+    const check = await pdfjs.getDocument({ data: await blob.arrayBuffer() }).promise;
+    if (!check.numPages || check.numPages !== pdf.numPages) return null;
+  } catch {
+    return null;
+  }
+
   return new File([blob], file.name, { type: 'application/pdf' });
 }
 

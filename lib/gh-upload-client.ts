@@ -103,6 +103,7 @@ function textToBase64(text: string): string {
 // encoded string in memory twice.
 async function fileToBase64(file: File, onSlice?: (percent: number) => void): Promise<string> {
   let result = '';
+  let readBytes = 0;
   const total = file.size || 1;
   for (let offset = 0; offset < file.size; offset += SLICE_BYTES) {
     const slice = file.slice(offset, Math.min(file.size, offset + SLICE_BYTES));
@@ -113,7 +114,13 @@ async function fileToBase64(file: File, onSlice?: (percent: number) => void): Pr
       reader.readAsDataURL(slice);
     });
     result += dataUrl.slice(dataUrl.indexOf(',') + 1);
+    readBytes += slice.size;
     onSlice?.(Math.min(100, Math.round((offset + slice.size) / total * 100)));
+  }
+  // Integrity guard: if the browser read back fewer bytes than the blob claims
+  // (can happen with odd streams), abort instead of committing a truncated file.
+  if (readBytes !== file.size) {
+    throw new Error(`Failed to read entire file (${readBytes}/${file.size} bytes). Please re-select the file.`);
   }
   return result;
 }

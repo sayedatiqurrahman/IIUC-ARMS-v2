@@ -1,7 +1,7 @@
 'use client';
 
-import { detectQuadOpenCV, isOpenCVReady, loadOpenCV } from './opencv-detect';
-import { detectQuadJscanify } from './jscanify-detect';
+import { detectQuadOpenCV } from './opencv-detect';
+import { detectQuadJscanify, extractPaperJscanify } from './jscanify-detect';
 import {
   detectQuadOnCanvas,
   orderQuad,
@@ -12,51 +12,8 @@ import {
   type ScanMode,
   type ProcessFrameResult,
   type GrayImage,
+  type Point,
 } from './image-utils';
-
-type CornerPoints = {
-  topLeft: { x: number; y: number };
-  topRight: { x: number; y: number };
-  bottomRight: { x: number; y: number };
-  bottomLeft: { x: number; y: number };
-};
-
-type ScanicModule = {
-  scanDocument: (
-    image: HTMLCanvasElement | HTMLImageElement | ImageData,
-    options?: Record<string, any>
-  ) => Promise<{ success: boolean; corners: CornerPoints | null; message?: string }>;
-  extractDocument: (
-    image: HTMLCanvasElement | HTMLImageElement | ImageData,
-    corners: CornerPoints,
-    options?: { output?: 'canvas' | 'imagedata' | 'dataurl' }
-  ) => Promise<{ success: boolean; output?: any; message?: string }>;
-};
-
-let scanicPromise: Promise<ScanicModule | null> | null = null;
-
-function loadScanic(): Promise<ScanicModule | null> {
-  if (typeof window === 'undefined') return Promise.resolve(null);
-  if (!scanicPromise) {
-    scanicPromise = import('scanic')
-      .then((m) => m as unknown as ScanicModule)
-      .catch(() => null);
-  }
-  return scanicPromise;
-}
-
-function cornersToQuad(c: CornerPoints): Quad {
-  return orderQuad([
-    { x: c.topLeft.x, y: c.topLeft.y },
-    { x: c.topRight.x, y: c.topRight.y },
-    { x: c.bottomRight.x, y: c.bottomRight.y },
-    { x: c.bottomLeft.x, y: c.bottomLeft.y },
-  ]);
-}
-
-function quadToCorners(q: Quad): CornerPoints {
-  return { topLeft: q[0], topRight: q[1], bottomRight: q[2], bottomLeft: q[3] };
-}
 
 // Sanity-check a detected quad so a garbage region (background blob, sliver of
 // an edge, half the frame) is rejected instead of being used for the crop.
@@ -96,71 +53,52 @@ function quadValid(q: Quad, w: number, h: number): boolean {
 // Detect a document quad in the given canvas's own pixel space. jscanify's
 // Canny -> Otsu -> largest-contour corner finder is the PRIMARY detector (the
 // user's papers are found reliably by it, where the OpenCV multi-path misses
-// them). Its corners are validated and snapped onto the paper edges with a
-// per-side line fit. OpenCV is the fallback when jscanify finds nothing or its
-// quad fails validation. `prev` is the previous frame's quad in the same space
-// and acts as a tracking prior so the live frame sticks to the paper. The
-// built-in CV and Scanic's WASM detector are the last-resort fallbacks.
+// them), so it runs alone and wins immediately. OpenCV's heavier multi-path is
+// only paid for when jscanify finds nothing or its quad fails validation; the
+// built-in pure-JS detector is the last resort. `prev` is a previous quad in
+// the same space and acts as a tracking prior for the OpenCV fallback.
 export async function detectQuadSmart(
   canvas: HTMLCanvasElement,
   previewW: number,
   previewH: number,
   prev?: Quad | null
 ): Promise<Quad | null> {
-  // OpenCV.js is a ~13MB wasm download. Until it has initialized, don't block
-  // auto-framing on it: kick off the (cached) download in the background and
-  // return an instant pure-JS quad instead. Once the wasm is ready the heavy
-  // detectors below take over, so the framing simply gets more precise.
-  if (!isOpenCVReady()) {
-    loadOpenCV();
-    return detectQuadOnCanvas(canvas, previewW, previewH);
-  }
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  const img = ctx.getImageData(0, 0, previewW, previewH);
+  const frame = { data: img.data, w: previewW, h: previewH };
   const tol = Math.max(8, Math.min(previewW, previewH) * 0.05);
+
+  // jscanify first, and alone — no point paying for the parallel OpenCV scan
+  // when the authoritative detector already found the paper.
   try {
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (ctx) {
-      const img = ctx.getImageData(0, 0, previewW, previewH);
-      const frame = { data: img.data, w: previewW, h: previewH };
-      const [js, ocv] = await Promise.all([
-        detectQuadJscanify(frame),
-        detectQuadOpenCV(frame, prev),
-      ]);
-      if (js) {
-        const q = refineQuadCorners({ data: frame.data, w: previewW, h: previewH } as GrayImage, js);
-        const maxShift = Math.max(...q.map((p, i) => Math.hypot(p.x - js[i].x, p.y - js[i].y)));
-        if (maxShift <= tol && quadValid(q, previewW, previewH)) return q;
-        if (quadValid(js, previewW, previewH)) return js;
-      }
-      if (ocv) return ocv;
+    const js = await detectQuadJscanify(frame);
+    if (js) {
+      const q = refineQuadCorners({ data: frame.data, w: previewW, h: previewH } as GrayImage, js);
+      const maxShift = Math.max(...q.map((p, i) => Math.hypot(p.x - js[i].x, p.y - js[i].y)));
+      if (maxShift <= tol && quadValid(q, previewW, previewH)) return q;
+      if (quadValid(js, previewW, previewH)) return js;
     }
+  } catch {
+    // fall through to the fallbacks
+  }
+
+  try {
+    const ocv = await detectQuadOpenCV(frame, prev);
+    if (ocv) return ocv;
   } catch {
     // fall through to the built-in detector
   }
 
-  const cv = detectQuadOnCanvas(canvas, previewW, previewH);
-  if (cv) return cv;
-
-  const scanic = await loadScanic();
-  if (scanic) {
-    try {
-      const res = await scanic.scanDocument(canvas, { mode: 'detect', maxProcessingDimension: 800 });
-      if (res.success && res.corners) {
-        const q = cornersToQuad(res.corners);
-        if (q.length === 4 && quadValid(q, canvas.width, canvas.height)) return q;
-      }
-    } catch {
-      // ignore
-    }
-  }
-  return null;
+  return detectQuadOnCanvas(canvas, previewW, previewH);
 }
 
 // Snap a quad (in the canvas's own pixel space) onto the real paper edges at
-// (optionally) a higher resolution than the coarse 640px detect pass. Detection
-// runs downscaled for speed, so upscaling its quad loses corner precision;
-// re-fitting the edge lines against this (usually full-res) gray fixes that.
-// `maxDim` bounds the refinement size (Infinity = native resolution). Returns
-// the original quad if refinement moves a corner implausibly far.
+// (optionally) a higher resolution than the coarse detect pass. Detection runs
+// downscaled for speed, so upscaling its quad loses corner precision; re-fitting
+// the edge lines against this (usually full-res) gray fixes that. `maxDim`
+// bounds the refinement size (Infinity = native resolution). Returns the
+// original quad if refinement moves a corner implausibly far.
 export function refineQuadOnCanvas(
   canvas: HTMLCanvasElement,
   quad: Quad,
@@ -192,24 +130,32 @@ export function refineQuadOnCanvas(
   return orderQuad(refined.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad);
 }
 
-// Perspective-correct a canvas using a quad in the canvas's pixel space.
-// Returns a processed (warped + scan filter applied) canvas.
+// Output dimensions for a document crop derived from the quad itself (the
+// average of opposite side lengths), capped so the page is never upscaled past
+// the source pixels or beyond `maxDim`.
+function quadOutputSize(quad: Quad, maxDim: number): { w: number; h: number } {
+  const dist = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
+  const w = (dist(quad[0], quad[1]) + dist(quad[3], quad[2])) / 2;
+  const h = (dist(quad[0], quad[3]) + dist(quad[1], quad[2])) / 2;
+  const scale = Math.min(1, maxDim / Math.max(1, Math.max(w, h)));
+  return { w: Math.max(2, Math.round(w * scale)), h: Math.max(2, Math.round(h * scale)) };
+}
+
+// Separate a document from its background and apply the scan filter. jscanify's
+// extractPaper does the warp with a true perspective transform sized to the
+// document's own aspect ratio; the pure-canvas mesh warp is the fallback.
 export async function processFrameSmart(
   source: HTMLCanvasElement,
   quad: Quad | null,
   mode: ScanMode,
   maxDim: number
 ): Promise<ProcessFrameResult> {
-  const scanic = await loadScanic();
-  if (scanic && quad) {
-    try {
-      const res = await scanic.extractDocument(source, quadToCorners(quad), { output: 'canvas' });
-      if (res.success && res.output instanceof HTMLCanvasElement && res.output.width > 0) {
-        const warped = applyScanFilter(res.output, mode);
-        return { canvas: warped, width: warped.width, height: warped.height, usedQuad: true };
-      }
-    } catch {
-      // fall through
+  if (quad) {
+    const { w, h } = quadOutputSize(quad, maxDim);
+    const warped = await extractPaperJscanify(source, orderQuad(quad), w, h);
+    if (warped && warped.width > 0 && warped.height > 0) {
+      const final = applyScanFilter(warped, mode);
+      return { canvas: final, width: final.width, height: final.height, usedQuad: true };
     }
   }
   return processFrame(source, quad, mode, maxDim);

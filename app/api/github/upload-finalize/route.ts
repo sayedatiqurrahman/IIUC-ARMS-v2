@@ -23,6 +23,11 @@ export async function POST(req: NextRequest) {
     const sessionId = String(body.sessionId || '').trim();
     const message = String(body.message || '');
     const githubToken = typeof body.githubToken === 'string' ? body.githubToken : '';
+    // Expected byte count per relative path, sent by the client. We reject any
+    // assembled file whose byte count does not match, so a truncated/chunked
+    // upload can never reach GitHub as a corrupt file.
+    const expectedSizes: Record<string, number> =
+      body.sizes && typeof body.sizes === 'object' ? body.sizes : {};
 
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
@@ -60,7 +65,17 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: `Incomplete upload for ${path}` }, { status: 400 });
         }
       }
-      files.push({ path, content: Buffer.concat(group.chunks.map(c => c.data)).toString('base64') });
+      const assembled = Buffer.concat(group.chunks.map(c => c.data));
+      if (typeof expectedSizes[path] === 'number') {
+        const expected = expectedSizes[path];
+        if (expected <= 0 || assembled.length !== expected) {
+          return NextResponse.json(
+            { error: `Corrupt upload rejected for ${path}: expected ${expected} bytes but got ${assembled.length}. Please re-upload this file.` },
+            { status: 400 }
+          );
+        }
+      }
+      files.push({ path, content: assembled.toString('base64') });
     }
 
     if (files.length > config.maxFilesPerUpload) {

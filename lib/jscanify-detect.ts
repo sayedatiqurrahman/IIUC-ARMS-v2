@@ -4,11 +4,12 @@
 //
 // jscanify's client build (src/jscanify.js) is a browser-only UMD that speaks
 // the global `cv` OpenCV.js binding. Its pipeline is intentionally simple:
-// Canny -> Otsu -> largest contour -> farthest-point-per-quadrant corners. That
-// is a *different* signal from our multi-path A/B/C/D + line-fit refinement in
-// opencv-detect.ts, so we run it as a second opinion: when both detectors agree
-// the OpenCV quad is confirmed; when OpenCV misses the paper (e.g. a low-contrast
-// sheet that Otsu still segments), jscanify rescues the frame.
+// Canny -> Otsu -> largest contour -> farthest-point-per-quadrant corners. It
+// finds the user's papers more reliably than the heavier multi-path pipeline in
+// opencv-detect.ts, so it is the PRIMARY detector AND the one doing the actual
+// crop: extractPaper warps the page out of the background with a true
+// perspective transform. OpenCV.js is the shared engine beneath both (same wasm
+// build, loaded once and cached).
 //
 // It never touches the node `canvas`/`jsdom` deps of the package entry point;
 // only the client subpath (`jscanify/client`) is imported, keeping it out of the
@@ -25,9 +26,24 @@ type JsCorners = {
   bottomLeftCorner: JsCorner;
 };
 
+// jscanify's extractPaper takes explicit corners in its own ordering
+// (top-left, top-right, bottom-left, bottom-right).
+type JsCornerPoints = {
+  topLeftCorner: { x: number; y: number };
+  topRightCorner: { x: number; y: number };
+  bottomLeftCorner: { x: number; y: number };
+  bottomRightCorner: { x: number; y: number };
+};
+
 interface JScanifyInstance {
   findPaperContour: (img: any) => any | null;
   getCornerPoints: (contour: any) => JsCorners;
+  extractPaper: (
+    image: HTMLCanvasElement | HTMLImageElement,
+    resultWidth: number,
+    resultHeight: number,
+    cornerPoints?: JsCornerPoints
+  ) => HTMLCanvasElement | null;
 }
 
 type JScanifyCtor = new () => JScanifyInstance;
@@ -102,5 +118,43 @@ export async function detectQuadJscanify(
     if (contour) contour.delete();
     gray.delete();
     src.delete();
+  }
+}
+
+// Warp a document out of the background using jscanify's own extraction pass
+// (perspective transform driven by the given corners). `corners` is an ordered
+// Quad (TL, TR, BR, BL) in the source's pixel space. Returns a canvas of the
+// straightened page, or null when the engine is unavailable.
+export async function extractPaperJscanify(
+  source: HTMLCanvasElement | HTMLImageElement,
+  corners: Quad,
+  outW: number,
+  outH: number
+): Promise<HTMLCanvasElement | null> {
+  if (typeof window === 'undefined') return null;
+  const cv = await loadOpenCV();
+  if (!cv) return null;
+  const ctor = await loadJscanify();
+  if (!ctor) return null;
+
+  exposeGlobalCV(cv);
+
+  const [tl, tr, br, bl] = corners;
+  try {
+    const instance = new ctor();
+    const result = instance.extractPaper(
+      source,
+      Math.max(2, Math.round(outW)),
+      Math.max(2, Math.round(outH)),
+      {
+        topLeftCorner: tl,
+        topRightCorner: tr,
+        bottomLeftCorner: bl,
+        bottomRightCorner: br,
+      }
+    );
+    return result instanceof HTMLCanvasElement ? result : null;
+  } catch {
+    return null;
   }
 }

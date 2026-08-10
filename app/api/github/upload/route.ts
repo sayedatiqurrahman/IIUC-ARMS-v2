@@ -22,6 +22,14 @@ export async function POST(req: NextRequest) {
       message = formData.get('message') as string || '';
       bodyToken = formData.get('githubToken') as string || '';
 
+      // Expected byte count per path — any mismatch means the multipart body was
+      // truncated somewhere, so we reject before the file reaches GitHub.
+      let expectedSizes: Record<string, number> = {};
+      try {
+        const raw = formData.get('sizes');
+        if (typeof raw === 'string' && raw) expectedSizes = JSON.parse(raw);
+      } catch {}
+
       // Extract files — each entry's filename is the full upload path
       const entries = Array.from(formData.entries());
       for (const [key, value] of entries) {
@@ -31,12 +39,6 @@ export async function POST(req: NextRequest) {
         const filePath = value.name; // filename was set to the full path by the client
         if (!filePath) continue;
 
-        const arrayBuf = await value.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuf);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-        const base64 = btoa(binary);
-
         // Strip the config.uploadPath prefix — the client already sends the full path
         // but the GitHub API calls below prepend it again, so store relative to uploadPath
         const relPath = filePath.startsWith(`${config.uploadPath}/`) ? filePath.slice(`${config.uploadPath}/`.length) : filePath;
@@ -45,7 +47,20 @@ export async function POST(req: NextRequest) {
         } catch {
           return NextResponse.json({ error: `Invalid file path: ${relPath}` }, { status: 400 });
         }
-        files.push({ path: relPath, content: base64 });
+
+        const arrayBuf = await value.arrayBuffer();
+        const bytes = Buffer.from(arrayBuf);
+        if (typeof expectedSizes[relPath] === 'number') {
+          const expected = expectedSizes[relPath];
+          if (expected <= 0 || bytes.length !== expected) {
+            return NextResponse.json(
+              { error: `Corrupt upload rejected for ${relPath}: expected ${expected} bytes but got ${bytes.length}. Please re-upload this file.` },
+              { status: 400 }
+            );
+          }
+        }
+
+        files.push({ path: relPath, content: bytes.toString('base64') });
       }
     } else {
       // Fallback: legacy JSON body (for any old clients or testing)

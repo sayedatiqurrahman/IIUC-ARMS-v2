@@ -139,6 +139,22 @@ export async function commitUpload(ctx: UploadContext, files: FileToCommit[], me
     validateRepoPath(f.path, false);
   }
 
+  // Corruption gate: a PDF that was truncated mid-upload can never reach
+  // GitHub. Every assembled PDF must start with the %PDF- header and end with
+  // the %%EOF marker, or the whole upload is rejected (nothing is committed).
+  for (const f of files) {
+    if (!f.path.toLowerCase().endsWith('.pdf')) continue;
+    const buf = Buffer.from(f.content, 'base64');
+    if (buf.length < 16) {
+      return { success: false, error: `"${f.path.split('/').pop()}" is an empty/invalid PDF — upload the original file again.`, status: 400 };
+    }
+    const head = buf.subarray(0, 1024).toString('latin1');
+    const tail = buf.subarray(Math.max(0, buf.length - 2048)).toString('latin1');
+    if (!head.includes('%PDF-') || !tail.includes('%%EOF')) {
+      return { success: false, error: `"${f.path.split('/').pop()}" looks corrupt (truncated during upload) — please re-upload it.`, status: 400 };
+    }
+  }
+
   const fullFiles = files.map(f => ({ ...f, path: `${config.uploadPath}/${f.path}` }));
   const commitMessage = `Add ${fullFiles.map(f => f.path).join(', ')}`;
 

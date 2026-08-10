@@ -1238,50 +1238,8 @@ async function handleCallbackQuery(cq: any) {
       let githubDeleted = 0;
 
       try {
-        const botToken = await getAppBotToken();
-        if (botToken) {
-          const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(botToken) });
-          if (refRes.ok) {
-            const refData = await refRes.json();
-            const baseCommitSha = refData.object.sha;
-            const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(botToken) });
-            if (commitRes.ok) {
-              const commitData = await commitRes.json();
-              const baseTreeSha = commitData.tree.sha;
-              const fullTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(botToken) });
-              if (fullTreeRes.ok) {
-                const fullTreeData = await fullTreeRes.json();
-                const deletePaths = new Set((fullTreeData.tree || []).filter((item: any) => item.path.startsWith(fromFull + '/') || item.path === fromFull).map((item: any) => item.path));
-                const keepItems = (fullTreeData.tree || []).filter((item: any) => !deletePaths.has(item.path));
-                if (keepItems.length > 0 && deletePaths.size > 0) {
-                  const treeItems = keepItems.map((item: any) => ({
-                    path: item.path, mode: item.mode, type: item.type,
-                    sha: item.type === 'blob' ? item.sha : undefined,
-                  }));
-                  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
-                    method: 'POST', headers: ghHeaders(botToken),
-                    body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems }),
-                  });
-                  if (treeRes.ok) {
-                    const treeData = await treeRes.json();
-                    const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
-                      method: 'POST', headers: ghHeaders(botToken),
-                      body: JSON.stringify({ message: `Delete: ${filePath}`, tree: treeData.sha, parents: [baseCommitSha] }),
-                    });
-                    if (newCommitRes.ok) {
-                      const newCommitData = await newCommitRes.json();
-                      await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
-                        method: 'PATCH', headers: ghHeaders(botToken),
-                        body: JSON.stringify({ sha: newCommitData.sha, force: true }),
-                      });
-                      githubDeleted = deletePaths.size;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        const { deleteRepoEntries } = await import('@/lib/file-delete');
+        githubDeleted = await deleteRepoEntries([fromFull]);
       } catch {}
 
       // Update activity log
