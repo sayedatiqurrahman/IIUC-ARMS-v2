@@ -72,8 +72,19 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
         const pdfjs: any = await import(/* webpackIgnore: true */ '/pdfjs/pdf.min.mjs');
         pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
 
-        const res = await fetch(src);
-        if (!res.ok) throw new Error(`Failed to load file (${res.status})`);
+        let res: Response | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            res = await fetch(src);
+            if (res.ok) break;
+          } catch {
+            res = null;
+          }
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+        }
+        if (!res || !res.ok) {
+          throw new Error(res ? `Failed to load file (${res.status})` : 'Failed to load this file. Please check your connection.');
+        }
         const pdf = await pdfjs.getDocument({ data: await res.arrayBuffer() }).promise;
         if (cancelled) {
           pdf.destroy?.();
@@ -159,6 +170,70 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
     stage.addEventListener('wheel', onWheel, { passive: false });
     return () => stage.removeEventListener('wheel', onWheel);
   }, [onWheel]);
+
+  // ---- Pinch zoom (two fingers) -------------------------------------------
+
+  const pinchRef = useRef<{
+    active: boolean;
+    startDist: number;
+    startScale: number;
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      e.preventDefault();
+      pinchRef.current = {
+        active: true,
+        startDist: dist(e.touches),
+        startScale: zoomRef.current.scale,
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        left: el.scrollLeft,
+        top: el.scrollTop,
+      };
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const p = pinchRef.current;
+      if (!p || e.touches.length !== 2) return;
+      e.preventDefault();
+      const d = dist(e.touches);
+      if (p.startDist > 0) {
+        const next = Math.min(3, Math.max(0.5, +(p.startScale * (d / p.startDist)).toFixed(2)));
+        zoomRef.current.scale = next;
+        setScale(next);
+      }
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      el.scrollLeft = p.left - (mx - p.x);
+      el.scrollTop = p.top - (my - p.y);
+    };
+
+    const endPinch = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinchRef.current = null;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', endPinch, { passive: false });
+    el.addEventListener('touchcancel', endPinch, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', endPinch);
+      el.removeEventListener('touchcancel', endPinch);
+    };
+  }, []);
 
   // ---- Laser pointer -----------------------------------------------------
 
@@ -249,7 +324,7 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = dragRef.current;
     const sc = scrollRef.current;
-    if (tool === 'hand' && d.active && sc) {
+    if (tool === 'hand' && d.active && sc && !pinchRef.current?.active) {
       sc.scrollLeft = d.left - (e.clientX - d.x);
       sc.scrollTop = d.top - (e.clientY - d.y);
     }
@@ -307,7 +382,7 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
           <span className="text-neutral-400 text-[0.72rem] font-mono min-w-[38px] text-center select-none">{Math.round(scale * 100)}%</span>
           <button className="pdf-btn" onClick={() => zoom(1)} title="Zoom in (Ctrl + +)" disabled={status !== 'ready'}><i className="fas fa-plus"></i></button>
           <button className="pdf-btn" onClick={resetZoom} title="Reset zoom (Ctrl + 0)" disabled={status !== 'ready'}><i className="fas fa-expand-arrows-alt"></i></button>
-          <a className="pdf-btn no-underline" href={url} download={name} title="Download" style={{ textDecoration: 'none' }}><i className="fas fa-download"></i></a>
+          <a className="pdf-btn no-underline" href={src} download={name} title="Download" style={{ textDecoration: 'none' }}><i className="fas fa-download"></i></a>
           <button
             className="pdf-btn"
             onClick={onClose}
@@ -331,7 +406,7 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-          style={{ cursor: tool === 'laser' ? 'none' : 'inherit' }}
+          style={{ cursor: tool === 'laser' ? 'none' : 'inherit', touchAction: 'pan-x pan-y' }}
         >
           <div className="p-3 flex flex-col items-center gap-3">
             {Array.from({ length: numPages }).map((_, i) => (
@@ -368,7 +443,7 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
             <i className="fas fa-file-pdf text-4xl mb-3 text-red-400"></i>
             <p className="text-sm mb-1">Could not open this PDF.</p>
             <p className="text-[0.78rem] text-dark-text3 mb-4">{error}</p>
-            <a href={url} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-qsis text-white text-sm font-semibold no-underline">
+            <a href={src} target="_blank" rel="noreferrer" className="px-4 py-2 rounded-xl bg-qsis text-white text-sm font-semibold no-underline">
               <i className="fas fa-external-link-alt mr-1"></i>Open in new tab
             </a>
           </div>

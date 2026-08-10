@@ -36,6 +36,17 @@ const MIME: Record<string, string> = {
 // path, so it can't be abused as an open proxy.
 const RAW_PREFIX = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${config.uploadPath}/`;
 
+// GitHub's contents API serves raw bytes when asked with this Accept header.
+// Used as a fallback host when raw.githubusercontent.com is unreachable or
+// throttled on the server's network.
+const CONTENTS_API = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/`;
+
+function looksLikePdf(buf: ArrayBuffer): boolean {
+  if (buf.byteLength < 5) return false;
+  const head = new Uint8Array(buf.slice(0, 5));
+  return head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46 && head[4] === 0x2d; // %PDF-
+}
+
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
@@ -52,22 +63,60 @@ export async function GET(req: NextRequest) {
     .replace(/[\u0000-\u001F\u007F]/g, '');
   const asciiName = fname.replace(/[^\x20-\x7E]/g, '_') || 'file';
 
+  const relIdx = clean.indexOf(config.uploadPath + '/');
+  const relPath = relIdx >= 0 ? clean.slice(relIdx) : '';
+
+  let buf: ArrayBuffer | null = null;
+  let ct = MIME[ext] || 'application/octet-stream';
+  let failCode = 502;
+
+  // Primary upstream: raw.githubusercontent.com
   try {
     const res = await fetch(raw, { cache: 'no-store', redirect: 'follow' });
-    if (!res.ok) {
-      return new NextResponse(`File not found (${res.status})`, { status: 404 });
+    if (res.ok) {
+      const body = await res.arrayBuffer();
+      if (ext !== 'pdf' || looksLikePdf(body)) {
+        buf = body;
+        if (!MIME[ext]) ct = res.headers.get('content-type') || ct;
+      }
+    } else {
+      failCode = res.status;
     }
-    const buf = await res.arrayBuffer();
-    const ct = MIME[ext] || res.headers.get('content-type') || 'application/octet-stream';
-    return new Response(new Uint8Array(buf), {
-      status: 200,
-      headers: {
-        'Content-Type': ct,
-        'Content-Disposition': `inline; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fname)}`,
-        'Cache-Control': 'public, max-age=300, s-maxage=300',
-      },
-    });
-  } catch (e: any) {
-    return new NextResponse('Failed to fetch file', { status: 502 });
+  } catch {
+    /* fall through to the contents API */
   }
+
+  // Fallback upstream: contents API — different host, survives raw being
+  // blocked/throttled, and also covers a truncated/invalid PDF from raw.
+  if (buf === null && relPath) {
+    try {
+      const alt = await fetch(`${CONTENTS_API}${relPath}`, {
+        headers: { Accept: 'application/vnd.github.raw', 'User-Agent': 'QSIS-ARMS-v2' },
+        cache: 'no-store',
+        redirect: 'follow',
+      });
+      if (alt.ok) {
+        buf = await alt.arrayBuffer();
+        if (!MIME[ext]) ct = alt.headers.get('content-type') || ct;
+      } else if (failCode === 502) {
+        failCode = alt.status;
+      }
+    } catch {
+      /* give up */
+    }
+  }
+
+  if (buf === null) {
+    return new NextResponse(`File not found (${failCode})`, { status: 404 });
+  }
+
+  return new Response(new Uint8Array(buf), {
+    status: 200,
+    headers: {
+      'Content-Type': ct,
+      'Content-Length': String(buf.byteLength),
+      'Content-Disposition': `inline; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fname)}`,
+      'Cache-Control': 'public, max-age=300, s-maxage=300',
+    },
+  });
 }
