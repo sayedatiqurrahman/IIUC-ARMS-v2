@@ -36,6 +36,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const [internalTab, setInternalTab] = useState<Tab>('overview');
   const activeTab = activeTabProp ?? internalTab;
   const setActiveTab = setActiveTabProp ?? setInternalTab;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userSubTab, setUserSubTab] = useState<UserSubTab>('all');
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -650,9 +651,20 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   return (
     <section className="mb-5">
       <div className="mb-5">
-        <h2 className="text-xl font-bold text-dark-text flex items-center gap-2">
-          <i className="fas fa-shield-alt text-qsis"></i>Admin Panel
-        </h2>
+        <div className="flex items-center gap-3">
+          {useSidebar && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden inline-flex items-center justify-center w-9 h-9 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.9rem]"
+              aria-label="Open admin menu"
+            >
+              <i className="fas fa-bars"></i>
+            </button>
+          )}
+          <h2 className="text-xl font-bold text-dark-text flex items-center gap-2">
+            <i className="fas fa-shield-alt text-qsis"></i>Admin Panel
+          </h2>
+        </div>
         <p className="text-[0.82rem] text-dark-text2 mt-1">
           {isAdmin ? 'Full admin access' : isManager ? 'Manager access — you can manage users but cannot change admin roles' : 'Teacher access — you can manage faculty, courses, rooms, and batches'}
         </p>
@@ -684,25 +696,29 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
             effectiveRole={effectiveRole}
             profileIsCR={profile?.isCR}
             canManageFacultyDepts={canManageFacultyDepts}
+            mobileOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
           />
         )}
 
         <div className="flex-1 min-w-0">
-          {/* Inline Tab Bar - always visible for teacher/custom permission, mobile-only for admin/manager */}
-          <div className={`flex gap-1 mb-4 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto scrollbar-thin ${useSidebar ? 'md:hidden' : ''}`}>
-            {TABS.filter(t => t.show).map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none whitespace-nowrap ${
-                  activeTab === tab.key ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
-                }`}
-              >
-                <i className={`fas ${tab.icon} ${activeTab === tab.key ? 'text-white' : tab.color}`}></i>
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          {/* Inline Tab Bar - teacher/custom-permission users (no sidebar) */}
+          {!useSidebar && (
+            <div className="flex gap-1 mb-4 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto scrollbar-thin">
+              {TABS.filter(t => t.show).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none whitespace-nowrap ${
+                    activeTab === tab.key ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
+                  }`}
+                >
+                  <i className={`fas ${tab.icon} ${activeTab === tab.key ? 'text-white' : tab.color}`}></i>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
 
         <div>
       {/* Overview Tab */}

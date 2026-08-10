@@ -55,9 +55,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     showToast('Checking for updates...', 'info');
     const hasUpdate = await checkForAppUpdate();
     if (hasUpdate) {
-      updateAppliedRef.current = true;
-      showToast('Update found — installing...', 'info');
-      await applyAppUpdate();
+      await installUpdate();
     } else {
       showToast('You are up to date!', 'success');
     }
@@ -219,12 +217,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Auto-update: detect a newer deploy (on load, focus, and every 5 min) and
-  // notify the user with an update banner that auto-applies after a countdown.
+  // notify the user with a single update banner that auto-applies after a countdown.
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
-  const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateCountdown, setUpdateCountdown] = useState(0);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
   const updateAppliedRef = useRef(false);
   const updateDismissedRef = useRef(false);
+
+  // Single path for applying an update. Keeps the banner visible with
+  // "Installing..." feedback while the new build is fetched + activated, then
+  // the page reloads.
+  const installUpdate = useCallback(async () => {
+    if (installingUpdate || updateAppliedRef.current) return;
+    updateAppliedRef.current = true;
+    setInstallingUpdate(true);
+    setShowUpdateBanner(true);
+    const { showToast } = await import('@/lib/utils');
+    showToast('Update found — installing...', 'info');
+    await applyAppUpdate();
+    setInstallingUpdate(false);
+  }, [installingUpdate]);
 
   useEffect(() => {
     const updated = checkAndBustCache();
@@ -234,7 +246,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
     return startUpdateWatcher((hasUpdate) => {
       if (!hasUpdate) return;
-      setUpdateAvailable(true);
       if (updateAppliedRef.current || updateDismissedRef.current) return;
       setShowUpdateBanner(true);
       setUpdateCountdown(20);
@@ -245,15 +256,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!showUpdateBanner) return;
     if (updateCountdown <= 0) {
-      if (!updateAppliedRef.current) {
-        updateAppliedRef.current = true;
-        applyAppUpdate();
-      }
+      installUpdate();
       return;
     }
     const t = window.setTimeout(() => setUpdateCountdown((c) => c - 1), 1000);
     return () => window.clearTimeout(t);
-  }, [showUpdateBanner, updateCountdown]);
+  }, [showUpdateBanner, updateCountdown, installUpdate]);
 
   // Refresh tree when user returns to tab — only if cache is stale (5min+)
   useEffect(() => {
@@ -314,20 +322,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       )}
       {showUpdateBanner && (
         <div className="bg-gradient-to-r from-qsis to-accent text-white px-4 py-2 text-center text-[0.82rem] font-medium flex items-center justify-center gap-3 z-[200] relative flex-wrap">
-          <i className="fas fa-download"></i>
-          <span>New update available!</span>
+          <i className={`fas ${installingUpdate ? 'fa-spinner fa-spin' : 'fa-download'}`}></i>
+          <span>{installingUpdate ? 'Installing the latest version...' : 'New update available!'}</span>
           <button
-            onClick={() => { updateAppliedRef.current = true; applyAppUpdate(); }}
-            className="px-3 py-1 rounded-lg bg-white/20 hover:bg-white/30 border-none cursor-pointer text-white text-[0.78rem] font-semibold transition-colors"
+            onClick={installUpdate}
+            disabled={installingUpdate}
+            className="px-3 py-1 rounded-lg bg-white/20 hover:bg-white/30 border-none cursor-pointer text-white text-[0.78rem] font-semibold transition-colors disabled:opacity-60 disabled:cursor-default"
           >
-            <i className="fas fa-sync-alt mr-1"></i>Update Now{updateCountdown > 0 ? ` (${updateCountdown}s)` : ''}
+            {installingUpdate ? (
+              <><i className="fas fa-spinner fa-spin mr-1"></i>Installing...</>
+            ) : (
+              <><i className="fas fa-sync-alt mr-1"></i>Update Now{updateCountdown > 0 ? ` (${updateCountdown}s)` : ''}</>
+            )}
           </button>
-          <button
-            onClick={() => { updateDismissedRef.current = true; setShowUpdateBanner(false); }}
-            className="px-2 py-1 rounded-lg bg-transparent hover:bg-white/10 border-none cursor-pointer text-white/70 text-[0.78rem] transition-colors"
-          >
-            Later
-          </button>
+          {!installingUpdate && (
+            <button
+              onClick={() => { updateDismissedRef.current = true; setShowUpdateBanner(false); }}
+              className="px-2 py-1 rounded-lg bg-transparent hover:bg-white/10 border-none cursor-pointer text-white/70 text-[0.78rem] transition-colors"
+            >
+              Later
+            </button>
+          )}
         </div>
       )}
       {/* NAVBAR */}
@@ -358,16 +373,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
           <div className="flex items-center gap-2">
-            {updateAvailable && updateDismissedRef.current && (
-              <button
-                onClick={() => { updateAppliedRef.current = true; applyAppUpdate(); }}
-                className="inline-flex items-center gap-[5px] px-2.5 py-1.5 rounded-lg text-[0.78rem] font-semibold border border-qsis/40 bg-qsis/20 text-qsis cursor-pointer hover:bg-qsis/30 transition-all"
-                title="Update available — tap to install the latest version"
-              >
-                <i className="fas fa-cloud-arrow-down animate-pulse"></i>
-                <span className="hidden sm:inline">Update</span>
-              </button>
-            )}
             <button className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-qsis/30 bg-qsis/10 text-qsis cursor-pointer hover:bg-qsis/20 transition-all" onClick={handleOpenUpload}>
               <i className="fas fa-upload"></i> Upload
             </button>

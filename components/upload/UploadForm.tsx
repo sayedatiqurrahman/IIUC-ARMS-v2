@@ -216,7 +216,7 @@ export default function UploadForm({
     <>
       {/* Department, Semester & Category */}
       <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 mb-4">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
            <div ref={deptRef}>
             <label className="text-[0.72rem] text-dark-text2 block mb-1">Department *</label>
             {canUploadAnyDept ? (
@@ -345,7 +345,7 @@ export default function UploadForm({
 
           {/* Exam Section & Session */}
           {isExamCategory && (
-            <div className="grid grid-cols-2 gap-2 mb-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
               <div>
                 <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Section *</label>
                 <CustomSelect value={course.midFinal} onChange={v => { updateCourse(course.id, { midFinal: v }); clearInvalid(`midFinal-${course.id}`); }} error={!!invalid[`midFinal-${course.id}`]} placeholder="Select..." options={[
