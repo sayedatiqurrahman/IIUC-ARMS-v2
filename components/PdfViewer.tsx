@@ -196,12 +196,18 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
     if (tool !== 'laser') return;
 
     const onMove = (e: MouseEvent) => {
+      const canvas = overlayRef.current;
       const stage = stageRef.current;
-      if (!stage) return;
-      const rect = stage.getBoundingClientRect();
+      if (!canvas || !stage) return;
+      const rect = canvas.getBoundingClientRect();
+      // Convert viewport coords into the canvas's local CSS-px space, correcting
+      // for browser zoom / any ancestor transform so the laser sits exactly on
+      // the cursor.
+      const scaleX = rect.width ? canvas.clientWidth / rect.width : 1;
+      const scaleY = rect.height ? canvas.clientHeight / rect.height : 1;
       cursorRef.current = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY,
         inside: true,
       };
     };

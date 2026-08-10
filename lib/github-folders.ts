@@ -1,10 +1,39 @@
 import crypto from 'crypto';
 import { config } from './config';
-import { getDepartmentFolder } from './departments';
+import { getDepartmentFolder, findDepartment } from './departments';
 import { matchCourseFolder } from './store/helpers';
 
 const SEMS = ['1st-semister','2nd-semister','3rd-semister','4th-semister','5th-semister','6th-semister','7th-semister','8th-semister'];
 const BATCH = 25;
+
+// Reject anything that could walk out of a single path segment (GitHub's
+// Contents API resolves "..", so these must be blocked before building paths).
+function cleanSegment(value: string, kind: 'dept' | 'sem' | 'code' | 'title'): string {
+  const v = String(value ?? '').trim();
+  if (!v) throw new Error(`Invalid ${kind}`);
+  if (v.length > 200) throw new Error(`${kind} too long`);
+  if (/[\\/\u0000-\u001F\u007F]/.test(v)) throw new Error(`Invalid ${kind}`);
+  if (v === '.' || v === '..' || v.startsWith('..')) throw new Error(`Invalid ${kind}`);
+  return v;
+}
+
+function validateCourseCode(value: string): string {
+  const code = cleanSegment(value, 'code').toUpperCase().replace(/\s+/g, '');
+  if (!/^[A-Z0-9]{2,8}[-]?\d{2,5}[A-Z]?$/.test(code)) throw new Error('Invalid course code');
+  return code;
+}
+
+function validateDept(value: string): string {
+  const deptId = cleanSegment(value, 'dept');
+  if (!findDepartment(deptId)) throw new Error('Unknown department');
+  return deptId;
+}
+
+function validateSemester(value: string): string {
+  const sem = cleanSegment(value, 'sem');
+  if (!SEMS.includes(sem)) throw new Error('Invalid semester');
+  return sem;
+}
 
 function makeJwt(appId: string, privateKey: string) {
   const n = Math.floor(Date.now() / 1000);
@@ -40,12 +69,14 @@ export async function fetchCoursesFromGitHub(deptId: string, semester: string): 
   if (!appId || !privateKey) return [];
 
   try {
+    const safeDept = validateDept(deptId);
+    const safeSem = validateSemester(semester);
     const jwt = makeJwt(appId, privateKey);
     const inst = await api('GET', `/repos/${config.owner}/${config.repo}/installation`, null, jwt);
     if (inst.s !== 200) return [];
     const tok = (await api('POST', `/app/installations/${inst.d.id}/access_tokens`, null, jwt)).d.token;
 
-    const folderPath = `${config.uploadPath}/${getDepartmentFolder(deptId)}/${semester}`;
+    const folderPath = `${config.uploadPath}/${getDepartmentFolder(safeDept)}/${safeSem}`;
     const treeRes = await api('GET', `/repos/${config.owner}/${config.repo}/contents/${folderPath}`, null, tok);
     if (treeRes.s !== 200 || !Array.isArray(treeRes.d)) return [];
 
@@ -67,6 +98,11 @@ export async function createCourseFolder(deptId: string, semester: string, cours
   if (!appId || !privateKey) return { success: false, error: 'GitHub App not configured' };
 
   try {
+    const safeDept = validateDept(deptId);
+    const safeSem = validateSemester(semester);
+    const safeCode = validateCourseCode(courseCode);
+    const safeTitle = cleanSegment(courseTitle, 'title').replace(/\s+/g, ' ');
+
     const jwt = makeJwt(appId, privateKey);
     const inst = await api('GET', `/repos/${config.owner}/${config.repo}/installation`, null, jwt);
     if (inst.s !== 200) return { success: false, error: 'Failed to get installation' };
@@ -76,10 +112,10 @@ export async function createCourseFolder(deptId: string, semester: string, cours
     if (refRes.s !== 200) return { success: false, error: 'Failed to get ref' };
     let currentSha = refRes.d.object.sha;
 
-    const folderName = `${courseCode} - ${courseTitle}`;
+    const folderName = `${safeCode} - ${safeTitle}`;
     const subfolders = ['Mid/NOTES', 'Mid/Previous Questions', 'Final/NOTES', 'Final/Previous Questions', 'sheet', 'Syllabus', 'Other'];
-    const deptFolder = getDepartmentFolder(deptId);
-    const paths = subfolders.map(sf => `${config.uploadPath}/${deptFolder}/${semester}/${folderName}/${sf}/.gitkeep`);
+    const deptFolder = getDepartmentFolder(safeDept);
+    const paths = subfolders.map(sf => `${config.uploadPath}/${deptFolder}/${safeSem}/${folderName}/${sf}/.gitkeep`);
 
     const treeRes = await api('POST', `/repos/${config.owner}/${config.repo}/git/trees`, {
       base_tree: currentSha,
@@ -88,7 +124,7 @@ export async function createCourseFolder(deptId: string, semester: string, cours
     if (treeRes.s !== 201) return { success: false, error: 'Failed to create tree' };
 
     const commitRes = await api('POST', `/repos/${config.owner}/${config.repo}/git/commits`, {
-      message: `Add course folder: ${folderName} in ${deptFolder}/${semester}`,
+      message: `Add course folder: ${folderName} in ${deptFolder}/${safeSem}`,
       tree: treeRes.d.sha,
       parents: [currentSha],
     }, tok);
@@ -110,6 +146,7 @@ export async function createDepartmentFolders(deptId: string): Promise<{ success
   }
 
   try {
+    const safeDept = validateDept(deptId);
     const jwt = makeJwt(appId, privateKey);
     const inst = await api('GET', `/repos/${config.owner}/${config.repo}/installation`, null, jwt);
     if (inst.s !== 200) return { success: false, created: 0, error: 'Failed to get installation' };
@@ -126,7 +163,7 @@ export async function createDepartmentFolders(deptId: string): Promise<{ success
 
     // Build paths — only semester folders and related-sources (course subfolders are created on demand)
     const paths: string[] = [];
-    const deptFolder = getDepartmentFolder(deptId);
+    const deptFolder = getDepartmentFolder(safeDept);
     for (const sem of SEMS) {
       const p = `${config.uploadPath}/${deptFolder}/${sem}/.gitkeep`;
       if (!existing.has(p)) paths.push(p);

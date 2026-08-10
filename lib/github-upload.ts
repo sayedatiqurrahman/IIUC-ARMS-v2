@@ -8,11 +8,13 @@ import { decrypt, isEncrypted } from '@/lib/crypto';
 import { hasPermission } from '@/lib/permissions';
 import { commitFilesToBranch, ghFetch, type FileToCommit } from '@/lib/github-commit';
 import { mergePullRequest } from '@/lib/github-merge';
+import { validateRepoPath } from '@/lib/repo-path';
 
 const GITHUB_API = 'https://api.github.com';
 
 export interface UploadContext {
   userEmail: string;
+  userName: string;
   isOwner: boolean;
   isBanned: boolean;
   canUpload: boolean;
@@ -35,6 +37,7 @@ export interface UploadResult {
 // bodyToken is the raw PAT pasted in the upload modal (from FormData or JSON).
 export async function resolveUploadContext(req: NextRequest, bodyToken = ''): Promise<{ ctx: UploadContext } | { error: string; status: number; code?: string }> {
   let userEmail = '';
+  let userName = '';
   let storedPat = '';                 // decrypted PAT stored in DB (credit path)
   let installationId: number | null = null;
   let isOwner = false;
@@ -48,6 +51,7 @@ export async function resolveUploadContext(req: NextRequest, bodyToken = ''): Pr
       const { prisma } = await import('@/lib/prisma');
       const profile = await prisma.profile.findUnique({ where: { userId: email } });
       isBanned = !!profile?.isBanned;
+      userName = profile?.name || email.split('@')[0];
       if (profile?.githubToken) {
         const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
         // Only PATs are usable for PR-based credit; installation tokens (ghs_) expire in ~1h
@@ -70,28 +74,18 @@ export async function resolveUploadContext(req: NextRequest, bodyToken = ''): Pr
   }
 
   // ── Resolve a write-capable token (server-authoritative) ─────────────
-  // Priority: stored PAT → PAT pasted in the modal → NextAuth session token
-  //           → GitHub App bot token for THIS repo → server GITHUB_TOKEN.
-  // The App bot token lets users upload with NO GitHub connection at all,
-  // committing directly to main (fast). Stored ghs_ tokens are ignored.
+  // Priority for fully-automatic uploads into config.uploadPath:
+  //   GitHub App bot token for THIS repo → server GITHUB_TOKEN → stored PAT
+  //   → PAT pasted in the modal → NextAuth session token.
+  // The App bot token (or server GITHUB_TOKEN) lets ANY authorized user upload
+  // with NO GitHub connection at all, committing directly to main — no PR, no
+  // review, nothing for the owner to approve. A user PAT/session token is only
+  // used as a fallback (fork + PR for credit) when no server token exists.
+  // Stored ghs_ tokens are ignored (installation tokens expire in ~1h).
   let token = '';
   let tokenKind: 'pat' | 'session' | 'bot' | 'env' = 'pat';
 
-  if (storedPat) {
-    token = storedPat;
-  } else if (bodyToken && (bodyToken.startsWith('ghp_') || bodyToken.startsWith('github_pat_'))) {
-    token = bodyToken;
-  } else {
-    try {
-      const session = await getServerSession(authOptions);
-      if (session?.accessToken) {
-        token = session.accessToken;
-        tokenKind = 'session';
-      }
-    } catch {}
-  }
-
-  if (!token && (canUpload || installationId)) {
+  if (canUpload || installationId) {
     const botToken = await getRepoBotToken(config.owner, config.repo);
     if (botToken) {
       token = botToken;
@@ -104,6 +98,22 @@ export async function resolveUploadContext(req: NextRequest, bodyToken = ''): Pr
   }
 
   if (!token) {
+    if (storedPat) {
+      token = storedPat;
+    } else if (bodyToken && (bodyToken.startsWith('ghp_') || bodyToken.startsWith('github_pat_'))) {
+      token = bodyToken;
+    } else {
+      try {
+        const session = await getServerSession(authOptions);
+        if (session?.accessToken) {
+          token = session.accessToken;
+          tokenKind = 'session';
+        }
+      } catch {}
+    }
+  }
+
+  if (!token) {
     return {
       error: 'GitHub not connected. Go to Dashboard → Connect with GitHub to set up, or ask admin for upload access.',
       status: 401,
@@ -112,7 +122,7 @@ export async function resolveUploadContext(req: NextRequest, bodyToken = ''): Pr
   }
 
   return {
-    ctx: { userEmail, isOwner, isBanned, canUpload, installationId, token, tokenKind },
+    ctx: { userEmail, userName, isOwner, isBanned, canUpload, installationId, token, tokenKind },
   };
 }
 
@@ -122,6 +132,13 @@ export async function resolveUploadContext(req: NextRequest, bodyToken = ''): Pr
 export async function commitUpload(ctx: UploadContext, files: FileToCommit[], message: string): Promise<UploadResult> {
   const isBotToken = ctx.token.startsWith('ghs_') || ctx.tokenKind === 'bot' || ctx.tokenKind === 'env';
   const directCommit = ctx.isOwner || isBotToken;
+
+  // Defense in depth: never let a client-supplied path walk outside
+  // config.uploadPath (GitHub's Contents API resolves .. segments).
+  for (const f of files) {
+    validateRepoPath(f.path, false);
+  }
+
   const fullFiles = files.map(f => ({ ...f, path: `${config.uploadPath}/${f.path}` }));
   const commitMessage = `Add ${fullFiles.map(f => f.path).join(', ')}`;
 
@@ -146,6 +163,7 @@ export async function commitUpload(ctx: UploadContext, files: FileToCommit[], me
         baseSha,
         files: fullFiles,
         message: commitMessage,
+        author: ctx.userEmail ? { name: ctx.userName || ctx.userEmail.split('@')[0], email: ctx.userEmail } : undefined,
       });
     } catch (e: any) {
       const msg = e?.message || '';

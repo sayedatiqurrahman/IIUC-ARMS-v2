@@ -20,6 +20,8 @@ interface DashboardSidebarProps {
   isTeacherUser: boolean;
   profile: any;
   unreadCount?: number;
+  mobileOpen?: boolean;
+  onClose?: () => void;
 }
 
 const baseMenu: MenuItem[] = [
@@ -48,6 +50,7 @@ const adminMenu: MenuItem[] = [
 
 export default function DashboardSidebar({
   activeSection, onNavigate, effectiveRole, isCR, hasAdminAccess, isTeacherUser, profile, unreadCount,
+  mobileOpen, onClose,
 }: DashboardSidebarProps) {
   const isStudent = effectiveRole === 'student';
 
@@ -59,27 +62,67 @@ export default function DashboardSidebar({
     ...(hasAdminAccess ? adminMenu : []),
   ];
 
+  const navContent = (
+    <nav className="space-y-0.5">
+      {menuItems.map(item => (
+        <button
+          key={item.id}
+          onClick={() => { onNavigate(item.id); onClose?.(); }}
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[0.8rem] font-medium transition-all text-left ${
+            activeSection === item.id
+              ? 'bg-qsis/10 text-qsis border border-qsis/20'
+              : 'text-dark-text2 hover:text-dark-text hover:bg-dark-bg3 border border-transparent'
+          }`}
+        >
+          <i className={`${item.icon} ${item.color || ''} w-4 text-center`}></i>
+          <span className="flex-1">{item.label}</span>
+          {item.id === 'activity' && unreadCount ? (
+            <span className="px-1.5 py-0.5 rounded-full bg-qsis/20 text-qsis text-[0.6rem]">{unreadCount}</span>
+          ) : null}
+          {item.admin && (
+            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[0.55rem] font-bold">ADMIN</span>
+          )}
+        </button>
+      ))}
+    </nav>
+  );
+
   return (
     <div className="w-full md:w-56 flex-shrink-0">
-      {/* Mobile: horizontal scroll */}
-      <div className="md:hidden flex gap-1.5 overflow-x-auto pb-2 mb-4 -mx-1 px-1 scrollbar-hide">
-        {menuItems.map(item => (
-          <button
-            key={item.id}
-            onClick={() => onNavigate(item.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[0.75rem] font-semibold whitespace-nowrap transition-all border ${
-              activeSection === item.id
-                ? 'bg-qsis/10 border-qsis/30 text-qsis'
-                : 'bg-dark-bg3 border-dark-border text-dark-text2 hover:text-dark-text hover:border-dark-border'
-            }`}
-          >
-            <i className={`${item.icon} ${item.color || ''}`}></i>
-            {item.label}
-            {item.id === 'activity' && unreadCount ? (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-qsis/20 text-qsis text-[0.6rem]">{unreadCount}</span>
-            ) : null}
-          </button>
-        ))}
+      {/* Mobile: slide-in drawer opened by the hamburger in the dashboard header */}
+      <div className={`md:hidden fixed inset-0 z-[95] ${mobileOpen ? '' : 'invisible pointer-events-none'}`}>
+        <div
+          className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0'}`}
+          onClick={onClose}
+        ></div>
+        <div className={`absolute top-0 left-0 bottom-0 w-64 max-w-[80vw] bg-dark-bg2 border-r border-dark-border p-3 flex flex-col shadow-2xl transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="flex items-center justify-between px-2 pb-3 mb-2 border-b border-dark-border">
+            <div>
+              <p className="text-[0.82rem] font-bold text-dark-text flex items-center gap-2"><i className="fas fa-th-large text-qsis"></i>Dashboard</p>
+              <p className="text-[0.62rem] text-dark-text3 mt-0.5">Menu</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-dark-bg3 flex items-center justify-center text-dark-text2 border-none cursor-pointer">
+              <i className="fas fa-times text-sm"></i>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {navContent}
+          </div>
+          {/* Role Badge */}
+          <div className="mt-4 px-2 pt-3 border-t border-dark-border">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${
+                effectiveRole === 'admin' ? 'bg-red-500' :
+                effectiveRole === 'manager' ? 'bg-amber-500' :
+                effectiveRole === 'teacher' ? 'bg-teal-500' :
+                effectiveRole === 'student' ? 'bg-blue-500' :
+                effectiveRole === 'external' ? 'bg-purple-500' : 'bg-gray-500'
+              }`}></div>
+              <span className="text-[0.7rem] text-dark-text3 capitalize font-medium">{effectiveRole}</span>
+              {isCR && <span className="px-1.5 py-0.5 rounded bg-qsis/10 text-qsis text-[0.55rem] font-bold">CR</span>}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Desktop: vertical sidebar */}
@@ -87,29 +130,7 @@ export default function DashboardSidebar({
         <div className="mb-3 px-2">
           <p className="text-[0.65rem] text-dark-text3 uppercase tracking-wider font-semibold">Dashboard</p>
         </div>
-        <nav className="space-y-0.5">
-          {menuItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[0.8rem] font-medium transition-all text-left ${
-                activeSection === item.id
-                  ? 'bg-qsis/10 text-qsis border border-qsis/20'
-                  : 'text-dark-text2 hover:text-dark-text hover:bg-dark-bg3 border border-transparent'
-              }`}
-            >
-              <i className={`${item.icon} ${item.color || ''} w-4 text-center`}></i>
-              <span className="flex-1">{item.label}</span>
-              {item.id === 'activity' && unreadCount ? (
-                <span className="px-1.5 py-0.5 rounded-full bg-qsis/20 text-qsis text-[0.6rem]">{unreadCount}</span>
-              ) : null}
-              {item.admin && (
-                <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[0.55rem] font-bold">ADMIN</span>
-              )}
-            </button>
-          ))}
-        </nav>
-
+        {navContent}
         {/* Role Badge */}
         <div className="mt-4 px-2 pt-3 border-t border-dark-border">
           <div className="flex items-center gap-2">

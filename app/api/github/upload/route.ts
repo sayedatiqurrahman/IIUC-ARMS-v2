@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { resolveUploadContext, commitUpload, logUploadActivity } from '@/lib/github-upload';
+import { validateRepoPath } from '@/lib/repo-path';
 
 export const maxDuration = 120;
 
@@ -39,12 +40,17 @@ export async function POST(req: NextRequest) {
         // Strip the config.uploadPath prefix — the client already sends the full path
         // but the GitHub API calls below prepend it again, so store relative to uploadPath
         const relPath = filePath.startsWith(`${config.uploadPath}/`) ? filePath.slice(`${config.uploadPath}/`.length) : filePath;
+        try {
+          validateRepoPath(relPath, false);
+        } catch {
+          return NextResponse.json({ error: `Invalid file path: ${relPath}` }, { status: 400 });
+        }
         files.push({ path: relPath, content: base64 });
       }
     } else {
       // Fallback: legacy JSON body (for any old clients or testing)
       const body = await req.json();
-      files = body.files || [];
+      files = (body.files || []).map((f: any) => ({ ...f, path: validateRepoPath(f.path, false) }));
       message = body.message || '';
       bodyToken = body.githubToken || '';
     }

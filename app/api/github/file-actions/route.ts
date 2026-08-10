@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth-options';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { decrypt, isEncrypted } from '@/lib/crypto';
 import { sendMessageWithButtons, delFileConfirmData, delFileRejectData, buildBrowseLink } from '@/lib/telegram';
+import { validateRepoPath, validateNewName } from '@/lib/repo-path';
 
 const GITHUB_API = 'https://api.github.com';
 const OWNER_CHAT_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID || '0');
@@ -141,7 +142,19 @@ export async function POST(req: NextRequest) {
     const isCR = profile?.isCR || false;
 
     const body = await req.json();
-    const { action, from, to, newName } = body;
+    const { action } = body;
+
+    // Reject path traversal / illegal segments before any repo call.
+    let from: string;
+    let to: string | undefined;
+    let newName: string | undefined;
+    try {
+      from = validateRepoPath(body.from, false);
+      if (typeof body.to === 'string' && body.to) to = validateRepoPath(body.to, false);
+      if (typeof body.newName === 'string' && body.newName) newName = validateNewName(body.newName);
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message || 'Invalid path' }, { status: 400 });
+    }
 
     // Check per-user or role-based permission
     const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
@@ -432,7 +445,14 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const folder = url.searchParams.get('folder') || '';
+    const rawFolder = url.searchParams.get('folder') || '';
+
+    let folder: string;
+    try {
+      folder = validateRepoPath(rawFolder, true);
+    } catch {
+      return NextResponse.json({ folders: [] });
+    }
 
     const { token } = await resolveToken(req);
     if (!token) return NextResponse.json({ folders: [] });

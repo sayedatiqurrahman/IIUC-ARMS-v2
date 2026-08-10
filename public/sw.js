@@ -145,18 +145,18 @@ self.addEventListener('fetch', (event) => {
   // API calls: network only, never cache (except the public tree below)
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname === '/api/github') {
-      // Tree endpoint: stale-while-revalidate so course browsing works offline.
-      // The app busts with ?_t=, so normalize the cache key to pathname-only.
+      // Tree endpoint: network-first so newly uploaded files always appear
+      // immediately. The cache is only a fallback for offline use.
       const treeUrl = url.origin + url.pathname;
       event.respondWith(
         caches.open(SHELL_CACHE).then(async (cache) => {
-          const cached = await cache.match(treeUrl);
-          if (cached) return cached;
           try {
             const response = await fetch(request);
             if (response.ok) cache.put(treeUrl, response.clone());
             return response;
           } catch {
+            const cached = await cache.match(treeUrl);
+            if (cached) return cached;
             return new Response(JSON.stringify({ error: 'Offline — please try again' }), {
               status: 503,
               headers: { 'Content-Type': 'application/json' },

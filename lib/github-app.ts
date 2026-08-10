@@ -10,10 +10,18 @@ function getPrivateKey(): string {
 export function generateJWT(): string {
   const privateKey = getPrivateKey();
   const now = Math.floor(Date.now() / 1000);
+  // The GitHub App's numeric App ID (NOT the OAuth client id). GITHUB_ID is the
+  // NextAuth OAuth client id (format Iv1.xxx) and can never be used as `iss`,
+  // so a dedicated GITHUB_APP_ID is required; GITHUB_ID is kept only as a
+  // legacy fallback for older setups.
+  const appId = process.env.GITHUB_APP_ID || process.env.GITHUB_ID;
+  if (!appId || !privateKey) {
+    throw new Error('GitHub App not configured (GITHUB_APP_ID / GITHUB_PRIVATE_KEY missing).');
+  }
   const payload = {
     iat: now - 60,
     exp: now + 240,
-    iss: process.env.GITHUB_ID!,
+    iss: appId,
   };
 
   const header = { alg: 'RS256', typ: 'JWT' };

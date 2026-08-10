@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { authorizeChunkUpload } from '@/lib/github-upload';
+import { validateRepoPath } from '@/lib/repo-path';
 
 export const maxDuration = 60;
 
@@ -50,7 +51,9 @@ export async function POST(req: NextRequest) {
     }
 
     const relPath = filePath.startsWith(`${config.uploadPath}/`) ? filePath.slice(`${config.uploadPath}/`.length) : filePath;
-    if (!relPath || relPath.length > 500) {
+    try {
+      validateRepoPath(relPath, false);
+    } catch {
       return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
     }
 

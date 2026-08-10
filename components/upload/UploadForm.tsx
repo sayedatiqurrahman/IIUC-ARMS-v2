@@ -106,7 +106,6 @@ export default function UploadForm({
   const effectiveRole = config.getEffectiveRole(email, profile.role);
   const canUploadAnyDept = effectiveRole === 'admin';
   const isExamCategory = category === config.categories.notes.folder || category === config.categories.questions.folder;
-  const hasPat = !!(profile.githubToken?.startsWith('ghp_') || profile.githubToken?.startsWith('github_pat_') || githubToken?.startsWith('ghp_') || githubToken?.startsWith('github_pat_'));
 
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const deptRef = useRef<HTMLDivElement>(null);
@@ -178,21 +177,10 @@ export default function UploadForm({
         <p className="text-[0.82rem] text-dark-text2 mb-4">
           {autoMerged
             ? result.direct
-              ? 'Your files were committed to the repository.'
+              ? 'Your files were committed to the repository instantly.'
               : 'Your files were merged into the repository.'
             : 'Your files are pending review.'}
         </p>
-        {!hasPat && result.direct && (
-          <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-left">
-            <p className="text-[0.75rem] font-semibold text-blue-400 mb-1"><i className="fas fa-info-circle mr-1"></i>Want contribution credit?</p>
-            <p className="text-[0.7rem] text-dark-text2">
-              This upload used the shared uploader account, so it isn&apos;t credited to you. Add your GitHub <strong>Personal Access Token (PAT)</strong> to get your name on the <strong>Contributors list</strong>.
-            </p>
-            <p className="text-[0.68rem] text-blue-400 mt-1.5">
-              Go to <strong>Dashboard → Connections → GitHub</strong> and paste your PAT.
-            </p>
-          </div>
-        )}
         <a href={result.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-qsis text-white font-semibold text-[0.85rem] hover:opacity-90 transition-opacity">
           <i className="fab fa-github"></i> {result.direct ? 'View Commit' : 'View Pull Request'}
         </a>

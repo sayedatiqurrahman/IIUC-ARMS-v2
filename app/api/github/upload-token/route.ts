@@ -55,6 +55,23 @@ export async function POST(req: NextRequest) {
       : '';
 
     // ── Resolve a browser-safe token (same priority as the server upload path) ──
+    // Fully-automatic: prefer the GitHub App bot token (repo-scoped, 1h expiry,
+    // safe to hand to the browser) and the server GITHUB_TOKEN so uploads commit
+    // straight to main with no review. A user PAT/session token is only a
+    // fallback (fork + PR for credit) when no server token exists.
+    if (canUpload || installationId) {
+      const botToken = await getRepoBotToken(config.owner, config.repo);
+      if (botToken) {
+        return NextResponse.json({ tokenKind: 'bot', token: botToken, isOwner: true, directCommit: true, credit: false });
+      }
+    }
+
+    if (process.env.GITHUB_TOKEN) {
+      // Env secret must stay server-side — signal the client to use the
+      // server-side upload path instead.
+      return NextResponse.json({ tokenKind: 'env', needsServer: true, isOwner, directCommit: true, credit: false });
+    }
+
     if (storedPat || bodyToken) {
       const token = storedPat || bodyToken;
       return NextResponse.json({ tokenKind: 'pat', token, isOwner, directCommit: isOwner, credit: !isOwner });
@@ -72,19 +89,6 @@ export async function POST(req: NextRequest) {
         });
       }
     } catch {}
-
-    if (canUpload || installationId) {
-      const botToken = await getRepoBotToken(config.owner, config.repo);
-      if (botToken) {
-        return NextResponse.json({ tokenKind: 'bot', token: botToken, isOwner: true, directCommit: true, credit: false });
-      }
-    }
-
-    if (process.env.GITHUB_TOKEN) {
-      // Env secret must stay server-side — signal the client to use the
-      // server-side upload path instead.
-      return NextResponse.json({ tokenKind: 'env', needsServer: true, isOwner, directCommit: true, credit: false });
-    }
 
     return NextResponse.json(
       { error: 'GitHub not connected. Connect with GitHub or ask admin for upload access.', code: 'AUTH_REQUIRED' },

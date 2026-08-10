@@ -193,7 +193,8 @@ export const useAppStore = create<AppState>((set, get) => {
     loadTree: async (token?: string) => {
       const TREE_CACHE_KEY = 'qsis-tree-cache';
       const TREE_CACHE_TS = 'qsis-tree-cache-ts';
-      const TREE_CACHE_TTL = 5 * 60 * 1000;
+      // Short TTL so newly uploaded files appear quickly for everyone.
+      const TREE_CACHE_TTL = 30 * 1000;
 
       try {
         const cached = localStorage.getItem(TREE_CACHE_KEY);
@@ -251,7 +252,7 @@ export const useAppStore = create<AppState>((set, get) => {
     isTreeCacheStale: () => {
       try {
         const cachedTs = parseInt(localStorage.getItem('qsis-tree-cache-ts') || '0', 10);
-        return !cachedTs || Date.now() - cachedTs >= 5 * 60 * 1000;
+        return !cachedTs || Date.now() - cachedTs >= 30 * 1000;
       } catch { return true; }
     },
 

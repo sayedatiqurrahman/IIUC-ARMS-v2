@@ -44,6 +44,12 @@ export function buildWelcomeMessage(): string {
     `• <code>/status</code> — Check connection status\n` +
     `• <code>/help</code> — All commands\n` +
     `• No username? Tap <b>📱 Connect by Phone Number</b> below\n\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Projects by ${esc(config.founderName)}</b>\n` +
+    `🏗️ ${esc(config.founderAgency)}\n` +
+    `🌐 IIUC-ARMS — <a href="${SITE_URL}">${SITE_URL.replace(/^https?:\/\//, '')}</a>\n` +
+    `📚 QSIS Academic Files — <a href="https://github.com/${config.githubStarRepos[0].owner}/${config.githubStarRepos[0].repo}">GitHub</a>\n` +
+    `💻 IIUC-ARMS Source — <a href="https://github.com/${config.githubStarRepos[1].owner}/${config.githubStarRepos[1].repo}">GitHub</a>\n\n` +
     `<i>📚 Powered by IIUC-ARMS</i>`
   );
 }

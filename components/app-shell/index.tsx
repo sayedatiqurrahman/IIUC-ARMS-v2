@@ -581,6 +581,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <i className="fas fa-cloud-arrow-down"></i> Check Update
               </button>
+              {/* Install App */}
+              <div className="w-full flex items-center justify-center">
+                <InstallAppButton />
+              </div>
             </div>
           </div>
         </div>

@@ -8,9 +8,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN not set' }, { status: 500 });
   }
 
-  // Secret token verified by the webhook handler (X-Telegram-Bot-Api-Secret-Token header).
-  // Falls back to the bot token itself so no extra env var is required.
+  // Re-registering the webhook redirects the bot's updates, so only the owner
+  // (holder of the webhook secret / bot token) may call this endpoint.
+  const key = req.nextUrl.searchParams.get('key') || '';
   const secret = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || TOKEN;
+  if (!key || key !== secret) {
+    return NextResponse.json(
+      { error: 'Forbidden — pass ?key=<TELEGRAM_BOT_WEBHOOK_SECRET or TELEGRAM_BOT_TOKEN>' },
+      { status: 403 }
+    );
+  }
 
   const host = req.headers.get('host') || req.nextUrl.host;
   const protocol = req.headers.get('x-forwarded-proto') || 'https';

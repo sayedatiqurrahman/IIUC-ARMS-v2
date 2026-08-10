@@ -257,7 +257,7 @@ export async function POST(req: NextRequest) {
       `[TG] Webhook REJECTED: header=${headerToken ? 'present(mismatch)' : 'MISSING'}, ` +
       `configured=${WEBHOOK_SECRET ? 'yes' : 'NO_SECRET'}. ` +
       `Fix: set TELEGRAM_BOT_TOKEN (and optionally TELEGRAM_BOT_WEBHOOK_SECRET) in Vercel, ` +
-      `then visit /api/telegram/setup to re-register the webhook.`
+      `then visit /api/telegram/setup?key=<secret> to re-register the webhook.`
     );
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

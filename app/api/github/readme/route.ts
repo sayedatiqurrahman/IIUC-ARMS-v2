@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { decrypt, isEncrypted } from '@/lib/crypto';
+import { validateRepoPath } from '@/lib/repo-path';
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -73,7 +74,7 @@ export async function GET(req: NextRequest) {
   if (!rl.success) return rl.response!;
 
   try {
-    const folder = req.nextUrl.searchParams.get('folder') || '';
+    const folder = validateRepoPath(req.nextUrl.searchParams.get('folder') || '', true);
     const token = await resolveToken(req);
 
     const readmePath = folder ? `${config.uploadPath}/${folder}/README.md` : `${config.uploadPath}/README.md`;
@@ -113,7 +114,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { folder, content } = body;
+    const folder = validateRepoPath(body?.folder || '', true);
+    const content = String(body?.content ?? '');
 
     const token = await resolveToken(req);
     if (!token) return NextResponse.json({ error: 'No GitHub token' }, { status: 401 });

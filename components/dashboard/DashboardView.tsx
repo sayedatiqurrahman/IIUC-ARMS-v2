@@ -39,6 +39,7 @@ export default function DashboardView() {
   const loadProfile = useAppStore(s => s.loadProfile);
 
   const [activeSection, setActiveSection] = useState('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [editingSocials, setEditingSocials] = useState(false);
@@ -675,7 +676,16 @@ export default function DashboardView() {
     <section className="mb-5">
       {/* Mobile header */}
       <div className="flex items-center justify-between mb-4 md:hidden">
-        <h3 className="text-base font-semibold flex items-center gap-2"><i className="fas fa-th-large"></i> Dashboard</h3>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.9rem]"
+            aria-label="Open dashboard menu"
+          >
+            <i className="fas fa-bars"></i>
+          </button>
+          <h3 className="text-base font-semibold flex items-center gap-2"><i className="fas fa-th-large"></i> Dashboard</h3>
+        </div>
         <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={() => router.push('/')}>
           <i className="fas fa-arrow-left"></i> Back
         </button>
@@ -703,6 +713,8 @@ export default function DashboardView() {
           hasAdminAccess={hasAdminAccess}
           isTeacherUser={isTeacherUser || showTeacherSection}
           profile={profile}
+          mobileOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
         />
         <div className="flex-1 min-w-0">
           {renderContent()}

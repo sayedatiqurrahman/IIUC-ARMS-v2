@@ -53,11 +53,11 @@ export async function GET(req: NextRequest) {
       allowedUpdates: wi.allowed_updates ?? null,
     };
     if (!wi.url) {
-      out.verdict = 'Webhook is NOT registered. Visit /api/telegram/setup to register it.';
+      out.verdict = 'Webhook is NOT registered. Visit /api/telegram/setup?key=<secret> to register it.';
     } else if (wi.last_error_message) {
-      out.verdict = `Telegram last failed to deliver an update (${wi.last_error_message}). Usually a secret_token mismatch — re-run /api/telegram/setup after confirming TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_WEBHOOK_SECRET are set.`;
+      out.verdict = `Telegram last failed to deliver an update (${wi.last_error_message}). Usually a secret_token mismatch — re-run /api/telegram/setup?key=<secret> after confirming TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_WEBHOOK_SECRET are set.`;
     } else if (wi.url !== out.expectedWebhookUrl) {
-      out.verdict = 'Webhook points at a different URL. Re-run /api/telegram/setup on the current deployment.';
+      out.verdict = 'Webhook points at a different URL. Re-run /api/telegram/setup?key=<secret> on the current deployment.';
     } else {
       out.verdict = 'Webhook looks healthy. If the bot still does not reply, check Vercel function logs for the [TG] Webhook received lines.';
     }
