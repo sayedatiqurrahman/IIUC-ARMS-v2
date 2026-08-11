@@ -10,18 +10,35 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
   const isFounder = c.role === 'Founder & Lead';
 
   return (
-    <div className={`bg-dark-bg2 border rounded-2xl overflow-hidden transition-all group flex flex-col ${
+    <div className={`bg-dark-bg2 border rounded-2xl transition-all group flex flex-col ${
       isFounder ? 'border-qsis/40 ring-1 ring-qsis/20' : 'border-dark-border hover:border-qsis/50 hover:shadow-[0_4px_20px_rgba(34,197,94,0.12)]'
     }`}>
       {/* Header */}
-      <div className={`relative px-4 pt-5 pb-3 text-center via-qsis/40 ${isFounder ? 'bg-gradient-to-b from-qsis/15 to-transparent' : 'bg-gradient-to-b from-qsis/5 to-transparent'}`}>
-        <div className="relative inline-block mb-2.5">
+      <div className={`relative px-4 pt-5 pb-3 text-center rounded-t-2xl ${isFounder ? 'bg-gradient-to-b from-qsis/15 to-transparent' : 'bg-gradient-to-b from-qsis/5 to-transparent'}`}>
+        <div className="relative inline-block mb-2.5 group/avatar">
           <Image src={c.avatar_url} alt={c.login} width={64} height={64} className={`w-16 h-16 rounded-full object-cover border-2 transition-colors ${
             isFounder ? 'border-qsis shadow-[0_0_16px_rgba(34,197,94,0.3)]' : 'border-dark-border group-hover:border-qsis/50'
           }`} />
           {isFounder && (
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2" title="Founder & Lead">
-              <i className="fas fa-crown text-white text-[0.55rem]"></i>
+            <>
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2 cursor-help" title="Founder & Lead">
+                <i className="fas fa-crown text-white text-[0.55rem]"></i>
+              </div>
+              <span className="pointer-events-none absolute bottom-7 right-0 z-50 w-56 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left opacity-0 translate-y-1 transition-all duration-150 group-hover/avatar:opacity-100 group-hover/avatar:translate-y-0 shadow-xl">
+                <span className="block text-[0.7rem] font-bold text-qsis mb-0.5">
+                  <i className="fas fa-crown mr-1"></i>Founder
+                </span>
+                <span className="block text-[0.65rem] leading-snug text-neutral-300">
+                  This crown marks the founder who created this platform. It isn't an earned
+                  badge — it belongs only to the founding account. Top contributors rise through
+                  the contributors leaderboard instead.
+                </span>
+              </span>
+            </>
+          )}
+          {!isFounder && c.profileComplete && (
+            <div className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-sky-500 flex items-center justify-center shadow ring-2 ring-dark-bg2" title="Verified">
+              <i className="fas fa-check text-white text-[0.45rem]"></i>
             </div>
           )}
           {!isFounder && isDev && isResource && (
@@ -48,11 +65,6 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
           {isResource && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-semibold bg-orange-500/15 text-orange-400">
               <i className="fas fa-book-open text-[0.5rem]"></i>Resource
-            </span>
-          )}
-          {c.profileComplete && !isFounder && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[0.58rem] font-medium bg-green-500/10 text-green-400">
-              <i className="fas fa-check-circle text-[0.45rem]"></i>Complete
             </span>
           )}
         </div>
@@ -129,7 +141,7 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
       </div>
 
       {/* Stats footer */}
-      <div className="px-4 py-2.5 border-t border-dark-border bg-dark-bg3/50">
+      <div className="px-4 py-2.5 border-t border-dark-border bg-dark-bg3/50 rounded-b-2xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="text-[0.6rem] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded" title="Code commits">

@@ -36,7 +36,11 @@ export default function WordViewer({ item, onClose }: { item: any; onClose: () =
 
         const data = await res.arrayBuffer();
         if (cancelled || !bodyRef.current) return;
-        await renderAsync(data, bodyRef.current, document.body, {
+        // CRITICAL: never pass document.body (or any app-owned node) as the
+        // style container — docx-preview does `styleContainer.innerHTML = ""`,
+        // which wipes React's root (#__next) and blacks out the whole app.
+        // The container div is owned by this viewer, so clearing it is safe.
+        await renderAsync(data, bodyRef.current, bodyRef.current, {
           className: 'docx',
           inWrapper: true,
           ignoreWidth: false,

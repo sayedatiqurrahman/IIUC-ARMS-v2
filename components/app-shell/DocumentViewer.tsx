@@ -1,7 +1,7 @@
 'use client';
 
 import PdfViewer from '@/components/PdfViewer';
-import OfficeViewer from './OfficeViewer';
+import OfficeDocViewer from './OfficeDocViewer';
 import WordViewer from './WordViewer';
 import ImageViewer from './ImageViewer';
 import EpubViewer from './EpubViewer';
@@ -9,19 +9,20 @@ import TextViewer from './TextViewer';
 import MediaViewer from './MediaViewer';
 import UnsupportedViewer from './UnsupportedViewer';
 
-const OFFICE_TYPES = ['doc', 'xls', 'xlsx', 'ppt', 'pptx'];
+const OFFICE_TYPES = ['doc', 'xls', 'xlsx', 'csv', 'ppt', 'pptx'];
 
 export default function DocumentViewer({ item, onClose }: { item: any; onClose: () => void }) {
   const mime = item.mimeType;
   const ext = item.path?.split('.').pop()?.toLowerCase() || '';
 
-  // pdf renders in the in-app pdf.js viewer; docx renders natively via
-  // docx-preview; the remaining office formats (doc/xls/xls/ppt/pptx) render in
-  // the Microsoft Office embed; media (mp3/mp4/webm/…) render in the native
+  // PDF renders in the in-app pdf.js viewer (continuous scroll). .docx renders
+  // inline via docx-preview. The remaining office formats (doc/xls/xlsx/csv/
+  // ppt/pptx) show a local download card — the old Microsoft Office embed went
+  // black on restricted networks. Media (mp3/mp4/webm/…) render in the native
   // HTML5 video/audio player.
   if (ext === 'pdf') return <PdfViewer url={item.rawUrl} name={item.name} onClose={onClose} />;
   if (ext === 'docx') return <WordViewer item={item} onClose={onClose} />;
-  if (OFFICE_TYPES.includes(ext)) return <OfficeViewer item={item} onClose={onClose} />;
+  if (OFFICE_TYPES.includes(ext)) return <OfficeDocViewer item={item} onClose={onClose} />;
   if (mime === 'image') return <ImageViewer item={item} onClose={onClose} />;
   if (mime === 'epub') return <EpubViewer item={item} onClose={onClose} />;
   if (mime === 'kindle') return <UnsupportedViewer item={item} kindle onClose={onClose} />;
