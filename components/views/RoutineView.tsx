@@ -26,7 +26,7 @@ import TeacherContacts from '@/components/routine/TeacherContacts';
 import AllSemesterView from '@/components/routine/AllSemesterView';
 import RoutineBuilder from '@/components/routine/RoutineBuilder';
 
-export default function RoutineView() {
+export default function RoutineView({ dept, setDept }: { dept: string; setDept: (val: string) => void }) {
   const router = useRouter();
   const { data: session } = useSession();
   const { confirm, confirmDialog } = useConfirm();
@@ -352,13 +352,13 @@ export default function RoutineView() {
           <div className="routine-page-header no-print">
             <div>
               <h3 className="routine-page-title"><i className="fas fa-calendar-alt"></i> Class Routine</h3>
-              {profile?.department && (
+              {dept && (
                 <p className="routine-page-sub" style={{ color: '#22c55e' }}>
-                  <i className="fas fa-building mr-1"></i>{profile.department}
-                  {profile.semester && <><span className="mx-1">&bull;</span><i className="fas fa-graduation-cap mr-1"></i>{config.semesters.find(s => s.id === profile.semester)?.label || profile.semester}</>}
+                  <i className="fas fa-building mr-1"></i>{dept}
+                  {profile?.semester && <><span className="mx-1">&bull;</span><i className="fas fa-graduation-cap mr-1"></i>{config.semesters.find(s => s.id === profile?.semester)?.label || profile?.semester}</>}
                 </p>
               )}
-              {!profile?.department && (
+              {!dept && (
                 <p className="routine-page-sub">Manage and view your class schedules</p>
               )}
             </div>

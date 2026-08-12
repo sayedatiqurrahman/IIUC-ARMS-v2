@@ -1873,3 +1873,53 @@ button { font-family: inherit; }
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 768px) {
+  .routine-grid-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .routine-grid-table th,
+  .routine-grid-table td {
+    padding: 4px;
+    font-size: 0.65rem;
+  }
+
+  .routine-grid-table th {
+    font-size: 0.6rem;
+  }
+
+  .routine-grid-time {
+    font-size: 0.65rem;
+    padding-left: 8px !important;
+  }
+
+  .routine-grid-time small, .routine-grid-time small {
+    font-size: 0.5rem;
+  }
+
+  .routine-day-btn {
+    padding: 6px 8px;
+    font-size: 0.65rem;
+  }
+
+  .routine-builder-hint {
+    font-size: 0.65rem;
+    margin-bottom: 8px;
+  }
+
+  .routine-add-btn {
+    font-size: 0.65rem;
+    padding: 6px;
+  }
+
+  .routine-day-selector {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .routine-day-selector .routine-day-btn {
+    flex: 1 1 30%;
+  }
+}

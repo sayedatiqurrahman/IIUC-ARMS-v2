@@ -4,17 +4,20 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import CustomSelect from '@/components/CustomSelect';
+import { config } from '@/lib/config';
 import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, BuilderStep } from './types';
 import { SEMESTERS, DEFAULT_PERIODS, DEFAULT_DAYS, DEFAULT_FEMALE_PERIODS } from './types';
 import { getDefaultSession, getSlot, loadDraft, saveDraft, clearDraft, to24h, to12h } from './helpers';
 import { showToast } from '@/lib/utils';
 import PeriodEditor from './PeriodEditor';
+import { useAppStore } from '@/lib/store';
 
 export default function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem | null; onSave: (r: RoutineItem) => void; onCancel: () => void }) {
   const [step, setStep] = useState<BuilderStep>('info');
   const [semester, setSemester] = useState(existing?.semester || SEMESTERS[0]);
   const [branch, setBranch] = useState(existing?.branch || '');
   const [gender, setGender] = useState<'male' | 'female' | 'both' | null>(existing?.gender || null);
+  const [department, setDepartment] = useState(existing?.department || 'Department of Qur\'anic Sciences & Islamic Studies');
   const [session, setSession] = useState(existing?.session || getDefaultSession());
   const [room, setRoom] = useState(existing?.room || '');
   const [maleRoom, setMaleRoom] = useState(existing?.maleRoom || '');
@@ -34,7 +37,7 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
 
   useEffect(() => {
     if (!semester) { setSemesterCourses([]); return; }
-    fetch(`/api/semester-courses?semester=${encodeURIComponent(semester)}`)
+    fetch(`/api/semester-courses?semester=${encodeURIComponent(semester)}&department=${encodeURIComponent(department)}`)
       .then(r => r.json())
       .then(data => {
         if (data.success && Array.isArray(data.courses)) {
@@ -42,7 +45,7 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
         }
       })
       .catch(() => {});
-  }, [semester]);
+  }, [semester, department]);
 
   useEffect(() => {
     if (existing) return;
@@ -194,8 +197,8 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
     const routine: RoutineItem = {
       id: existing?.id || `my-${Date.now()}`,
       semester, branch: branch || null, gender, session, room: room || '',
+      department: department,
       academicYear: existing?.academicYear || new Date().getFullYear().toString(),
-      department: existing?.department || 'Department of Qur\'anic Sciences & Islamic Studies',
       university: existing?.university || 'International Islamic University Chittagong',
       periods, days, courses, slots,
       ...(isBoth ? { malePeriods, femalePeriods, maleSlots, femaleSlots, maleRoom, femaleRoom } : {}),
@@ -405,49 +408,51 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
             </div>
           ) : (
             <div className="routine-grid-wrapper">
-              <table className="routine-grid-table">
-                <thead>
-                  <tr>
-                    <th>Period</th>
-                    {days.map(d => <th key={d}>{d.slice(0, 3)}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {activePeriods.map((p, pIdx) => {
-                    if (p.isBreak) {
+              <div className="routine-grid-scroll">
+                <table className="routine-grid-table">
+                  <thead>
+                    <tr>
+                      <th>Period</th>
+                      {days.map(d => <th key={d}>{d.slice(0, 3)}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activePeriods.map((p, pIdx) => {
+                      if (p.isBreak) {
+                        return (
+                          <tr key={pIdx} className="routine-grid-break">
+                            <td className="routine-grid-time">{p.start} - {p.end}</td>
+                            {days.map(d => <td key={d}>Break</td>)}
+                          </tr>
+                        );
+                      }
+                      const cpIdx = nonBreakIdx(pIdx, activePeriods);
                       return (
-                        <tr key={pIdx} className="routine-grid-break">
-                          <td className="routine-grid-time">{p.start} - {p.end}</td>
-                          {days.map(d => <td key={d}>Break</td>)}
+                        <tr key={pIdx}>
+                          <td className="routine-grid-time">
+                            <div>{p.name}</div>
+                            <small>{p.start} - {p.end}</small>
+                          </td>
+                          {days.map(d => {
+                            const currentSlot = getSlot(d, cpIdx, activeSlots);
+                            return (
+                              <td key={d}>
+                                <CustomSelect
+                                  value={currentSlot?.course || ''}
+                                  onChange={(val) => setSlotForActive(d, cpIdx, val)}
+                                  placeholder="-- Off Day --"
+                                  options={courses.map(c => ({ value: c.code, label: `${c.code} - ${c.title}` }))}
+                                  size="sm"
+                                />
+                              </td>
+                            );
+                          })}
                         </tr>
                       );
-                    }
-                    const cpIdx = nonBreakIdx(pIdx, activePeriods);
-                    return (
-                      <tr key={pIdx}>
-                        <td className="routine-grid-time">
-                          <div>{p.name}</div>
-                          <small>{p.start} - {p.end}</small>
-                        </td>
-                        {days.map(d => {
-                          const currentSlot = getSlot(d, cpIdx, activeSlots);
-                          return (
-                            <td key={d}>
-                              <CustomSelect
-                                value={currentSlot?.course || ''}
-                                onChange={(val) => setSlotForActive(d, cpIdx, val)}
-                                placeholder="-- Off Day --"
-                                options={courses.map(c => ({ value: c.code, label: `${c.code} - ${c.title}` }))}
-                                size="sm"
-                              />
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

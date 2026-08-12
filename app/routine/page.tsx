@@ -1,7 +1,7 @@
-'use client';
-
+import { config } from '@/lib/config'; import { FACULTIES } from '@/lib/departments';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
+import CustomSelect from '@/components/CustomSelect';
 import RoutineView from '@/components/views/RoutineView';
 import ExamRoutineView from '@/components/views/ExamRoutineView';
 import SeatPlanView from '@/components/views/SeatPlanView';
@@ -22,6 +22,7 @@ export default function RoutinePage() {
   const [tab, setTab] = useState<RoutineTab>('class');
   const [teacherName, setTeacherName] = useState('');
   const appliedRef = useRef(false);
+  const [dept, setDept] = useState<string>('');
 
   useEffect(() => {
     if (appliedRef.current) return;
@@ -29,7 +30,6 @@ export default function RoutinePage() {
     const params = new URLSearchParams(window.location.search);
     const t = params.get('tab') as RoutineTab | null;
     if (t && TAB_KEYS.includes(t)) {
-      // Only teachers may open the teacher tab; everyone else falls back.
       setTab(t === 'teacher' && !canUseTeacherTab ? 'class' : t);
     }
     const teacher = params.get('teacher');
@@ -67,6 +67,20 @@ export default function RoutinePage() {
 
   return (
     <div>
+      {/* Department Selector */}
+      <div className="mb-3 px-2 py-2 bg-dark-bg2 border border-dark-border rounded-md mb-3">
+        <label className="text-[0.7rem] text-dark-text2 mb-1 block">Department</label>
+        <CustomSelect
+          value={dept || 'All Departments'}
+          onChange={(val) => setDept(val || '')}
+          placeholder="Select department"
+          options={[
+            { value: '', label: 'All Departments' },
+            ...FACULTIES.flatMap(f => f.departments).map(d => ({ value: d.id, label: d.shortName || d.name })).filter(Boolean)
+          ]}
+        />
+      </div>
+
       <div className="flex gap-1 mb-5 p-1 bg-dark-bg2 border border-dark-border rounded-xl">
         {tabBtn('class', 'Class Routine', 'Class', 'fas fa-calendar-alt')}
         {tabBtn('exam', 'Exam Routine', 'Exam', 'fas fa-file-alt')}
@@ -74,7 +88,7 @@ export default function RoutinePage() {
         {canUseTeacherTab && tabBtn('teacher', 'My Routine', 'Mine', 'fas fa-chalkboard-teacher')}
       </div>
 
-      {tab === 'class' && <RoutineView />}
+      {tab === 'class' && <RoutineView dept={dept} setDept={setDept} />}
       {tab === 'exam' && <ExamRoutineView />}
       {tab === 'seatplan' && <SeatPlanView />}
       {canUseTeacherTab && tab === 'teacher' && <TeacherRoutineView initialTeacher={teacherName || undefined} onTeacherChange={handleTeacherChange} />}
