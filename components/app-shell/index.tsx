@@ -371,6 +371,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/faculty" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/faculty') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
               <i className="fas fa-chalkboard-teacher"></i> Faculty
             </Link>
+            <Link href="/studio" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/studio') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
+              <i className="fas fa-tools"></i> Studio
+            </Link>
           </div>
           <div className="flex items-center gap-2">
             <button className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-qsis/30 bg-qsis/10 text-qsis cursor-pointer hover:bg-qsis/20 transition-all" onClick={handleOpenUpload}>
@@ -474,34 +477,39 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             <div className="p-4 space-y-5">
-              {/* Quick Links */}
+              {/* Features — native app style icon grid */}
               <div>
-                <h4 className="text-[0.75rem] font-bold text-dark-text3 uppercase tracking-wider mb-2">Quick Links</h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <Link href="/" onClick={() => setShowMoreSheet(false)} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors no-underline">
-                    <i className="fas fa-home text-qsis text-sm"></i>
-                    <span className="text-[0.68rem] text-dark-text font-medium">Browse</span>
-                  </Link>
-                  <button onClick={() => { handleOpenUpload(); setShowMoreSheet(false); }} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors">
-                    <i className="fas fa-upload text-green-400 text-sm"></i>
-                    <span className="text-[0.68rem] text-dark-text font-medium">Upload</span>
-                  </button>
-                  <Link href="/history" onClick={() => setShowMoreSheet(false)} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors no-underline">
-                    <i className="fas fa-history text-yellow-400 text-sm"></i>
-                    <span className="text-[0.68rem] text-dark-text font-medium">History</span>
-                  </Link>
-                  <Link href="/contributors" onClick={() => setShowMoreSheet(false)} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors no-underline">
-                    <i className="fas fa-users text-purple-400 text-sm"></i>
-                    <span className="text-[0.68rem] text-dark-text font-medium">Team</span>
-                  </Link>
-                  <Link href="/faculty" onClick={() => setShowMoreSheet(false)} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors no-underline">
-                    <i className="fas fa-chalkboard-teacher text-teal-400 text-sm"></i>
-                    <span className="text-[0.68rem] text-dark-text font-medium">Faculty</span>
-                  </Link>
-                  <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition-colors">
-                    <i className="fab fa-github text-dark-text2 text-sm"></i>
-                    <span className="text-[0.68rem] text-dark-text font-medium">GitHub</span>
-                  </a>
+                <h4 className="text-[0.75rem] font-bold text-dark-text3 uppercase tracking-wider mb-2">Features</h4>
+                <div className="grid grid-cols-4 gap-2">
+                  {([
+                    ['home', '/', 'fa-house', 'bg-blue-500/15', 'text-blue-400', 'Browse', true, 'link'],
+                    ['upload', '', 'fa-upload', 'bg-green-500/15', 'text-green-400', 'Upload', false, 'upload'],
+                    ['history', '/history', 'fa-clock-rotate-left', 'bg-yellow-500/15', 'text-yellow-400', 'History', true, 'link'],
+                    ['routine', '/routine', 'fa-calendar-days', 'bg-purple-500/15', 'text-purple-400', 'Routine', true, 'link'],
+                    ['studio', '/studio', 'fa-tools', 'bg-orange-500/15', 'text-orange-400', 'Studio', true, 'link'],
+                    ['team', '/contributors', 'fa-users', 'bg-pink-500/15', 'text-pink-400', 'Team', true, 'link'],
+                    ['faculty', '/faculty', 'fa-chalkboard-user', 'bg-teal-500/15', 'text-teal-400', 'Faculty', true, 'link'],
+                    ['github', '', 'fa-github', 'bg-slate-500/15', 'text-slate-300', 'GitHub', false, 'external'],
+                  ] as const).map(([key, href, icon, bg, color, label, isLink, kind]) => {
+                    const cls = `flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-dark-bg3 border border-dark-border transition-colors no-underline ${kind === 'link' ? 'hover:border-qsis/40' : kind === 'upload' ? 'hover:border-green-500/40' : 'hover:border-slate-400/40'}`;
+                    const inner = (
+                      <>
+                        <div className={`w-12 h-12 rounded-2xl ${bg} flex items-center justify-center`}>
+                          <i className={`${icon} ${color} text-lg`}></i>
+                        </div>
+                        <span className="text-[0.6rem] text-dark-text font-medium">{label}</span>
+                      </>
+                    );
+                    if (kind === 'link') return (
+                      <Link key={key} href={href} onClick={() => setShowMoreSheet(false)} className={cls}>{inner}</Link>
+                    );
+                    if (kind === 'upload') return (
+                      <button key={key} onClick={() => { handleOpenUpload(); setShowMoreSheet(false); }} className={`${cls} cursor-pointer`}>{inner}</button>
+                    );
+                    return (
+                      <a key={key} href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" className={cls}>{inner}</a>
+                    );
+                  })}
                 </div>
               </div>
               {/* Organizations */}
@@ -619,6 +627,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link href="/routine" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-calendar-alt mr-2"></i>Routine</Link>
                 <Link href="/contributors" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2"></i>Contributors</Link>
                 <Link href="/faculty" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-chalkboard-teacher mr-2"></i>Faculty</Link>
+               <Link href="/studio" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-tools mr-2"></i>Studio</Link>
                 <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" className="text-[0.8rem] text-dark-text2 hover:text-qsis transition-colors"><i className="fab fa-github mr-2"></i>GitHub Repo</a>
               </div>
             </div>
