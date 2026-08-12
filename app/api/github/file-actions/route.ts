@@ -79,53 +79,6 @@ async function getFileSha(token: string, filePath: string, branch: string): Prom
   return data.sha || null;
 }
 
-async function getAllFilesInFolder(token: string, folderPath: string, branch: string): Promise<{ path: string; sha: string }[]> {
-  const url = `${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${folderPath}?ref=${branch}`;
-  const res = await fetch(url, { headers: ghHeaders(token) });
-  if (!res.ok) return [];
-  const items = await res.json();
-  if (!Array.isArray(items)) return [];
-
-  const files: { path: string; sha: string }[] = [];
-  for (const item of items) {
-    if (item.type === 'file') {
-      files.push({ path: item.path, sha: item.sha });
-    } else if (item.type === 'dir') {
-      const subFiles = await getAllFilesInFolder(token, item.path, branch);
-      files.push(...subFiles);
-    }
-  }
-  return files;
-}
-
-async function createFile(token: string, filePath: string, content: string, message: string, branch: string, sha?: string): Promise<boolean> {
-  const body: any = { message, content, branch };
-  if (sha) body.sha = sha;
-  const res = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${filePath}`, {
-    method: 'PUT',
-    headers: ghHeaders(token),
-    body: JSON.stringify(body),
-  });
-  return res.ok;
-}
-
-async function deleteFile(token: string, filePath: string, message: string, branch: string, sha: string): Promise<boolean> {
-  const res = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${filePath}`, {
-    method: 'DELETE',
-    headers: ghHeaders(token),
-    body: JSON.stringify({ message, sha, branch }),
-  });
-  return res.ok;
-}
-
-async function getContent(token: string, filePath: string, branch: string): Promise<{ content: string; sha: string } | null> {
-  const url = `${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${filePath}?ref=${branch}`;
-  const res = await fetch(url, { headers: ghHeaders(token) });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return { content: data.content, sha: data.sha };
-}
-
 // POST /api/github/file-actions — { action: 'move'|'rename'|'copy'|'delete', from, to? }
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.admin);
@@ -173,9 +126,13 @@ export async function POST(req: NextRequest) {
     }
 
     const { token } = await resolveToken(req);
-    if (!token) {
+    const botTok = await getRepoBotToken(config.owner, config.repo);
+    // Mutations run as the installed GitHub App bot; require a token only when
+    // neither the user nor the bot can authenticate.
+    if (!token && !botTok) {
       return NextResponse.json({ error: 'No GitHub token available' }, { status: 401 });
     }
+    const checkTok = botTok || token;
 
     const branch = config.branch;
     const fromFull = `${config.uploadPath}/${from}`;
@@ -184,7 +141,7 @@ export async function POST(req: NextRequest) {
     if (action === 'delete') {
       // The Contents API returns an ARRAY for a directory and an OBJECT for a
       // file. getFileSha() returned null for folders → the old 404 bug.
-      const contentsRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${fromFull}?ref=${branch}`, { headers: ghHeaders(token) });
+      const contentsRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${fromFull}?ref=${branch}`, { headers: ghHeaders(checkTok) });
       if (!contentsRes.ok) {
         return NextResponse.json({ error: 'File not found' }, { status: 404 });
       }
@@ -315,21 +272,16 @@ export async function POST(req: NextRequest) {
       const toPath = [...fromParts.slice(0, -1), newName].join('/');
       const toFull = `${config.uploadPath}/${toPath}`;
 
-      // Check destination doesn't exist
-      const existingSha = await getFileSha(token, toFull, branch);
-      if (existingSha) return NextResponse.json({ error: `"${newName}" already exists at destination` }, { status: 409 });
+      // Reject if destination already exists (single file or folder).
+      const destSha = await getFileSha(checkTok, toFull, branch);
+      const destContents = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${toFull}?ref=${branch}`, { headers: ghHeaders(checkTok) });
+      if (destSha || (destContents.ok && Array.isArray(await destContents.json()))) {
+        return NextResponse.json({ error: `"${newName}" already exists at destination` }, { status: 409 });
+      }
 
-      const sha = await getFileSha(token, fromFull, branch);
-      if (!sha) return NextResponse.json({ error: 'File not found' }, { status: 404 });
-
-      const data = await getContent(token, fromFull, branch);
-      if (!data) return NextResponse.json({ error: 'Cannot read file' }, { status: 500 });
-
-      const created = await createFile(token, toFull, data.content, `Rename ${oldName} → ${newName}`, branch);
-      if (!created) return NextResponse.json({ error: 'Failed to create renamed file' }, { status: 500 });
-
-      const deleted = await deleteFile(token, fromFull, `Delete original after rename: ${oldName}`, branch, sha);
-      if (!deleted) return NextResponse.json({ error: 'Renamed but failed to delete original. Both copies exist.' }, { status: 500 });
+      const { moveCopyRepoEntries } = await import('@/lib/github-tree-ops');
+      const res = await moveCopyRepoEntries(fromFull, toFull, 'move', `Rename ${oldName} → ${newName} (via app bot)`);
+      if (!res.ok || res.count === 0) return NextResponse.json({ error: 'Rename failed' }, { status: 500 });
 
       try {
         await prisma.activityLog.create({
@@ -348,66 +300,19 @@ export async function POST(req: NextRequest) {
     if (action === 'move') {
       if (!to) return NextResponse.json({ error: 'Missing "to" destination' }, { status: 400 });
 
-      const toFull = `${config.uploadPath}/${to}`;
+      const toFull = `${config.uploadPath}/${to}`.replace(/\/$/, '');
       if (fromFull === toFull) return NextResponse.json({ error: 'Source and destination are the same' }, { status: 400 });
 
-      // Check destination parent exists
-      const toParts = to.split('/');
-      const destFileName = toParts[toParts.length - 1];
-      const destFolder = toParts.slice(0, -1).join('/');
-      const destFolderFull = destFolder ? `${config.uploadPath}/${destFolder}` : config.uploadPath;
-
-      // Check if it's a folder move (to ends with / or to is a directory)
-      const folderFiles = await getAllFilesInFolder(token, fromFull, branch);
-
-      if (folderFiles.length > 0) {
-        // Folder move — move all files
-        let moved = 0;
-        const fromBase = from;
-        const toBase = to.replace(/\/$/, '');
-
-        for (const f of folderFiles) {
-          const relPath = f.path.replace(`${config.uploadPath}/${fromBase}`, '').replace(/^\//, '');
-          const newFilePath = `${config.uploadPath}/${toBase}/${relPath}`;
-
-          const fileData = await getContent(token, f.path, branch);
-          if (!fileData) continue;
-
-          const created = await createFile(token, newFilePath, fileData.content, `Move ${relPath}`, branch);
-          if (created) {
-            await deleteFile(token, f.path, `Delete original after move: ${relPath}`, branch, f.sha);
-            moved++;
-          }
-        }
-
-        try {
-          await prisma.activityLog.create({
-            data: {
-              action: 'file_move',
-              userId: email,
-              userName: profile?.name || email.split('@')[0],
-              details: JSON.stringify({ from, to, filesMoved: moved, isFolder: true }),
-            },
-          });
-        } catch {}
-        return NextResponse.json({ success: true, moved, isFolder: true });
+      // Reject if the destination already exists (file or folder).
+      const destSha = await getFileSha(checkTok, toFull, branch);
+      const destContents = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${toFull}?ref=${branch}`, { headers: ghHeaders(checkTok) });
+      if (destSha || (destContents.ok && Array.isArray(await destContents.json()))) {
+        return NextResponse.json({ error: `A file or folder already exists at "${to}"` }, { status: 409 });
       }
 
-      // Single file move
-      const existingSha = await getFileSha(token, toFull, branch);
-      if (existingSha) return NextResponse.json({ error: `A file already exists at "${to}"` }, { status: 409 });
-
-      const sha = await getFileSha(token, fromFull, branch);
-      if (!sha) return NextResponse.json({ error: 'File not found' }, { status: 404 });
-
-      const data = await getContent(token, fromFull, branch);
-      if (!data) return NextResponse.json({ error: 'Cannot read file' }, { status: 500 });
-
-      const created = await createFile(token, toFull, data.content, `Move ${from.split('/').pop()} → ${to}`, branch);
-      if (!created) return NextResponse.json({ error: 'Failed to create file at destination' }, { status: 500 });
-
-      const deleted = await deleteFile(token, fromFull, `Delete original after move: ${from.split('/').pop()}`, branch, sha);
-      if (!deleted) return NextResponse.json({ error: 'Moved but failed to delete original. Both copies exist.' }, { status: 500 });
+      const { moveCopyRepoEntries } = await import('@/lib/github-tree-ops');
+      const res = await moveCopyRepoEntries(fromFull, toFull, 'move', `Move ${from.split('/').pop()} → ${to} (via app bot)`);
+      if (!res.ok || res.count === 0) return NextResponse.json({ error: 'Move failed' }, { status: 500 });
 
       try {
         await prisma.activityLog.create({
@@ -415,28 +320,34 @@ export async function POST(req: NextRequest) {
             action: 'file_move',
             userId: email,
             userName: profile?.name || email.split('@')[0],
-            details: JSON.stringify({ from, to }),
+            details: JSON.stringify({ from, to, filesMoved: res.count, isFolder: res.count > 1 }),
           },
         });
       } catch {}
-      return NextResponse.json({ success: true, newPath: to });
+      return NextResponse.json({ success: true, newPath: to, moved: res.count });
     }
 
     // ─── COPY ───
     if (action === 'copy') {
       if (!to) return NextResponse.json({ error: 'Missing "to" destination' }, { status: 400 });
 
-      const toFull = `${config.uploadPath}/${to}`;
+      let toFull = `${config.uploadPath}/${to}`.replace(/\/$/, '');
       if (fromFull === toFull) return NextResponse.json({ error: 'Source and destination are the same' }, { status: 400 });
 
-      const existingSha = await getFileSha(token, toFull, branch);
-      if (existingSha) return NextResponse.json({ error: `A file already exists at "${to}"` }, { status: 409 });
+      // When copying a folder, the destination is a folder (trailing slash).
+      const srcContents = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${fromFull}?ref=${branch}`, { headers: ghHeaders(checkTok) });
+      const srcIsFolder = srcContents.ok && Array.isArray(await srcContents.json());
+      if (srcIsFolder) toFull = `${toFull}/`;
 
-      const data = await getContent(token, fromFull, branch);
-      if (!data) return NextResponse.json({ error: 'Source file not found' }, { status: 404 });
+      const destSha = await getFileSha(checkTok, toFull, branch);
+      const destContents = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${toFull}?ref=${branch}`, { headers: ghHeaders(checkTok) });
+      if (destSha || (destContents.ok && Array.isArray(await destContents.json()))) {
+        return NextResponse.json({ error: `A file or folder already exists at "${to}"` }, { status: 409 });
+      }
 
-      const created = await createFile(token, toFull, data.content, `Copy ${from.split('/').pop()} → ${to}`, branch);
-      if (!created) return NextResponse.json({ error: 'Failed to copy' }, { status: 500 });
+      const { moveCopyRepoEntries } = await import('@/lib/github-tree-ops');
+      const res = await moveCopyRepoEntries(fromFull, toFull, 'copy', `Copy ${from.split('/').pop()} → ${to} (via app bot)`);
+      if (!res.ok || res.count === 0) return NextResponse.json({ error: 'Copy failed' }, { status: 500 });
 
       try {
         await prisma.activityLog.create({
@@ -448,7 +359,7 @@ export async function POST(req: NextRequest) {
           },
         });
       } catch {}
-      return NextResponse.json({ success: true, newPath: to });
+      return NextResponse.json({ success: true, newPath: to, copied: res.count });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

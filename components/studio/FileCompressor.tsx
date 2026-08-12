@@ -22,10 +22,10 @@ function formatBytes(n: number): string {
 let nextId = 1;
 
 type QualityKey = 'high' | 'medium' | 'low';
-const QUALITY_PRESETS: Record<QualityKey, { pdfOpt: { quality: number; maxDim: number }; pdfRaster: { qualities: number[] } }> = {
-  high: { pdfOpt: { quality: 0.82, maxDim: 2400 }, pdfRaster: { qualities: [0.85, 0.72] } },
-  medium: { pdfOpt: { quality: 0.7, maxDim: 1600 }, pdfRaster: { qualities: [0.78, 0.6] } },
-  low: { pdfOpt: { quality: 0.5, maxDim: 1100 }, pdfRaster: { qualities: [0.6, 0.45] } },
+const QUALITY_PRESETS: Record<QualityKey, { pdfOpt: { quality: number; maxDim: number }; pdfRaster: { qualities: number[] }; img: { quality: number; maxDim: number } }> = {
+  high: { pdfOpt: { quality: 0.82, maxDim: 2400 }, pdfRaster: { qualities: [0.8, 0.68] }, img: { quality: 0.82, maxDim: 2400 } },
+  medium: { pdfOpt: { quality: 0.7, maxDim: 1600 }, pdfRaster: { qualities: [0.68, 0.55] }, img: { quality: 0.7, maxDim: 1600 } },
+  low: { pdfOpt: { quality: 0.5, maxDim: 1100 }, pdfRaster: { qualities: [0.55, 0.4] }, img: { quality: 0.5, maxDim: 1100 } },
 };
 
 export default function FileCompressor() {
@@ -47,7 +47,7 @@ export default function FileCompressor() {
     } else if (ARCHIVE_RE.test(lower)) {
       result = await compressArchive(file);
     } else {
-      result = await compressImageStrong(file);
+      result = await compressImageStrong(file, preset.img);
     }
 
     const r = result;

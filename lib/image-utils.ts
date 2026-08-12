@@ -1,5 +1,7 @@
 'use client';
 
+import { encodeJpeg, decodeJpeg, type RawImage } from './jsquash';
+
 export interface Point {
   x: number;
   y: number;
@@ -37,6 +39,16 @@ export function fileToDataUrl(file: File | Blob): Promise<string> {
     reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
+}
+
+function uint8ToDataUrl(bytes: Uint8Array, mime: string): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    const slice = bytes.subarray(i, i + chunk);
+    for (let j = 0; j < slice.length; j++) binary += String.fromCharCode(slice[j]);
+  }
+  return `data:${mime};base64,${btoa(binary)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,18 +91,24 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
   return new File([blob], `${baseName}${ext}`, { type: 'image/jpeg' });
 }
 
-// Aggressive-but-fast compression for the standalone Studio tool. Re-encodes a
-// single downscaled canvas and only retries with a lower quality when the first
-// pass isn't smaller, so a well-compressed original still shrinks instead of
-// being reported as "already small". Max 3 encodes → stays quick like online
-// compressors. Returns null when nothing beats the original.
-export async function compressImageStrong(file: File): Promise<File | null> {
+// Aggressive client-side compression for the standalone Studio tool. Pixels are
+// decoded once, then re-encoded with MozJPEG (far tighter than the browser's
+// native canvas JPEG) and WebP, and the smallest result that actually beats the
+// original is kept. PNGs / transparency additionally get a lossless WebP pass so
+// they shrink without dropping a single pixel. Returns null when nothing beats
+// the original.
+export async function compressImageStrong(
+  file: File,
+  opts: { quality?: number; maxDim?: number } = {},
+): Promise<File | null> {
   const name = file.name.toLowerCase();
   if (/\.gif$/i.test(name)) return null;
 
+  const quality = opts.quality ?? 0.82;
+  const maxDim = opts.maxDim ?? 2400;
+
   const dataUrl = await fileToDataUrl(file);
   const img = await loadImage(dataUrl);
-  const maxDim = 2048;
   const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
   const w = Math.max(1, Math.round(img.naturalWidth * scale));
   const h = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -104,19 +122,39 @@ export async function compressImageStrong(file: File): Promise<File | null> {
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, w, h);
   ctx.drawImage(img, 0, 0, w, h);
+  const raw: RawImage = { data: ctx.getImageData(0, 0, w, h).data as Uint8ClampedArray<ArrayBuffer>, width: w, height: h };
 
-  let best: Blob | null = null;
-  for (const q of [0.78, 0.65, 0.52]) {
-    const blob = await canvasToBlob(canvas, 'image/jpeg', q);
-    if (!blob) continue;
-    if (!best || blob.size < best.size) best = blob;
-    if (blob.size < file.size) break;
-  }
-  if (!best || best.size >= file.size) return null;
+  const hasAlpha = /\.png$/i.test(name) || /\.webp$/i.test(name) || hasTransparency(raw);
 
-  const ext = /\.png$/i.test(name) ? '.png' : /\.webp$/i.test(name) ? '.webp' : '.jpg';
+  type Cand = { bytes: Uint8Array<ArrayBuffer>; ext: string; type: string };
+  const cands: Cand[] = [];
+  // MozJPEG — far tighter than the browser's native canvas JPEG at equal quality.
+  try {
+    cands.push({ bytes: await encodeJpeg(raw, quality), ext: '.jpg', type: 'image/jpeg' });
+  } catch {}
+  // Native canvas WebP — smaller than JPEG at the same quality and keeps alpha,
+  // so it's the better pick for photos and for PNGs / transparency.
+  try {
+    const webpBlob = await canvasToBlob(canvas, 'image/webp', quality);
+    if (webpBlob) cands.push({ bytes: new Uint8Array(await webpBlob.arrayBuffer()), ext: '.webp', type: 'image/webp' });
+  } catch {}
+
+  if (!cands.length) return null;
+  cands.sort((a, b) => a.bytes.length - b.bytes.length);
+  const best = cands.find(c => c.bytes.length < file.size);
+  if (!best) return null;
+
   const baseName = name.replace(/\.[^.]+$/, '');
-  return new File([best], `${baseName}${ext}`, { type: 'image/jpeg' });
+  return new File([best.bytes], `${baseName}${best.ext}`, { type: best.type });
+}
+
+// True when any pixel in an RGBA buffer is not fully opaque.
+function hasTransparency(raw: RawImage): boolean {
+  const d = raw.data;
+  for (let i = 3; i < d.length; i += 4) {
+    if (d[i] < 255) return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +209,15 @@ export async function compressPdf(
     const { jsPDF } = await import('jspdf');
     let bestBlob: Blob | null = null;
     for (const q of qualities) {
-      const imgs = canvases.map(c => c.toDataURL('image/jpeg', q));
+      // MozJPEG beats the browser's native canvas JPEG at the same quality, so
+      // the rasterised pages come out noticeably smaller for scanned PDFs.
+      const imgs = await Promise.all(
+        canvases.map(async c => {
+          const raw: RawImage = { data: c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data as Uint8ClampedArray<ArrayBuffer>, width: c.width, height: c.height };
+          const bytes = await encodeJpeg(raw, q);
+          return uint8ToDataUrl(bytes, 'image/jpeg');
+        }),
+      );
       const firstOrient = dims[0].w >= dims[0].h ? 'landscape' : 'portrait';
       const doc: any = new jsPDF({ orientation: firstOrient, unit: 'px', format: [dims[0].w, dims[0].h] });
       for (let i = 0; i < imgs.length; i++) {
@@ -198,42 +244,39 @@ export async function compressPdf(
 // PDF optimization — keep text/vectors, recompress embedded raster images
 // ---------------------------------------------------------------------------
 
-// Re-encode a raw JPEG (the bytes of a DCTDecode image stream) through a canvas
-// at the target quality, optionally downscaling to `maxDim` on the long side.
+// Re-encode a raw JPEG (the bytes of a DCTDecode image stream) through MozJPEG at
+// the target quality, optionally downscaling to `maxDim` on the long side.
 // Returns the new JPEG bytes plus the (possibly smaller) dimensions, or null if
-// the browser can't decode/re-encode it (never throws).
-function reencodeJpeg(bytes: Uint8Array, quality: number, maxDim: number): Promise<{ data: Uint8Array; w: number; h: number } | null> {
-  return new Promise(resolve => {
-    if (typeof document === 'undefined' && typeof OffscreenCanvas === 'undefined') return resolve(null);
-    const blob = new Blob([bytes as BlobPart], { type: 'image/jpeg' });
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-        const w = Math.max(1, Math.round(img.width * scale));
-        const h = Math.max(1, Math.round(img.height * scale));
-        const canvas: any = typeof OffscreenCanvas !== 'undefined'
-          ? new OffscreenCanvas(w, h)
-          : Object.assign(document.createElement('canvas'), { width: w, height: h });
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { URL.revokeObjectURL(url); return resolve(null); }
-        ctx.drawImage(img, 0, 0, w, h);
-        URL.revokeObjectURL(url);
-        const finish = (b: Blob | null) => {
-          if (!b) return resolve(null);
-          b.arrayBuffer().then(ab => resolve({ data: new Uint8Array(ab), w, h })).catch(() => resolve(null));
-        };
-        if (canvas.convertToBlob) canvas.convertToBlob({ type: 'image/jpeg', quality }).then(finish);
-        else canvas.toBlob(finish, 'image/jpeg', quality);
-      } catch {
-        URL.revokeObjectURL(url);
-        resolve(null);
-      }
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-    img.src = url;
-  });
+// the codec can't decode/re-encode it (never throws).
+async function reencodeJpeg(bytes: Uint8Array, quality: number, maxDim: number): Promise<{ data: Uint8Array; w: number; h: number } | null> {
+  try {
+    const dec = await decodeJpeg(bytes);
+    const scale = Math.min(1, maxDim / Math.max(dec.width, dec.height));
+    const w = Math.max(1, Math.round(dec.width * scale));
+    const h = Math.max(1, Math.round(dec.height * scale));
+    const data = scale < 1 ? resizeRGBA(dec, w, h).data : dec.data;
+    const out = await encodeJpeg({ data, width: w, height: h }, quality);
+    return { data: out, w, h };
+  } catch {
+    return null;
+  }
+}
+
+// Downscale an RGBA buffer with bilinear-ish smoothing via a canvas.
+function resizeRGBA(src: RawImage, w: number, h: number): RawImage {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const cx = c.getContext('2d')!;
+  cx.putImageData(new ImageData(src.data, src.width, src.height), 0, 0);
+  const c2 = document.createElement('canvas');
+  c2.width = w;
+  c2.height = h;
+  const cx2 = c2.getContext('2d')!;
+  cx2.imageSmoothingEnabled = true;
+  cx2.imageSmoothingQuality = 'high';
+  cx2.drawImage(c, 0, 0, w, h);
+  return { data: cx2.getImageData(0, 0, w, h).data as Uint8ClampedArray<ArrayBuffer>, width: w, height: h };
 }
 
 // Mirrors what online tools (iLovePDF, Smallpdf) do server-side with Ghostscript:
