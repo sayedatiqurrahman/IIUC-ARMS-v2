@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { compressImageStrong, compressPdf } from '@/lib/image-utils';
+import { compressArchive, compressImageStrong, compressPdf, ARCHIVE_RE } from '@/lib/image-utils';
 import { downloadFile } from '@/lib/download-file';
 import { showToast } from '@/lib/utils';
 
@@ -27,8 +27,18 @@ export default function FileCompressor() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const runCompression = useCallback(async (id: number, file: File) => {
-    const isPdf = /\.pdf$/i.test(file.name);
-    const r = isPdf ? await compressPdf(file) : await compressImageStrong(file);
+    const lower = file.name.toLowerCase();
+    let result: File | null = null;
+    if (/\.pdf$/i.test(lower)) {
+      result = await compressPdf(file);
+      // Fall back to a lossless archive re-zip if it's a ZIP-based document.
+      if (!result && ARCHIVE_RE.test(lower)) result = await compressArchive(file);
+    } else if (ARCHIVE_RE.test(lower)) {
+      result = await compressArchive(file);
+    } else {
+      result = await compressImageStrong(file);
+    }
+    const r = result;
     setItems(prev => prev.map(it => (it.id === id ? { ...it, result: r, saved: r ? Math.max(0, it.original.size - r.size) : 0, status: 'done' } : it)));
   }, []);
 
@@ -98,7 +108,7 @@ export default function FileCompressor() {
                     ) : it.saved > 0 ? (
                       <span><span className="line-through opacity-70">{formatBytes(it.original.size)}</span> → <span className="text-green-400">{formatBytes(it.result?.size ?? it.original.size)}</span> <span className="text-green-400 font-semibold">−{pct}%</span></span>
                     ) : (
-                      <span>{formatBytes(it.original.size)} <span className="text-dark-text3">— already small or not compressible</span></span>
+                      <span>{formatBytes(it.original.size)} <span className="text-dark-text3">— already optimized, can't reduce further</span></span>
                     )}
                   </p>
                 </div>

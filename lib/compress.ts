@@ -41,8 +41,10 @@ export async function compressUploadFile(file: File): Promise<CompressResult> {
       if (c) return { file: c, saved: Math.max(0, original - c.size) };
     }
 
+    // ZIP-based containers (Office Open XML, ODF, EPUB, raw ZIP, comic books).
+    // Lossless re-compression — never damages the file.
     if (
-      (name.endsWith('.docx') || name.endsWith('.pptx') || name.endsWith('.epub')) &&
+      /\.(docx|docm|pptx|pptm|xlsx|xlsm|epub|odt|ods|odp|zip|cbz)$/i.test(name) &&
       original <= 25 * 1024 * 1024
     ) {
       const c = await capped(rezipContainer(file), 10000, null);

@@ -130,10 +130,10 @@ export async function compressImageStrong(file: File): Promise<File | null> {
 // Returns null if the result isn't smaller than the original or on any error.
 export async function compressPdf(
   file: File,
-  opts: { quality?: number; maxWidth?: number } = {},
+  opts: { qualities?: number[]; maxWidth?: number } = {},
 ): Promise<File | null> {
-  const quality = opts.quality ?? 0.72;
-  const maxWidth = opts.maxWidth ?? 1240;
+  const maxWidth = opts.maxWidth ?? 1500;
+  const qualities = opts.qualities ?? [0.78, 0.6];
   const name = file.name.toLowerCase();
   if (!/\.pdf$/i.test(name)) return null;
 
@@ -147,7 +147,10 @@ export async function compressPdf(
   }
 
   try {
-    const pages: { dataUrl: string; w: number; h: number }[] = [];
+    // Render every page once at a sensible resolution; we then re-encode at a
+    // few JPEG qualities and keep the smallest result that beats the original.
+    const canvases: HTMLCanvasElement[] = [];
+    const dims: { w: number; h: number }[] = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const vp = page.getViewport({ scale: 1 });
@@ -161,30 +164,55 @@ export async function compressPdf(
       ctx.fillStyle = '#fff';
       ctx.fillRect(0, 0, w, h);
       await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale }) }).promise;
-      pages.push({ dataUrl: canvas.toDataURL('image/jpeg', quality), w, h });
+      canvases.push(canvas);
+      dims.push({ w, h });
     }
 
     const { jsPDF } = await import('jspdf');
-    const first = pages[0];
-    const firstOrient = first.w >= first.h ? 'landscape' : 'portrait';
-    const doc: any = new jsPDF({ orientation: firstOrient, unit: 'px', format: [first.w, first.h] });
-    for (let i = 0; i < pages.length; i++) {
-      if (i > 0) {
-        doc.addPage([pages[i].w, pages[i].h], pages[i].w >= pages[i].h ? 'landscape' : 'portrait');
+    let bestBlob: Blob | null = null;
+    for (const q of qualities) {
+      const imgs = canvases.map(c => c.toDataURL('image/jpeg', q));
+      const firstOrient = dims[0].w >= dims[0].h ? 'landscape' : 'portrait';
+      const doc: any = new jsPDF({ orientation: firstOrient, unit: 'px', format: [dims[0].w, dims[0].h] });
+      for (let i = 0; i < imgs.length; i++) {
+        if (i > 0) doc.addPage([dims[i].w, dims[i].h], dims[i].w >= dims[i].h ? 'landscape' : 'portrait');
+        doc.addImage(imgs[i], 'JPEG', 0, 0, dims[i].w, dims[i].h);
       }
-      doc.addImage(pages[i].dataUrl, 'JPEG', 0, 0, pages[i].w, pages[i].h);
+      const blob = doc.output('blob') as Blob;
+      if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
     }
 
-    const blob = doc.output('blob') as Blob;
-    if (blob.size >= file.size) return null;
+    if (!bestBlob || bestBlob.size >= file.size) return null;
     const baseName = file.name.replace(/\.pdf$/i, '');
-    return new File([blob], `${baseName}_compressed.pdf`, { type: 'application/pdf' });
+    return new File([bestBlob], `${baseName}_compressed.pdf`, { type: 'application/pdf' });
   } catch {
     return null;
   } finally {
     try {
       pdf.destroy?.();
     } catch {}
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Archive (ZIP-based document) compression — lossless
+// ---------------------------------------------------------------------------
+
+// These are ZIP containers; re-zipping every entry with max DEFLATE compression
+// shrinks them with zero quality loss and keeps them perfectly valid/openable.
+export const ARCHIVE_RE = /\.(docx|docm|pptx|pptm|xlsx|xlsm|epub|odt|ods|odp|zip|cbz)$/i;
+
+export async function compressArchive(file: File): Promise<File | null> {
+  if (!ARCHIVE_RE.test(file.name)) return null;
+  try {
+    const { unzipSync, zipSync } = await import('fflate');
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const files = unzipSync(buf);
+    const out = zipSync(files, { level: 9 });
+    if (out.length >= buf.length) return null;
+    return new File([out], file.name, { type: file.type || 'application/octet-stream' });
+  } catch {
+    return null;
   }
 }
 
