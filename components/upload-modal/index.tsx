@@ -299,16 +299,22 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const valid = filtered.filter(f => f.size <= config.maxSingleFileUploadMB * 1024 * 1024);
     if (valid.length < filtered.length) alert(`${filtered.length - valid.length} file(s) exceeded ${config.maxSingleFileUploadMB}MB and were skipped.`);
 
-    // Compress client-side before upload (images, large PDFs, DOCX/PPTX/EPUB)
+    // Compress client-side before upload (images, large PDFs, DOCX/PPTX/EPUB).
+    // Each file is isolated: a compression failure/hang on one file must never
+    // block the rest — it just keeps the original and still gets added below.
     const valid2: File[] = [];
     let totalSaved = 0;
     setCompressing(`Compressing 0/${valid.length}...`);
     try {
       for (let i = 0; i < valid.length; i++) {
         setCompressing(`Compressing ${i + 1}/${valid.length} — ${valid[i].name}...`);
-        const r = await compressUploadFile(valid[i]);
-        valid2.push(r.file);
-        totalSaved += r.saved;
+        try {
+          const r = await compressUploadFile(valid[i]);
+          valid2.push(r.file);
+          totalSaved += r.saved;
+        } catch {
+          valid2.push(valid[i]);
+        }
       }
     } finally {
       setCompressing(null);

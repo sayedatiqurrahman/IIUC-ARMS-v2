@@ -22,15 +22,22 @@ export async function compressUploadFile(file: File): Promise<CompressResult> {
   const name = file.name.toLowerCase();
   const original = file.size;
 
+  // Compression is strictly best-effort: if any path stalls (pdf.js worker
+  // startup, an oversized scan, a slow sync rezip) we must never leave the UI
+  // stuck on "Compressing…" — the original file is returned after the cap so
+  // the upload always proceeds.
+  const capped = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
+    Promise.race([p, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
+
   try {
     if (isImageName(name)) {
-      const c = await compressImage(file, imageOptsFor(original));
+      const c = await capped(compressImage(file, imageOptsFor(original)), 15000, file);
       return { file: c, saved: Math.max(0, original - c.size) };
     }
 
     // Tiny PDFs rasterize in ~seconds for <100KB of savings — not worth it.
     if (name.endsWith('.pdf') && original > 800 * 1024 && original <= 30 * 1024 * 1024) {
-      const c = await compressPdf(file);
+      const c = await capped(compressPdf(file), 40000, null);
       if (c) return { file: c, saved: Math.max(0, original - c.size) };
     }
 
@@ -38,7 +45,7 @@ export async function compressUploadFile(file: File): Promise<CompressResult> {
       (name.endsWith('.docx') || name.endsWith('.pptx') || name.endsWith('.epub')) &&
       original <= 25 * 1024 * 1024
     ) {
-      const c = await rezipContainer(file);
+      const c = await capped(rezipContainer(file), 10000, null);
       if (c) return { file: c, saved: Math.max(0, original - c.size) };
     }
   } catch {}
@@ -58,9 +65,10 @@ function imageOptsFor(size: number) {
 // Rebuild a PDF page-by-page. Used ONLY for scanned/photo PDFs (the common case
 // for exam questions & notes) where they lose 40-70% and still look sharp.
 // PDFs with real text content are left untouched — rasterizing them would wreck
-// their crispness. Raster output is supersampled at 2x and re-encoded at high
-// JPEG quality, preserving each page's original aspect ratio instead of forcing
-// A4. The result is only kept when it is genuinely smaller (never upsized).
+// their crispness. Raster output is supersampled (scale-capped so page canvases
+// stay bounded) and re-encoded at high JPEG quality, preserving each page's
+// original aspect ratio instead of forcing A4. The result is only kept when it
+// is genuinely smaller (never upsized).
 async function compressPdf(file: File): Promise<File | null> {
   const pdfjs: any = await import(/* webpackIgnore: true */ '/pdfjs/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
@@ -76,8 +84,12 @@ async function compressPdf(file: File): Promise<File | null> {
   } catch {}
 
   const { jsPDF } = await import('jspdf');
-  const RENDER_SCALE = 2; // supersample so raster text/images stay sharp
   const JPEG_Q = 0.9;
+  // Supersample to keep raster text/images sharp, but cap the render so a
+  // huge scan page never turns into a GPU-swallowing canvas (e.g. a 4000px
+  // page at 2x would be 8000px wide). The cap keeps per-page canvases at
+  // ~2x the max side up to 2400px — a good sharpness/effort balance.
+  const renderScaleFor = (maxDim: number) => Math.min(2, 2400 / maxDim);
 
   const pageSize = (vpW: number, vpH: number) => {
     const A4W = 210, A4H = 297;
@@ -98,7 +110,8 @@ async function compressPdf(file: File): Promise<File | null> {
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: RENDER_SCALE });
+    const vp1 = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: renderScaleFor(Math.max(vp1.width, vp1.height)) });
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.floor(viewport.width));
     canvas.height = Math.max(1, Math.floor(viewport.height));
@@ -115,7 +128,6 @@ async function compressPdf(file: File): Promise<File | null> {
     }
 
     if (i > 1) {
-      const vp1 = page.getViewport({ scale: 1 });
       const s = pageSize(vp1.width, vp1.height);
       out.addPage([s.w, s.h], orientationFor(s.w, s.h));
     }
