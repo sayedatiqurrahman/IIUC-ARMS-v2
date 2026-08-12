@@ -346,7 +346,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
       {/* NAVBAR */}
-      <nav className="sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border">
+      <nav className="sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border wco-aware">
         <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3 no-underline" onClick={(e) => { e.preventDefault(); goHome(); router.push('/'); }}>
             <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white" priority />

@@ -21,6 +21,32 @@ button { font-family: inherit; }
 *::-webkit-scrollbar { width: 0; height: 0; }
 * { scrollbar-width: none; -ms-overflow-style: none; }
 
+/* ── Window Controls Overlay (installed desktop PWA) ────────────────────
+   When the app is installed on desktop, the OS draws the system menu +
+   minimize/maximize/close buttons as an overlay on top of the app's own
+   top bar. We must reserve that region so the OS controls never sit on top
+   of the app's icons / profile menu.
+
+   `titlebar-area-x` / `titlebar-area-width` describe the usable title-bar
+   region (the part NOT covered by the OS controls). On Windows/Linux the
+   controls are on the RIGHT, so the right inset becomes the leftover width;
+   on macOS they are on the LEFT, so `titlebar-area-x` already covers it.
+   Using the env vars makes the layout correct on every platform. */
+@media (display-mode: window-controls-overlay) {
+  .wco-aware {
+    padding-left: env(titlebar-area-x, 0px);
+    padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+  }
+  /* Let the empty area of the top bar act as a drag handle for the window,
+     while keeping every interactive control clickable. */
+  .wco-drag {
+    app-region: drag;
+  }
+  .wco-drag .wco-no-drag {
+    app-region: no-drag;
+  }
+}
+
 .viewer-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1500; }
 .viewer-overlay.active { display:flex; }
 .viewer-container { background:#111827; width:100%; height:100vh; display:flex; flex-direction:column; overflow:hidden; }

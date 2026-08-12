@@ -369,7 +369,7 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
 
   return (
     <div className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col">
-      <div className="flex items-center gap-2 px-3 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 px-3 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0 flex-wrap wco-aware">
         <span className="text-neutral-300 text-[0.8rem] font-semibold truncate max-w-[40vw]">{name}</span>
         <span className="text-neutral-500 text-[0.72rem] hidden sm:block">
           {status === 'ready' ? `${numPages} page${numPages === 1 ? '' : 's'}` : ''}
