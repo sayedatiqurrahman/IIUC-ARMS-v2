@@ -408,14 +408,14 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
           onPointerCancel={endDrag}
           style={{ cursor: tool === 'laser' ? 'none' : 'inherit', touchAction: 'pan-x pan-y' }}
         >
-          <div className="p-3 flex flex-col items-center gap-3">
+          <div className="p-3 flex flex-col gap-3">
             {Array.from({ length: numPages }).map((_, i) => (
               <canvas
                 key={i}
                 ref={(el) => {
                   canvasRefs.current[i] = el;
                 }}
-                className="rounded shadow-lg bg-white"
+                className="rounded shadow-lg bg-white mx-auto"
               />
             ))}
           </div>
