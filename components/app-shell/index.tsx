@@ -482,14 +482,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <h4 className="text-[0.75rem] font-bold text-dark-text3 uppercase tracking-wider mb-2">Features</h4>
                 <div className="grid grid-cols-4 gap-2">
                   {([
-                    ['home', '/', 'fa-house', 'bg-blue-500/15', 'text-blue-400', 'Browse', true, 'link'],
-                    ['upload', '', 'fa-upload', 'bg-green-500/15', 'text-green-400', 'Upload', false, 'upload'],
-                    ['history', '/history', 'fa-clock-rotate-left', 'bg-yellow-500/15', 'text-yellow-400', 'History', true, 'link'],
-                    ['routine', '/routine', 'fa-calendar-days', 'bg-purple-500/15', 'text-purple-400', 'Routine', true, 'link'],
-                    ['studio', '/studio', 'fa-tools', 'bg-orange-500/15', 'text-orange-400', 'Studio', true, 'link'],
-                    ['team', '/contributors', 'fa-users', 'bg-pink-500/15', 'text-pink-400', 'Team', true, 'link'],
-                    ['faculty', '/faculty', 'fa-chalkboard-user', 'bg-teal-500/15', 'text-teal-400', 'Faculty', true, 'link'],
-                    ['github', '', 'fa-github', 'bg-slate-500/15', 'text-slate-300', 'GitHub', false, 'external'],
+                    ['home', '/', 'fas fa-house', 'bg-blue-500/15', 'text-blue-400', 'Browse', true, 'link'],
+                    ['upload', '', 'fas fa-upload', 'bg-green-500/15', 'text-green-400', 'Upload', false, 'upload'],
+                    ['history', '/history', 'fas fa-clock-rotate-left', 'bg-yellow-500/15', 'text-yellow-400', 'History', true, 'link'],
+                    ['routine', '/routine', 'fas fa-calendar-days', 'bg-purple-500/15', 'text-purple-400', 'Routine', true, 'link'],
+                    ['studio', '/studio', 'fas fa-tools', 'bg-orange-500/15', 'text-orange-400', 'Studio', true, 'link'],
+                    ['team', '/contributors', 'fas fa-users', 'bg-pink-500/15', 'text-pink-400', 'Team', true, 'link'],
+                    ['faculty', '/faculty', 'fas fa-chalkboard-user', 'bg-teal-500/15', 'text-teal-400', 'Faculty', true, 'link'],
+                    ['github', '', 'fab fa-github', 'bg-slate-500/15', 'text-slate-300', 'GitHub', false, 'external'],
                   ] as const).map(([key, href, icon, bg, color, label, isLink, kind]) => {
                     const cls = `flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-dark-bg3 border border-dark-border transition-colors no-underline ${kind === 'link' ? 'hover:border-qsis/40' : kind === 'upload' ? 'hover:border-green-500/40' : 'hover:border-slate-400/40'}`;
                     const inner = (
