@@ -328,18 +328,17 @@ function collectCandidates(
   return candidates;
 }
 
-// Detect the paper quad in an RGBA frame. `prev` is the previous frame's quad
-// (same pixel space) and acts as a tracking prior. Returns null when nothing
-// plausible is found (OpenCV unavailable or no quad survives the checks).
-export async function detectQuadOpenCV(
+// Collect every plausible paper quad from an RGBA frame (CamScanner-style
+// multi-path) and return them sorted best-first. This is the shared core used
+// by both the single-quad detector and the multi-paper detector.
+function collectAllCandidates(
+  cv: CVModule,
   frame: RgbaFrame,
   prev?: Quad | null,
-  onCandidates?: (info: DetectDebugInfo) => void
-): Promise<Quad | null> {
-  const cv = await loadOpenCV();
-  if (!cv) return null;
+  debug?: (info: DetectDebugInfo) => void
+): Candidate[] {
   const { data, w, h } = frame;
-  if (w < 48 || h < 48) return null;
+  if (w < 48 || h < 48) return [];
 
   const src = new cv.Mat(h, w, cv.CV_8UC4);
   src.data.set(data);
@@ -375,7 +374,7 @@ export async function detectQuadOpenCV(
     cv.Canny(blur, edges, lo, hi);
     cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernel);
     cv.findContours(closed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-    candidates.push(...collectCandidates(cv, contours, w, h, minArea, 0.97, 'A:edges', onCandidates));
+    candidates.push(...collectCandidates(cv, contours, w, h, minArea, 0.97, 'A:edges', debug));
 
     // B. Bright region (white page on any background)
     const hist = new Array(256).fill(0);
@@ -387,7 +386,7 @@ export async function detectQuadOpenCV(
     // reconnects them into one solid page before contouring.
     cv.morphologyEx(mask, maskClosed, cv.MORPH_CLOSE, kernelClose);
     cv.findContours(maskClosed, contours2, hierarchy2, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-    candidates.push(...collectCandidates(cv, contours2, w, h, minArea, 0.93, 'B:bright', onCandidates));
+    candidates.push(...collectCandidates(cv, contours2, w, h, minArea, 0.93, 'B:bright', debug));
 
     // B2. Bright-peak interior isolation: RETR_EXTERNAL merges a bright
     // wall/desk with the paper into one border-touching blob, hiding the paper.
@@ -421,9 +420,9 @@ export async function detectQuadOpenCV(
     closeKernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(closeSize, closeSize));
     cv.morphologyEx(maskDark, adap, cv.MORPH_CLOSE, closeKernel);
     cv.findContours(adap, contours4, hierarchy4, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-    candidates.push(...collectCandidates(cv, contours4, w, h, minArea, 0.93, 'C:ink', onCandidates));
+    candidates.push(...collectCandidates(cv, contours4, w, h, minArea, 0.93, 'C:ink', debug));
 
-    if (candidates.length === 0) return null;
+    if (candidates.length === 0) return [];
 
     const diag = Math.hypot(w, h);
     const prevCenter = prev ? quadCenter(prev) : null;
@@ -438,13 +437,7 @@ export async function detectQuadOpenCV(
       c.baseScore = score;
     }
     candidates.sort((a, b) => b.baseScore - a.baseScore);
-    const best = candidates[0].q;
-    const ordered = orderQuad(best);
-
-    // Line-fit corner refinement so the corners land exactly on the paper edges.
-    const refined = refineQuadCorners({ data: gd, w, h } as GrayImage, ordered);
-    const maxShift = Math.max(...ordered.map((p, i) => Math.hypot(refined[i].x - p.x, refined[i].y - p.y)));
-    return maxShift <= Math.max(12, Math.min(w, h) * 0.05) ? refined : ordered;
+    return candidates;
   } finally {
     src.delete();
     gray.delete();
@@ -465,4 +458,37 @@ export async function detectQuadOpenCV(
     contours4.delete();
     hierarchy4.delete();
   }
+}
+
+// Detect the paper quad in an RGBA frame. `prev` is the previous frame's quad
+// (same pixel space) and acts as a tracking prior. Returns null when nothing
+// plausible is found (OpenCV unavailable or no quad survives the checks).
+export async function detectQuadOpenCV(
+  frame: RgbaFrame,
+  prev?: Quad | null,
+  onCandidates?: (info: DetectDebugInfo) => void
+): Promise<Quad | null> {
+  const cv = await loadOpenCV();
+  if (!cv) return null;
+  const { w, h } = frame;
+  const candidates = collectAllCandidates(cv, frame, prev, onCandidates);
+  if (candidates.length === 0) return null;
+  const ordered = orderQuad(candidates[0].q);
+  // Line-fit corner refinement so the corners land exactly on the paper edges.
+  const refined = refineQuadCorners({ data: frame.data, w, h } as GrayImage, ordered);
+  const maxShift = Math.max(...ordered.map((p, i) => Math.hypot(refined[i].x - p.x, refined[i].y - p.y)));
+  return maxShift <= Math.max(12, Math.min(w, h) * 0.05) ? refined : ordered;
+}
+
+// Multi-paper detector: returns up to `maxCount` plausible paper quads (best
+// first). Used for tap-to-select when several documents lie in the frame.
+export async function detectQuadsOpenCVMulti(
+  frame: RgbaFrame,
+  maxCount = 4,
+  prev?: Quad | null
+): Promise<Quad[]> {
+  const cv = await loadOpenCV();
+  if (!cv) return [];
+  const candidates = collectAllCandidates(cv, frame, prev);
+  return candidates.slice(0, maxCount).map((c) => orderQuad(c.q));
 }
