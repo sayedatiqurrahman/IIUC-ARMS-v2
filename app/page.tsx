@@ -3,10 +3,11 @@
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { config } from '@/lib/config';
+import { DEFAULT_PERMISSIONS } from '@/lib/permissions';
 import { FACULTIES, getDepartmentFolder } from '@/lib/departments';
 import { useAppStore } from '@/lib/store';
 import { getMimeFromExt, extractYear, showToast } from '@/lib/utils';
-import ReadmeEditor from '@/components/ReadmeEditor';
+import ReadmeEditor from '@/components/upload';
 import { CreateCourseResult } from '@/components/upload';
 import {
   BrowseHeader, BrowseModals, PageHeader, FileGrid, FolderCard,
@@ -23,8 +24,9 @@ export default function BrowsePage() {
   const userName = session?.user?.name || profile.name || '';
   const isPrivileged = userRole === 'admin' || userRole === 'teacher';
   const isOwner = email ? config.ownerEmails.includes(email.toLowerCase()) : false;
-  const [filePerms, setFilePerms] = useState<Record<string, boolean>>({});
-  const [coursePerms, setCoursePerms] = useState({ canAdd: false, canEdit: false, canDelete: false, canEditLinks: false });
+  const [filePerms, setFilePerms] = useState<Record<string, boolean>>({
+    move: false, copy: false, rename: false, delete: false,
+  });
   const [moveTarget, setMoveTarget] = useState<{ path: string; name: string; mode: 'move' | 'copy' } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ path: string; name: string } | null>(null);
@@ -84,7 +86,23 @@ export default function BrowsePage() {
       try {
         const res = await fetch('/api/settings/permissions');
         const data = await res.json();
-        if (!data.success) return;
+        if (!data.success) {
+          // Fall back to default permissions from site settings
+          const perms = await import('@/lib/permissions').then(m => m.DEFAULT_PERMISSIONS);
+          setFilePerms({
+            move: isOwner || perms.moveFile.includes(isCR ? 'cr' : role),
+            copy: isOwner || perms.copyFile.includes(isCR ? 'cr' : role),
+            rename: isOwner || perms.renameFile.includes(isCR ? 'cr' : role),
+            delete: isOwner || perms.deleteFile.includes(isCR ? 'cr' : role),
+          });
+          setCoursePerms({
+            canAdd: perms.addCourse.includes(isCR ? 'cr' : role),
+            canEdit: perms.editCourse.includes(isCR ? 'cr' : role),
+            canDelete: perms.deleteCourse.includes(isCR ? 'cr' : role),
+            canEditLinks: perms.editLinks.includes(isCR ? 'cr' : role),
+          });
+          return;
+        }
         const perms = data.permissions || {};
         const customPerms = (profile as any).customPermissions || {};
         const check = (action: string) => {
@@ -107,7 +125,22 @@ export default function BrowsePage() {
           canDelete: check('deleteCourse'),
           canEditLinks: check('editLinks'),
         });
-      } catch {}
+      } catch {
+        // Fall back to default permissions
+        const perms = await import('@/lib/permissions').then(m => m.DEFAULT_PERMISSIONS);
+        setFilePerms({
+          move: isOwner || perms.moveFile.includes(isCR ? 'cr' : role),
+          copy: isOwner || perms.copyFile.includes(isCR ? 'cr' : role),
+          rename: isOwner || perms.renameFile.includes(isCR ? 'cr' : role),
+          delete: isOwner || perms.deleteFile.includes(isCR ? 'cr' : role),
+        });
+        setCoursePerms({
+          canAdd: perms.addCourse.includes(isCR ? 'cr' : role),
+          canEdit: perms.editCourse.includes(isCR ? 'cr' : role),
+          canDelete: perms.deleteCourse.includes(isCR ? 'cr' : role),
+          canEditLinks: perms.editLinks.includes(isCR ? 'cr' : role),
+        });
+      }
     };
     loadPerms();
   }, [email, profile.isCR]);
