@@ -18,6 +18,12 @@
   "url_handlers": [
     { "origin": "https://iiuc-arms.eu.cc" }
   ],
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://iiuc-arms.eu.cc/manifest.json"
+    }
+  ],
   "icons": [
     {
       "src": "/arms-logo-icon.png",

@@ -13,20 +13,48 @@ function isIOS() {
   return /iPhone|iPad|iPod/.test(navigator.userAgent);
 }
 
+// Best-effort check for "installed on this device but opened in a browser tab".
+// Only Chrome/Android expose getInstalledRelatedApps(); it relies on the
+// manifest declaring related_applications. Other browsers fall back to the
+// session-only appinstalled event.
+async function isAppInstalled(): Promise<boolean> {
+  try {
+    const nav = navigator as Navigator & {
+      getInstalledRelatedApps?: () => Promise<Array<{ platform: string; url?: string; id?: string }>>;
+    };
+    if (typeof nav.getInstalledRelatedApps === 'function') {
+      const apps = await nav.getInstalledRelatedApps();
+      return apps.some(a => a.platform === 'webapp');
+    }
+  } catch {}
+  return false;
+}
+
+type InstallState = 'loading' | 'standalone' | 'installed' | 'install';
+
 export default function InstallAppButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [installed, setInstalled] = useState(false);
+  const [state, setState] = useState<InstallState>('loading');
   const [showIosHelp, setShowIosHelp] = useState(false);
 
   useEffect(() => {
-    setInstalled(isStandalone());
+    // Inside the installed app (standalone window) → never show the button.
+    if (isStandalone()) {
+      setState('standalone');
+      return;
+    }
+
+    isAppInstalled().then((detected) => {
+      setState(detected ? 'installed' : 'install');
+    });
 
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
+      setState('install');
     };
     const onAppInstalled = () => {
-      setInstalled(true);
+      setState('installed');
       setDeferredPrompt(null);
       showToast('App installed', 'success');
     };
@@ -40,15 +68,11 @@ export default function InstallAppButton() {
   }, []);
 
   const handleInstall = useCallback(async () => {
-    if (isStandalone()) {
-      setInstalled(true);
-      return;
-    }
     if (deferredPrompt) {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === 'accepted') {
-        setInstalled(true);
+        setState('installed');
         showToast('Installing IIUC-ARMS...', 'success');
       }
       setDeferredPrompt(null);
@@ -61,11 +85,17 @@ export default function InstallAppButton() {
     showToast('Use your browser menu → Install app / Add to Home screen', 'info');
   }, [deferredPrompt]);
 
-  if (installed) {
+  if (state === 'loading' || state === 'standalone') return null;
+
+  if (state === 'installed') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-[0.72rem] font-medium">
-        <i className="fas fa-check"></i> App installed
-      </span>
+      <a
+        href="/"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-[0.72rem] font-medium border border-green-500/20 hover:bg-green-500/20 cursor-pointer transition-all"
+        title="Open the installed IIUC-ARMS app"
+      >
+        <i className="fas fa-external-link-alt"></i> Open App
+      </a>
     );
   }
 
@@ -81,7 +111,7 @@ export default function InstallAppButton() {
 
       {showIosHelp && (
         <div className="fixed inset-0 z-[300] bg-black/60 flex items-center justify-center p-4" onClick={() => setShowIosHelp(false)}>
-          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-dark-bg2 border-dark-border rounded-2xl p-5 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-2">
               <i className="fas fa-mobile-alt text-qsis"></i>
               <h4 className="text-[0.9rem] font-bold text-dark-text">Install IIUC-ARMS</h4>
