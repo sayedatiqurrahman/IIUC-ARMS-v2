@@ -3,11 +3,11 @@
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { config } from '@/lib/config';
-import { DEFAULT_PERMISSIONS } from '@/lib/permissions';
+import { DEFAULT_PERMISSIONS } from '@/lib/permission-defaults';
 import { FACULTIES, getDepartmentFolder } from '@/lib/departments';
 import { useAppStore } from '@/lib/store';
 import { getMimeFromExt, extractYear, showToast } from '@/lib/utils';
-import ReadmeEditor from '@/components/upload';
+import ReadmeEditor from '@/components/ReadmeEditor';
 import { CreateCourseResult } from '@/components/upload';
 import {
   BrowseHeader, BrowseModals, PageHeader, FileGrid, FolderCard,
@@ -26,6 +26,9 @@ export default function BrowsePage() {
   const isOwner = email ? config.ownerEmails.includes(email.toLowerCase()) : false;
   const [filePerms, setFilePerms] = useState<Record<string, boolean>>({
     move: false, copy: false, rename: false, delete: false,
+  });
+  const [coursePerms, setCoursePerms] = useState<{ canAdd: boolean; canEdit: boolean; canDelete: boolean; canEditLinks: boolean }>({
+    canAdd: false, canEdit: false, canDelete: false, canEditLinks: false,
   });
   const [moveTarget, setMoveTarget] = useState<{ path: string; name: string; mode: 'move' | 'copy' } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
@@ -88,7 +91,7 @@ export default function BrowsePage() {
         const data = await res.json();
         if (!data.success) {
           // Fall back to default permissions from site settings
-          const perms = await import('@/lib/permissions').then(m => m.DEFAULT_PERMISSIONS);
+          const perms = await import('@/lib/permission-defaults').then(m => m.DEFAULT_PERMISSIONS);
           setFilePerms({
             move: isOwner || perms.moveFile.includes(isCR ? 'cr' : role),
             copy: isOwner || perms.copyFile.includes(isCR ? 'cr' : role),
@@ -127,7 +130,7 @@ export default function BrowsePage() {
         });
       } catch {
         // Fall back to default permissions
-        const perms = await import('@/lib/permissions').then(m => m.DEFAULT_PERMISSIONS);
+        const perms = await import('@/lib/permission-defaults').then(m => m.DEFAULT_PERMISSIONS);
         setFilePerms({
           move: isOwner || perms.moveFile.includes(isCR ? 'cr' : role),
           copy: isOwner || perms.copyFile.includes(isCR ? 'cr' : role),
