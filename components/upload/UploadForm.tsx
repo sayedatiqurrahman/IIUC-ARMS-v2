@@ -622,19 +622,20 @@ export default function UploadForm({
         </div>
       )}
 
+      {compressing ? (
+        <div className="w-full flex items-center justify-center">
+          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-qsis/15 text-qsis text-[0.75rem] font-semibold border border-qsis/20">
+            <i className="fas fa-spinner fa-spin text-xs"></i>
+            {compressing}
+          </span>
+        </div>
+      ) : (
       <button
         className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={handleSubmitClick}
         disabled={uploading || !!compressing}
       >
-        {compressing ? (
-          <span className="flex flex-col items-center gap-1.5">
-            <span className="flex items-center gap-2"><i className="fas fa-compress-arrows-alt mr-1"></i>{compressing}</span>
-            <span className="w-full max-w-[300px] h-1.5 bg-white/20 rounded-full overflow-hidden">
-              <span className="block h-full bg-white rounded-full animate-pulse"></span>
-            </span>
-          </span>
-        ) : uploading ? (
+        {uploading ? (
           <span className="flex flex-col items-center gap-1.5">
             <span className="flex items-center gap-2"><i className="fas fa-spinner fa-spin mr-1"></i>{uploadProgress?.label || 'Uploading...'}</span>
             {(uploadProgress && uploadProgress.percent > 0) && (
@@ -647,6 +648,7 @@ export default function UploadForm({
           <><i className="fas fa-paper-plane mr-2"></i>Submit {totalFiles} File{totalFiles !== 1 ? 's' : ''} for Review</>
         )}
       </button>
+      )}
     </>
   );
 }
