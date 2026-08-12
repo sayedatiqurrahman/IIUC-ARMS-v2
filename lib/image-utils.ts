@@ -120,6 +120,75 @@ export async function compressImageStrong(file: File): Promise<File | null> {
 }
 
 // ---------------------------------------------------------------------------
+// PDF compression
+// ---------------------------------------------------------------------------
+
+// Compress a PDF by re-rendering every page to a downscaled JPEG and rebuilding
+// the document with jsPDF. This dramatically shrinks scanned / image-heavy
+// PDFs (the common academic case). Text-only PDFs may not get smaller — in that
+// case we return null so the caller can report "already optimized".
+// Returns null if the result isn't smaller than the original or on any error.
+export async function compressPdf(
+  file: File,
+  opts: { quality?: number; maxWidth?: number } = {},
+): Promise<File | null> {
+  const quality = opts.quality ?? 0.72;
+  const maxWidth = opts.maxWidth ?? 1240;
+  const name = file.name.toLowerCase();
+  if (!/\.pdf$/i.test(name)) return null;
+
+  let pdf: any;
+  try {
+    const pdfjs: any = await import(/* webpackIgnore: true */ '/pdfjs/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+    pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  } catch {
+    return null;
+  }
+
+  try {
+    const pages: { dataUrl: string; w: number; h: number }[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const vp = page.getViewport({ scale: 1 });
+      const scale = Math.min(1, maxWidth / vp.width);
+      const w = Math.max(1, Math.round(vp.width * scale));
+      const h = Math.max(1, Math.round(vp.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+      await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale }) }).promise;
+      pages.push({ dataUrl: canvas.toDataURL('image/jpeg', quality), w, h });
+    }
+
+    const { jsPDF } = await import('jspdf');
+    const first = pages[0];
+    const firstOrient = first.w >= first.h ? 'landscape' : 'portrait';
+    const doc: any = new jsPDF({ orientation: firstOrient, unit: 'px', format: [first.w, first.h] });
+    for (let i = 0; i < pages.length; i++) {
+      if (i > 0) {
+        doc.addPage([pages[i].w, pages[i].h], pages[i].w >= pages[i].h ? 'landscape' : 'portrait');
+      }
+      doc.addImage(pages[i].dataUrl, 'JPEG', 0, 0, pages[i].w, pages[i].h);
+    }
+
+    const blob = doc.output('blob') as Blob;
+    if (blob.size >= file.size) return null;
+    const baseName = file.name.replace(/\.pdf$/i, '');
+    return new File([blob], `${baseName}_compressed.pdf`, { type: 'application/pdf' });
+  } catch {
+    return null;
+  } finally {
+    try {
+      pdf.destroy?.();
+    } catch {}
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Grayscale / edge detection helpers
 // ---------------------------------------------------------------------------
 
