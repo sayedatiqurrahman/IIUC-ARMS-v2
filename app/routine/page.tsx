@@ -1,3 +1,4 @@
+"use client";
 import { config } from '@/lib/config'; import { FACULTIES } from '@/lib/departments';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
