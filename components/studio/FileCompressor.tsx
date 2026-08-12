@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { compressArchive, compressImageStrong, compressPdf, ARCHIVE_RE } from '@/lib/image-utils';
+import { compressArchive, compressImageStrong, compressPdf, optimizePdf, ARCHIVE_RE } from '@/lib/image-utils';
 import { downloadFile } from '@/lib/download-file';
 import { showToast } from '@/lib/utils';
 
@@ -21,26 +21,38 @@ function formatBytes(n: number): string {
 
 let nextId = 1;
 
+type QualityKey = 'high' | 'medium' | 'low';
+const QUALITY_PRESETS: Record<QualityKey, { pdfOpt: { quality: number; maxDim: number }; pdfRaster: { qualities: number[] } }> = {
+  high: { pdfOpt: { quality: 0.82, maxDim: 2400 }, pdfRaster: { qualities: [0.85, 0.72] } },
+  medium: { pdfOpt: { quality: 0.7, maxDim: 1600 }, pdfRaster: { qualities: [0.78, 0.6] } },
+  low: { pdfOpt: { quality: 0.5, maxDim: 1100 }, pdfRaster: { qualities: [0.6, 0.45] } },
+};
+
 export default function FileCompressor() {
   const [items, setItems] = useState<Item[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [quality, setQuality] = useState<QualityKey>('medium');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const runCompression = useCallback(async (id: number, file: File) => {
     const lower = file.name.toLowerCase();
+    const preset = QUALITY_PRESETS[quality];
     let result: File | null = null;
+
     if (/\.pdf$/i.test(lower)) {
-      result = await compressPdf(file);
-      // Fall back to a lossless archive re-zip if it's a ZIP-based document.
-      if (!result && ARCHIVE_RE.test(lower)) result = await compressArchive(file);
+      // Primary: recompress embedded images, keep text crisp (like iLovePDF).
+      // Fallback: rasterize pages if the PDF has no recompressible images.
+      result = await optimizePdf(file, preset.pdfOpt);
+      if (!result) result = await compressPdf(file, preset.pdfRaster);
     } else if (ARCHIVE_RE.test(lower)) {
       result = await compressArchive(file);
     } else {
       result = await compressImageStrong(file);
     }
+
     const r = result;
     setItems(prev => prev.map(it => (it.id === id ? { ...it, result: r, saved: r ? Math.max(0, it.original.size - r.size) : 0, status: 'done' } : it)));
-  }, []);
+  }, [quality]);
 
   const addFiles = useCallback((files: File[]) => {
     if (!files.length) return;
@@ -89,6 +101,19 @@ export default function FileCompressor() {
         </div>
         <p className="text-[0.85rem] font-semibold text-dark-text">Drop files here or tap to choose</p>
         <p className="text-[0.7rem] text-dark-text2 max-w-sm">Images, PDFs, DOCX, PPTX &amp; EPUB are compressed in your browser — nothing is uploaded, everything stays on this device.</p>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 text-[0.72rem] text-dark-text2">
+        <span>Compression:</span>
+        <select
+          value={quality}
+          onChange={e => setQuality(e.target.value as QualityKey)}
+          className="bg-dark-bg3 border border-dark-border rounded-lg px-2 py-1 text-dark-text cursor-pointer outline-none"
+        >
+          <option value="high">High (near-lossless)</option>
+          <option value="medium">Medium (recommended)</option>
+          <option value="low">Low (smallest)</option>
+        </select>
       </div>
 
       {items.length > 0 && (

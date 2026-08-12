@@ -195,6 +195,119 @@ export async function compressPdf(
 }
 
 // ---------------------------------------------------------------------------
+// PDF optimization — keep text/vectors, recompress embedded raster images
+// ---------------------------------------------------------------------------
+
+// Re-encode a raw JPEG (the bytes of a DCTDecode image stream) through a canvas
+// at the target quality, optionally downscaling to `maxDim` on the long side.
+// Returns the new JPEG bytes plus the (possibly smaller) dimensions, or null if
+// the browser can't decode/re-encode it (never throws).
+function reencodeJpeg(bytes: Uint8Array, quality: number, maxDim: number): Promise<{ data: Uint8Array; w: number; h: number } | null> {
+  return new Promise(resolve => {
+    if (typeof document === 'undefined' && typeof OffscreenCanvas === 'undefined') return resolve(null);
+    const blob = new Blob([bytes as BlobPart], { type: 'image/jpeg' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas: any = typeof OffscreenCanvas !== 'undefined'
+          ? new OffscreenCanvas(w, h)
+          : Object.assign(document.createElement('canvas'), { width: w, height: h });
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { URL.revokeObjectURL(url); return resolve(null); }
+        ctx.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        const finish = (b: Blob | null) => {
+          if (!b) return resolve(null);
+          b.arrayBuffer().then(ab => resolve({ data: new Uint8Array(ab), w, h })).catch(() => resolve(null));
+        };
+        if (canvas.convertToBlob) canvas.convertToBlob({ type: 'image/jpeg', quality }).then(finish);
+        else canvas.toBlob(finish, 'image/jpeg', quality);
+      } catch {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+// Mirrors what online tools (iLovePDF, Smallpdf) do server-side with Ghostscript:
+// walk every page's image XObjects, recompress the embedded JPEGs (DCTDecode)
+// at a lower quality / resolution, and re-save. Text and vector content are
+// left as-is, so the result is visually lossless for text while the raster
+// payload shrinks dramatically. Returns null if nothing could be reduced.
+export async function optimizePdf(
+  file: File,
+  opts: { quality?: number; maxDim?: number } = {},
+): Promise<File | null> {
+  const quality = opts.quality ?? 0.7;
+  const maxDim = opts.maxDim ?? 1600;
+  const name = file.name.toLowerCase();
+  if (!/\.pdf$/i.test(name)) return null;
+
+  let pdfDoc: any;
+  try {
+    const pdflib: any = await import('pdf-lib');
+    const { PDFDocument, PDFName, PDFDict, PDFNumber, PDFRef } = pdflib;
+    pdfDoc = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+    const ctx = pdfDoc.context;
+    const pages = pdfDoc.getPages();
+
+    let foundImage = false;
+    let modified = false;
+
+    for (const page of pages) {
+      const res = page.node.Resources ? page.node.Resources() : null;
+      if (!res) continue;
+      const xobj = res.lookup(PDFName.of('XObject'), PDFDict);
+      if (!xobj) continue;
+      for (const [, ref] of xobj.entries()) {
+        const obj: any = ref instanceof PDFRef ? ctx.lookup(ref) : ref;
+        if (!obj || !obj.dict) continue;
+        const sub = obj.dict.lookup(PDFName.of('Subtype'));
+        if (!sub || sub !== PDFName.of('Image')) continue;
+        if (obj.dict.lookup(PDFName.of('ImageMask'))) continue; // 1-bit masks: skip
+        if (obj.dict.lookup(PDFName.of('SMask'))) continue;     // soft masks: skip (avoid breakage)
+        foundImage = true;
+
+        const filter = obj.dict.lookup(PDFName.of('Filter'));
+        const isDCT =
+          String(filter) === '/DCTDecode' ||
+          (filter && typeof filter.asArray === 'function' &&
+            (filter.asArray() as any[]).some((f: any) => String(f) === '/DCTDecode'));
+        if (!isDCT || !obj.contents) continue;
+
+        const r = await reencodeJpeg(obj.contents as Uint8Array, quality, maxDim);
+        if (!r) continue;
+
+        obj.contents = r.data;
+        obj.dict.set(PDFName.of('Width'), PDFNumber.of(r.w));
+        obj.dict.set(PDFName.of('Height'), PDFNumber.of(r.h));
+        obj.dict.set(PDFName.of('Length'), PDFNumber.of(r.data.length));
+        obj.dict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
+        modified = true;
+      }
+    }
+
+    if (!foundImage || !modified) return null;
+
+    const out = await pdfDoc.save();
+    if (out.length >= file.size) return null;
+    const baseName = file.name.replace(/\.pdf$/i, '');
+    return new File([out], `${baseName}_optimized.pdf`, { type: 'application/pdf' });
+  } catch {
+    return null;
+  } finally {
+    // PDFDocument has no destroy; nothing to clean up.
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Archive (ZIP-based document) compression — lossless
 // ---------------------------------------------------------------------------
 

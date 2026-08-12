@@ -1,6 +1,6 @@
 'use client';
 
-import { compressImage } from '@/lib/image-utils';
+import { compressImage, optimizePdf } from '@/lib/image-utils';
 import { unzipSync, zipSync } from 'fflate';
 
 export interface CompressResult {
@@ -35,10 +35,13 @@ export async function compressUploadFile(file: File): Promise<CompressResult> {
       return { file: c, saved: Math.max(0, original - c.size) };
     }
 
-    // Tiny PDFs rasterize in ~seconds for <100KB of savings — not worth it.
-    if (name.endsWith('.pdf') && original > 800 * 1024 && original <= 30 * 1024 * 1024) {
-      const c = await capped(compressPdf(file), 40000, null);
+    // Prefer recompressing embedded images (keeps text crisp, like iLovePDF);
+    // fall back to rasterizing pages if there are no recompressible images.
+    if (name.endsWith('.pdf') && original > 300 * 1024 && original <= 30 * 1024 * 1024) {
+      const c = await capped(optimizePdf(file, { quality: 0.7, maxDim: 1600 }), 40000, null);
       if (c) return { file: c, saved: Math.max(0, original - c.size) };
+      const c2 = await capped(compressPdf(file), 40000, null);
+      if (c2) return { file: c2, saved: Math.max(0, original - c.size) };
     }
 
     // ZIP-based containers (Office Open XML, ODF, EPUB, raw ZIP, comic books).
