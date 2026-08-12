@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { compressUploadFile } from '@/lib/compress';
+import { compressImageStrong } from '@/lib/image-utils';
 import { downloadFile } from '@/lib/download-file';
 import { showToast } from '@/lib/utils';
 
@@ -27,8 +27,8 @@ export default function FileCompressor() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const runCompression = useCallback(async (id: number, file: File) => {
-    const r = await compressUploadFile(file);
-    setItems(prev => prev.map(it => (it.id === id ? { ...it, result: r.file, saved: r.saved, status: 'done' } : it)));
+    const r = await compressImageStrong(file);
+    setItems(prev => prev.map(it => (it.id === id ? { ...it, result: r, saved: r ? Math.max(0, it.original.size - r.size) : 0, status: 'done' } : it)));
   }, []);
 
   const addFiles = useCallback((files: File[]) => {

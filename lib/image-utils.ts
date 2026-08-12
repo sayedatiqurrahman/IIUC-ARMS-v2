@@ -79,6 +79,46 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
   return new File([blob], `${baseName}${ext}`, { type: 'image/jpeg' });
 }
 
+// Aggressive-but-fast compression for the standalone Studio tool. Re-encodes a
+// single downscaled canvas and only retries with a lower quality when the first
+// pass isn't smaller, so a well-compressed original still shrinks instead of
+// being reported as "already small". Max 3 encodes → stays quick like online
+// compressors. Returns null when nothing beats the original.
+export async function compressImageStrong(file: File): Promise<File | null> {
+  const name = file.name.toLowerCase();
+  if (/\.gif$/i.test(name)) return null;
+
+  const dataUrl = await fileToDataUrl(file);
+  const img = await loadImage(dataUrl);
+  const maxDim = 2048;
+  const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+
+  let best: Blob | null = null;
+  for (const q of [0.78, 0.65, 0.52]) {
+    const blob = await canvasToBlob(canvas, 'image/jpeg', q);
+    if (!blob) continue;
+    if (!best || blob.size < best.size) best = blob;
+    if (blob.size < file.size) break;
+  }
+  if (!best || best.size >= file.size) return null;
+
+  const ext = /\.png$/i.test(name) ? '.png' : /\.webp$/i.test(name) ? '.webp' : '.jpg';
+  const baseName = name.replace(/\.[^.]+$/, '');
+  return new File([best], `${baseName}${ext}`, { type: 'image/jpeg' });
+}
+
 // ---------------------------------------------------------------------------
 // Grayscale / edge detection helpers
 // ---------------------------------------------------------------------------
