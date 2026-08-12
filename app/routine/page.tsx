@@ -1,5 +1,5 @@
 "use client";
-import { config } from '@/lib/config'; import { FACULTIES } from '@/lib/departments';
+import { config } from '@/lib/config'; import { FACULTIES, resolveDepartment } from '@/lib/departments';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import CustomSelect from '@/components/CustomSelect';
@@ -24,6 +24,13 @@ export default function RoutinePage() {
   const [teacherName, setTeacherName] = useState('');
   const appliedRef = useRef(false);
   const [dept, setDept] = useState<string>('');
+
+  // Auto-sync the department from the logged-in user's profile (personalization).
+  useEffect(() => {
+    if (dept) return;
+    const resolved = profile?.department ? resolveDepartment(profile.department) : '';
+    if (resolved) setDept(resolved);
+  }, [profile?.department, dept]);
 
   useEffect(() => {
     if (appliedRef.current) return;

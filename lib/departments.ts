@@ -144,6 +144,27 @@ export function resolveDepartmentId(idOrFolder: string): string {
   return getDepartmentIdByFolder(idOrFolder);
 }
 
+// Resolve a department value (which may be an id, a folder, a short name, or a
+// full display name — e.g. profile.department is stored as a name) to its
+// canonical department id. Falls back to the input if nothing matches.
+export function resolveDepartment(input: string): string {
+  if (!input) return input;
+  const found = findDepartment(input);
+  if (found) return found.department.id;
+  const all = getAllDepartments();
+  for (const { department } of all) {
+    if (
+      department.id === input ||
+      department.folder === input ||
+      department.name === input ||
+      department.shortName === input
+    ) {
+      return department.id;
+    }
+  }
+  return input;
+}
+
 export function isShariahDepartmentId(id: string): boolean {
   const canonical = resolveDepartmentId(id);
   return canonical === 'shariah' || canonical === 'qsis' || canonical === 'dawah' || canonical === 'hadith';

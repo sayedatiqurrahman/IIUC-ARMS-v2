@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import CustomSelect from '@/components/CustomSelect';
 import { config } from '@/lib/config';
+import { FACULTIES, resolveDepartment } from '@/lib/departments';
 import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, BuilderStep } from './types';
 import { SEMESTERS, DEFAULT_PERIODS, DEFAULT_DAYS, DEFAULT_FEMALE_PERIODS } from './types';
 import { getDefaultSession, getSlot, loadDraft, saveDraft, clearDraft, to24h, to12h } from './helpers';
@@ -17,7 +18,15 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
   const [semester, setSemester] = useState(existing?.semester || SEMESTERS[0]);
   const [branch, setBranch] = useState(existing?.branch || '');
   const [gender, setGender] = useState<'male' | 'female' | 'both' | null>(existing?.gender || null);
-  const [department, setDepartment] = useState(existing?.department || 'Department of Qur\'anic Sciences & Islamic Studies');
+  const [department, setDepartment] = useState(existing?.department || '');
+  const profile = useAppStore(s => s.profile);
+
+  // Auto-select the department from the logged-in user's profile (personalization).
+  useEffect(() => {
+    if (existing || department) return;
+    const resolved = profile?.department ? resolveDepartment(profile.department) : '';
+    if (resolved) setDepartment(resolved);
+  }, [profile?.department, existing, department]);
   const [session, setSession] = useState(existing?.session || getDefaultSession());
   const [room, setRoom] = useState(existing?.room || '');
   const [maleRoom, setMaleRoom] = useState(existing?.maleRoom || '');
@@ -230,6 +239,15 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
         <div className="routine-builder-section">
           <h4><i className="fas fa-info-circle"></i> Basic Information</h4>
           <div className="routine-form-grid">
+            <div className="routine-form-group">
+              <label>Department</label>
+              <CustomSelect
+                value={department}
+                onChange={(val) => setDepartment(val)}
+                placeholder="Select department"
+                options={FACULTIES.flatMap(f => f.departments).map(d => ({ value: d.id, label: d.shortName || d.name }))}
+              />
+            </div>
             <div className="routine-form-group">
               <label>Semester</label>
               <CustomSelect

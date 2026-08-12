@@ -14,7 +14,7 @@ export default function CompressorPage() {
       <div className="rounded-2xl border border-dark-border bg-dark-bg2/60 overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-dark-border bg-dark-bg2">
           <div className="w-10 h-10 rounded-xl bg-qsis/15 flex items-center justify-center flex-shrink-0">
-            <i className="fas fa-file-compress text-qsis text-lg"></i>
+            <i className="fas fa-file-zipper text-qsis text-lg"></i>
           </div>
           <div>
             <h2 className="text-[0.9rem] font-bold text-dark-text">File Compressor</h2>

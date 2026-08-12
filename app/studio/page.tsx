@@ -3,7 +3,7 @@ import Link from 'next/link';
 const APPS = [
   {
     href: '/studio/compressor',
-    icon: 'fas fa-file-compress',
+    icon: 'fas fa-file-zipper',
     bg: 'bg-qsis/15',
     color: 'text-qsis',
     title: 'File Compressor',

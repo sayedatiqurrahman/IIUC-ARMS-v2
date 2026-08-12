@@ -74,7 +74,7 @@ export default function FileCompressor() {
         className={`cursor-pointer rounded-2xl border-2 border-dashed transition-colors flex flex-col items-center justify-center gap-2 px-6 py-10 text-center ${dragging ? 'border-qsis bg-qsis/10' : 'border-dark-border bg-dark-bg2 hover:border-qsis/50 hover:bg-dark-bg3'}`}
       >
         <div className="w-14 h-14 rounded-2xl bg-qsis/15 flex items-center justify-center">
-          <i className="fas fa-file-compress text-qsis text-2xl"></i>
+          <i className="fas fa-file-zipper text-qsis text-2xl"></i>
         </div>
         <p className="text-[0.85rem] font-semibold text-dark-text">Drop files here or tap to choose</p>
         <p className="text-[0.7rem] text-dark-text2 max-w-sm">Images, PDFs, DOCX, PPTX &amp; EPUB are compressed in your browser — nothing is uploaded, everything stays on this device.</p>

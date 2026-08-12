@@ -87,7 +87,10 @@ export default function RoutineView({ dept, setDept }: { dept: string; setDept: 
   };
 
   const allVisibleRoutines = (() => {
-    const all = [...publishedRoutines, ...sharedRoutines].filter(filterByGender);
+    let all = [...publishedRoutines, ...sharedRoutines].filter(filterByGender);
+    // When a specific department is selected (e.g. auto-synced from the user's
+    // profile), restrict to that department. "All Departments" (empty) shows all.
+    if (dept) all = all.filter(r => r.department === dept);
     // Teachers, managers, and admins see ALL semesters (role-based control)
     if (isTeacherPlus) return all;
     if (!userSemesterLabel) return all;
