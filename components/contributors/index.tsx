@@ -273,7 +273,7 @@ export default function ContributorsView() {
               {tabList.length === 0 ? (
                 <div className="text-center py-6 text-dark-text2 text-[0.8rem]">No contributors found.</div>
               ) : (
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {tabList.map((c: any) => (
                     <GridCard key={c.id} c={c} settings={settings} onShowHistory={setHistoryFor} />
                   ))}
