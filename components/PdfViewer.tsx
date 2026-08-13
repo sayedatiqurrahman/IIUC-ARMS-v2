@@ -61,6 +61,12 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
         /* page destroyed during unmount — ignore */
       }
     }
+    // Keep the document horizontally centered after any zoom so the pages
+    // never drift to the right side.
+    requestAnimationFrame(() => {
+      const sc = scrollRef.current;
+      if (sc) sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2;
+    });
   }, [scale]);
 
   useEffect(() => {

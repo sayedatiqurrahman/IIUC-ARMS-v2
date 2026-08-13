@@ -169,7 +169,7 @@ export default function WordViewer({ item, onClose }: { item: any; onClose: () =
 
   return (
     <div ref={rootRef} className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col">
-      <div className="flex items-center gap-2 px-3 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0 flex-wrap">
+      <div className="flex items-center gap-2 px-3 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0 flex-wrap wco-aware">
         <i className="fas fa-file-word text-[#3b82f6] flex-shrink-0"></i>
         <span className="text-neutral-300 text-[0.8rem] font-semibold truncate max-w-[30vw]">{item.name}</span>
         {status === 'ready' && pages > 0 && (

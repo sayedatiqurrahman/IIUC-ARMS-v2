@@ -90,10 +90,43 @@ button { font-family: inherit; }
     font-size: 0.92rem;
     letter-spacing: 0.2px;
   }
-  /* Tighten the menu-style nav links so the bar reads like a desktop menu bar. */
+  /* Photoshop-style chrome: a slim title row + a dedicated menu bar row. */
+  .app-titlebar .tb-inner {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .app-titlebar .tb-logo-wrap {
+    order: 1;
+    flex: 1 1 auto;
+  }
+  .app-titlebar .tb-actions {
+    order: 2;
+    flex: 0 0 auto;
+  }
+  .app-titlebar .tb-nav {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: flex-start;
+    gap: 2px;
+    margin-top: 2px;
+    padding-top: 5px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  /* Nav links become flat menu-bar items (like Photoshop's File/Edit/...). */
   .app-titlebar .tb-nav a {
-    padding-top: 0.4rem;
-    padding-bottom: 0.4rem;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #cbd5e1;
+    background: transparent !important;
+  }
+  .app-titlebar .tb-nav a:hover {
+    background: rgba(34, 197, 94, 0.12) !important;
+    color: #e8edf5 !important;
+  }
+  .app-titlebar .tb-nav a.text-qsis {
+    background: transparent !important;
+    color: #22c55e !important;
+    box-shadow: inset 0 -2px 0 #22c55e;
   }
 }
 
@@ -2160,3 +2193,12 @@ button { font-family: inherit; }
 #eduone-scanner-ui-wrapper .scanner-engine-text { color: #94a3b8 !important; }
 
 #eduone-scanner-ui-wrapper .scanner-header-title { color: #e8edf5 !important; }
+
+/* Keep viewer toolbars (PDF/DOC/image/media) clear of the OS window-control
+   buttons (minimize / maximize / close / Windows "more") in WCO mode. */
+@media (display-mode: window-controls-overlay) {
+  .image-toolbar {
+    padding-left: calc(env(titlebar-area-x, 0px) + 12px) !important;
+    padding-right: calc((100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)) + 12px) !important;
+  }
+}
