@@ -29,7 +29,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(false);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
   const { confirm, confirmDialog } = useConfirm();
   const confirmRef = useRef(confirm);
   confirmRef.current = confirm;
@@ -287,6 +289,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setProfileDropdownOpen(false);
       }
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+        setMoreOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -346,16 +351,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
       {/* NAVBAR */}
-      <nav className="sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border wco-aware">
+      <nav className="sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border wco-aware wco-drag">
         <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-3 no-underline" onClick={(e) => { e.preventDefault(); goHome(); router.push('/'); }}>
+          <Link href="/" className="flex items-center gap-3 no-underline wco-no-drag" onClick={(e) => { e.preventDefault(); goHome(); router.push('/'); }}>
             <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white" priority />
             <div>
               <h1 className="text-[1.1rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</h1>
               <span className="text-[0.7rem] text-dark-text2 hidden md:block">Academic Resource System</span>
             </div>
           </Link>
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-1 wco-no-drag">
             <Link href="/" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isBrowse ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
               <i className="fas fa-book-open"></i> Browse
             </Link>
@@ -375,10 +380,54 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <i className="fas fa-tools"></i> Studio
             </Link>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 wco-no-drag">
             <button className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-qsis/30 bg-qsis/10 text-qsis cursor-pointer hover:bg-qsis/20 transition-all" onClick={handleOpenUpload}>
               <i className="fas fa-upload"></i> Upload
             </button>
+            {standalone && (
+              <div className="relative" ref={moreRef}>
+                <button
+                  onClick={() => setMoreOpen(!moreOpen)}
+                  className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-dark-border bg-dark-bg3 text-dark-text2 cursor-pointer hover:text-dark-text hover:bg-dark-bg2 transition-all"
+                  aria-haspopup="true"
+                  aria-expanded={moreOpen}
+                >
+                  <i className="fas fa-ellipsis-h"></i> More
+                </button>
+                {moreOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-72 max-h-[80vh] overflow-y-auto bg-dark-bg2 border border-dark-border rounded-xl shadow-2xl p-2 z-[110] text-dark-text2">
+                    <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">Go To</div>
+                    <Link href="/" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-home w-4 text-center"></i><span>Dashboard</span></Link>
+                    <button onClick={() => { setMoreOpen(false); handleOpenUpload(); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-upload w-4 text-center"></i><span>Upload Files</span></button>
+                    <Link href="/history" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-history w-4 text-center"></i><span>History</span></Link>
+                    <Link href="/routine" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-calendar-alt w-4 text-center"></i><span>Routine</span></Link>
+                    <Link href="/contributors" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-users w-4 text-center"></i><span>Contributors</span></Link>
+                    <Link href="/faculty" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-chalkboard-teacher w-4 text-center"></i><span>Faculty</span></Link>
+                    <Link href="/studio" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-tools w-4 text-center"></i><span>Studio</span></Link>
+                    <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fab fa-github w-4 text-center"></i><span>GitHub Repo</span></a>
+                    <div className="my-1 h-px bg-dark-border" />
+                    <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">Organizations</div>
+                    <a href="https://www.iiuc.ac.bd/" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><Image src="/iiuc-logo.png" alt="" width={20} height={20} className="w-5 h-5 rounded object-contain bg-white" /><span className="text-[0.78rem]">IIUC</span></a>
+                    <a href="https://www.facebook.com/DQSIS" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><Image src="/qsis-logo.jpg" alt="" width={20} height={20} className="w-5 h-5 rounded object-contain bg-white" /><span className="text-[0.78rem]">Qur&apos;anic Sciences Club</span></a>
+                    <a href="https://programming-light.eu.cc" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><Image src="/pl-logo.png" alt="" width={20} height={20} className="w-5 h-5 rounded object-contain bg-white" /><span className="text-[0.78rem]">Programming Light</span></a>
+                    <div className="my-1 h-px bg-dark-border" />
+                    <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">Community</div>
+                    <a href="https://whatsapp.com/channel/0029VbD78MI3gvWcocoFdR1g" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><i className="fab fa-whatsapp w-4 text-center text-green-400"></i><span className="text-[0.78rem]">WhatsApp Channel</span></a>
+                    <a href="https://chat.whatsapp.com/JQbkkwbDTvj9G0Xly9N771" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><i className="fab fa-whatsapp w-4 text-center text-green-400"></i><span className="text-[0.78rem]">WhatsApp Community</span></a>
+                    <a href="https://t.me/iiuc_arms" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><i className="fab fa-telegram w-4 text-center text-blue-400"></i><span className="text-[0.78rem]">Telegram Channel</span></a>
+                    <a href="https://t.me/iiuc_arms_chat" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><i className="fab fa-telegram w-4 text-center text-blue-400"></i><span className="text-[0.78rem]">Telegram Group</span></a>
+                    <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><i className="fas fa-robot w-4 text-center text-blue-400"></i><span className="text-[0.78rem]">Telegram Bot</span></a>
+                    <div className="my-1 h-px bg-dark-border" />
+                    <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">App</div>
+                    <button onClick={async () => { setMoreOpen(false); if (await confirm({ message: 'Reset App? This will clear all cached data and reload.', danger: true, title: 'Force Reset' })) forceResetApp(); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] text-red-400 hover:bg-red-500/10 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-trash-alt w-4 text-center"></i><span>Reset App</span></button>
+                    <button onClick={() => { setMoreOpen(false); handleCheckUpdate(); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-cloud-arrow-down w-4 text-center"></i><span>Check Update</span></button>
+                    <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-star w-4 text-center text-yellow-500"></i><span>Star Repo</span></a>
+                    <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-code-fork w-4 text-center text-qsis"></i><span>Fork to Contribute</span></a>
+                    <a href="https://github.com/sayedatiqurrahman/QSIS-ARMS-v2" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fab fa-github w-4 text-center"></i><span>Source Code</span></a>
+                  </div>
+                )}
+              </div>
+            )}
             {status === 'loading' ? (
               <div className="w-9 h-9 rounded-full bg-dark-bg3 animate-pulse"></div>
             ) : session ? (
@@ -603,8 +652,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* FOOTER — hidden on mobile + admin/dashboard pages */}
-      {!pathname?.startsWith('/dashboard') && !pathname?.startsWith('/admin') && (
+      {/* FOOTER — hidden on mobile + admin/dashboard pages + installed (standalone) app,
+          where its contents are surfaced via the desktop "More" menu instead. */}
+      {!pathname?.startsWith('/dashboard') && !pathname?.startsWith('/admin') && !standalone && (
       <footer className="hidden md:block bg-dark-bg2 border-t border-dark-border mt-8">
         <div className="max-w-[1200px] mx-auto px-5 py-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
