@@ -26,7 +26,6 @@ interface UploadFormProps {
   setCategory: (v: string) => void;
   courses: CourseGroup[];
   updateCourse: (id: number, patch: Partial<CourseGroup>) => void;
-  addCourse: () => void;
   removeCourse: (id: number) => void;
   addLink: (courseId: number, title: string, url: string) => void;
   removeLink: (courseId: number, linkIndex: number) => void;
@@ -67,7 +66,7 @@ export default function UploadForm({
   session, profile, githubToken, setGithubToken,
   department, setDepartment, semester, setSemester,
   category, setCategory,
-  courses, updateCourse, addCourse, removeCourse,
+  courses, updateCourse, removeCourse,
   addLink, removeLink, loadExistingLinks,
   existingCourses, courseOptions,
   createCourseFor, setCreateCourseFor,
@@ -531,12 +530,6 @@ export default function UploadForm({
       })}
 
       {/* Add another course */}
-      {courses.length < 5 && (
-        <button className="w-full py-3 rounded-xl border-2 border-dashed border-qsis/40 bg-qsis/5 text-qsis text-[0.85rem] font-bold cursor-pointer hover:border-qsis hover:bg-qsis/10 transition-all mb-4" onClick={addCourse}>
-          <i className="fas fa-plus-circle mr-2 text-lg"></i> Add Another Course
-        </button>
-      )}
-
       {/* Summary */}
       <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-4">
         <div className="flex items-center justify-between text-[0.78rem]">

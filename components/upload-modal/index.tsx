@@ -255,12 +255,6 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     finally { setPatSaving(false); }
   }
 
-  function addCourse() {
-    if (courses.length >= 5) return;
-    const newId = Math.max(0, ...courses.map(c => c.id)) + 1;
-    setCourses(prev => [...prev, { id: newId, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
-  }
-
   function removeCourse(id: number) {
     if (courses.length <= 1) return;
     setCourses(prev => prev.filter(c => c.id !== id));
@@ -687,7 +681,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             session={session} profile={profile} githubToken={githubToken} setGithubToken={setGithubToken}
             department={department} setDepartment={setDepartment} semester={semester} setSemester={setSemester}
             category={category} setCategory={setCategory}
-            courses={courses} updateCourse={updateCourse} addCourse={addCourse} removeCourse={removeCourse}
+            courses={courses} updateCourse={updateCourse} removeCourse={removeCourse}
             addLink={addLink} removeLink={removeLink} loadExistingLinks={loadExistingLinks}
             existingCourses={existingCourses} courseOptions={courseOptions}
             createCourseFor={createCourseFor} setCreateCourseFor={setCreateCourseFor}
