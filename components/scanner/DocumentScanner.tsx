@@ -1,28 +1,24 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  processFrame,
-  canvasToBlob,
-  orderQuad,
-  type Quad,
-  type Point,
-  type ScanMode,
-  MAX_DIM_DEFAULT,
-} from '@/lib/image-utils';
-import { detectQuadSmart, detectQuadLive, processFrameSmart, refineQuadOnCanvas } from '@/lib/scanic-bridge';
-import { loadOpenCV } from '@/lib/opencv-detect';
-import { buildSearchablePdf, blobToCanvas } from '@/lib/ocr';
+import { useEffect, useRef } from 'react';
+import { buildSearchablePdf } from '@/lib/ocr';
 import { showToast } from '@/lib/utils';
 
-interface CapturedPage {
+// The camera scanner is now powered by `eduone-scanner-sdk`, which runs OpenCV.js
+// + an ONNX document-detection model in a Web Worker and renders its own
+// fullscreen overlay (live framing, auto-capture, perspective crop, review grid
+// and page reordering). This component is a thin bridge: it launches the SDK
+// overlay and converts the cropped page DataURLs it returns into the same
+// onResult/onDone contract the upload flow and the standalone ScannerTool expect.
+
+export interface CapturedPage {
   blob: Blob;
   width: number;
   height: number;
   thumb: string;
   preview: string;
   src: string;
-  quad: Quad;
+  quad: unknown;
 }
 
 interface DocumentScannerProps {
@@ -30,1084 +26,125 @@ interface DocumentScannerProps {
   onCancel: () => void;
   onResult?: (file: File, usedOcr: boolean) => void;
   maxPages?: number;
-  // When true the scan must be a document file (e.g. Notes) — even a single
-  // page is emitted as a PDF instead of a JPG.
+  // When true the scan is emitted as a PDF even for a single page (e.g. Notes).
   docOnly?: boolean;
+  // Build the multi-page output as a searchable PDF via OCR. Defaults to false.
+  ocrEnabled?: boolean;
 }
 
-const MAX_PAGES = 99;
+// Base URL of the OpenCV.js / ONNX Runtime / detection-model assets the SDK
+// worker loads. Overridable per-environment; defaults to the hosted CDN.
+const SCANNER_ASSETS =
+  process.env.NEXT_PUBLIC_SCANNER_ASSETS_URL ||
+  'https://fonixedugrading.blob.core.windows.net/scanner-assets/';
 
-// Scale + offset used to map between a full-res image and its CSS "contain" box.
-function fitRect(vw: number, vh: number, cw: number, ch: number) {
-  const scale = Math.min(cw / vw, ch / vh);
-  return { scale, offX: (cw - vw * scale) / 2, offY: (ch - vh * scale) / 2 };
+function pad(n: number) {
+  return String(n).padStart(2, '0');
+}
+function stamp() {
+  const d = new Date();
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
-// Re-encode a captured page for a compact PDF. Pages already at or below the
-// target dimension pass through untouched; larger pages are downscaled and
-// re-compressed at a slightly lower JPEG quality — readable content is kept
-// while the final file shrinks noticeably.
-async function compressPageBlob(blob: Blob, width: number, height: number, maxDim = 1650, quality = 0.85) {
-  const scale = Math.min(1, maxDim / Math.max(width, height));
-  if (scale >= 1) return { blob, width, height };
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(width * scale));
-  canvas.height = Math.max(1, Math.round(height * scale));
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  try {
-    const img = await blobToCanvas(blob);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  } catch {
-    return { blob, width, height };
-  }
-  const outBlob = await canvasToBlob(canvas, 'image/jpeg', quality);
-  if (!outBlob || outBlob.size === 0) return { blob, width, height };
-  return { blob: outBlob, width: canvas.width, height: canvas.height };
+function dataUrlToBlob(dataUrl: string): { blob: Blob; mime: string } {
+  const [head, b64] = dataUrl.split(',');
+  const mime = (head.match(/data:(.*?);base64/) || [])[1] || 'image/jpeg';
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return { blob: new Blob([arr], { type: mime }), mime };
 }
 
-export default function DocumentScanner({ onDone, onCancel, onResult, maxPages = MAX_PAGES, docOnly = false }: DocumentScannerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const overlayRef = useRef<HTMLCanvasElement>(null);
+function blobSize(blob: Blob): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve({ width: 0, height: 0 });
+    img.src = URL.createObjectURL(blob);
+  });
+}
 
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState('');
-  const [mode, setMode] = useState<ScanMode>('bw');
-  const [ocrEnabled, setOcrEnabled] = useState(false);
-  const [pages, setPages] = useState<CapturedPage[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [progressMsg, setProgressMsg] = useState('');
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+export default function DocumentScanner({ onDone, onCancel, onResult, docOnly = false, ocrEnabled = false }: DocumentScannerProps) {
+  const startedRef = useRef(false);
+  const stopRef = useRef<(() => void) | null>(null);
 
-  const modeRef = useRef<ScanMode>('bw');
-  modeRef.current = mode;
-  const pagesRef = useRef<CapturedPage[]>([]);
-  pagesRef.current = pages;
-  const busyRef = useRef(false);
-  busyRef.current = busy;
-  // Index of the page currently being edited (re-edit) or null for a new capture.
-  const editingIndexRef = useRef<number | null>(null);
+  // Keep the latest callbacks/options reachable from the SDK's async callbacks
+  // without re-launching the scanner on every parent re-render.
+  const cbRef = useRef({ onDone, onCancel, onResult, docOnly, ocrEnabled });
+  cbRef.current = { onDone, onCancel, onResult, docOnly, ocrEnabled };
 
-  // ---- Live framing (jscanify overlay on the viewfinder) ----
-  const [detected, setDetected] = useState(false);
-  const quadRef = useRef<Quad | null>(null);
-  const lastQuadRef = useRef<Quad | null>(null);
-  const missesRef = useRef(0);
-
-  // ---- Edit overlay (captured frame with adjustable corners) ----
-  const editingSrcRef = useRef<string | null>(null);
-  const editingCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const editingQuadRef = useRef<Quad | null>(null);
-  const [editingSrc, setEditingSrc] = useState<string | null>(null);
-  const editingImgRef = useRef<HTMLImageElement>(null);
-  const editOverlayRef = useRef<HTMLCanvasElement>(null);
-
-  // ---- Camera setup ----
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
     let cancelled = false;
 
-    async function start() {
+    (async () => {
       try {
-        // Prefer the rear camera, but fall back to any available camera on
-        // devices where the rear one is missing or busy (avoids black screen).
-        let stream: MediaStream;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
-            audio: false,
-          });
-        } catch {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
-            audio: false,
-          });
-        }
-        if (cancelled) {
-          stream.getTracks().forEach(t => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        // Attach to the already-mounted <video> element directly — the element
-        // mounts before getUserMedia resolves, so the ref callback alone cannot
-        // be relied on to wire the stream up on first open.
-        const el = videoRef.current;
-        if (el && el.srcObject !== stream) {
-          el.srcObject = stream;
-          el.play().catch(() => {});
-        }
-        setReady(true);
-      } catch {
-        setError('Camera access denied or unavailable. Please allow camera permission.');
+        const { DocumentScanner: EduOneScanner } = await import('eduone-scanner-sdk');
+        if (cancelled) return;
+
+        const ui = EduOneScanner.startUI({
+          assetsPath: SCANNER_ASSETS,
+          logoHTML: '<span style="color:#fff;font-weight:700;font-size:0.95rem">IIUC-ARMS</span>',
+          onComplete: async (pages: string[]) => {
+            const { onDone, onCancel, onResult, docOnly, ocrEnabled } = cbRef.current;
+            try {
+              if (!pages.length) {
+                onDone([]);
+                return;
+              }
+              const converted = await Promise.all(
+                pages.map(async (url) => {
+                  const { blob } = dataUrlToBlob(url);
+                  const { width, height } = await blobSize(blob);
+                  return { blob, width, height };
+                })
+              );
+
+              if (converted.length === 1 && !docOnly) {
+                const { blob } = converted[0];
+                const file = new File([blob], `scan-${stamp()}.jpg`, { type: 'image/jpeg' });
+                onResult?.(file, false);
+                onDone([]);
+                return;
+              }
+
+              const usedOcr = ocrEnabled;
+              if (usedOcr) showToast('Building searchable PDF with OCR…', 'info');
+              const file = await buildSearchablePdf(
+                converted.map((c) => ({ blob: c.blob, width: c.width, height: c.height })),
+                usedOcr,
+                `scan-${stamp()}.pdf`
+              );
+              onResult?.(file, usedOcr);
+              onDone([]);
+            } catch (e: any) {
+              showToast(e?.message || 'Failed to process scan', 'error');
+              onCancel();
+            }
+          },
+          onCancel: () => {
+            cbRef.current.onCancel();
+          },
+        });
+        stopRef.current = ui.stop;
+      } catch (e: any) {
+        showToast(e?.message || 'Scanner failed to start', 'error');
+        cbRef.current.onCancel();
       }
-    }
-    start();
+    })();
+
     return () => {
       cancelled = true;
-      streamRef.current?.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    };
-  }, []);
-
-  // The <video> unmounts while the edit screen is shown, so a fresh element is
-  // mounted when returning to the camera. This callback re-attaches the stream
-  // on every mount and resumes playback automatically.
-  const attachVideo = useCallback((el: HTMLVideoElement | null) => {
-    videoRef.current = el;
-    if (el && streamRef.current && el.srcObject !== streamRef.current) {
-      el.srcObject = streamRef.current;
-      el.play().catch(() => {});
-      setReady(true);
-    }
-  }, []);
-
-  // ---- Warm up OpenCV.js in the background ----
-  // jscanify (the detector/crop engine) shares this ~13MB wasm build. Fetching
-  // it up front means the first capture doesn't stall on the download.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    loadOpenCV();
-  }, []);
-
-  // ---- Live framing loop ----
-  // Runs jscanify on a small downscaled frame a few times a second (no heavy
-  // OpenCV fallback, no per-frame refinement), smooths the quad toward the
-  // previous one, and holds the last good frame briefly instead of flickering.
-  // The overlay mirrors exactly what capture-time detection will crop.
-  useEffect(() => {
-    if (!ready) return;
-    let disposed = false;
-    let running = false;
-    const FRAME_MS = 200;
-
-    async function runDetect() {
-      if (disposed || running || busyRef.current) return;
-      const video = videoRef.current;
-      if (!video || video.readyState < 2) return;
-      const vw = video.videoWidth;
-      const vh = video.videoHeight;
-      if (!vw || !vh) return;
-      running = true;
-      const scale = Math.min(1, 640 / Math.max(vw, vh));
-      const dw = Math.max(1, Math.round(vw * scale));
-      const dh = Math.max(1, Math.round(vh * scale));
-      const raw = document.createElement('canvas');
-      raw.width = dw;
-      raw.height = dh;
-      const rctx = raw.getContext('2d', { willReadFrequently: true })!;
-      rctx.drawImage(video, 0, 0, dw, dh);
       try {
-        const detectedQ = await detectQuadLive(raw, dw, dh);
-        if (disposed) return;
-        if (detectedQ) {
-          missesRef.current = 0;
-          const full = detectedQ.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad;
-          // Adaptive temporal smoothing: snap hard while the paper is moving so
-          // the frame tracks in real time, ease gently once it settles.
-          const prev = lastQuadRef.current;
-          let alpha = 0.7;
-          if (prev) {
-            let drift = 0;
-            for (let i = 0; i < 4; i++) {
-              drift += Math.hypot(full[i].x - prev[i].x, full[i].y - prev[i].y);
-            }
-            const diag = Math.hypot(vw, vh);
-            alpha = drift / 4 < diag * 0.008 ? 0.35 : drift / 4 < diag * 0.02 ? 0.6 : 1;
-          }
-          const smoothed: Quad = prev
-            ? orderQuad(full.map((p, i) => ({
-                x: prev[i].x * (1 - alpha) + p.x * alpha,
-                y: prev[i].y * (1 - alpha) + p.y * alpha,
-              })) as Quad)
-            : full;
-          quadRef.current = smoothed;
-          lastQuadRef.current = full;
-          setDetected(true);
-        } else {
-          // Transient miss: hold the last good frame briefly.
-          missesRef.current++;
-          if (lastQuadRef.current && missesRef.current <= 8) {
-            quadRef.current = lastQuadRef.current;
-          } else {
-            quadRef.current = null;
-            lastQuadRef.current = null;
-            setDetected(false);
-          }
-        }
-      } catch {
-        if (disposed) return;
-        missesRef.current++;
-        if (lastQuadRef.current && missesRef.current <= 8) {
-          quadRef.current = lastQuadRef.current;
-        } else {
-          quadRef.current = null;
-          lastQuadRef.current = null;
-          setDetected(false);
-        }
-      } finally {
-        running = false;
-      }
-    }
-
-    const id = window.setInterval(runDetect, FRAME_MS);
-    runDetect();
-    return () => {
-      disposed = true;
-      window.clearInterval(id);
+        stopRef.current?.();
+      } catch {}
+      stopRef.current = null;
+      startedRef.current = false;
     };
-  }, [ready]);
-
-  // ---- Re-run detection on a captured still ----
-  // One-shot (not per-frame) so a reasonably high detect resolution is fine:
-  // jscanify runs on a ~1200px downscale, then the quad is re-fitted against a
-  // 2000px gray and scaled back into the full-resolution frame's pixel space.
-  async function detectQuadOnStill(canvas: HTMLCanvasElement): Promise<Quad | null> {
-    const cw = canvas.width;
-    const ch = canvas.height;
-    const scale = Math.min(1, 1200 / Math.max(cw, ch));
-    const dw = Math.max(1, Math.round(cw * scale));
-    const dh = Math.max(1, Math.round(ch * scale));
-    const small = document.createElement('canvas');
-    small.width = dw;
-    small.height = dh;
-    const sctx = small.getContext('2d')!;
-    sctx.drawImage(canvas, 0, 0, dw, dh);
-    const quad = await detectQuadSmart(small, dw, dh);
-    if (!quad) return null;
-    const full = quad.map(p => ({ x: p.x / scale, y: p.y / scale })) as Quad;
-    return refineQuadOnCanvas(canvas, full, 2000);
-  }
-
-  // ---- Edit overlay corner dragging ----
-  const editDragRef = useRef<{ anchor: Point } | null>(null);
-
-  function drawEditOverlay() {
-    const overlay = editOverlayRef.current;
-    const img = editingImgRef.current;
-    if (!overlay || !img || !editingQuadRef.current) return;
-    const cssW = overlay.clientWidth;
-    const cssH = overlay.clientHeight;
-    if (!cssW || !cssH) return;
-    overlay.width = cssW * devicePixelRatio;
-    overlay.height = cssH * devicePixelRatio;
-    const ctx = overlay.getContext('2d')!;
-    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    ctx.clearRect(0, 0, cssW, cssH);
-    const vw = img.naturalWidth || img.width;
-    const vh = img.naturalHeight || img.height;
-    const { scale, offX, offY } = fitRect(vw, vh, cssW, cssH);
-    const quad = editingQuadRef.current;
-    const pts = quad.map(p => ({ x: offX + p.x * scale, y: offY + p.y * scale }));
-    ctx.strokeStyle = 'rgba(52, 211, 153, 0.95)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.setLineDash([]);
-    for (const p of pts) {
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = '#34d399';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-  }
-
-  function onEditPointerDown(e: React.PointerEvent) {
-    if (!editingQuadRef.current || !editingImgRef.current) return;
-    const img = editingImgRef.current;
-    const rect = img.getBoundingClientRect();
-    const vw = img.naturalWidth || img.width;
-    const vh = img.naturalHeight || img.height;
-    const { scale, offX, offY } = fitRect(vw, vh, rect.width, rect.height);
-    const p = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    let best = -1;
-    let bestDist = 30;
-    editingQuadRef.current.forEach((q, i) => {
-      const d = Math.hypot(p.x - (offX + q.x * scale), p.y - (offY + q.y * scale));
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
-      }
-    });
-    if (best >= 0) {
-      editDragRef.current = { anchor: { ...editingQuadRef.current[best] } };
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    }
-  }
-
-  function onEditPointerMove(e: React.PointerEvent) {
-    const drag = editDragRef.current;
-    if (!drag || !editingQuadRef.current || !editingImgRef.current) return;
-    const img = editingImgRef.current;
-    const rect = img.getBoundingClientRect();
-    const vw = img.naturalWidth || img.width;
-    const vh = img.naturalHeight || img.height;
-    const { scale, offX, offY } = fitRect(vw, vh, rect.width, rect.height);
-    const np = { x: (e.clientX - rect.left - offX) / scale, y: (e.clientY - rect.top - offY) / scale };
-    // orderQuad() re-sorts the array every frame, so track the corner by its
-    // last position instead of a fixed index that would jump mid-drag.
-    const quad = orderQuad(editingQuadRef.current.map(p => ({ ...p })));
-    let idx = 0;
-    let best = Infinity;
-    for (let i = 0; i < 4; i++) {
-      const d = Math.hypot(quad[i].x - drag.anchor.x, quad[i].y - drag.anchor.y);
-      if (d < best) {
-        best = d;
-        idx = i;
-      }
-    }
-    quad[idx] = { x: Math.max(0, Math.min(vw, np.x)), y: Math.max(0, Math.min(vh, np.y)) };
-    drag.anchor = { ...quad[idx] };
-    editingQuadRef.current = quad;
-    drawEditOverlay();
-  }
-
-  function onEditPointerUp() {
-    editDragRef.current = null;
-  }
-
-  // ---- Manual capture ----
-  // Freeze the live frame, run jscanify once to find the page, then separate it
-  // from the background right away (warp + filter). If no document is found the
-  // corner editor opens so the page can be framed by hand.
-  const capture = useCallback(async () => {
-    if (busy || pages.length >= maxPages) return;
-    const video = videoRef.current;
-    if (!video || !video.readyState) return;
-    const sw = video.videoWidth;
-    const sh = video.videoHeight;
-    if (!sw || !sh) return;
-    // Clear the live overlay so a fresh capture re-detects from scratch.
-    quadRef.current = null;
-    lastQuadRef.current = null;
-    missesRef.current = 0;
-    setDetected(false);
-    setBusy(true);
-    setProgressMsg('Detecting document...');
-    try {
-      const raw = document.createElement('canvas');
-      raw.width = sw;
-      raw.height = sh;
-      const ctx = raw.getContext('2d')!;
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, sw, sh);
-      ctx.drawImage(video, 0, 0, sw, sh);
-
-      const quad = await detectQuadOnStill(raw);
-      if (quad) {
-        const result = await processFrameSmart(raw, orderQuad(quad), modeRef.current, MAX_DIM_DEFAULT);
-        const blob = await canvasToBlob(result.canvas, 'image/jpeg', 0.9);
-        const thumb = result.canvas.toDataURL('image/jpeg', 0.5);
-        const preview = result.canvas.toDataURL('image/jpeg', 0.75);
-        const src = raw.toDataURL('image/jpeg', 0.85);
-        const page: CapturedPage = {
-          blob,
-          width: result.width,
-          height: result.height,
-          thumb,
-          preview,
-          src,
-          quad: orderQuad(quad),
-        };
-        const addedIndex = pagesRef.current.length;
-        setPages(prev => [...prev, page]);
-        setPreviewIndex(addedIndex);
-      } else {
-        // No document detected automatically — let the user place the corners.
-        editingCanvasRef.current = raw;
-        editingQuadRef.current = orderQuad([{ x: 0, y: 0 }, { x: sw, y: 0 }, { x: sw, y: sh }, { x: 0, y: sh }]);
-        editingSrcRef.current = raw.toDataURL('image/jpeg', 0.85);
-        editingIndexRef.current = null; // new capture
-        setEditingSrc(editingSrcRef.current);
-      }
-    } catch {
-      setError('Failed to capture frame');
-    }
-    setProgressMsg('');
-    setBusy(false);
-  }, [busy, pages.length, maxPages]);
-
-  // ---- Confirm edited corners -> process into a page ----
-  const confirmEdit = useCallback(async () => {
-    const canvas = editingCanvasRef.current;
-    const quad = editingQuadRef.current;
-    const src = editingSrcRef.current;
-    if (!canvas || !quad || !src) return;
-    setBusy(true);
-    setProgressMsg('Processing...');
-    try {
-      const result = await processFrameSmart(canvas, quad, modeRef.current, MAX_DIM_DEFAULT);
-      const blob = await canvasToBlob(result.canvas, 'image/jpeg', 0.9);
-      const thumb = result.canvas.toDataURL('image/jpeg', 0.5);
-      const preview = result.canvas.toDataURL('image/jpeg', 0.75);
-      const page: CapturedPage = {
-        blob,
-        width: result.width,
-        height: result.height,
-        thumb,
-        preview,
-        src,
-        quad: orderQuad(quad),
-      };
-      const editingIndex = editingIndexRef.current;
-      let addedIndex: number;
-      if (editingIndex !== null) {
-        // Re-editing an existing page: replace in place.
-        setPages(prev => prev.map((p, i) => (i === editingIndex ? page : p)));
-        addedIndex = editingIndex;
-        editingIndexRef.current = null;
-      } else {
-        addedIndex = pagesRef.current.length;
-        setPages(prev => [...prev, page]);
-      }
-      // Show the processed page in the preview screen, like CamScanner.
-      setPreviewIndex(addedIndex);
-      setEditingSrc(null);
-      editingSrcRef.current = null;
-      editingCanvasRef.current = null;
-      editingQuadRef.current = null;
-      quadRef.current = null;
-      lastQuadRef.current = null;
-      missesRef.current = 0;
-      setDetected(false);
-      setProgressMsg('');
-    } catch {
-      setError('Failed to process frame');
-    }
-    setBusy(false);
+    // Launch exactly once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Re-open a captured page for corner adjustment ----
-  const reEditPage = useCallback((index: number) => {
-    const page = pagesRef.current[index];
-    if (!page) return;
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0);
-      editingCanvasRef.current = canvas;
-      editingQuadRef.current = page.quad ? orderQuad(page.quad.map(p => ({ ...p }))) : null;
-      editingSrcRef.current = page.src;
-      editingIndexRef.current = index;
-      setEditingSrc(page.src);
-    };
-    img.src = page.src;
-  }, []);
-
-  // ---- Delete a captured page ----
-  const deletePage = useCallback((index: number) => {
-    const next = pagesRef.current.filter((_, i) => i !== index);
-    setPages(next);
-    if (next.length === 0) {
-      setPreviewIndex(null);
-    } else {
-      setPreviewIndex(prev => (prev === null ? null : Math.min(prev, next.length - 1)));
-    }
-  }, []);
-
-  // ---- Move a captured page left/right ----
-  const movePage = useCallback((index: number, dir: -1 | 1) => {
-    setPages(prev => {
-      const target = index + dir;
-      if (target < 0 || target >= prev.length) return prev;
-      const next = prev.slice();
-      const tmp = next[index];
-      next[index] = next[target];
-      next[target] = tmp;
-      return next;
-    });
-    setPreviewIndex(index + dir);
-  }, []);
-
-  // ---- Rotate a captured page 90° clockwise ----
-  const rotatePage = useCallback((index: number) => {
-    const page = pagesRef.current[index];
-    if (!page) return;
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const W = img.naturalWidth;
-        const H = img.naturalHeight;
-        const canvas = document.createElement('canvas');
-        canvas.width = H;
-        canvas.height = W;
-        const ctx = canvas.getContext('2d')!;
-        ctx.translate(H, 0);
-        ctx.rotate(Math.PI / 2);
-        ctx.drawImage(img, 0, 0);
-        const quad = page.quad
-          ? orderQuad(page.quad.map(p => ({ x: H - p.y, y: p.x })))
-          : null;
-        const result = processFrame(canvas, quad, modeRef.current, MAX_DIM_DEFAULT);
-        canvasToBlob(result.canvas, 'image/jpeg', 0.9).then(blob => {
-          const thumb = result.canvas.toDataURL('image/jpeg', 0.5);
-          const preview = result.canvas.toDataURL('image/jpeg', 0.75);
-          const src = canvas.toDataURL('image/jpeg', 0.85);
-          const rotated: CapturedPage = {
-            blob,
-            width: result.width,
-            height: result.height,
-            thumb,
-            preview,
-            src,
-            quad: quad ?? page.quad,
-          };
-          setPages(prev => prev.map((p, i) => (i === index ? rotated : p)));
-        });
-      } catch {
-        // ignore rotation errors
-      }
-    };
-    img.src = page.src;
-  }, []);
-
-  // ---- Discard edit and go back to camera ----
-  const retake = useCallback(() => {
-    setEditingSrc(null);
-    editingSrcRef.current = null;
-    editingCanvasRef.current = null;
-    editingQuadRef.current = null;
-    // Start live framing fresh on the way back to the viewfinder.
-    quadRef.current = null;
-    lastQuadRef.current = null;
-    missesRef.current = 0;
-    setDetected(false);
-  }, []);
-
-  // ---- Auto-fix: re-detect the paper corners on the still frame ----
-  const [autoFixBusy, setAutoFixBusy] = useState(false);
-  const autoFix = useCallback(async () => {
-    const canvas = editingCanvasRef.current;
-    if (!canvas || autoFixBusy) return;
-    setAutoFixBusy(true);
-    try {
-      const detected = await detectQuadOnStill(canvas);
-      if (detected) {
-        editingQuadRef.current = orderQuad(detected);
-        requestAnimationFrame(() => drawEditOverlay());
-      }
-    } catch {
-      // ignore
-    }
-    setAutoFixBusy(false);
-  }, [autoFixBusy]);
-
-  // ---- Draw edit overlay when it becomes visible / after image loads ----
-  useEffect(() => {
-    if (!editingSrc) return;
-    let disposed = false;
-    function loop() {
-      if (disposed) return;
-      if (editingImgRef.current && editingImgRef.current.complete) {
-        drawEditOverlay();
-        return;
-      }
-      requestAnimationFrame(loop);
-    }
-    const t = window.setTimeout(() => { if (!disposed) requestAnimationFrame(loop); }, 30);
-    return () => {
-      disposed = true;
-      window.clearTimeout(t);
-    };
-  }, [editingSrc]);
-
-  // ---- Build the final file: 1 image -> image; multiple -> merged PDF (OCR if enabled) ----
-  const buildResult = useCallback(async () => {
-    const name = (ext: string) => {
-      const d = new Date();
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-      return `iiuc-arms_doc-scanner_${stamp}.${ext}`;
-    };
-    if (pages.length === 1 && !docOnly) {
-      const page = pages[0];
-      return { file: new File([page.blob], name('jpg'), { type: 'image/jpeg' }), usedOcr: false };
-    }
-    // Compact the pages (downscale + re-encode) so the PDF stays small without
-    // visibly hurting content quality.
-    const compressed = await Promise.all(pages.map(p => compressPageBlob(p.blob, p.width, p.height)));
-    const file = await buildSearchablePdf(
-      compressed,
-      ocrEnabled,
-      name('pdf'),
-      p => setProgressMsg(`Building PDF... ${Math.round(p * 100)}%`)
-    );
-    return { file, usedOcr: ocrEnabled };
-  }, [pages, ocrEnabled, docOnly]);
-
-  const finish = useCallback(async () => {
-    if (pages.length === 0) return;
-    setBusy(true);
-    setProgressMsg('Finalizing...');
-    try {
-      if (ocrEnabled && pages.length > 1) setProgressMsg('Running OCR — this may take a while...');
-      const { file, usedOcr } = await buildResult();
-      onResult?.(file, usedOcr);
-      onDone(pages);
-    } catch (err: any) {
-      setError('Failed to finalize: ' + (err?.message || 'Unknown error'));
-    }
-    setBusy(false);
-  }, [buildResult, onDone, onResult]);
-
-  // ---- Download the finished file to the device (no upload) ----
-  const downloadLocal = useCallback(async () => {
-    if (pages.length === 0) return;
-    setBusy(true);
-    setProgressMsg('Preparing download...');
-    try {
-      const { file } = await buildResult();
-      const url = URL.createObjectURL(file);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = file.name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
-      setProgressMsg('');
-      showToast(`Downloaded ${file.name}`, 'success');
-    } catch (err: any) {
-      setError('Download failed: ' + (err?.message || 'Unknown error'));
-    }
-    setBusy(false);
-  }, [buildResult, pages.length]);
-
-  // ---- Live view: framing overlay (detected quad or fallback guide) ----
-  useEffect(() => {
-    if (!ready) return;
-    let disposed = false;
-    function drawOverlay() {
-      if (disposed) return;
-      const video = videoRef.current;
-      const overlay = overlayRef.current;
-      if (video && overlay && video.readyState >= 2) {
-        const vw = video.videoWidth;
-        const vh = video.videoHeight;
-        const cssW = overlay.clientWidth;
-        const cssH = overlay.clientHeight;
-        if (vw && vh && cssW && cssH) {
-          overlay.width = cssW * devicePixelRatio;
-          overlay.height = cssH * devicePixelRatio;
-          const ctx = overlay.getContext('2d')!;
-          ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-          ctx.clearRect(0, 0, cssW, cssH);
-          const { scale, offX, offY } = fitRect(vw, vh, cssW, cssH);
-          const quad = quadRef.current;
-          if (quad) {
-            const pts = quad.map(p => ({ x: offX + p.x * scale, y: offY + p.y * scale }));
-            // Dim everything OUTSIDE the document.
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-            ctx.beginPath();
-            ctx.rect(0, 0, cssW, cssH);
-            ctx.moveTo(pts[0].x, pts[0].y);
-            for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
-            ctx.closePath();
-            ctx.fill('evenodd');
-            ctx.fillStyle = 'rgba(52, 211, 153, 0.08)';
-            ctx.beginPath();
-            ctx.moveTo(pts[0].x, pts[0].y);
-            for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(52, 211, 153, 0.95)';
-            ctx.lineWidth = 2.5;
-            ctx.setLineDash([6, 4]);
-            ctx.beginPath();
-            ctx.moveTo(pts[0].x, pts[0].y);
-            for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
-            ctx.closePath();
-            ctx.stroke();
-            ctx.setLineDash([]);
-            for (const p of pts) {
-              ctx.fillStyle = '#fff';
-              ctx.strokeStyle = '#34d399';
-              ctx.lineWidth = 2.5;
-              ctx.beginPath();
-              ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.stroke();
-            }
-          } else {
-            // Default framing guide: inset rectangle with corner brackets.
-            const margin = Math.min(cssW, cssH) * 0.06;
-            const bx = offX + margin;
-            const by = offY + margin;
-            const bw = vw * scale - margin * 2;
-            const bh = vh * scale - margin * 2;
-            if (bw > 20 && bh > 20) {
-              const len = Math.min(cssW, cssH) * 0.09;
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-              ctx.lineWidth = 3;
-              const corners: [number, number, number, number][] = [
-                [bx, by, 1, 1],
-                [bx + bw, by, -1, 1],
-                [bx + bw, by + bh, -1, -1],
-                [bx, by + bh, 1, -1],
-              ];
-              for (const [cx, cy, dx, dy] of corners) {
-                ctx.beginPath();
-                ctx.moveTo(cx + dx * len, cy);
-                ctx.lineTo(cx, cy);
-                ctx.lineTo(cx, cy + dy * len);
-                ctx.stroke();
-              }
-            }
-          }
-        }
-      }
-      requestAnimationFrame(drawOverlay);
-    }
-    const id = requestAnimationFrame(drawOverlay);
-    return () => {
-      disposed = true;
-      cancelAnimationFrame(id);
-    };
-  }, [ready]);
-
-  // ---- Edit screen ----
-  if (editingSrc) {
-    return (
-      <div className="fixed inset-0 z-[210] bg-black flex flex-col scan-edit-surface" onContextMenu={e => e.preventDefault()}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-black/90 border-b border-white/10">
-          <button className="w-9 h-9 rounded-lg bg-white/10 text-white flex items-center justify-center cursor-pointer border-none" onClick={retake}>
-            <i className="fas fa-rotate-left"></i>
-          </button>
-          <span className="text-white text-[0.9rem] font-semibold">Adjust corners</span>
-          <span className="text-white/60 text-[0.75rem] w-9 text-right">{pages.length}/{maxPages}</span>
-        </div>
-
-        {/* Image + corner handles */}
-        <div className="relative flex-1 overflow-hidden bg-black">
-          <img
-            ref={editingImgRef}
-            src={editingSrc}
-            alt="captured"
-            className="absolute inset-0 w-full h-full object-contain touch-none select-none"
-            draggable={false}
-            onContextMenu={e => e.preventDefault()}
-            onPointerDown={onEditPointerDown}
-            onPointerMove={onEditPointerMove}
-            onPointerUp={onEditPointerUp}
-          />
-          <canvas ref={editOverlayRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-[0.72rem] bg-black/60 px-3 py-1.5 rounded-lg whitespace-nowrap">
-            <i className="fas fa-hand-pointer mr-1"></i>Drag the green corners to fit the document
-          </div>
-        </div>
-
-        {/* Mode toggle */}
-        <div className="px-4 py-2.5 bg-black/80 border-t border-white/10 flex justify-center gap-2">
-          {([
-            ['bw', 'B&W'],
-            ['enhance', 'Enhance'],
-            ['original', 'Original'],
-          ] as [ScanMode, string][]).map(([val, label]) => (
-            <button
-              key={val}
-              className={`px-3 py-1.5 text-[0.72rem] font-semibold cursor-pointer border-none rounded-lg transition-colors ${mode === val ? 'bg-qsis text-white' : 'bg-white/10 text-white/70'}`}
-              onClick={() => setMode(val)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Bottom controls */}
-        <div className="px-4 py-4 bg-black/90 border-t border-white/10 flex items-center justify-center gap-8">
-          <button
-            className="flex flex-col items-center gap-1 text-white/60 text-[0.68rem] bg-transparent border-none cursor-pointer"
-            onClick={retake}
-          >
-            <i className="fas fa-rotate-left text-lg"></i>
-            Retake
-          </button>
-          <button
-            className="w-16 h-16 rounded-full bg-qsis text-white flex items-center justify-center cursor-pointer hover:opacity-90 border-none disabled:opacity-40"
-            onClick={confirmEdit}
-            disabled={busy}
-            title="Apply crop & straighten"
-          >
-            <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-check'} text-xl`}></i>
-          </button>
-          <button
-            className="flex flex-col items-center gap-1 text-qsis text-[0.68rem] bg-transparent border-none cursor-pointer disabled:opacity-40"
-            onClick={autoFix}
-            disabled={busy || autoFixBusy}
-          >
-            <i className={`fas ${autoFixBusy ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'} text-lg`}></i>
-            {autoFixBusy ? 'Detecting...' : 'Auto-fix'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ---- Preview & reorder screen ----
-  if (previewIndex !== null) {
-    const idx = Math.min(previewIndex, Math.max(0, pages.length - 1));
-    const page = pages[idx];
-    return (
-      <div className="fixed inset-0 z-[210] bg-black flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-black/90 border-b border-white/10">
-          <button className="w-9 h-9 rounded-lg bg-white/10 text-white flex items-center justify-center cursor-pointer border-none" onClick={() => setPreviewIndex(null)} title="Add another page">
-            <i className="fas fa-plus"></i>
-          </button>
-          <span className="text-white text-[0.9rem] font-semibold">Review pages</span>
-          <div className="flex items-center gap-2">
-            <span className="text-white/60 text-[0.75rem] w-9 text-right">{pages.length}/{maxPages}</span>
-            <button
-              className="w-8 h-8 rounded-lg bg-white/10 text-white/70 flex items-center justify-center cursor-pointer border-none hover:bg-white/20 hover:text-white transition-colors disabled:opacity-40"
-              onClick={downloadLocal}
-              disabled={busy || pages.length === 0}
-              title="Save a copy to your device (optional)"
-            >
-              <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-download'} text-sm`}></i>
-            </button>
-          </div>
-        </div>
-
-        {/* Large preview */}
-        <div className="relative flex-1 bg-black/80 flex items-center justify-center p-4 overflow-hidden">
-          {page ? (
-            <img src={page.preview} alt={`page ${idx + 1}`} className="max-h-full max-w-full object-contain rounded shadow-2xl" />
-          ) : (
-            <p className="text-white/70 text-[0.85rem]">No pages yet</p>
-          )}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-white/80 text-[0.7rem] bg-black/60 px-3 py-1 rounded-lg whitespace-nowrap">
-            <i className="fas fa-hand-pointer mr-1"></i>Tap a thumbnail to select
-          </div>
-        </div>
-
-        {/* Thumbnail strip (tap to select) */}
-        <div className="px-3 py-3 bg-black/90 border-t border-white/10">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {pages.map((p, i) => (
-              <button
-                key={i}
-                onClick={() => setPreviewIndex(i)}
-                className={`relative w-14 h-20 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer bg-white transition-all ${i === idx ? 'ring-2 ring-qsis' : 'ring-1 ring-white/30'}`}
-              >
-                <img src={p.thumb} alt={`page ${i + 1}`} className="w-full h-full object-cover" />
-                <span className="absolute top-1 left-1 w-4 h-4 rounded-full bg-black/70 text-white text-[0.6rem] flex items-center justify-center">{i + 1}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Page actions */}
-        <div className="px-4 py-3 bg-black/90 border-t border-white/10 flex items-center justify-center gap-6">
-          <button
-            className="flex flex-col items-center gap-1 text-white/70 text-[0.65rem] bg-transparent border-none cursor-pointer disabled:opacity-30"
-            onClick={() => movePage(idx, -1)}
-            disabled={idx <= 0}
-          >
-            <i className="fas fa-arrow-left text-lg"></i>
-            Move left
-          </button>
-          <button
-            className="flex flex-col items-center gap-1 text-white/70 text-[0.65rem] bg-transparent border-none cursor-pointer"
-            onClick={() => rotatePage(idx)}
-          >
-            <i className="fas fa-rotate text-lg"></i>
-            Rotate
-          </button>
-          <button
-            className="flex flex-col items-center gap-1 text-white/70 text-[0.65rem] bg-transparent border-none cursor-pointer"
-            onClick={() => reEditPage(idx)}
-          >
-            <i className="fas fa-crop-alt text-lg"></i>
-            Adjust
-          </button>
-          <button
-            className="flex flex-col items-center gap-1 text-red-400 text-[0.65rem] bg-transparent border-none cursor-pointer"
-            onClick={() => deletePage(idx)}
-          >
-            <i className="fas fa-trash text-lg"></i>
-            Delete
-          </button>
-          <button
-            className="flex flex-col items-center gap-1 text-white/70 text-[0.65rem] bg-transparent border-none cursor-pointer disabled:opacity-30"
-            onClick={() => movePage(idx, 1)}
-            disabled={idx >= pages.length - 1}
-          >
-            <i className="fas fa-arrow-right text-lg"></i>
-            Move right
-          </button>
-        </div>
-
-        {/* Bottom bar */}
-        <div className="relative px-4 py-4 bg-black/90 border-t border-white/10 flex items-center justify-center">
-          <button
-            className="flex flex-col items-center gap-1 text-white/60 text-[0.68rem] bg-transparent border-none cursor-pointer absolute left-4"
-            onClick={() => setPreviewIndex(null)}
-          >
-            <i className="fas fa-plus text-lg"></i>
-            Add page
-          </button>
-          <button
-            className="flex flex-col items-center gap-1.5 bg-transparent border-none cursor-pointer disabled:opacity-40 group"
-            onClick={finish}
-            disabled={busy || pages.length === 0}
-            title="Proceed to the upload panel"
-          >
-            <span className="w-16 h-16 rounded-full bg-qsis text-white flex items-center justify-center group-hover:opacity-90 transition-opacity">
-              <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-arrow-right'} text-xl`}></i>
-            </span>
-            <span className="text-qsis text-[0.68rem] font-semibold">
-              {pages.length > 1 ? 'Merge & Upload' : 'Proceed'}
-            </span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ---- Live view ----
-  return (
-    <div className="fixed inset-0 z-[210] bg-black flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-black/90 border-b border-white/10">
-        <button className="w-9 h-9 rounded-lg bg-white/10 text-white flex items-center justify-center cursor-pointer border-none" onClick={onCancel}>
-          <i className="fas fa-arrow-left"></i>
-        </button>
-        <span className="text-white text-[0.9rem] font-semibold">Document Scanner</span>
-        <span className="text-white/60 text-[0.75rem] w-9 text-right">{pages.length}/{maxPages}</span>
-      </div>
-
-      {/* Viewfinder */}
-      <div className="relative flex-1 overflow-hidden bg-black">
-        {/* The video only mounts once the stream exists — key={ready} forces a
-            fresh element that attachVideo wires up while it is visible, which
-            avoids the iOS/Android black-frame bug from play() on hidden video. */}
-        <video
-          key={ready ? 'stream-on' : 'stream-off'}
-          ref={attachVideo}
-          autoPlay
-          playsInline
-          muted
-          className="absolute inset-0 w-full h-full object-contain select-none"
-          onContextMenu={e => e.preventDefault()}
-        />
-        <canvas ref={overlayRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-
-        {!ready && !error && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-white/70 flex flex-col items-center gap-2">
-              <i className="fas fa-spinner fa-spin text-2xl"></i>
-              <span className="text-[0.8rem]">Starting camera...</span>
-            </div>
-          </div>
-        )}
-        {error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 text-center">
-            <i className="fas fa-video-slash text-3xl text-red-400"></i>
-            <p className="text-white/80 text-[0.85rem]">{error}</p>
-            <button className="px-4 py-2 rounded-lg bg-white/15 text-white text-[0.8rem] cursor-pointer border-none" onClick={onCancel}>
-              Back
-            </button>
-          </div>
-        )}
-
-        {/* Mode toggle */}
-        {ready && !error && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 flex rounded-xl overflow-hidden bg-black/60 border border-white/15">
-            {([
-              ['bw', 'B&W'],
-              ['enhance', 'Enhance'],
-              ['original', 'Original'],
-            ] as [ScanMode, string][]).map(([val, label]) => (
-              <button
-                key={val}
-                className={`px-3 py-1.5 text-[0.72rem] font-semibold cursor-pointer border-none transition-colors ${mode === val ? 'bg-qsis text-white' : 'bg-transparent text-white/70'}`}
-                onClick={() => setMode(val)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* OCR toggle */}
-        {ready && !error && (
-          <div className="absolute top-3 right-3 flex flex-col gap-2">
-            <button
-              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[0.72rem] font-semibold cursor-pointer border border-white/15 transition-colors ${ocrEnabled ? 'bg-accent text-white' : 'bg-black/60 text-white/70'}`}
-              onClick={() => setOcrEnabled(v => !v)}
-            >
-              <i className={`fas ${ocrEnabled ? 'fa-check' : 'fa-eye-slash'}`}></i>
-              OCR
-            </button>
-          </div>
-        )}
-
-        {/* Instruction hint */}
-        {ready && !error && pages.length === 0 && !progressMsg && (
-          <div className="absolute bottom-28 left-1/2 -translate-x-1/2 text-white/80 text-[0.7rem] bg-black/50 px-3 py-1 rounded-lg whitespace-nowrap">
-            {detected
-              ? <span className="text-qsis"><i className="fas fa-check-circle mr-1"></i>Document detected — tap to capture</span>
-              : <span><i className="fas fa-hand-pointer mr-1"></i>Line up the document, then tap the shutter</span>}
-          </div>
-        )}
-
-        {progressMsg && (
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 text-white/90 text-[0.78rem] bg-black/70 px-3 py-1.5 rounded-lg">
-            <i className="fas fa-spinner fa-spin mr-2"></i>{progressMsg}
-          </div>
-        )}
-
-        {/* Captured thumbnails */}
-        {pages.length > 0 && (
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex gap-2">
-            {pages.map((p, i) => (
-              <div key={i} className="relative w-14 h-20 rounded-lg overflow-hidden border-2 border-white/40 bg-white cursor-pointer" onClick={() => setPreviewIndex(i)}>
-                <img src={p.thumb} alt={`page ${i + 1}`} className="w-full h-full object-cover" />
-                <button
-                  className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-[0.6rem] rounded-bl-lg cursor-pointer border-none flex items-center justify-center"
-                  onClick={(e) => { e.stopPropagation(); deletePage(i); }}
-                >
-                  <i className="fas fa-times"></i>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Bottom controls */}
-      <div className="px-4 py-4 bg-black/90 border-t border-white/10 flex items-center justify-center gap-8">
-        <button
-          className="w-16 h-16 rounded-full border-4 border-white bg-white/10 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors disabled:opacity-40"
-          onClick={capture}
-          disabled={busy || pages.length >= maxPages}
-          title="Capture"
-        >
-          <i className="fas fa-camera text-white text-xl"></i>
-        </button>
-        <button
-          className="flex flex-col items-center gap-1 text-qsis text-[0.68rem] bg-transparent border-none cursor-pointer disabled:opacity-40"
-          onClick={finish}
-          disabled={pages.length === 0 || busy}
-          title="Finish"
-        >
-          <i className="fas fa-check-circle text-lg"></i>
-          {pages.length > 1 ? 'Merge to PDF' : 'Done'}
-        </button>
-      </div>
-    </div>
-  );
+  return null;
 }
-
-export type { CapturedPage };
