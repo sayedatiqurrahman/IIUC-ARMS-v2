@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Account banned' }, { status: 403 });
     }
 
-    const canUpload = await hasPermission('uploadFile', config.getEffectiveRole(email), false, email);
+    const canUpload = await hasPermission('uploadFile', config.getEffectiveRole(email, profile?.role), false, email);
     const isOwner = config.ownerEmails.includes(email) || profile?.githubLogin === config.owner;
     if (!canUpload && !isOwner) {
       return NextResponse.json({ error: 'No upload permission' }, { status: 403 });

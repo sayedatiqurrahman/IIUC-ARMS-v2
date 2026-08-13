@@ -244,17 +244,27 @@ export async function GET(req: NextRequest) {
       result = result.filter(u => u.department === filterDept);
     }
 
-    // Server-side domain filter for Firebase users
+    // Server-side domain filter for Firebase users.
+    // The assigned role is the source of truth: an admin may manually assign a
+    // student/teacher role to a non-@ugrad email (e.g. a gmail account), and that
+    // assigned role must be honoured — not just the email domain.
     if (filterDomain && filterDomain !== 'all') {
-      if (filterDomain === 'student') {
-        result = result.filter(u => u.email?.endsWith('@ugrad.iiuc.ac.bd') && u.accountStatus !== 'pending' && u.accountStatus !== 'rejected');
-      } else if (filterDomain === 'teacher') {
-        result = result.filter(u => u.accountStatus !== 'pending' && u.accountStatus !== 'rejected' && !u.email?.endsWith('@ugrad.iiuc.ac.bd') && (u.role === 'teacher' || u.email?.endsWith('@iiuc.ac.bd')));
-      } else if (filterDomain === 'external') {
-        result = result.filter(u => !u.email?.endsWith('.iiuc.ac.bd') && u.accountStatus === 'active');
-      } else if (filterDomain === 'pending') {
-        result = result.filter(u => u.accountStatus === 'pending' && !u.email?.endsWith('.iiuc.ac.bd') && !config.ownerEmails.includes(u.email?.toLowerCase()));
-      }
+      result = result.filter(u => {
+        const eff = config.getEffectiveRole(u.email, u.role);
+        if (filterDomain === 'student') {
+          return eff === 'student' && u.accountStatus !== 'pending' && u.accountStatus !== 'rejected';
+        }
+        if (filterDomain === 'teacher') {
+          return u.accountStatus !== 'pending' && u.accountStatus !== 'rejected' && eff === 'teacher';
+        }
+        if (filterDomain === 'external') {
+          return !u.email?.endsWith('.iiuc.ac.bd') && u.accountStatus === 'active' && eff !== 'student' && eff !== 'teacher' && eff !== 'admin' && eff !== 'manager';
+        }
+        if (filterDomain === 'pending') {
+          return u.accountStatus === 'pending' && !u.email?.endsWith('.iiuc.ac.bd') && !config.ownerEmails.includes(u.email?.toLowerCase());
+        }
+        return true;
+      });
     }
 
     // Every non-pending view excludes pending/rejected accounts
@@ -408,7 +418,10 @@ export async function POST(req: NextRequest) {
       if (targetEmail.toLowerCase() === email.toLowerCase() && newRole !== 'admin') {
         return NextResponse.json({ error: 'Cannot demote yourself' }, { status: 400 });
       }
-      await prisma.profile.update({ where: { userId: targetEmail }, data: { role: newRole } });
+      // Assigning a role is an explicit admin action — activate the account so the
+      // user (e.g. a manually-assigned student on a non-@ugrad email) is no longer
+      // treated as a pending external account and shows up under their role tab.
+      await prisma.profile.update({ where: { userId: targetEmail }, data: { role: newRole, accountStatus: 'active' } });
       return NextResponse.json({ success: true, message: `Role changed to ${newRole}` });
     }
 

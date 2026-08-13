@@ -43,13 +43,14 @@ export async function resolveUploadContext(req: NextRequest, bodyToken = ''): Pr
   let isOwner = false;
   let isBanned = false;
   let canUpload = false;
+  let profile: { role?: string; isBanned?: boolean; name?: string | null; githubToken?: string | null; githubInstallationId?: string | null; githubLogin?: string | null } | null = null;
 
   try {
     const email = await getUserEmail(req);
     userEmail = email || '';
     if (email) {
       const { prisma } = await import('@/lib/prisma');
-      const profile = await prisma.profile.findUnique({ where: { userId: email } });
+      profile = await prisma.profile.findUnique({ where: { userId: email } });
       isBanned = !!profile?.isBanned;
       userName = profile?.name || email.split('@')[0];
       if (profile?.githubToken) {
@@ -70,7 +71,7 @@ export async function resolveUploadContext(req: NextRequest, bodyToken = ''): Pr
   }
 
   if (userEmail) {
-    canUpload = await hasPermission('uploadFile', config.getEffectiveRole(userEmail), false, userEmail);
+    canUpload = await hasPermission('uploadFile', config.getEffectiveRole(userEmail, profile?.role), false, userEmail);
   }
 
   // ── Resolve a write-capable token (server-authoritative) ─────────────
@@ -344,7 +345,7 @@ export async function authorizeChunkUpload(req: NextRequest): Promise<{ email: s
     const { prisma } = await import('@/lib/prisma');
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
     if (profile?.isBanned) return { error: 'Account banned — upload not allowed', status: 403 };
-    const allowed = await hasPermission('uploadFile', config.getEffectiveRole(email), false, email);
+    const allowed = await hasPermission('uploadFile', config.getEffectiveRole(email, profile?.role), false, email);
     if (!allowed && !profile?.githubInstallationId) return { error: 'You do not have permission to upload files', status: 403 };
   } catch {}
 
