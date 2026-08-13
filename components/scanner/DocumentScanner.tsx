@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { buildSearchablePdf } from '@/lib/ocr';
 import { showToast } from '@/lib/utils';
+import { applyFilter, type FilterMode } from '@/lib/image-enhance';
 
 // The camera scanner is now powered by `eduone-scanner-sdk`, which runs OpenCV.js
 // + an ONNX document-detection model in a Web Worker and renders its own
@@ -30,6 +31,9 @@ interface DocumentScannerProps {
   docOnly?: boolean;
   // Build the multi-page output as a searchable PDF via OCR. Defaults to false.
   ocrEnabled?: boolean;
+  // Post-capture filter applied to every scanned page. Defaults to 'enhance',
+  // which sharpens + boosts contrast so small text stays readable.
+  filterMode?: FilterMode;
 }
 
 // Base URL of the OpenCV.js / ONNX Runtime / detection-model assets the SDK
@@ -64,14 +68,14 @@ function blobSize(blob: Blob): Promise<{ width: number; height: number }> {
   });
 }
 
-export default function DocumentScanner({ onDone, onCancel, onResult, docOnly = false, ocrEnabled = false }: DocumentScannerProps) {
+export default function DocumentScanner({ onDone, onCancel, onResult, docOnly = false, ocrEnabled = false, filterMode = 'enhance' }: DocumentScannerProps) {
   const startedRef = useRef(false);
   const stopRef = useRef<(() => void) | null>(null);
 
   // Keep the latest callbacks/options reachable from the SDK's async callbacks
   // without re-launching the scanner on every parent re-render.
-  const cbRef = useRef({ onDone, onCancel, onResult, docOnly, ocrEnabled });
-  cbRef.current = { onDone, onCancel, onResult, docOnly, ocrEnabled };
+  const cbRef = useRef({ onDone, onCancel, onResult, docOnly, ocrEnabled, filterMode });
+  cbRef.current = { onDone, onCancel, onResult, docOnly, ocrEnabled, filterMode };
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -86,8 +90,10 @@ export default function DocumentScanner({ onDone, onCancel, onResult, docOnly = 
         const ui = EduOneScanner.startUI({
           assetsPath: SCANNER_ASSETS,
           logoHTML: '<span style="color:#fff;font-weight:700;font-size:0.95rem">IIUC-ARMS</span>',
+          // Skip the Sinhala "Scan Guidelines" intro and go straight to capture.
+          skipGuidelines: true,
           onComplete: async (pages: string[]) => {
-            const { onDone, onCancel, onResult, docOnly, ocrEnabled } = cbRef.current;
+            const { onDone, onCancel, onResult, docOnly, ocrEnabled, filterMode } = cbRef.current;
             try {
               if (!pages.length) {
                 onDone([]);
@@ -95,7 +101,8 @@ export default function DocumentScanner({ onDone, onCancel, onResult, docOnly = 
               }
               const converted = await Promise.all(
                 pages.map(async (url) => {
-                  const { blob } = dataUrlToBlob(url);
+                  const filteredUrl = await applyFilter(url, filterMode || 'enhance');
+                  const { blob } = dataUrlToBlob(filteredUrl);
                   const { width, height } = await blobSize(blob);
                   return { blob, width, height };
                 })
@@ -148,3 +155,25 @@ export default function DocumentScanner({ onDone, onCancel, onResult, docOnly = 
 
   return null;
 }
+
+// Proactively preload the SDK's Web Worker + ONNX model so that when the user
+// actually opens the scanner the heavy "Preparing Scanner Engine…" step is
+// already done and capture starts near-instantly. Safe to call multiple times;
+// it only warms once.
+let warmedUp = false;
+export function warmupScannerEngine() {
+  if (typeof window === 'undefined' || warmedUp) return;
+  warmedUp = true;
+  import('eduone-scanner-sdk')
+    .then(({ DocumentScanner: EduOneScanner }) => {
+      try {
+        EduOneScanner.warmUp(SCANNER_ASSETS, 'lcnet');
+      } catch {
+        warmedUp = false;
+      }
+    })
+    .catch(() => {
+      warmedUp = false;
+    });
+}
+

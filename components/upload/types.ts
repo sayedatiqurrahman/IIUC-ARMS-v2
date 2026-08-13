@@ -7,6 +7,7 @@ export const CURRENT_SEASON = CURRENT_MONTH >= 4 && CURRENT_MONTH <= 9 ? 'Spring
 export function isPdf(name: string) { return name.toLowerCase().endsWith('.pdf'); }
 export function isImage(name: string) { return /\.(jpg|jpeg|png|gif|webp)$/i.test(name); }
 export function isDocsOnly(name: string) { return /\.(pdf|doc|docx|ppt|pptx)$/i.test(name); }
+export function isMarkdown(name: string) { return /\.(md|markdown)$/i.test(name); }
 
 export interface FileWithMeta {
   file: File;

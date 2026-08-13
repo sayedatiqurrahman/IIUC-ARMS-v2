@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { CURRENT_YEAR } from './types';
-import { isPdf, isImage } from './types';
+import { isPdf, isImage, isMarkdown } from './types';
 import type { FileWithMeta, CourseGroup } from './types';
 import type { Profile } from '@/lib/store';
+import { renderMarkdown } from '@/lib/markdown';
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return bytes + ' B';
@@ -18,6 +20,7 @@ function getFileIcon(name: string) {
   if (['doc','docx'].includes(ext)) return <i className="fas fa-file-word" style={{color:'#3b82f6'}}></i>;
   if (['xls','xlsx','csv'].includes(ext)) return <i className="fas fa-file-excel" style={{color:'#22c55e'}}></i>;
   if (['ppt','pptx'].includes(ext)) return <i className="fas fa-file-powerpoint" style={{color:'#f97316'}}></i>;
+  if (['md','markdown'].includes(ext)) return <i className="fas fa-file-lines" style={{color:'#a78bfa'}}></i>;
   return <i className="fas fa-file" style={{color:'#94a3b8'}}></i>;
 }
 
@@ -48,15 +51,27 @@ export default function FilePreview({
   onRemoveFile, onUpdateFile,
   mergeDialogCourseId, mergeImages, mergeSession, mergeYear, mergeMerging,
   mergeOcr, setMergeOcr,
-  onMerge, onDismissMerge, profile, email,
+  onMerge, onDismissMerge,   profile, email,
 }: FilePreviewProps) {
+  const [preview, setPreview] = useState<{ name: string; html: string } | null>(null);
+
   if (files.length === 0) return null;
+
+  async function openPreview(file: File) {
+    try {
+      const text = await file.text();
+      setPreview({ name: file.name, html: renderMarkdown(text) });
+    } catch {
+      setPreview({ name: file.name, html: '<p class="text-dark-text3">Unable to read file.</p>' });
+    }
+  }
 
   return (
     <>
       <div className="mt-2 flex flex-col gap-1.5">
         {files.map((fileMeta, fi) => {
           const fileIsPdf = isPdf(fileMeta.file.name);
+          const fileIsMd = isMarkdown(fileMeta.file.name);
           return (
             <div key={fi} className="p-2 rounded-lg bg-dark-bg border border-dark-border">
               <div className="flex items-center gap-2">
@@ -65,6 +80,11 @@ export default function FilePreview({
                   <div className="text-[0.75rem] font-semibold truncate">{fileMeta.file.name}</div>
                 </div>
                 <div className="text-[0.62rem] text-dark-text2 flex-shrink-0">{formatSize(fileMeta.file.size)}</div>
+                {fileIsMd && (
+                  <button className="w-5 h-5 rounded bg-qsis/10 text-qsis border-none cursor-pointer flex items-center justify-center text-[0.65rem] hover:bg-qsis/20" onClick={() => openPreview(fileMeta.file)} title="Preview">
+                    <i className="fas fa-eye"></i>
+                  </button>
+                )}
                 <button className="w-5 h-5 rounded bg-red-500/10 text-red-400 border-none cursor-pointer flex items-center justify-center text-[0.65rem] hover:bg-red-500/20" onClick={() => onRemoveFile(courseId, fi)}>
                   <i className="fas fa-times"></i>
                 </button>
@@ -167,6 +187,25 @@ export default function FilePreview({
           {mergeOcr && (
             <p className="ml-5 mt-1.5 text-[0.65rem] text-blue-300"><i className="fas fa-info-circle mr-1"></i>OCR makes the merged PDF text selectable &amp; copyable (takes longer).</p>
           )}
+        </div>
+      )}
+
+      {preview && (
+        <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
+          <div className="bg-dark-bg2 w-full max-w-[560px] max-h-[88vh] rounded-2xl border border-dark-border overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-dark-border">
+              <div className="flex items-center gap-2 min-w-0">
+                <i className="fas fa-file-lines text-qsis"></i>
+                <span className="text-[0.85rem] font-semibold text-dark-text truncate">{preview.name}</span>
+              </div>
+              <button className="w-8 h-8 rounded-lg bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 cursor-pointer hover:text-dark-text" onClick={() => setPreview(null)}>
+                <i className="fas fa-times text-sm"></i>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="md-content text-dark-text" dangerouslySetInnerHTML={{ __html: preview.html }} />
+            </div>
+          </div>
         </div>
       )}
     </>

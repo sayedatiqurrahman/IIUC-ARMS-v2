@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { downloadFile } from '@/lib/download-file';
 import { showToast } from '@/lib/utils';
+import { warmupScannerEngine } from '@/components/scanner/DocumentScanner';
+import { FILTER_LABELS, FILTER_HINTS, type FilterMode } from '@/lib/image-enhance';
 
 const DocumentScanner = dynamic(() => import('@/components/scanner/DocumentScanner'), { ssr: false });
 
@@ -13,6 +15,13 @@ const DocumentScanner = dynamic(() => import('@/components/scanner/DocumentScann
 // the browser.
 export default function ScannerTool() {
   const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState<FilterMode>('enhance');
+
+  // Preload the scanner engine while the user reads the intro, so clicking
+  // "Open Scanner" doesn't stall on the "Preparing Scanner Engine" step.
+  useEffect(() => {
+    warmupScannerEngine();
+  }, []);
 
   if (!open) {
     return (
@@ -22,7 +31,28 @@ export default function ScannerTool() {
         </div>
         <div>
           <p className="text-[0.85rem] font-semibold text-dark-text">Scan documents with your camera</p>
-          <p className="text-[0.7rem] text-dark-text2 mt-1 max-w-sm">Crop, straighten, filter (B&amp;W / enhance), merge pages to PDF and run OCR — all on-device, then save the file to your device.</p>
+          <p className="text-[0.7rem] text-dark-text2 mt-1 max-w-sm">Crop, straighten, filter (B&amp;W / enhance / balance), merge pages to PDF and run OCR — all on-device, then save the file to your device.</p>
+        </div>
+        <div className="w-full max-w-sm">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[0.72rem] font-medium text-dark-text2">Scan filter</span>
+            <span className="text-[0.6rem] text-dark-text3">{FILTER_HINTS[filter]}</span>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {(Object.keys(FILTER_LABELS) as FilterMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setFilter(m)}
+                className={`px-2 py-2 rounded-lg text-[0.72rem] font-semibold border cursor-pointer transition-all ${
+                  filter === m
+                    ? 'bg-qsis/15 text-qsis border-qsis/40'
+                    : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-dark-text'
+                }`}
+              >
+                {FILTER_LABELS[m]}
+              </button>
+            ))}
+          </div>
         </div>
         <button
           onClick={() => setOpen(true)}
@@ -37,6 +67,7 @@ export default function ScannerTool() {
 
   return (
     <DocumentScanner
+      filterMode={filter}
       onResult={(file) => {
         downloadFile(file);
         showToast(`Saved ${file.name}`, 'success');

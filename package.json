@@ -13,6 +13,7 @@
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",
     "@jsquash/jpeg": "^1.6.0",
+    "@jsquash/png": "^3.1.1",
     "@prisma/adapter-pg": "^7.9.0",
     "@prisma/client": "^7.9.0",
     "@techstark/opencv-js": "^5.0.0-release.1",

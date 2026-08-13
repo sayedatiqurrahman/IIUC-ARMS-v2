@@ -10,7 +10,8 @@ import { jsPDF } from 'jspdf';
 import { UploadForm, CreateCourseModal, type CreateCourseResult } from '@/components/upload';
 import { CURRENT_YEAR, CURRENT_SEASON, isPdf, isImage, isDocsOnly } from '@/components/upload/types';
 import type { CourseGroup, FileWithMeta, Link, UploadModalProps } from '@/components/upload/types';
-import DocumentScanner, { type CapturedPage } from '@/components/scanner/DocumentScanner';
+import DocumentScanner, { type CapturedPage, warmupScannerEngine } from '@/components/scanner/DocumentScanner';
+import { FILTER_LABELS, FILTER_HINTS, type FilterMode } from '@/lib/image-enhance';
 import { compressUploadFile } from '@/lib/compress';
 import { buildSearchablePdf } from '@/lib/ocr';
 
@@ -138,6 +139,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerCourseId, setScannerCourseId] = useState<number | null>(null);
+  const [scannerFilter, setScannerFilter] = useState<FilterMode>('enhance');
 
   const [patInputToken, setPatInputToken] = useState('');
   const [patSaving, setPatSaving] = useState(false);
@@ -164,6 +166,12 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   useEffect(() => {
     useAppStore.getState().loadCourses();
+  }, []);
+
+  // Preload the scanner engine while the modal is open, so launching the camera
+  // scanner doesn't stall on the "Preparing Scanner Engine…" step.
+  useEffect(() => {
+    warmupScannerEngine();
   }, []);
 
   useEffect(() => {
@@ -477,6 +485,45 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     );
   }
 
+  async function handleAddMarkdown(courseId: number, file: File): Promise<void> {
+    const course = courses.find(c => c.id === courseId);
+    if (!course) return;
+    const isNotes = category === config.categories.notes.folder;
+    const isQuestions = config.categories.questions.folder;
+
+    const maxFiles = isNotes ? 1 : isQuestions
+      ? (course.files.some(f => isPdf(f.file.name)) ? 1 : 5)
+      : 5;
+    if (course.files.length + 1 > maxFiles) {
+      if (isNotes) alert('Only 1 file allowed for Notes.');
+      else if (isQuestions && maxFiles === 1) alert('PDF already selected. Only 1 file allowed for Previous Questions.');
+      else alert(`Max ${maxFiles} files per course.`);
+      return;
+    }
+
+    if (file.size > config.maxSingleFileUploadMB * 1024 * 1024) {
+      alert(`File exceeds ${config.maxSingleFileUploadMB}MB and was skipped.`);
+      return;
+    }
+
+    const newTotal = totalFiles + 1;
+    if (newTotal > 10) { alert('Max 10 files total across all courses.'); return; }
+
+    const newTotalSize = (totalSizeMB * 1024 * 1024 + file.size) / (1024 * 1024);
+    if (newTotalSize > config.maxUploadSizeMB) { alert(`Total upload size cannot exceed ${config.maxUploadSizeMB}MB.`); return; }
+
+    const meta: FileWithMeta = isQuestions
+      ? isPdf(file.name)
+        ? { file, year: '', yearRange: `${CURRENT_YEAR}-${CURRENT_YEAR}` }
+        : { file, year: String(CURRENT_YEAR), yearRange: '' }
+      : isNotes
+        ? { file, year: String(CURRENT_YEAR), yearRange: '' }
+        : { file, year: '', yearRange: '' };
+
+    updateCourse(courseId, { files: [...course.files, meta] });
+    showToast('Markdown file added', 'success');
+  }
+
   async function handleCreateCourse(code: string, title: string): Promise<CreateCourseResult> {
     if (createCourseFor === null) return { success: false, error: 'Please try again' };
     try {
@@ -676,6 +723,28 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           </button>
         </div>
 
+        <div className="px-5 py-2.5 border-b border-dark-border bg-dark-bg/40">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[0.7rem] font-medium text-dark-text2">Scan filter</span>
+            <span className="text-[0.6rem] text-dark-text3">{FILTER_HINTS[scannerFilter]}</span>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {(Object.keys(FILTER_LABELS) as FilterMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setScannerFilter(m)}
+                className={`px-2 py-1.5 rounded-lg text-[0.7rem] font-semibold border cursor-pointer transition-all ${
+                  scannerFilter === m
+                    ? 'bg-qsis/15 text-qsis border-qsis/40'
+                    : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-dark-text'
+                }`}
+              >
+                {FILTER_LABELS[m]}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <UploadForm
             session={session} profile={profile} githubToken={githubToken} setGithubToken={setGithubToken}
@@ -693,6 +762,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             patInputToken={patInputToken} setPatInputToken={setPatInputToken} patSaving={patSaving} handleSavePat={handleSavePat}
             mergeDialogCourseId={mergeDialogCourseId} mergeImages={mergeImages} mergeSession={mergeSession} mergeYear={mergeYear}
             mergeMerging={mergeMerging} mergeOcr={mergeOcr} setMergeOcr={setMergeOcr} handleMergeImages={handleMergeImages} dismissMerge={() => { setMergeDialogCourseId(null); setMergeImages([]); setMergeOcr(false); }}
+            onAddMarkdown={handleAddMarkdown}
             isLoggedIn={isLoggedIn} onLogin={onLogin} onClose={onClose}
           />
         </div>
@@ -704,6 +774,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         onCancel={() => { setScannerOpen(false); setScannerCourseId(null); }}
         onResult={handleScannerResult}
         docOnly={category === config.categories.notes.folder}
+        filterMode={scannerFilter}
       />
     )}
     {createCourseFor !== null && (

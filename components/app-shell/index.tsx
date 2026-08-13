@@ -351,16 +351,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
       {/* NAVBAR */}
-      <nav className="sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border wco-aware wco-drag">
-        <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex items-center justify-between gap-4">
+      <nav className={`sticky top-0 z-[100] bg-dark-bg2 border-b border-dark-border wco-aware wco-drag${standalone ? ' app-titlebar' : ''}`}>
+        <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex items-center justify-between gap-4 tb-inner">
           <Link href="/" className="flex items-center gap-3 no-underline wco-no-drag" onClick={(e) => { e.preventDefault(); goHome(); router.push('/'); }}>
-            <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white" priority />
+            <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white tb-logo" priority />
             <div>
-              <h1 className="text-[1.1rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</h1>
-              <span className="text-[0.7rem] text-dark-text2 hidden md:block">Academic Resource System</span>
+              <h1 className="text-[1.1rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent tb-title">IIUC-ARMS</h1>
+              <span className="text-[0.7rem] text-dark-text2 hidden md:block tb-subtitle">Academic Resource System</span>
             </div>
           </Link>
-          <div className="hidden md:flex items-center gap-1 wco-no-drag">
+          <div className="hidden md:flex items-center gap-1 wco-no-drag tb-nav">
             <Link href="/" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isBrowse ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
               <i className="fas fa-book-open"></i> Browse
             </Link>

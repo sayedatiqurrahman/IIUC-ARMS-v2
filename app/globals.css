@@ -38,13 +38,81 @@ button { font-family: inherit; }
     padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
   }
   /* Let the empty area of the top bar act as a drag handle for the window,
-     while keeping every interactive control clickable. */
+      while keeping every interactive control clickable. */
   .wco-drag {
     app-region: drag;
   }
   .wco-drag .wco-no-drag {
     app-region: no-drag;
   }
+}
+
+/* ── Desktop-app title bar look (installed PWA / WCO) ───────────────────
+   When the app is installed on desktop and the OS hands the title-bar region
+   to the web app (window-controls-overlay), make our top nav read like native
+   window chrome — slim, full-bleed, grabbable, with the OS minimize /
+   maximize / close buttons overlaid on the reserved edge. Think Photoshop /
+   VS Code title bar. */
+@media (display-mode: window-controls-overlay) {
+  .app-titlebar {
+    -webkit-app-region: drag;
+    app-region: drag;
+    height: env(titlebar-area-height, 42px);
+    min-height: 42px;
+    padding-top: 0;
+    padding-bottom: 0;
+    background: linear-gradient(180deg, #18223a 0%, #0e1626 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 24px rgba(0, 0, 0, 0.4);
+  }
+  /* Let the whole bar drag the window, but keep controls clickable. */
+  .app-titlebar .wco-no-drag {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+  /* Stretch the bar edge-to-edge like real window chrome (no centered column). */
+  .app-titlebar .tb-inner {
+    max-width: none;
+    margin: 0;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  /* Shrink the logo + drop the subtitle so the bar stays compact. */
+  .app-titlebar .tb-logo {
+    width: 26px !important;
+    height: 26px !important;
+    padding: 0 !important;
+  }
+  .app-titlebar .tb-subtitle {
+    display: none;
+  }
+  .app-titlebar .tb-title {
+    font-size: 0.92rem;
+    letter-spacing: 0.2px;
+  }
+  /* Tighten the menu-style nav links so the bar reads like a desktop menu bar. */
+  .app-titlebar .tb-nav a {
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+}
+
+/* Non-overlay standalone (OS already draws its own title bar): keep a slim,
+   app-like bar but do NOT grab the window, to avoid fighting the OS chrome. */
+@media (display-mode: standalone) {
+  .app-titlebar {
+    min-height: 44px;
+    padding-top: 0;
+    padding-bottom: 0;
+    background: linear-gradient(180deg, #18223a 0%, #0e1626 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+  .app-titlebar .tb-logo {
+    width: 28px !important;
+    height: 28px !important;
+    padding: 0 !important;
+  }
+  .app-titlebar .tb-subtitle { display: none; }
 }
 
 .viewer-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1500; }
@@ -1949,3 +2017,146 @@ button { font-family: inherit; }
     flex: 1 1 30%;
   }
 }
+
+/* Markdown preview (upload editor + .md file preview) */
+.md-content > *:first-child { margin-top: 0; }
+.md-content > *:last-child { margin-bottom: 0; }
+.md-content h1 { font-size: 1.35rem; font-weight: 800; margin: 0.8em 0 0.4em; color: #f1f5f9; }
+.md-content h2 { font-size: 1.18rem; font-weight: 700; margin: 0.75em 0 0.35em; color: #f1f5f9; }
+.md-content h3 { font-size: 1.02rem; font-weight: 700; margin: 0.7em 0 0.3em; color: #f1f5f9; }
+.md-content h4, .md-content h5, .md-content h6 { font-weight: 700; margin: 0.6em 0 0.3em; color: #f1f5f9; }
+.md-content p { margin: 0.5em 0; line-height: 1.55; }
+.md-content a { color: #38bdf8; text-decoration: underline; }
+.md-content strong { color: #f1f5f9; font-weight: 700; }
+.md-content em { font-style: italic; }
+.md-content del { opacity: 0.6; }
+.md-content ul { list-style: disc; padding-left: 1.3em; margin: 0.5em 0; }
+.md-content ol { list-style: decimal; padding-left: 1.3em; margin: 0.5em 0; }
+.md-content li { margin: 0.2em 0; }
+.md-content code {
+  background: rgba(148, 163, 184, 0.18);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.md-content pre {
+  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid #1e293b;
+  padding: 0.75em 0.9em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.6em 0;
+}
+.md-content pre code { background: transparent; padding: 0; font-size: 0.82em; }
+.md-content blockquote {
+  border-left: 3px solid #38bdf8;
+  padding: 0.2em 0.8em;
+  margin: 0.6em 0;
+  color: #cbd5e1;
+  background: rgba(56, 189, 248, 0.06);
+}
+.md-content hr { border: none; border-top: 1px solid #1e293b; margin: 0.9em 0; }
+
+/* ── Document Scanner guidelines modal (eduone-scanner-sdk overlay) ───────
+   The SDK injects its own "Scan Guidelines" card (defaults to Sinhala). Force
+   the English copy and restyle it to match the ARMS dark theme. This only
+   kicks in if the guidelines screen is shown (it is skipped by default via
+   `skipGuidelines: true` in DocumentScanner.tsx). */
+.scanner-modal-card {
+  background: #111827 !important;
+  border: 1px solid #2a3a5c !important;
+  border-radius: 16px !important;
+  color: #e8edf5 !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55) !important;
+}
+.scanner-modal-header { border-bottom: 1px solid #2a3a5c !important; }
+.scanner-modal-title-si { display: none !important; }
+.scanner-modal-title-en {
+  display: block !important;
+  color: #22c55e !important;
+  font-weight: 700 !important;
+  font-size: 1.05rem !important;
+}
+.scanner-modal-close { color: #94a3b8 !important; }
+.scanner-modal-close:hover { color: #e8edf5 !important; }
+.scanner-modal-num {
+  background: rgba(34, 197, 94, 0.15) !important;
+  color: #22c55e !important;
+  border: 1px solid rgba(34, 197, 94, 0.4) !important;
+}
+.scanner-modal-text h4 { color: #e8edf5 !important; }
+.scanner-modal-text h4 span {
+  color: #94a3b8 !important;
+  font-weight: 500 !important;
+  font-size: 0.72rem !important;
+}
+.scanner-modal-text > p:not(.en) { display: none !important; }
+.scanner-modal-text > p.en { display: block !important; color: #94a3b8 !important; }
+.scanner-modal-action-btn {
+  background: linear-gradient(135deg, #22c55e, #10b981) !important;
+  color: #06281a !important;
+  border: none !important;
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+}
+.scanner-modal-action-btn span:first-child { display: none !important; }
+.scanner-modal-action-btn span:last-child { display: inline !important; }
+
+/* ── Re-theme the document scanner overlay to the ARMS black + green theme ─
+   The eduone-scanner-sdk injects its own white/orange UI; override its accent
+   (#FF502D) and surfaces to match #0a0f1e (black) + #22c55e (qsis green). */
+#eduone-scanner-ui-wrapper { background: #0a0f1e !important; }
+
+#eduone-scanner-ui-wrapper .scanner-header-overlay,
+#eduone-scanner-ui-wrapper .scanner-footer-overlay {
+  background: rgba(17, 24, 39, 0.6) !important;
+  border: 1px solid rgba(34, 197, 94, 0.25) !important;
+}
+
+#eduone-scanner-ui-wrapper .scanner-btn-circle {
+  border: 1px solid rgba(34, 197, 94, 0.3) !important;
+  color: #e8edf5 !important;
+}
+#eduone-scanner-ui-wrapper .scanner-btn-circle:active {
+  background: rgba(34, 197, 94, 0.18) !important;
+}
+
+#eduone-scanner-ui-wrapper .scanner-mode-tabs {
+  background: rgba(10, 15, 30, 0.6) !important;
+  border: 1px solid rgba(34, 197, 94, 0.25) !important;
+}
+#eduone-scanner-ui-wrapper .scanner-mode-tab { color: rgba(255, 255, 255, 0.6) !important; }
+#eduone-scanner-ui-wrapper .scanner-mode-tab.active {
+  background: #22c55e !important;
+  color: #04140b !important;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.35) !important;
+}
+
+#eduone-scanner-ui-wrapper .scanner-shutter-outer.capturing .scanner-shutter-inner {
+  background: #22c55e !important;
+  border-color: #fff !important;
+}
+
+#eduone-scanner-ui-wrapper .scanner-thumbnail-btn {
+  border: 1px solid rgba(34, 197, 94, 0.3) !important;
+  background: rgba(34, 197, 94, 0.12) !important;
+}
+#eduone-scanner-ui-wrapper .scanner-thumbnail-btn .badge {
+  background: #22c55e !important;
+  color: #04140b !important;
+  border-color: #0a0f1e !important;
+}
+
+#eduone-scanner-ui-wrapper .scanner-btn-check {
+  background: #22c55e !important;
+  color: #04140b !important;
+}
+#eduone-scanner-ui-wrapper .scanner-btn-check:active { background: #16a34a !important; }
+
+#eduone-scanner-ui-wrapper .scanner-engine-spinner {
+  border-top-color: #22c55e !important;
+}
+#eduone-scanner-ui-wrapper .scanner-engine-text { color: #94a3b8 !important; }
+
+#eduone-scanner-ui-wrapper .scanner-header-title { color: #e8edf5 !important; }

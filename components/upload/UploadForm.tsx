@@ -12,6 +12,7 @@ import LinksEditor from './LinksEditor';
 import FilePreview from './FilePreview';
 import { CURRENT_YEAR, CURRENT_SEASON } from './types';
 import type { CourseGroup, FileWithMeta } from './types';
+import { renderMarkdown } from '@/lib/markdown';
 
 interface UploadFormProps {
   session: any;
@@ -57,6 +58,7 @@ interface UploadFormProps {
   setMergeOcr: (v: boolean) => void;
   handleMergeImages: (courseId: number) => void;
   dismissMerge: () => void;
+  onAddMarkdown: (courseId: number, file: File) => void;
   isLoggedIn: boolean;
   onLogin: () => void;
   onClose: () => void;
@@ -77,10 +79,15 @@ export default function UploadForm({
   patInputToken, setPatInputToken, patSaving, handleSavePat,
   mergeDialogCourseId, mergeImages, mergeSession, mergeYear,
   mergeMerging, mergeOcr, setMergeOcr, handleMergeImages, dismissMerge,
+  onAddMarkdown,
   isLoggedIn, onLogin, onClose,
 }: UploadFormProps) {
   const email = (session as any)?.user?.email || profile.email || '';
   const [chooserCourseId, setChooserCourseId] = useState<number | null>(null);
+  const [mdCourseId, setMdCourseId] = useState<number | null>(null);
+  const [mdContent, setMdContent] = useState('');
+  const [mdFilename, setMdFilename] = useState('notes.md');
+  const mdFileRef = useRef<HTMLInputElement>(null);
 
   const userDeptId = (() => {
     const deptVal = profile.department || '';
@@ -163,6 +170,36 @@ export default function UploadForm({
       return;
     }
     handleSubmit();
+  }
+
+  function openMarkdownEditor(courseId: number) {
+    setMdFilename(`${courses.find(c => c.id === courseId)?.selectedCourseCode || 'notes'}.md`);
+    setMdContent('');
+    setMdCourseId(courseId);
+    setChooserCourseId(null);
+  }
+
+  async function handleMdBrowse(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      const text = await f.text();
+      setMdContent(text);
+      const lower = f.name.toLowerCase();
+      setMdFilename(lower.endsWith('.md') || lower.endsWith('.markdown') ? f.name : `${f.name}.md`);
+    } catch {}
+    if (mdFileRef.current) mdFileRef.current.value = '';
+  }
+
+  function handleMdAdd() {
+    if (mdCourseId === null) return;
+    const name = mdFilename.trim() || 'notes.md';
+    const lower = name.toLowerCase();
+    const safeName = lower.endsWith('.md') || lower.endsWith('.markdown') ? name : `${name}.md`;
+    const file = new File([mdContent], safeName, { type: 'text/markdown' });
+    onAddMarkdown(mdCourseId, file);
+    setMdCourseId(null);
+    setMdContent('');
   }
 
   if (result?.success) {
@@ -464,6 +501,19 @@ export default function UploadForm({
                         </span>
                         <i className="fas fa-chevron-right ml-auto text-qsis/70"></i>
                       </button>
+                      <button
+                        className="w-full flex items-center gap-3 px-4 py-4 text-left rounded-xl border-2 border-qsis/40 bg-qsis/10 hover:bg-qsis/20 hover:border-qsis active:scale-[0.98] transition-all cursor-pointer"
+                        onClick={() => { if (compressing) return; openMarkdownEditor(course.id); }}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-qsis/20 flex items-center justify-center shrink-0">
+                          <i className="fas fa-file-lines text-lg text-qsis"></i>
+                        </div>
+                        <span className="flex flex-col min-w-0">
+                          <span className="text-[0.82rem] font-bold text-dark-text">Markdown (.md)</span>
+                          <span className="text-[0.65rem] text-dark-text2">Write notes &amp; preview them live</span>
+                        </span>
+                        <i className="fas fa-chevron-right ml-auto text-qsis/70"></i>
+                      </button>
                     </div>
                     <button
                       className="w-full mt-2 py-3.5 border-t border-dark-border bg-dark-bg3/60 hover:bg-dark-bg3 text-dark-text3 hover:text-dark-text text-[0.78rem] font-semibold cursor-pointer transition-colors"
@@ -471,6 +521,57 @@ export default function UploadForm({
                     >
                       Cancel
                     </button>
+                  </div>
+                </>
+              )}
+
+              {mdCourseId === course.id && (
+                <>
+                  <div className="fixed inset-0 z-[250] bg-black/60" onClick={() => { setMdCourseId(null); setMdContent(''); }} />
+                  <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[260] w-[calc(100%-2rem)] max-w-[440px] max-h-[88vh] rounded-2xl border border-dark-border bg-dark-bg2 shadow-2xl overflow-hidden flex flex-col">
+                    <div className="px-4 pt-4 pb-3 flex items-center justify-between">
+                      <div>
+                        <h4 className="text-[0.95rem] font-bold text-dark-text flex items-center gap-2">
+                          <i className="fas fa-file-lines text-qsis"></i> Markdown (.md)
+                        </h4>
+                        <p className="text-[0.7rem] text-dark-text3 mt-0.5">Write or browse a .md file — preview updates live</p>
+                      </div>
+                      <button className="w-8 h-8 rounded-lg bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 cursor-pointer hover:text-dark-text" onClick={() => { setMdCourseId(null); setMdContent(''); }}>
+                        <i className="fas fa-times text-sm"></i>
+                      </button>
+                    </div>
+                    <div className="px-4 pb-3 flex flex-col gap-2.5 overflow-y-auto">
+                      <div className="flex items-center gap-2">
+                        <input ref={mdFileRef} type="file" accept=".md,.markdown,.txt" className="hidden" onChange={handleMdBrowse} />
+                        <button className="px-3 py-1.5 rounded-lg border border-qsis/40 bg-qsis/5 text-qsis text-[0.72rem] font-semibold cursor-pointer hover:bg-qsis/10 flex items-center gap-1.5" onClick={() => mdFileRef.current?.click()}>
+                          <i className="fas fa-folder-open"></i> Browse .md
+                        </button>
+                        <input
+                          className="flex-1 px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none focus:border-qsis font-mono"
+                          placeholder="filename.md"
+                          value={mdFilename}
+                          onChange={e => setMdFilename(e.target.value)}
+                        />
+                      </div>
+                      <textarea
+                        className="w-full h-44 px-3 py-2 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.78rem] font-mono outline-none focus:border-qsis resize-y leading-relaxed"
+                        placeholder={'# Heading\n\nWrite **Markdown** here…'}
+                        value={mdContent}
+                        onChange={e => setMdContent(e.target.value)}
+                      />
+                      <div>
+                        <p className="text-[0.62rem] text-dark-text3 mb-1 flex items-center gap-1"><i className="fas fa-eye"></i> Live preview</p>
+                        <div className="md-content max-h-44 overflow-y-auto px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.78rem]" dangerouslySetInnerHTML={{ __html: mdContent ? renderMarkdown(mdContent) : '<p class="text-dark-text3">Nothing to preview yet</p>' }} />
+                      </div>
+                    </div>
+                    <div className="px-4 py-3 border-t border-dark-border flex gap-2">
+                      <button className="flex-1 py-2.5 rounded-lg bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.78rem] font-semibold border-none cursor-pointer hover:opacity-90" onClick={handleMdAdd}>
+                        <i className="fas fa-plus mr-1"></i> Add to course
+                      </button>
+                      <button className="px-4 py-2.5 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.78rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2" onClick={() => { setMdCourseId(null); setMdContent(''); }}>
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
