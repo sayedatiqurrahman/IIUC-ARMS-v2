@@ -313,6 +313,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const isBrowse = pathname === '/' || pathname.startsWith('/semester');
   const isActive = (path: string) => pathname === path;
+  // Photoshop-style menu bar (installed app). Labels switch to the desktop
+  // app names (File/Edit/Tools/Window/Filters) when running as a PWA.
+  const navItems = [
+    { href: '/', match: isBrowse, icon: 'fa-book-open', label: 'Browse', appLabel: 'File' },
+    { href: '/history', match: isActive('/history'), icon: 'fa-history', label: 'History', appLabel: 'Edit' },
+    { href: '/studio', match: isActive('/studio'), icon: 'fa-tools', label: 'Studio', appLabel: 'Tools' },
+    { href: '/routine', match: isActive('/routine'), icon: 'fa-calendar-alt', label: 'Routine', appLabel: 'Window' },
+    { href: '/contributors', match: isActive('/contributors'), icon: 'fa-users', label: 'Contributors', appLabel: 'Filters' },
+  ];
 
   return (
     <div className="min-h-screen bg-dark-bg text-dark-text">
@@ -361,24 +370,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </Link>
           <div className="hidden md:flex items-center gap-1 wco-no-drag tb-nav">
-            <Link href="/" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isBrowse ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
-              <i className="fas fa-book-open"></i> Browse
-            </Link>
-            <Link href="/history" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/history') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
-              <i className="fas fa-history"></i> History
-            </Link>
-            <Link href="/routine" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/routine') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
-              <i className="fas fa-calendar-alt"></i> Routine
-            </Link>
-            <Link href="/contributors" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/contributors') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
-              <i className="fas fa-users"></i> Contributors
-            </Link>
-            <Link href="/faculty" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/faculty') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
-              <i className="fas fa-chalkboard-teacher"></i> Faculty
-            </Link>
-            <Link href="/studio" className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${isActive('/studio') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}>
-              <i className="fas fa-tools"></i> Studio
-            </Link>
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${item.match ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}
+              >
+                <i className={`fas ${item.icon}`}></i> {standalone ? item.appLabel : item.label}
+              </Link>
+            ))}
           </div>
           <div className="flex items-center gap-2 wco-no-drag tb-actions">
             <button className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-qsis/30 bg-qsis/10 text-qsis cursor-pointer hover:bg-qsis/20 transition-all" onClick={handleOpenUpload}>
@@ -388,14 +388,46 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div className="relative" ref={moreRef}>
                 <button
                   onClick={() => setMoreOpen(!moreOpen)}
-                  className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-dark-border bg-dark-bg3 text-dark-text2 cursor-pointer hover:text-dark-text hover:bg-dark-bg2 transition-all"
+                  className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-dark-border bg-dark-bg3 text-dark-text2 cursor-pointer hover:text-dark-text hover:bg-dark-bg2 transition-all more-trigger"
                   aria-haspopup="true"
                   aria-expanded={moreOpen}
                 >
-                  <i className="fas fa-ellipsis-h"></i> More
+                  {status !== 'loading' && session ? (
+                    <Image src={profile.image || (session as any)?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent((session as any)?.user?.name || 'User')}&background=22c55e&color=fff&bold=true&size=80`} alt="" width={24} height={24} className="w-6 h-6 rounded-full border border-qsis object-cover" />
+                  ) : (
+                    <i className="fas fa-ellipsis-h"></i>
+                  )}
+                  <span>More</span>
                 </button>
                 {moreOpen && (
                   <div className="absolute right-0 top-full mt-2 w-72 max-h-[80vh] overflow-y-auto bg-dark-bg2 border border-dark-border rounded-xl shadow-2xl p-2 z-[110] text-dark-text2">
+                    {status !== 'loading' && session && (
+                      <>
+                        <div className="flex items-center gap-3 px-2 py-2 mb-1 border-b border-dark-border">
+                          <Image src={profile.image || (session as any)?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent((session as any)?.user?.name || 'User')}&background=22c55e&color=fff&bold=true&size=80`} alt="" width={40} height={40} className="w-10 h-10 rounded-full border-2 border-qsis object-cover" />
+                          <div className="min-w-0">
+                            <p className="text-[0.8rem] font-semibold text-dark-text truncate">{(session as any)?.user?.name || 'User'}</p>
+                            <p className="text-[0.68rem] text-dark-text2 truncate">{(session as any)?.user?.email || ''}</p>
+                          </div>
+                        </div>
+                        <Link href="/dashboard" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-th-large w-4 text-center"></i><span>Dashboard</span></Link>
+                        {(() => {
+                          const email = (session as any)?.user?.email || profile.email || '';
+                          const effectiveRole = config.getEffectiveRole(email, profile.role);
+                          return effectiveRole === 'admin' ? (
+                            <Link href="/admin" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-shield-alt w-4 text-center text-qsis"></i><span>Admin Panel</span></Link>
+                          ) : null;
+                        })()}
+                        <button onClick={() => { setMoreOpen(false); fetch('/api/auth/firebase-session', { method: 'DELETE' }); signOut({ callbackUrl: '/' }); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] text-red-400 hover:bg-red-500/10 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-sign-out-alt w-4 text-center"></i><span>Logout</span></button>
+                        <div className="my-1 h-px bg-dark-border" />
+                      </>
+                    )}
+                    {status !== 'loading' && !session && (
+                      <>
+                        <button onClick={() => { setMoreOpen(false); handleOpenLogin(); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] text-qsis hover:bg-white/5 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-sign-in-alt w-4 text-center"></i><span>Sign In</span></button>
+                        <div className="my-1 h-px bg-dark-border" />
+                      </>
+                    )}
                     <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">Go To</div>
                     <Link href="/" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-home w-4 text-center"></i><span>Dashboard</span></Link>
                     <button onClick={() => { setMoreOpen(false); handleOpenUpload(); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-upload w-4 text-center"></i><span>Upload Files</span></button>
@@ -428,54 +460,64 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 )}
               </div>
             )}
-            {status === 'loading' ? (
-              <div className="w-9 h-9 rounded-full bg-dark-bg3 animate-pulse"></div>
-            ) : session ? (
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                  className="cursor-pointer bg-transparent border-none p-0 mt-2"
-                >
-                  <Image src={profile.image || (session as any)?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent((session as any)?.user?.name || 'User')}&background=22c55e&color=fff&bold=true&size=80`} alt="" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-dark-border hover:border-qsis transition-all object-cover" />
+            {standalone ? (
+              status !== 'loading' && !session && (
+                <button className="px-3 py-1.5 rounded-lg text-[0.78rem] font-medium bg-qsis text-white border-none cursor-pointer hover:opacity-90 transition-opacity" onClick={handleOpenLogin}>
+                  <i className="fas fa-sign-in-alt mr-1.5"></i> Sign In
                 </button>
-                {profileDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-dark-bg2 border border-dark-border rounded-xl shadow-lg py-2 z-[110]">
-                    <div className="px-4 py-2 border-b border-dark-border">
-                      <p className="text-[0.78rem] font-semibold text-dark-text truncate">{(session as any)?.user?.name || 'User'}</p>
-                      <p className="text-[0.68rem] text-dark-text2 truncate">{(session as any)?.user?.email || ''}</p>
-                    </div>
+              )
+            ) : (
+              <>
+                {status === 'loading' ? (
+                  <div className="w-9 h-9 rounded-full bg-dark-bg3 animate-pulse"></div>
+                ) : session ? (
+                  <div className="relative" ref={dropdownRef}>
                     <button
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-dark-text hover:bg-dark-bg3 cursor-pointer bg-transparent border-none text-left transition-colors"
-                      onClick={() => { setProfileDropdownOpen(false); router.push('/dashboard'); }}
+                      onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                      className="cursor-pointer bg-transparent border-none p-0 mt-2"
                     >
-                      <i className="fas fa-th-large w-4 text-center text-dark-text2"></i> Dashboard
+                      <Image src={profile.image || (session as any)?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent((session as any)?.user?.name || 'User')}&background=22c55e&color=fff&bold=true&size=80`} alt="" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-dark-border hover:border-qsis transition-all object-cover" />
                     </button>
-                    {(() => {
-                      const email = (session as any)?.user?.email || profile.email || '';
-                      const effectiveRole = config.getEffectiveRole(email, profile.role);
-                      const canAccessAdminPanel = effectiveRole === 'admin';
-                      return canAccessAdminPanel ? (
+                    {profileDropdownOpen && (
+                      <div className="absolute right-0 top-full mt-2 w-48 bg-dark-bg2 border border-dark-border rounded-xl shadow-lg py-2 z-[110]">
+                        <div className="px-4 py-2 border-b border-dark-border">
+                          <p className="text-[0.78rem] font-semibold text-dark-text truncate">{(session as any)?.user?.name || 'User'}</p>
+                          <p className="text-[0.68rem] text-dark-text2 truncate">{(session as any)?.user?.email || ''}</p>
+                        </div>
                         <button
                           className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-dark-text hover:bg-dark-bg3 cursor-pointer bg-transparent border-none text-left transition-colors"
-                          onClick={() => { setProfileDropdownOpen(false); router.push('/admin'); }}
+                          onClick={() => { setProfileDropdownOpen(false); router.push('/dashboard'); }}
                         >
-                          <i className="fas fa-shield-alt w-4 text-center text-qsis"></i> Admin Panel
+                          <i className="fas fa-th-large w-4 text-center text-dark-text2"></i> Dashboard
                         </button>
-                      ) : null;
-                    })()}
-                    <button
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-red-400 hover:bg-red-500/10 cursor-pointer bg-transparent border-none text-left transition-colors"
-                      onClick={() => { setProfileDropdownOpen(false); fetch('/api/auth/firebase-session', { method: 'DELETE' }); signOut({ callbackUrl: '/' }); }}
-                    >
-                      <i className="fas fa-sign-out-alt w-4 text-center"></i> Logout
-                    </button>
+                        {(() => {
+                          const email = (session as any)?.user?.email || profile.email || '';
+                          const effectiveRole = config.getEffectiveRole(email, profile.role);
+                          const canAccessAdminPanel = effectiveRole === 'admin';
+                          return canAccessAdminPanel ? (
+                            <button
+                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-dark-text hover:bg-dark-bg3 cursor-pointer bg-transparent border-none text-left transition-colors"
+                              onClick={() => { setProfileDropdownOpen(false); router.push('/admin'); }}
+                            >
+                              <i className="fas fa-shield-alt w-4 text-center text-qsis"></i> Admin Panel
+                            </button>
+                          ) : null;
+                        })()}
+                        <button
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-red-400 hover:bg-red-500/10 cursor-pointer bg-transparent border-none text-left transition-colors"
+                          onClick={() => { setProfileDropdownOpen(false); fetch('/api/auth/firebase-session', { method: 'DELETE' }); signOut({ callbackUrl: '/' }); }}
+                        >
+                          <i className="fas fa-sign-out-alt w-4 text-center"></i> Logout
+                        </button>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <button className="px-3 py-1.5 rounded-lg text-[0.78rem] font-medium bg-qsis text-white border-none cursor-pointer hover:opacity-90 transition-opacity" onClick={handleOpenLogin}>
+                    <i className="fas fa-sign-in-alt mr-1.5"></i> Sign In
+                  </button>
                 )}
-              </div>
-            ) : (
-              <button className="px-3 py-1.5 rounded-lg text-[0.78rem] font-medium bg-qsis text-white border-none cursor-pointer hover:opacity-90 transition-opacity" onClick={handleOpenLogin}>
-                <i className="fas fa-sign-in-alt mr-1.5"></i> Sign In
-              </button>
+              </>
             )}
           </div>
         </div>

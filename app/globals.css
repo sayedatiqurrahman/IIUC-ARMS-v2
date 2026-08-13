@@ -90,32 +90,21 @@ button { font-family: inherit; }
     font-size: 0.92rem;
     letter-spacing: 0.2px;
   }
-  /* Photoshop-style chrome: a slim title row + a dedicated menu bar row. */
+  /* Photoshop-style chrome: one single-line menu bar. The OS window buttons
+     sit at the far right of the same row as the logo, nav and actions. */
   .app-titlebar .tb-inner {
-    flex-wrap: wrap;
-    row-gap: 2px;
-  }
-  .app-titlebar .tb-logo-wrap {
-    order: 1;
-    flex: 1 1 auto;
-  }
-  .app-titlebar .tb-actions {
-    order: 2;
-    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    gap: 8px;
   }
   .app-titlebar .tb-nav {
-    order: 3;
-    flex-basis: 100%;
-    justify-content: flex-start;
     gap: 2px;
-    margin-top: 2px;
-    padding-top: 5px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
   /* Nav links become flat menu-bar items (like Photoshop's File/Edit/...). */
   .app-titlebar .tb-nav a {
     border-radius: 6px;
-    padding: 6px 12px;
+    padding: 5px 10px;
+    font-size: 0.78rem;
     color: #cbd5e1;
     background: transparent !important;
   }
@@ -127,6 +116,18 @@ button { font-family: inherit; }
     background: transparent !important;
     color: #22c55e !important;
     box-shadow: inset 0 -2px 0 #22c55e;
+  }
+  /* The More trigger blends into the bar as a flat menu item. */
+  .app-titlebar .tb-actions .more-trigger {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: #cbd5e1 !important;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .app-titlebar .tb-actions .more-trigger:hover {
+    background: rgba(34, 197, 94, 0.12) !important;
+    color: #e8edf5 !important;
   }
 }
 
