@@ -9,22 +9,61 @@ export interface AnnoPoint {
 
 export type AnnoType = 'pen' | 'highlight' | 'text';
 
+// 'xdraw' annotations are Excalidraw scenes drawn over a page snapshot. The
+// scene is rasterized to a transparent PNG (image) at save time so overlaying
+// it on the document is cheap; `scene` keeps the editable JSON for re-opening.
+export type AnnotationType = AnnoType | 'xdraw';
+
 export interface Annotation {
   id: string;
   page: number; // 1-based page number / section index
-  type: AnnoType;
+  type: AnnotationType;
   color: string;
   points: AnnoPoint[];
   text?: string;
   lineWidth: number; // fraction of page width
   fontSize: number; // fraction of page width
+  image?: string; // xdraw: transparent PNG dataURL of the page-area scene
+  imgW?: number; // xdraw: PNG natural width (== page area width)
+  imgH?: number; // xdraw: PNG natural height (== page area height)
+  scene?: string; // xdraw: serialized Excalidraw scene JSON (re-edit source)
 }
 
 export const ANNO_COLORS = ['#ef4444', '#f59e0b', '#facc15', '#22c55e', '#3b82f6', '#a855f7', '#111111', '#ffffff'];
 
 export const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
+// Decoded xdraw PNGs, cached per annotation id so overlay repaints stay cheap.
+const xdrawCache = new Map<string, HTMLImageElement>();
+
+/** Preloads an xdraw annotation's raster so drawAnno can overlay it. Returns
+ *  true when a brand-new load was kicked off. */
+export function preloadXdraw(anno: Annotation, onDone?: () => void): boolean {
+  if (!anno.image || anno.type !== 'xdraw') return false;
+  if (xdrawCache.has(anno.id)) {
+    onDone?.();
+    return false;
+  }
+  const img = new Image();
+  xdrawCache.set(anno.id, img);
+  img.onload = () => onDone?.();
+  img.onerror = () => onDone?.();
+  img.src = anno.image;
+  return true;
+}
+
+export function clearXdrawCache() {
+  xdrawCache.clear();
+}
+
 export function drawAnno(ctx: CanvasRenderingContext2D, a: Annotation, cw: number, ch: number) {
+  if (a.type === 'xdraw') {
+    const img = xdrawCache.get(a.id);
+    if (img && img.complete && img.naturalWidth) {
+      ctx.drawImage(img, 0, 0, cw, ch);
+    }
+    return;
+  }
   if (a.type === 'text') {
     ctx.font = `${Math.max(6, a.fontSize * cw)}px 'Segoe UI', sans-serif`;
     ctx.fillStyle = a.color;

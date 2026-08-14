@@ -17,6 +17,14 @@ const APPS = [
     title: 'Document Scanner',
     sub: 'Capture, crop, enhance, merge to PDF and run OCR — save straight to your device.',
   },
+  {
+    href: '/studio/excalidraw',
+    icon: 'fas fa-draw-polygon',
+    bg: 'bg-violet-500/15',
+    color: 'text-violet-400',
+    title: 'Excalidraw Whiteboard',
+    sub: 'Full drawing canvas — shapes, arrows, freehand, text & the magic laser. Auto-saves on your device.',
+  },
 ];
 
 export default function StudioPage() {

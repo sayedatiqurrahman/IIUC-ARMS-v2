@@ -9,8 +9,10 @@ interface DocToolbarProps {
   annotating: boolean;
   tool: 'laser' | 'hand' | 'annotate';
   downloadHref: string;
+  xdrawBusy: boolean;
   onSelectTool: (t: 'laser' | 'hand') => void;
   onToggleAnnotate: () => void;
+  onOpenExcalidraw: () => void;
   onZoomBy: (dir: 1 | -1) => void;
   onFit: () => void;
   onClose: () => void;
@@ -25,8 +27,10 @@ export default function DocToolbar({
   annotating,
   tool,
   downloadHref,
+  xdrawBusy,
   onSelectTool,
   onToggleAnnotate,
+  onOpenExcalidraw,
   onZoomBy,
   onFit,
   onClose,
@@ -62,6 +66,15 @@ export default function DocToolbar({
             </button>
           </>
         )}
+        <button
+          className="pdf-btn"
+          onClick={onOpenExcalidraw}
+          title="Excalidraw — open full art tools to draw on the current page"
+          disabled={status !== 'ready' || xdrawBusy}
+          style={{ background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.45)' }}
+        >
+          {xdrawBusy ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-bezier-curve"></i>}
+        </button>
         <button
           className="pdf-btn"
           onClick={onToggleAnnotate}

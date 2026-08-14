@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['tesseract.js', '@jsquash/jpeg'],
+  experimental: {
+    cpus: 1,
+    staticGenerationMaxConcurrency: 1,
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' },

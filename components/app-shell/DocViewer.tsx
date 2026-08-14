@@ -1,16 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ANNO_COLORS, type Annotation, type AnnoType } from '@/lib/annotations';
+import dynamic from 'next/dynamic';
+import { ANNO_COLORS, clearXdrawCache, preloadXdraw, type Annotation, type AnnoType } from '@/lib/annotations';
 import DocToolbar from './doc-viewer/DocToolbar';
 import AnnoToolbar from './doc-viewer/AnnoToolbar';
 import PdfStage from './doc-viewer/PdfStage';
 import DocxStage from './doc-viewer/DocxStage';
 import { useDocxAnnotations } from './doc-viewer/useDocxAnnotations';
 import { usePdfAnnotations } from './doc-viewer/usePdfAnnotations';
-import { usePdfLaser } from './doc-viewer/usePdfLaser';
+import { useMagicLaser } from './doc-viewer/useMagicLaser';
 import { usePdfPinch } from './doc-viewer/usePdfPinch';
 import { useViewerShortcuts } from './doc-viewer/useViewerShortcuts';
+import type { XdrawSaveData } from './doc-viewer/ExcalidrawAnnoEditor';
+
+// Excalidraw is ~several MB, so it only loads when a document is open AND the
+// user opens the art editor (annotation mode) — never on app startup.
+const ExcalidrawAnnoEditor = dynamic(() => import('./doc-viewer/ExcalidrawAnnoEditor'), { ssr: false });
 
 // Unified document viewer: renders both PDF (pdf.js) and .docx (docx-preview)
 // through a single toolbar + annotation system, so one lazy-loaded chunk covers
@@ -26,7 +32,7 @@ import { useViewerShortcuts } from './doc-viewer/useViewerShortcuts';
 //   DocToolbar / AnnoToolbar / StatusOverlay  — pure UI
 //   PdfStage / PdfPage / DocxStage           — layout of each format
 //   usePdfAnnotations / useDocxAnnotations   — drawing logic
-//   usePdfLaser / usePdfPinch / useViewerShortcuts — input handling
+//   useMagicLaser / usePdfPinch / useViewerShortcuts — input handling
 export default function DocViewer({ item, onClose }: { item: any; onClose: () => void }) {
   const ext = item.path?.split('.').pop()?.toLowerCase() || '';
   const isPdf = ext === 'pdf';
@@ -45,6 +51,11 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   const [annos, setAnnos] = useState<Annotation[]>([]);
   const [textDraft, setTextDraft] = useState<{ page: number; x: number; y: number } | null>(null);
   const [draftText, setDraftText] = useState('');
+
+  // Excalidraw art-annotation state (lazy-loaded editor + raster preload tick).
+  const [xdrawOpen, setXdrawOpen] = useState<{ page: number; image: string; w: number; h: number } | null>(null);
+  const [xdrawPreparing, setXdrawPreparing] = useState(false);
+  const [xdrawTick, setXdrawTick] = useState(0);
 
   // PDF-only tool state (laser / hand / annotate).
   const [tool, setTool] = useState<'laser' | 'hand' | 'annotate'>('hand');
@@ -152,6 +163,90 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
     setDraftText('');
     drawingRef.current = null;
   };
+
+  // ---- Excalidraw art annotation -------------------------------------------
+
+  const getCurrentPage = useCallback((): number => {
+    const sc = scrollRef.current;
+    if (!sc) return 1;
+    const vmid = sc.clientHeight / 2;
+    if (isPdf) {
+      const canvases = canvasRefs.current;
+      let acc = 0;
+      for (let i = 0; i < canvases.length; i++) {
+        const c = canvases[i];
+        if (!c) break;
+        acc += c.clientHeight + 12;
+        if (sc.scrollTop + vmid < acc) return i + 1;
+      }
+      return canvases.length || 1;
+    }
+    const sections = bodyRef.current?.querySelectorAll('.docx-wrapper > section.docx') || [];
+    const top = sc.getBoundingClientRect().top;
+    for (let i = 0; i < sections.length; i++) {
+      const r = (sections[i] as HTMLElement).getBoundingClientRect();
+      if (r.top - top <= vmid && r.bottom - top >= vmid) return i + 1;
+    }
+    return sections.length || 1;
+  }, [isPdf]);
+
+  const openXdrawEditor = useCallback(async () => {
+    if (status !== 'ready') return;
+    const page = getCurrentPage();
+    setXdrawPreparing(true);
+    try {
+      if (isPdf) {
+        const canvas = canvasRefs.current[page - 1];
+        if (!canvas) return;
+        setXdrawOpen({ page, image: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
+      } else {
+        const section = bodyRef.current?.querySelectorAll('.docx-wrapper > section.docx')[page - 1] as HTMLElement | null;
+        if (!section) return;
+        const { toPng } = await import('dom-to-image-more');
+        const image = await toPng(section, { pixelRatio: 2, bgcolor: '#ffffff' });
+        setXdrawOpen({ page, image, w: section.offsetWidth * 2, h: section.offsetHeight * 2 });
+      }
+    } catch (e) {
+      console.error('Excalidraw page snapshot failed', e);
+    } finally {
+      setXdrawPreparing(false);
+    }
+  }, [status, isPdf, getCurrentPage]);
+
+  const handleXdrawSave = useCallback(
+    (data: XdrawSaveData) => {
+      setAnnos((prev) => [
+        ...prev,
+        {
+          id: Math.random().toString(36).slice(2),
+          page: xdrawOpen?.page ?? 1,
+          type: 'xdraw',
+          color: '#ffffff',
+          points: [{ x: 0, y: 0 }],
+          lineWidth: 0,
+          fontSize: 0,
+          image: data.image,
+          imgW: data.imgW,
+          imgH: data.imgH,
+          scene: data.scene,
+        },
+      ]);
+      setXdrawOpen(null);
+    },
+    [xdrawOpen]
+  );
+
+  useEffect(() => {
+    const images = annos.filter((a) => a.type === 'xdraw' && a.image);
+    if (!images.length) return;
+    let pending = false;
+    for (const a of images) {
+      if (preloadXdraw(a, () => setXdrawTick((t) => t + 1))) pending = true;
+    }
+    if (pending) setXdrawTick((t) => t + 1);
+  }, [annos]);
+
+  useEffect(() => () => clearXdrawCache(), []);
 
   // ---- Load + render ------------------------------------------------------
 
@@ -294,7 +389,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   });
 
   const pinchRef = usePdfPinch({ isPdf, scrollRef, zoomRef, setZoom });
-  usePdfLaser({ isPdf, tool, overlayRef, stageRef });
+  useMagicLaser({ enabled: isPdf && tool === 'laser', overlayRef, containerRef: stageRef });
   useViewerShortcuts({ zoomFnRef, fitFnRef, scrollRef });
 
   // ---- Shared: repaint annotation overlays --------------------------------
@@ -303,7 +398,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
     if (status !== 'ready') return;
     if (isPdf) annCanvasRefs.current.forEach((_, i) => paintPdfPage(i));
     else syncOverlays();
-  }, [status, annos, zoom, isPdf, paintPdfPage, syncOverlays]);
+  }, [status, annos, zoom, isPdf, xdrawTick, paintPdfPage, syncOverlays]);
 
   // ---- DOCX: initial layout + resize --------------------------------------
 
@@ -415,8 +510,10 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
         annotating={annotating}
         tool={tool}
         downloadHref={src}
+        xdrawBusy={xdrawPreparing}
         onSelectTool={selectTool}
         onToggleAnnotate={toggleAnnotate}
+        onOpenExcalidraw={openXdrawEditor}
         onZoomBy={zoomBy}
         onFit={fit}
         onClose={onClose}
@@ -478,6 +575,18 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
           zoom={zoom}
           annotating={annotating}
           openHref={src}
+        />
+      )}
+
+      {xdrawOpen && status === 'ready' && (
+        <ExcalidrawAnnoEditor
+          title={item.name}
+          page={xdrawOpen.page}
+          bgImage={xdrawOpen.image}
+          bgWidth={xdrawOpen.w}
+          bgHeight={xdrawOpen.h}
+          onSave={handleXdrawSave}
+          onCancel={() => setXdrawOpen(null)}
         />
       )}
     </div>
