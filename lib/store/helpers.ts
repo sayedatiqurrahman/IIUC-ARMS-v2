@@ -1,12 +1,18 @@
 import { config } from '../config';
 
 export function detectCategory(name: string) {
-  const l = name.toLowerCase();
+  const l = name.toLowerCase().trim();
   if (config.relatedKitabsCategories[l]) return l;
-  if (l === 'sheet') return 'sheet';
-  if (l === 'notes' || l === 'note') return 'notes';
-  if (l === 'previous questions' || l.includes('previous question')) return 'questions';
-  if (l === 'syllabus') return 'syllabus';
+  if (l === 'sheet' || l === 'sheets' || l === 'question sheet' || l === 'solve sheet') return 'sheet';
+  if (l === 'notes' || l === 'note' || l === 'hand notes' || l === 'handnotes' || l === 'class notes' || l === 'classnotes') return 'notes';
+  if (
+    l === 'questions' || l === 'question' ||
+    l === 'previous questions' || l === 'previous question' ||
+    l === 'prev questions' || l === 'prev question' ||
+    l === 'question bank' || l === 'questions bank' ||
+    l.includes('previous question') || l.includes('question bank')
+  ) return 'questions';
+  if (l === 'syllabus' || l === 'syllabuses' || l === 'syllabi' || l === 'course outline') return 'syllabus';
   if (l === 'related sources' || l === 'related-sources') return 'related-sources';
   return 'other';
 }

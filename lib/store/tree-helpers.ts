@@ -562,12 +562,9 @@ export function createTreeHelpers(get: GetState) {
         const midHasMd = Array.from(courseMdFiles).some(k => k.startsWith('mid'));
         const finalHasMd = Array.from(courseMdFiles).some(k => k.startsWith('final'));
 
-        const hasMidFolder = folderSet.has('Mid/notes') || folderSet.has('Mid/questions') || folderSet.has('Mid/sheet') || folderSet.has('Mid/syllabus') || folderSet.has('Mid/other');
-        const hasFinalFolder = folderSet.has('Final/notes') || folderSet.has('Final/questions') || folderSet.has('Final/sheet') || folderSet.has('Final/syllabus') || folderSet.has('Final/other');
-
         const virtualCats: { key: string; label: string; icon: string; count: number; files: any[]; hasLinks: boolean; hasMd: boolean }[] = [];
-        if (midCount > 0 || hasMidFolder) virtualCats.push({ key: '_mid', label: 'Mid', icon: 'fa-pen-fancy', count: midCount, files: [], hasLinks: midHasLinks, hasMd: midHasMd });
-        if (finalCount > 0 || hasFinalFolder) virtualCats.push({ key: '_final', label: 'Final', icon: 'fa-graduation-cap', count: finalCount, files: [], hasLinks: finalHasLinks, hasMd: finalHasMd });
+        if (midCount > 0 || midHasLinks || midHasMd) virtualCats.push({ key: '_mid', label: 'Mid', icon: 'fa-pen-fancy', count: midCount, files: [], hasLinks: midHasLinks, hasMd: midHasMd });
+        if (finalCount > 0 || finalHasLinks || finalHasMd) virtualCats.push({ key: '_final', label: 'Final', icon: 'fa-graduation-cap', count: finalCount, files: [], hasLinks: finalHasLinks, hasMd: finalHasMd });
 
         const rootCatKeys = new Set<string>(Array.from(catMap.keys()));
         Array.from(folderSet).forEach(fk => {
@@ -591,7 +588,7 @@ export function createTreeHelpers(get: GetState) {
           hasLinks: Array.from(courseReadmes).some(k => k === key.toLowerCase() || k.startsWith(key.toLowerCase() + '/')),
           hasMd: Array.from(courseMdFiles).some(k => k === key.toLowerCase() || k.startsWith(key.toLowerCase() + '/')),
         }));
-        return [...virtualCats, ...rootCats];
+        return [...virtualCats, ...rootCats.filter(c => c.count > 0 || c.hasLinks || c.hasMd)];
       }
 
       const resultCats = Array.from(catMap.entries()).map(([key, data]) => ({
@@ -628,7 +625,7 @@ export function createTreeHelpers(get: GetState) {
         }
       });
 
-      return resultCats;
+      return resultCats.filter(c => c.count > 0 || c.hasLinks || c.hasMd);
     },
 
     getCourseMidFinal: (semId: string, courseCode: string, departmentId?: string | null) => {

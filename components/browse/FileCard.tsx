@@ -20,6 +20,7 @@ export default function FileCard({ item, onOpen, filePerms, onMove, onCopy, onRe
   const mime = getMimeFromExt(ext);
   const isFolder = item.type === 'tree';
   const hasActions = filePerms.move || filePerms.copy || filePerms.rename || filePerms.delete;
+  const actionPath = item.githubPath || item.path;
 
   return (
     <div className="bg-dark-bg2 border border-dark-border rounded-xl p-[12px_14px] transition-all hover:border-qsis hover:shadow-[0_0_12px_rgba(34,197,94,0.3)]">
@@ -36,13 +37,13 @@ export default function FileCard({ item, onOpen, filePerms, onMove, onCopy, onRe
         </button>
         {hasActions && (
           <FileActionsMenu
-            filePath={item.path}
+            filePath={actionPath}
             fileName={name}
             isFolder={isFolder}
-            onMove={() => onMove(item.path, name, 'move')}
-            onCopy={() => onCopy(item.path, name, 'copy')}
-            onRename={() => onRename(item.path, name)}
-            onDelete={() => onDelete(item.path, name)}
+            onMove={() => onMove(actionPath, name, 'move')}
+            onCopy={() => onCopy(actionPath, name, 'copy')}
+            onRename={() => onRename(actionPath, name)}
+            onDelete={() => onDelete(actionPath, name)}
           />
         )}
       </div>
