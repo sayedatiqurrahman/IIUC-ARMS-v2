@@ -313,14 +313,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const isBrowse = pathname === '/' || pathname.startsWith('/semester');
   const isActive = (path: string) => pathname === path;
-  // Photoshop-style menu bar (installed app). Labels switch to the desktop
-  // app names (File/Edit/Tools/Window/Filters) when running as a PWA.
   const navItems = [
-    { href: '/', match: isBrowse, icon: 'fa-book-open', label: 'Browse', appLabel: 'File' },
-    { href: '/history', match: isActive('/history'), icon: 'fa-history', label: 'History', appLabel: 'Edit' },
-    { href: '/studio', match: isActive('/studio'), icon: 'fa-tools', label: 'Studio', appLabel: 'Tools' },
-    { href: '/routine', match: isActive('/routine'), icon: 'fa-calendar-alt', label: 'Routine', appLabel: 'Window' },
-    { href: '/contributors', match: isActive('/contributors'), icon: 'fa-users', label: 'Contributors', appLabel: 'Filters' },
+    { href: '/', match: isBrowse, icon: 'fa-book-open', label: 'Browse' },
+    { href: '/history', match: isActive('/history'), icon: 'fa-history', label: 'History' },
+    { href: '/routine', match: isActive('/routine'), icon: 'fa-calendar-alt', label: 'Routine' },
+    { href: '/contributors', match: isActive('/contributors'), icon: 'fa-users', label: 'Contributors' },
+    { href: '/faculty', match: isActive('/faculty'), icon: 'fa-chalkboard-teacher', label: 'Faculty' },
+    { href: '/studio', match: isActive('/studio'), icon: 'fa-tools', label: 'Studio' },
   ];
 
   return (
@@ -376,7 +375,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all no-underline ${item.match ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}
               >
-                <i className={`fas ${item.icon}`}></i> {standalone ? item.appLabel : item.label}
+                <i className={`fas ${item.icon}`}></i> {item.label}
               </Link>
             ))}
           </div>
