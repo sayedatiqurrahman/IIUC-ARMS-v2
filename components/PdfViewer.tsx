@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ANNO_COLORS, clamp01, drawAnno, type Annotation, type AnnoPoint, type AnnoType } from '@/lib/annotations';
 
 interface PdfViewerProps {
   url: string;
@@ -22,28 +23,6 @@ interface PdfViewerProps {
 // Annotation: the toolbar "Annotate" button toggles an annotation toolbar with
 // pen / highlighter / text tools, colour swatches, undo and clear. Marks are
 // stored in normalized page coordinates so they scale correctly with zoom.
-
-interface AnnoPoint {
-  x: number;
-  y: number;
-}
-
-type AnnoType = 'pen' | 'highlight' | 'text';
-
-interface Annotation {
-  id: string;
-  page: number; // 1-based
-  type: AnnoType;
-  color: string;
-  points: AnnoPoint[];
-  text?: string;
-  lineWidth: number; // fraction of page width
-  fontSize: number; // fraction of page width
-}
-
-const ANNO_COLORS = ['#ef4444', '#f59e0b', '#facc15', '#22c55e', '#3b82f6', '#a855f7', '#111111', '#ffffff'];
-
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
   const src = `${window.location.origin}/api/github/raw?url=${encodeURIComponent(url)}`;
@@ -398,29 +377,6 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
   };
 
   // ---- Annotations -------------------------------------------------------
-
-  const drawAnno = (ctx: CanvasRenderingContext2D, a: Annotation, cw: number, ch: number) => {
-    if (a.type === 'text') {
-      ctx.font = `${Math.max(6, a.fontSize * cw)}px 'Segoe UI', sans-serif`;
-      ctx.fillStyle = a.color;
-      ctx.textBaseline = 'alphabetic';
-      const p = a.points[0];
-      ctx.fillText(a.text || '', p.x * cw, p.y * ch);
-      return;
-    }
-    ctx.strokeStyle = a.color;
-    ctx.globalAlpha = a.type === 'highlight' ? 0.35 : 1;
-    ctx.lineWidth = a.type === 'highlight' ? Math.max(10, ch * 0.035) : Math.max(1.5, a.lineWidth * cw);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    a.points.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(p.x * cw, p.y * ch);
-      else ctx.lineTo(p.x * cw, p.y * ch);
-    });
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
 
   const paintPage = useCallback((pageIndex: number, extra?: Annotation) => {
     const canvas = annCanvasRefs.current[pageIndex];
