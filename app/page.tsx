@@ -10,6 +10,8 @@ import { getMimeFromExt, extractYear, showToast } from '@/lib/utils';
 import { CreateCourseResult } from '@/components/upload';
 import PageHeader from '@/components/browse/PageHeader';
 import BrowseHeader from '@/components/browse/BrowseHeader';
+import OperationProgress from '@/components/OperationProgress';
+import { refreshTreeUntilVisible } from '@/lib/tree-refresh';
 import dynamic from 'next/dynamic';
 // Each browse view is loaded on demand — only the view you're actually in is
 // fetched/executed, so switching departments → semesters → courses → files
@@ -43,6 +45,7 @@ export default function BrowsePage() {
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ path: string; name: string } | null>(null);
   const [actionLoading, setActionLoading] = useState('');
+  const [operationLabel, setOperationLabel] = useState('');
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState<{ show: boolean; message: string; contact: string }>({ show: false, message: '', contact: '' });
   const loading = useAppStore(s => s.loading);
@@ -157,7 +160,14 @@ export default function BrowsePage() {
     loadPerms();
   }, [email, profile.isCR]);
   const handleFileAction = useCallback(async (action: string, from: string, to?: string, newName?: string) => {
+    const opLabels: Record<string, string> = {
+      delete: 'Deleting…',
+      rename: 'Renaming…',
+      move: 'Moving…',
+      copy: 'Copying…',
+    };
     setActionLoading(action + from);
+    setOperationLabel(opLabels[action] || 'Working…');
     try {
       const res = await fetch('/api/github/file-actions', {
         method: 'POST',
@@ -179,9 +189,11 @@ export default function BrowsePage() {
       throw e;
     } finally {
       setActionLoading('');
+      setOperationLabel('');
     }
   }, [session?.accessToken, loadTree]);
   const handleAddCourse = useCallback(async (code: string, title: string): Promise<CreateCourseResult> => {
+    setOperationLabel('Creating course…');
     try {
       const res = await useAppStore.getState().addCourse(currentDept || '', currentSem || '', code, title);
       if (!res.success) {
@@ -192,13 +204,19 @@ export default function BrowsePage() {
         return { success: false, error: res.error || 'Failed to create course' };
       }
       showToast(res.alreadyExisted ? `Course ${code} already exists — selected` : `Course ${code} created on GitHub`, res.alreadyExisted ? 'info' : 'success');
-      useAppStore.getState().invalidateTreeCache();
       useAppStore.getState().invalidateCoursesCache();
       useAppStore.getState().loadCourses();
-      loadTree(session?.accessToken || '');
+      // GitHub's tree API is eventually consistent — keep reloading until the
+      // newly created course folder actually shows up, so no manual refresh.
+      const finalCode = (res.course?.code || code).toUpperCase();
+      const cleanTitle = (res.course?.title || title).trim();
+      const expectedFolder = `${getDepartmentFolder(currentDept || '')}/${currentSem || ''}/${finalCode} - ${cleanTitle}`;
+      refreshTreeUntilVisible(expectedFolder, session?.accessToken || '');
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e.message || 'Failed to create course' };
+    } finally {
+      setOperationLabel('');
     }
   }, [currentDept, currentSem, session?.accessToken, loadTree]);
   useEffect(() => {
@@ -685,6 +703,7 @@ export default function BrowsePage() {
         permissionDenied={permissionDenied} setPermissionDenied={setPermissionDenied}
         handleFileAction={handleFileAction}
       />
+      <OperationProgress label={operationLabel} />
     </>
   );
 }

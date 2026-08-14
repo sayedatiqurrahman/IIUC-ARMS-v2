@@ -13,6 +13,7 @@ import type { CourseGroup, FileWithMeta, Link, UploadModalProps } from '@/compon
 import DocumentScanner, { type CapturedPage, warmupScannerEngine } from '@/components/scanner/DocumentScanner';
 import { compressUploadFile } from '@/lib/compress';
 import { buildSearchablePdf } from '@/lib/ocr';
+import { refreshTreeUntilVisible } from '@/lib/tree-refresh';
 
 // Files are ALWAYS uploaded from the browser to our backend, which stores the
 // chunks (staging) and commits them to GitHub in one atomic commit. There is no
@@ -541,8 +542,10 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       setRecentlyCreated(prev => [...prev.filter(c => c.code !== finalCode), { code: finalCode, title: finalTitle }]);
       useAppStore.getState().invalidateCoursesCache();
       useAppStore.getState().loadCourses();
-      useAppStore.getState().invalidateTreeCache();
-      useAppStore.getState().loadTree(session?.accessToken || '');
+      // Wait for the new course folder to show up in the (eventually
+      // consistent) GitHub tree before finishing, so it appears instantly.
+      const expectedFolder = `${getDepartmentFolder(department)}/${semester}/${finalCode} - ${finalTitle}`;
+      await refreshTreeUntilVisible(expectedFolder, session?.accessToken || '');
       showToast(res.alreadyExisted ? `Course ${finalCode} already exists — selected` : `Course ${finalCode} created on GitHub`, res.alreadyExisted ? 'info' : 'success');
       return { success: true };
     } catch { return { success: false, error: 'Network error' }; }

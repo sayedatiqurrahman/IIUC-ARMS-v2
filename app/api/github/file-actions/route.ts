@@ -281,7 +281,7 @@ export async function POST(req: NextRequest) {
 
       const { moveCopyRepoEntries } = await import('@/lib/github-tree-ops');
       const res = await moveCopyRepoEntries(fromFull, toFull, 'move', `Rename ${oldName} → ${newName} (via app bot)`);
-      if (!res.ok || res.count === 0) return NextResponse.json({ error: 'Rename failed' }, { status: 500 });
+      if (!res.ok || res.count === 0) return NextResponse.json({ error: res.error || 'Rename failed' }, { status: 500 });
 
       try {
         await prisma.activityLog.create({
@@ -312,7 +312,7 @@ export async function POST(req: NextRequest) {
 
       const { moveCopyRepoEntries } = await import('@/lib/github-tree-ops');
       const res = await moveCopyRepoEntries(fromFull, toFull, 'move', `Move ${from.split('/').pop()} → ${to} (via app bot)`);
-      if (!res.ok || res.count === 0) return NextResponse.json({ error: 'Move failed' }, { status: 500 });
+      if (!res.ok || res.count === 0) return NextResponse.json({ error: res.error || 'Move failed' }, { status: 500 });
 
       try {
         await prisma.activityLog.create({
@@ -347,7 +347,7 @@ export async function POST(req: NextRequest) {
 
       const { moveCopyRepoEntries } = await import('@/lib/github-tree-ops');
       const res = await moveCopyRepoEntries(fromFull, toFull, 'copy', `Copy ${from.split('/').pop()} → ${to} (via app bot)`);
-      if (!res.ok || res.count === 0) return NextResponse.json({ error: 'Copy failed' }, { status: 500 });
+      if (!res.ok || res.count === 0) return NextResponse.json({ error: res.error || 'Copy failed' }, { status: 500 });
 
       try {
         await prisma.activityLog.create({

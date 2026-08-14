@@ -249,6 +249,18 @@ button { font-family: inherit; }
 .fa-spin { animation: fa-spin 1s linear infinite !important; }
 @keyframes fa-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+/* Indeterminate operation progress bar */
+@keyframes progress-indeterminate {
+  0% { left: -35%; width: 35%; }
+  60% { left: 100%; width: 60%; }
+  100% { left: 100%; width: 60%; }
+}
+.progress-bar {
+  position: relative;
+  overflow: hidden;
+  animation: progress-indeterminate 1.4s ease-in-out infinite;
+}
+
 /* Book page-turn loading animation */
 .loading-container {
   display: flex;
