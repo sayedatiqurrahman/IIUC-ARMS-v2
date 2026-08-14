@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
+import { resolveDepartment, getDepartmentDisplayName } from '@/lib/departments';
 import { showToast } from '@/lib/utils';
 import { useConfirm } from '@/components/ConfirmModal';
 import type { RoutineItem, ViewMode, AllSemesterDraft } from '@/components/routine/types';
@@ -90,7 +91,7 @@ export default function RoutineView({ dept, setDept }: { dept: string; setDept: 
     let all = [...publishedRoutines, ...sharedRoutines].filter(filterByGender);
     // When a specific department is selected (e.g. auto-synced from the user's
     // profile), restrict to that department. "All Departments" (empty) shows all.
-    if (dept) all = all.filter(r => r.department === dept);
+    if (dept) all = all.filter(r => resolveDepartment(r.department) === dept);
     // Teachers, managers, and admins see ALL semesters (role-based control)
     if (isTeacherPlus) return all;
     if (!userSemesterLabel) return all;
@@ -357,7 +358,7 @@ export default function RoutineView({ dept, setDept }: { dept: string; setDept: 
               <h3 className="routine-page-title"><i className="fas fa-calendar-alt"></i> Class Routine</h3>
               {dept && (
                 <p className="routine-page-sub" style={{ color: '#22c55e' }}>
-                  <i className="fas fa-building mr-1"></i>{dept}
+                  <i className="fas fa-building mr-1"></i>{getDepartmentDisplayName(dept)}
                   {profile?.semester && <><span className="mx-1">&bull;</span><i className="fas fa-graduation-cap mr-1"></i>{config.semesters.find(s => s.id === profile?.semester)?.label || profile?.semester}</>}
                 </p>
               )}
@@ -376,7 +377,7 @@ export default function RoutineView({ dept, setDept }: { dept: string; setDept: 
                   session: getDefaultSession(),
                   room: '',
                   academicYear: new Date().getFullYear().toString(),
-                  department: 'Department of Qur\'anic Sciences & Islamic Studies',
+                  department: profile?.department ? resolveDepartment(profile.department) : 'qsis',
                   university: 'International Islamic University Chittagong',
                   periods: [...DEFAULT_PERIODS],
                   days: [...DEFAULT_DAYS],

@@ -162,7 +162,54 @@ export function resolveDepartment(input: string): string {
       return department.id;
     }
   }
+  // Fuzzy match for variants like "Department of Qur'anic Sciences & Islamic
+  // Studies" (normalize: strip "Department of", "&" -> "and", non-alpha -> space).
+  const norm = (s: string) =>
+    s.toLowerCase().replace(/department\s+of\s+/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+  const nInput = norm(input);
+  if (nInput) {
+    for (const { department } of all) {
+      if (norm(department.name) === nInput || norm(department.shortName) === nInput) {
+        return department.id;
+      }
+    }
+  }
   return input;
+}
+
+// Full display name for a department value (id, folder, short name, or full
+// name variant). Falls back to the input when nothing matches.
+export function getDepartmentDisplayName(input: string): string {
+  if (!input) return input;
+  const id = resolveDepartment(input);
+  const found = findDepartment(id);
+  if (found) return found.department.name;
+  return input;
+}
+
+export interface DepartmentSelectOption {
+  value: string;
+  label: string;
+  icon?: string;
+  group?: string;
+}
+
+// Options for a department selector that show both the short form and the full
+// form, grouped by faculty and searchable by either (typing "CSE" reveals
+// "CSE — Computer Science and Engineering").
+export function getDepartmentSelectOptions(): DepartmentSelectOption[] {
+  const out: DepartmentSelectOption[] = [];
+  for (const faculty of FACULTIES) {
+    for (const dept of faculty.departments) {
+      out.push({
+        value: dept.id,
+        label: `${dept.shortName} — ${dept.name}`,
+        icon: dept.icon,
+        group: faculty.shortName,
+      });
+    }
+  }
+  return out;
 }
 
 export function isShariahDepartmentId(id: string): boolean {

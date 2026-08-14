@@ -5,7 +5,8 @@ import { useSession } from 'next-auth/react';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import CustomSelect from '@/components/CustomSelect';
 import { config } from '@/lib/config';
-import { FACULTIES, resolveDepartment } from '@/lib/departments';
+import { resolveDepartment, getDepartmentSelectOptions } from '@/lib/departments';
+import { getOnboardingData } from '@/lib/onboarding-storage';
 import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, BuilderStep } from './types';
 import { SEMESTERS, DEFAULT_PERIODS, DEFAULT_DAYS, DEFAULT_FEMALE_PERIODS } from './types';
 import { getDefaultSession, getSlot, loadDraft, saveDraft, clearDraft, to24h, to12h } from './helpers';
@@ -18,14 +19,20 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
   const [semester, setSemester] = useState(existing?.semester || SEMESTERS[0]);
   const [branch, setBranch] = useState(existing?.branch || '');
   const [gender, setGender] = useState<'male' | 'female' | 'both' | null>(existing?.gender || null);
-  const [department, setDepartment] = useState(existing?.department || '');
+  const [department, setDepartment] = useState<string>(existing ? resolveDepartment(existing.department || '') : '');
   const profile = useAppStore(s => s.profile);
 
-  // Auto-select the department from the logged-in user's profile (personalization).
+  // Auto-select the department from the user's personalization
+  // (profile first, then onboarding).
   useEffect(() => {
     if (existing || department) return;
     const resolved = profile?.department ? resolveDepartment(profile.department) : '';
-    if (resolved) setDepartment(resolved);
+    if (resolved) { setDepartment(resolved); return; }
+    const onboard = getOnboardingData();
+    if (onboard?.department) {
+      const r = resolveDepartment(onboard.department);
+      if (r) setDepartment(r);
+    }
   }, [profile?.department, existing, department]);
   const [session, setSession] = useState(existing?.session || getDefaultSession());
   const [room, setRoom] = useState(existing?.room || '');
@@ -43,6 +50,7 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
   const [draftSaved, setDraftSaved] = useState(false);
   const [semesterCourses, setSemesterCourses] = useState<{ code: string; title: string; teacher: string; room: string }[]>([]);
   const [codeSuggestions, setCodeSuggestions] = useState<{ idx: number; matches: { code: string; title: string; teacher: string; room: string }[] } | null>(null);
+  const [githubLoading, setGithubLoading] = useState(false);
 
   useEffect(() => {
     if (!semester) { setSemesterCourses([]); return; }
@@ -152,6 +160,27 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
   };
 
   const addCourse = () => setCourses([...courses, { code: '', title: '', teacher: '', room: '' }]);
+
+  // Load the course list for the selected department + semester from GitHub.
+  const loadCoursesFromGitHub = async () => {
+    if (!department) { showToast('Please select a department first', 'error'); return; }
+    if (!semester) { showToast('Please select a semester first', 'error'); return; }
+    setGithubLoading(true);
+    try {
+      const res = await fetch(`/api/github-courses?department=${encodeURIComponent(department)}&semester=${encodeURIComponent(semester)}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.courses) && data.courses.length > 0) {
+        setCourses(data.courses.map((c: any) => ({ code: c.code, title: c.title, teacher: '', room: '' })));
+        showToast(`Loaded ${data.courses.length} courses from GitHub`, 'success');
+      } else {
+        showToast(data.error || 'No courses found on GitHub for this department & semester', 'error');
+      }
+    } catch {
+      showToast('Failed to load courses from GitHub', 'error');
+    } finally {
+      setGithubLoading(false);
+    }
+  };
   const toInitials = (name: string): string => {
     if (!name) return '';
     const skip = new Set(['dr.', 'prof.', 'mr.', 'mrs.', 'ms.', 'md.', 'sheikh', 'ustaz', 'moulana', 'alhaj']);
@@ -245,7 +274,8 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
                 value={department}
                 onChange={(val) => setDepartment(val)}
                 placeholder="Select department"
-                options={FACULTIES.flatMap(f => f.departments).map(d => ({ value: d.id, label: d.shortName || d.name }))}
+                searchable
+                options={getDepartmentSelectOptions()}
               />
             </div>
             <div className="routine-form-group">
@@ -314,7 +344,12 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
         <div className="routine-builder-section">
           <div className="routine-builder-section-header">
             <h4><i className="fas fa-book"></i> Course List</h4>
-            <button className="routine-add-btn" onClick={addCourse}><i className="fas fa-plus"></i> Add Course</button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="routine-add-btn" onClick={loadCoursesFromGitHub} disabled={githubLoading}>
+                <i className={`fas ${githubLoading ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt'}`}></i> {githubLoading ? 'Loading...' : 'Load from GitHub'}
+              </button>
+              <button className="routine-add-btn" onClick={addCourse}><i className="fas fa-plus"></i> Add Course</button>
+            </div>
           </div>
           {courses.length > 0 && (
             <div className="routine-course-list">

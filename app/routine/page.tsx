@@ -1,5 +1,6 @@
 "use client";
-import { config } from '@/lib/config'; import { FACULTIES, resolveDepartment } from '@/lib/departments';
+import { config } from '@/lib/config'; import { resolveDepartment, getDepartmentSelectOptions } from '@/lib/departments';
+import { getOnboardingData } from '@/lib/onboarding-storage';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import CustomSelect from '@/components/CustomSelect';
@@ -27,11 +28,17 @@ export default function RoutinePage() {
   const appliedRef = useRef(false);
   const [dept, setDept] = useState<string>('');
 
-  // Auto-sync the department from the logged-in user's profile (personalization).
+  // Auto-sync the department from the user's personalization (profile, then
+  // onboarding), so routing follows their department by default.
   useEffect(() => {
     if (dept) return;
     const resolved = profile?.department ? resolveDepartment(profile.department) : '';
-    if (resolved) setDept(resolved);
+    if (resolved) { setDept(resolved); return; }
+    const onboard = getOnboardingData();
+    if (onboard?.department) {
+      const r = resolveDepartment(onboard.department);
+      if (r) setDept(r);
+    }
   }, [profile?.department, dept]);
 
   useEffect(() => {
@@ -84,9 +91,10 @@ export default function RoutinePage() {
           value={dept || 'All Departments'}
           onChange={(val) => setDept(val || '')}
           placeholder="Select department"
+          searchable
           options={[
             { value: '', label: 'All Departments' },
-            ...FACULTIES.flatMap(f => f.departments).map(d => ({ value: d.id, label: d.shortName || d.name })).filter(Boolean)
+            ...getDepartmentSelectOptions()
           ]}
         />
       </div>

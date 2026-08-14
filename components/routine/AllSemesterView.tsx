@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useConfirm } from '@/components/ConfirmModal';
 import CustomSelect from '@/components/CustomSelect';
+import { resolveDepartment, getDepartmentSelectOptions, getDepartmentDisplayName } from '@/lib/departments';
+import { getOnboardingData } from '@/lib/onboarding-storage';
+import { useAppStore } from '@/lib/store';
 import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, AllSemesterDraft, AllSemesterDraftSection, AllSemBuilderStep } from './types';
 import { DEFAULT_PERIODS, DEFAULT_FEMALE_PERIODS } from './types';
 import { loadAllSemDraft, saveAllSemDraft, clearAllSemDraft, createEmptyDraft, findTeacherConflicts } from './helpers';
@@ -40,6 +43,21 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
   const [periodTab, setPeriodTab] = useState<'male' | 'female'>('male');
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
   const [conflictMap, setConflictMap] = useState<Record<string, string[]>>({});
+  const [githubLoadingSem, setGithubLoadingSem] = useState<string | null>(null);
+
+  // Department is driven by the user's personalization (profile, then onboarding).
+  const profile = useAppStore(s => s.profile);
+  const [department, setDepartment] = useState<string>('');
+  useEffect(() => {
+    if (department) return;
+    const resolved = profile?.department ? resolveDepartment(profile.department) : '';
+    if (resolved) { setDepartment(resolved); return; }
+    const onboard = getOnboardingData();
+    if (onboard?.department) {
+      const r = resolveDepartment(onboard.department);
+      if (r) setDepartment(r);
+    }
+  }, [profile?.department, department]);
 
   // Temporary slots for gender-level grid (no sections)
   const [tempGenderSlots, setTempGenderSlots] = useState<Record<string, Record<string, Record<number, string>>>>({});
@@ -229,6 +247,31 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
     setDraft(updated);
   };
 
+  // Load the course list for the selected department + this semester from GitHub.
+  const loadCoursesFromGitHub = async (semIdx: number) => {
+    if (!department) { showToast('Please select a department first', 'error'); return; }
+    const sem = draft.semesters[semIdx];
+    setGithubLoadingSem(sem.name);
+    try {
+      const res = await fetch(`/api/github-courses?department=${encodeURIComponent(department)}&semester=${encodeURIComponent(sem.name)}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.courses) && data.courses.length > 0) {
+        const courses = data.courses.map((c: any) => ({ code: c.code, title: c.title, teacher: '', room: '' }));
+        const updated = { ...draft };
+        updated.semesters = [...updated.semesters];
+        updated.semesters[semIdx] = { ...updated.semesters[semIdx], courses };
+        setDraft(updated);
+        showToast(`Loaded ${courses.length} courses for ${sem.name} from GitHub`, 'success');
+      } else {
+        showToast(data.error || `No courses found on GitHub for this department & ${sem.name}`, 'error');
+      }
+    } catch {
+      showToast('Failed to load courses from GitHub', 'error');
+    } finally {
+      setGithubLoadingSem(null);
+    }
+  };
+
   const updatePeriods = (gender: 'male' | 'female', periods: RoutinePeriod[]) => {
     updateDraft(gender === 'male' ? { malePeriods: periods } : { femalePeriods: periods });
   };
@@ -252,7 +295,7 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
               semester: sem.name, branch: section.branch, gender: section.gender,
               session: draft.session, room: section.room,
               academicYear: new Date().getFullYear().toString(),
-              department: 'Department of Qur\'anic Sciences & Islamic Studies',
+              department: getDepartmentDisplayName(department),
               university: 'International Islamic University Chittagong',
               periods: refPeriods, days: draft.days,
               courses: sem.courses, slots: section.slots,
@@ -275,7 +318,7 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
             semester: sem.name, branch: null, gender,
             session: draft.session, room: sem[genderRoomKey],
             academicYear: new Date().getFullYear().toString(),
-            department: 'Department of Qur\'anic Sciences & Islamic Studies',
+            department: getDepartmentDisplayName(department),
             university: 'International Islamic University Chittagong',
             periods: refPeriods, days: draft.days,
             courses: sem.courses, slots: genderSlots,
@@ -323,6 +366,16 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
         <div className="routine-builder-section">
           <h4><i className="fas fa-info-circle"></i> Basic Information</h4>
           <div className="routine-form-grid">
+            <div className="routine-form-group">
+              <label>Department</label>
+              <CustomSelect
+                value={department}
+                onChange={(val) => setDepartment(val)}
+                placeholder="Select department"
+                searchable
+                options={getDepartmentSelectOptions()}
+              />
+            </div>
             <div className="routine-form-group">
               <label>Session</label>
               <input value={draft.session} onChange={e => updateDraft({ session: e.target.value })} placeholder="e.g. Autumn - 2026" />
@@ -482,7 +535,12 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
                       <button className="routine-remove-btn" onClick={() => removeSemCourse(semIdx, cIdx)}><i className="fas fa-trash-alt"></i></button>
                     </div>
                   ))}
-                  <button className="routine-add-btn" onClick={() => addCourseToSem(semIdx)} style={{ marginTop: 8 }}><i className="fas fa-plus"></i> Add Course to {sem.name}</button>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                    <button className="routine-add-btn" onClick={() => loadCoursesFromGitHub(semIdx)} disabled={githubLoadingSem === sem.name}>
+                      <i className={`fas ${githubLoadingSem === sem.name ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt'}`}></i> {githubLoadingSem === sem.name ? 'Loading...' : 'Load from GitHub'}
+                    </button>
+                    <button className="routine-add-btn" onClick={() => addCourseToSem(semIdx)}><i className="fas fa-plus"></i> Add Course to {sem.name}</button>
+                  </div>
                 </div>
               )}
             </div>

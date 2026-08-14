@@ -4,7 +4,19 @@ import { getDepartmentFolder, findDepartment } from './departments';
 import { matchCourseFolder } from './store/helpers';
 
 const SEMS = ['1st-semister','2nd-semister','3rd-semister','4th-semister','5th-semister','6th-semister','7th-semister','8th-semister'];
+const SEM_ORDINALS = ['1st','2nd','3rd','4th','5th','6th','7th','8th'];
 const BATCH = 25;
+
+// Convert a human semester label ("1st Semester") to the GitHub folder format
+// ("1st-semister"). Passes through values already in the folder format.
+export function semesterToGitHubFolder(semester: string): string {
+  if (!semester) return semester;
+  const s = semester.trim().toLowerCase();
+  if (SEMS.includes(s)) return s;
+  const idx = SEM_ORDINALS.findIndex(p => s.startsWith(p));
+  if (idx >= 0) return SEMS[idx];
+  return semester;
+}
 
 // Reject anything that could walk out of a single path segment (GitHub's
 // Contents API resolves "..", so these must be blocked before building paths).

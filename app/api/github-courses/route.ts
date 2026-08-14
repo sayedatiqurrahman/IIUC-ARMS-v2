@@ -10,8 +10,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'department and semester required' }, { status: 400 });
   }
   try {
-    const { fetchCoursesFromGitHub } = await import('@/lib/github-folders');
-    const courses = await fetchCoursesFromGitHub(dept, semester);
+    const { fetchCoursesFromGitHub, semesterToGitHubFolder } = await import('@/lib/github-folders');
+    const courses = await fetchCoursesFromGitHub(dept, semesterToGitHubFolder(semester));
     return NextResponse.json({ success: true, courses });
   } catch {
     return NextResponse.json({ success: false, error: 'Failed to fetch from GitHub' }, { status: 500 });

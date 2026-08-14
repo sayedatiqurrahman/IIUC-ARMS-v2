@@ -1,6 +1,7 @@
 'use client';
 
 import type { RoutineItem, RoutinePeriod, RoutineSlot } from './types';
+import { getDepartmentDisplayName } from '@/lib/departments';
 
 export default function RoutinePlainTable({ routine }: { routine: RoutineItem }) {
   const classPeriods = routine.periods.filter(p => !p.isBreak);
@@ -83,7 +84,7 @@ export default function RoutinePlainTable({ routine }: { routine: RoutineItem })
     <div style={{ background: '#fff', padding: '24px', fontFamily: 'Times New Roman, serif', color: '#000' }}>
       <div style={{ textAlign: 'center', marginBottom: '16px' }}>
         <h2 style={{ fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 4px' }}>{routine.university || 'International Islamic University Chittagong'}</h2>
-        <h3 style={{ fontSize: '0.85rem', fontWeight: 600, margin: '0 0 4px' }}>{routine.department}</h3>
+        <h3 style={{ fontSize: '0.85rem', fontWeight: 600, margin: '0 0 4px' }}>{getDepartmentDisplayName(routine.department)}</h3>
         <h4 style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 4px' }}>Class Routine</h4>
         <p style={{ fontSize: '0.72rem', margin: 0 }}>Session: {routine.session} | Semester: {routine.semester}</p>
       </div>
