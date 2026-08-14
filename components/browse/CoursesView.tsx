@@ -157,9 +157,38 @@ export default function CoursesView({
           // on its own based on the matching permission.
           const showMenu = !!session && (canEditThis || canDeleteThis);
 
+          const menuButton = showMenu ? (
+            <div className="relative flex-shrink-0">
+              <button onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === course.code ? null : course.code); }}
+                className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 hover:text-dark-text hover:border-qsis/40 flex items-center justify-center cursor-pointer transition-colors" title="Course actions">
+                <i className="fas fa-ellipsis-v text-sm"></i>
+              </button>
+              {openMenu === course.code && (
+                <>
+                  <div className="fixed inset-0 z-[210]" onClick={(e) => { e.stopPropagation(); setOpenMenu(null); }} />
+                  <div className="absolute right-0 top-9 z-[220] w-44 rounded-xl border border-dark-border bg-dark-bg3 shadow-2xl overflow-hidden">
+                    {canEditThis && (
+                      <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setEditTarget({ code: course.code, title: course.title, folderPath: course.folderPath }); setEditTitle(course.title); setEditError(''); }}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-dark-text hover:bg-dark-bg2 cursor-pointer border-none text-left">
+                        <i className="fas fa-pen text-blue-400 w-4 text-center"></i> Rename course
+                      </button>
+                    )}
+                    {canDeleteThis && (
+                      <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setDeleteTarget({ code: course.code, title: course.title, folderPath: course.folderPath }); setDeleteError(''); }}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-red-400 hover:bg-red-500/10 cursor-pointer border-none text-left">
+                        <i className="fas fa-trash w-4 text-center"></i> Delete course
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null;
+
           return (
           <div key={course.code} className="p-[14px_18px] bg-dark-bg2 border border-dark-border rounded-xl hover:border-qsis hover:shadow-[0_0_12px_rgba(34,197,94,0.3)] transition-all group">
-            <div className="flex items-center gap-3.5">
+            {/* ── Desktop layout (sm and up) ─────────────────────────────── */}
+            <div className="hidden sm:flex items-center gap-3.5">
               <div className="text-[1.3rem] text-qsis flex-shrink-0 cursor-pointer" onClick={() => navigateToCourse(course.code, course.title)}><i className="fas fa-book-open"></i></div>
               <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigateToCourse(course.code, course.title)}>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -190,33 +219,47 @@ export default function CoursesView({
                   </div>
                 )}
               </div>
-              {showMenu && (
-                <div className="relative flex-shrink-0">
-                  <button onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === course.code ? null : course.code); }}
-                    className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 hover:text-dark-text hover:border-qsis/40 flex items-center justify-center cursor-pointer transition-colors" title="Course actions">
-                    <i className="fas fa-ellipsis-v text-sm"></i>
-                  </button>
-                  {openMenu === course.code && (
+              {menuButton}
+            </div>
+
+            {/* ── Mobile layout (below sm) ───────────────────────────────── */}
+            <div className="sm:hidden">
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigateToCourse(course.code, course.title)}>
+                  {/* 1st line: course name on one line */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="text-[1.05rem] text-qsis flex-shrink-0"><i className="fas fa-book-open"></i></div>
+                    <span className="font-semibold text-[0.92rem] truncate flex-1 min-w-0">{course.code} — {course.title}</span>
+                    {isMyCourse && <span className="text-[0.55rem] px-1.5 py-[1px] rounded-full bg-qsis/15 text-qsis border border-qsis/30 font-semibold flex-shrink-0">You</span>}
+                    {!isMyCourse && addedBy && <span className="text-[0.55rem] px-1.5 py-[1px] rounded-full bg-dark-bg3 text-dark-text3 border border-dark-border flex-shrink-0" title={`Added by ${addedBy}`}><i className="fas fa-user-circle mr-0.5"></i>{addedBy.split('@')[0]}</span>}
+                  </div>
+                  {/* 2nd line: subfolders + their file counts */}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {course.categories.map((cat: any) => (
+                      <span key={cat.key} className={`text-[0.66rem] px-2 py-[2px] rounded-full border ${(cat as any).hasLinks ? 'bg-pink-500/15 text-pink-400 border-pink-500/40 font-semibold' : (cat as any).hasMd ? 'bg-blue-500/15 text-blue-400 border-blue-500/40 font-semibold' : 'bg-dark-bg3 text-dark-text2 border-dark-border'}`}>
+                        {cat.label}: {cat.count}
+                        {(cat as any).hasLinks && <i className="fas fa-link ml-1 text-[0.55rem]"></i>}
+                        {!(cat as any).hasLinks && (cat as any).hasMd && <i className="fas fa-file-alt ml-1 text-[0.55rem]"></i>}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                {menuButton}
+              </div>
+              {/* 3rd line: links/md, mid/final badges + total files count */}
+              <div className="mt-2 flex items-center justify-between gap-2 cursor-pointer" onClick={() => navigateToCourse(course.code, course.title)}>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(course as any).hasSharedLinks && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-400 text-[0.6rem] font-bold border border-pink-500/30"><i className="fas fa-link text-[0.55rem]"></i>Links</span>}
+                  {(course as any).hasMd && !(course as any).hasSharedLinks && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[0.6rem] font-bold border border-blue-500/30"><i className="fas fa-file-alt text-[0.55rem]"></i>.md</span>}
+                  {course.hasMidFinal && (
                     <>
-                      <div className="fixed inset-0 z-[210]" onClick={(e) => { e.stopPropagation(); setOpenMenu(null); }} />
-                      <div className="absolute right-0 top-9 z-[220] w-44 rounded-xl border border-dark-border bg-dark-bg3 shadow-2xl overflow-hidden">
-                        {canEditThis && (
-                          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setEditTarget({ code: course.code, title: course.title, folderPath: course.folderPath }); setEditTitle(course.title); setEditError(''); }}
-                            className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-dark-text hover:bg-dark-bg2 cursor-pointer border-none text-left">
-                            <i className="fas fa-pen text-blue-400 w-4 text-center"></i> Rename course
-                          </button>
-                        )}
-                        {canDeleteThis && (
-                          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setDeleteTarget({ code: course.code, title: course.title, folderPath: course.folderPath }); setDeleteError(''); }}
-                            className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-red-400 hover:bg-red-500/10 cursor-pointer border-none text-left">
-                            <i className="fas fa-trash w-4 text-center"></i> Delete course
-                          </button>
-                        )}
-                      </div>
+                      <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-yellow-400/15 text-yellow-400">Mid Term</span>
+                      <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-green-400/15 text-green-400">Final Term</span>
                     </>
                   )}
                 </div>
-              )}
+                <span className="text-[0.75rem] text-dark-text2 flex-shrink-0">{course.totalFiles} files</span>
+              </div>
             </div>
           </div>
           );
