@@ -1,8 +1,7 @@
 'use client';
 
-import PdfViewer from '@/components/PdfViewer';
+import DocViewer from './DocViewer';
 import OfficeDocViewer from './OfficeDocViewer';
-import WordViewer from './WordViewer';
 import ImageViewer from './ImageViewer';
 import EpubViewer from './EpubViewer';
 import TextViewer from './TextViewer';
@@ -15,13 +14,12 @@ export default function DocumentViewer({ item, onClose }: { item: any; onClose: 
   const mime = item.mimeType;
   const ext = item.path?.split('.').pop()?.toLowerCase() || '';
 
-  // PDF renders in the in-app pdf.js viewer (continuous scroll). .docx renders
-  // inline via docx-preview. The remaining office formats (doc/xls/xlsx/csv/
+  // PDF and .docx both render inline in the unified DocViewer (pdf.js for PDF,
+  // docx-preview for Word). The remaining office formats (doc/xls/xlsx/csv/
   // ppt/pptx) show a local download card — the old Microsoft Office embed went
   // black on restricted networks. Media (mp3/mp4/webm/…) render in the native
   // HTML5 video/audio player.
-  if (ext === 'pdf') return <PdfViewer url={item.rawUrl} name={item.name} onClose={onClose} />;
-  if (ext === 'docx') return <WordViewer item={item} onClose={onClose} />;
+  if (ext === 'pdf' || ext === 'docx') return <DocViewer item={item} onClose={onClose} />;
   if (OFFICE_TYPES.includes(ext)) return <OfficeDocViewer item={item} onClose={onClose} />;
   if (mime === 'image') return <ImageViewer item={item} onClose={onClose} />;
   if (mime === 'epub') return <EpubViewer item={item} onClose={onClose} />;

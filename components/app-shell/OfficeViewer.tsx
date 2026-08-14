@@ -4,8 +4,8 @@ import { useState } from 'react';
 
 // doc/xls/xlsx/ppt/pptx preview via the Microsoft Office online viewer. The
 // file is served through the inline proxy so Office can fetch the bytes.
-// Word (.docx) uses WordViewer instead — this is only a fallback for formats
-// docx-preview cannot render.
+// Word (.docx) and PDF render in DocViewer instead — this is only a fallback
+// for formats docx-preview cannot render.
 export default function OfficeViewer({ item, onClose }: { item: any; onClose: () => void }) {
   const src = `${window.location.origin}/api/github/raw?url=${encodeURIComponent(item.rawUrl)}`;
   const embedUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(src)}`;
