@@ -1,5 +1,5 @@
 import type { UserRole } from '../config';
-import type { OnboardingData } from '@/components/OnboardingModal';
+import type { OnboardingData } from '@/lib/onboarding-storage';
 
 export type View = 'departments' | 'semesters' | 'categories' | 'courses' | 'files' | 'history' | 'contributors' | 'routine' | 'dashboard' | 'search';
 

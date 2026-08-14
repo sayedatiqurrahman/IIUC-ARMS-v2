@@ -7,12 +7,21 @@ import { DEFAULT_PERMISSIONS } from '@/lib/permission-defaults';
 import { FACULTIES, getDepartmentFolder } from '@/lib/departments';
 import { useAppStore } from '@/lib/store';
 import { getMimeFromExt, extractYear, showToast } from '@/lib/utils';
-import ReadmeEditor from '@/components/ReadmeEditor';
 import { CreateCourseResult } from '@/components/upload';
-import {
-  BrowseHeader, BrowseModals, PageHeader, FileGrid, FolderCard,
-  DepartmentsView, SemestersView, CoursesView, CategoriesView,
-} from '@/components/browse';
+import PageHeader from '@/components/browse/PageHeader';
+import BrowseHeader from '@/components/browse/BrowseHeader';
+import dynamic from 'next/dynamic';
+// Each browse view is loaded on demand — only the view you're actually in is
+// fetched/executed, so switching departments → semesters → courses → files
+// doesn't run everything at once and low-end devices stay responsive.
+const DepartmentsView = dynamic(() => import('@/components/browse/DepartmentsView'), { ssr: false });
+const SemestersView = dynamic(() => import('@/components/browse/SemestersView'), { ssr: false });
+const CoursesView = dynamic(() => import('@/components/browse/CoursesView'), { ssr: false });
+const CategoriesView = dynamic(() => import('@/components/browse/CategoriesView'), { ssr: false });
+const FileGrid = dynamic(() => import('@/components/browse/FileGrid'), { ssr: false });
+const FolderCard = dynamic(() => import('@/components/browse/FolderCard'), { ssr: false });
+const BrowseModals = dynamic(() => import('@/components/browse/BrowseModals'), { ssr: false });
+const ReadmeEditor = dynamic(() => import('@/components/ReadmeEditor'), { ssr: false });
 export default function BrowsePage() {
   const { data: session } = useSession();
   const profile = useAppStore(s => s.profile);

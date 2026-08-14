@@ -5,9 +5,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { useAppStore, getSavedPdfPage } from '@/lib/store';
-import LoginModal from '@/components/LoginModal';
-import UploadModal from '@/components/upload-modal';
-import OnboardingModal, { getOnboardingData, hasDismissedOnboarding, dismissOnboarding, type OnboardingData } from '@/components/OnboardingModal';
+import { getOnboardingData, hasDismissedOnboarding, dismissOnboarding } from '@/lib/onboarding-storage';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut, signIn } from 'next-auth/react';
 import { config } from '@/lib/config';
@@ -19,6 +17,11 @@ import { handleGoogleRedirectResult } from '@/lib/firebase';
 import dynamic from 'next/dynamic';
 const DocumentViewer = dynamic(() => import('./DocumentViewer'), { ssr: false });
 const InstallAppButton = dynamic(() => import('@/components/dashboard/InstallAppButton'), { ssr: false });
+// Modals only load their JS when actually opened — keeps the always-loaded
+// shell light so the installed app starts fast on low-end devices.
+const LoginModal = dynamic(() => import('@/components/LoginModal'), { ssr: false });
+const UploadModal = dynamic(() => import('@/components/upload-modal'), { ssr: false });
+const OnboardingModal = dynamic(() => import('@/components/OnboardingModal'), { ssr: false });
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();

@@ -3,7 +3,8 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import DashboardView from '@/components/dashboard/DashboardView';
+import dynamic from 'next/dynamic';
+const DashboardView = dynamic(() => import('@/components/dashboard/DashboardView'), { ssr: false });
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();

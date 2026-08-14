@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { config } from '../config';
 import { FACULTIES, resolveDepartmentId } from '../departments';
 import { safeJson, getRawUrl, getMimeFromExt } from '../utils';
-import { getOnboardingData, setOnboardingData as saveOnboarding, clearOnboardingData as clearOnboardingStorage } from '@/components/OnboardingModal';
+import { getOnboardingData, setOnboardingData as saveOnboarding, clearOnboardingData as clearOnboardingStorage } from '@/lib/onboarding-storage';
 import { getPdfPageKey } from './helpers';
 import { defaultProfile } from './types';
 import type { AppState, Profile, ViewerItem } from './types';

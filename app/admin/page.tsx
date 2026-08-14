@@ -3,7 +3,8 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import AdminPanelView from '@/components/views/AdminPanelView';
+import dynamic from 'next/dynamic';
+const AdminPanelView = dynamic(() => import('@/components/views/AdminPanelView'), { ssr: false });
 import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
 

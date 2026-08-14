@@ -3,10 +3,12 @@ import { config } from '@/lib/config'; import { FACULTIES, resolveDepartment } f
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import CustomSelect from '@/components/CustomSelect';
-import RoutineView from '@/components/views/RoutineView';
-import ExamRoutineView from '@/components/views/ExamRoutineView';
-import SeatPlanView from '@/components/views/SeatPlanView';
-import TeacherRoutineView from '@/components/routine/TeacherRoutineView';
+import dynamic from 'next/dynamic';
+// Each routine tab loads only when opened (class / exam / seat plan / teacher).
+const RoutineView = dynamic(() => import('@/components/views/RoutineView'), { ssr: false });
+const ExamRoutineView = dynamic(() => import('@/components/views/ExamRoutineView'), { ssr: false });
+const SeatPlanView = dynamic(() => import('@/components/views/SeatPlanView'), { ssr: false });
+const TeacherRoutineView = dynamic(() => import('@/components/routine/TeacherRoutineView'), { ssr: false });
 import { useAppStore } from '@/lib/store';
 import { isTeacherUser } from '@/lib/roles';
 
