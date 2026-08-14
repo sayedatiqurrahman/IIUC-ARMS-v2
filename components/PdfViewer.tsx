@@ -14,6 +14,37 @@ interface PdfViewerProps {
 // iframe, no X-Frame-Options) and rendered page-by-page into canvases inside a
 // scrollable container. A laser pointer replaces the OS cursor exactly (no
 // lag), a hand tool allows drag-scrolling, and Ctrl+/- / Ctrl+wheel zoom.
+//
+// Centering: pages are always kept centered in the viewport after any zoom
+// (the scroll position is re-centered once layout has settled, and short
+// documents are centered vertically too).
+//
+// Annotation: the toolbar "Annotate" button toggles an annotation toolbar with
+// pen / highlighter / text tools, colour swatches, undo and clear. Marks are
+// stored in normalized page coordinates so they scale correctly with zoom.
+
+interface AnnoPoint {
+  x: number;
+  y: number;
+}
+
+type AnnoType = 'pen' | 'highlight' | 'text';
+
+interface Annotation {
+  id: string;
+  page: number; // 1-based
+  type: AnnoType;
+  color: string;
+  points: AnnoPoint[];
+  text?: string;
+  lineWidth: number; // fraction of page width
+  fontSize: number; // fraction of page width
+}
+
+const ANNO_COLORS = ['#ef4444', '#f59e0b', '#facc15', '#22c55e', '#3b82f6', '#a855f7', '#111111', '#ffffff'];
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
 export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
   const src = `${window.location.origin}/api/github/raw?url=${encodeURIComponent(url)}`;
 
@@ -21,18 +52,30 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
   const [error, setError] = useState('');
   const [scale, setScale] = useState(1);
   const [numPages, setNumPages] = useState(0);
-  const [tool, setTool] = useState<'laser' | 'hand'>('hand');
+  const [tool, setTool] = useState<'laser' | 'hand' | 'annotate'>('hand');
   const [grabbing, setGrabbing] = useState(false);
+  const [centerV, setCenterV] = useState(true);
+
+  const [annoTool, setAnnoTool] = useState<AnnoType>('pen');
+  const [annoColor, setAnnoColor] = useState('#ef4444');
+  const [annos, setAnnos] = useState<Annotation[]>([]);
+  const [textDraft, setTextDraft] = useState<{ page: number; x: number; y: number } | null>(null);
+  const [draftText, setDraftText] = useState('');
 
   const stageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const pdfRef = useRef<any>(null);
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+  const annCanvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+  const textInputRef = useRef<HTMLInputElement>(null);
 
   const cursorRef = useRef({ x: -100, y: -100, inside: false });
   const dragRef = useRef({ active: false, x: 0, y: 0, left: 0, top: 0 });
   const zoomRef = useRef<{ scale: number; status: string }>({ scale: 1, status: 'loading' });
+  const annosRef = useRef<Annotation[]>([]);
+  annosRef.current = annos;
+  const drawingRef = useRef<{ page: number; points: AnnoPoint[]; id: string } | null>(null);
 
   // ---- PDF rendering -----------------------------------------------------
 
@@ -61,11 +104,15 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
         /* page destroyed during unmount — ignore */
       }
     }
-    // Keep the document horizontally centered after any zoom so the pages
-    // never drift to the right side.
+    // Keep the document centered after any zoom so the pages never drift to
+    // one side. Double-rAF so the browser has applied the new layout first.
     requestAnimationFrame(() => {
-      const sc = scrollRef.current;
-      if (sc) sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2;
+      requestAnimationFrame(() => {
+        const sc = scrollRef.current;
+        if (!sc) return;
+        sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2;
+        setCenterV(sc.scrollHeight <= sc.clientHeight + 2);
+      });
     });
   }, [scale]);
 
@@ -119,6 +166,18 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
   useEffect(() => {
     if (status === 'ready') renderAllPages();
   }, [status, renderAllPages]);
+
+  // Re-center after the window resizes too.
+  useEffect(() => {
+    const onResize = () => {
+      const sc = scrollRef.current;
+      if (!sc) return;
+      sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2;
+      setCenterV(sc.scrollHeight <= sc.clientHeight + 2);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // ---- Zoom --------------------------------------------------------------
 
@@ -281,9 +340,6 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
       const stage = stageRef.current;
       if (!canvas || !stage) return;
       const rect = canvas.getBoundingClientRect();
-      // Convert viewport coords into the canvas's local CSS-px space, correcting
-      // for browser zoom / any ancestor transform so the laser sits exactly on
-      // the cursor.
       const scaleX = rect.width ? canvas.clientWidth / rect.width : 1;
       const scaleY = rect.height ? canvas.clientHeight / rect.height : 1;
       cursorRef.current = {
@@ -341,6 +397,166 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
     setGrabbing(false);
   };
 
+  // ---- Annotations -------------------------------------------------------
+
+  const drawAnno = (ctx: CanvasRenderingContext2D, a: Annotation, cw: number, ch: number) => {
+    if (a.type === 'text') {
+      ctx.font = `${Math.max(6, a.fontSize * cw)}px 'Segoe UI', sans-serif`;
+      ctx.fillStyle = a.color;
+      ctx.textBaseline = 'alphabetic';
+      const p = a.points[0];
+      ctx.fillText(a.text || '', p.x * cw, p.y * ch);
+      return;
+    }
+    ctx.strokeStyle = a.color;
+    ctx.globalAlpha = a.type === 'highlight' ? 0.35 : 1;
+    ctx.lineWidth = a.type === 'highlight' ? Math.max(10, ch * 0.035) : Math.max(1.5, a.lineWidth * cw);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    a.points.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p.x * cw, p.y * ch);
+      else ctx.lineTo(p.x * cw, p.y * ch);
+    });
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+
+  const paintPage = useCallback((pageIndex: number, extra?: Annotation) => {
+    const canvas = annCanvasRefs.current[pageIndex];
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const cw = canvas.clientWidth;
+    const ch = canvas.clientHeight;
+    if (!cw || !ch) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (canvas.width !== Math.floor(cw * dpr) || canvas.height !== Math.floor(ch * dpr)) {
+      canvas.width = Math.floor(cw * dpr);
+      canvas.height = Math.floor(ch * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+    for (const a of annosRef.current) {
+      if (a.page === pageIndex + 1) drawAnno(ctx, a, cw, ch);
+    }
+    if (extra && extra.page === pageIndex + 1) drawAnno(ctx, extra, cw, ch);
+  }, []);
+
+  const redrawPage = useCallback((pageIndex: number) => paintPage(pageIndex), [paintPage]);
+
+  // Redraw all annotation canvases whenever annotations change or the pages
+  // are re-rendered (zoom / load).
+  useEffect(() => {
+    if (status !== 'ready') return;
+    annCanvasRefs.current.forEach((_, i) => redrawPage(i));
+  }, [status, annos, scale, redrawPage]);
+
+  useEffect(() => {
+    if (textDraft) textInputRef.current?.focus();
+  }, [textDraft]);
+
+  const getNorm = (e: React.PointerEvent<HTMLDivElement>, el: HTMLDivElement): AnnoPoint => {
+    const r = el.getBoundingClientRect();
+    return {
+      x: r.width ? clamp01((e.clientX - r.left) / r.width) : 0,
+      y: r.height ? clamp01((e.clientY - r.top) / r.height) : 0,
+    };
+  };
+
+  const onPagePointerDown = (pageIndex: number, e: React.PointerEvent<HTMLDivElement>) => {
+    if (tool !== 'annotate') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (annoTool === 'text') {
+      const p = getNorm(e, e.currentTarget);
+      setTextDraft({ page: pageIndex + 1, x: p.x, y: p.y });
+      setDraftText('');
+      return;
+    }
+    drawingRef.current = {
+      page: pageIndex + 1,
+      points: [getNorm(e, e.currentTarget)],
+      id: Math.random().toString(36).slice(2),
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onPagePointerMove = (pageIndex: number, e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drawingRef.current;
+    if (!d) return;
+    e.preventDefault();
+    d.points.push(getNorm(e, e.currentTarget));
+    const temp: Annotation = {
+      id: d.id,
+      page: d.page,
+      type: annoTool,
+      color: annoColor,
+      points: d.points,
+      lineWidth: 0.0035,
+      fontSize: 0.018,
+    };
+    paintPage(pageIndex, temp);
+  };
+
+  const onPagePointerUp = (pageIndex: number, e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drawingRef.current;
+    if (!d) return;
+    drawingRef.current = null;
+    e.preventDefault();
+    const pts = d.points;
+    if (pts.length < 2) return;
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    if (Math.hypot(last.x - first.x, last.y - first.y) < 0.004) return;
+    setAnnos((prev) => [
+      ...prev,
+      {
+        id: d.id,
+        page: d.page,
+        type: annoTool,
+        color: annoColor,
+        points: pts,
+        lineWidth: 0.0035,
+        fontSize: 0.018,
+      },
+    ]);
+  };
+
+  const commitText = () => {
+    if (!textDraft) return;
+    const t = draftText.trim();
+    if (t) {
+      setAnnos((prev) => [
+        ...prev,
+        {
+          id: Math.random().toString(36).slice(2),
+          page: textDraft.page,
+          type: 'text',
+          color: annoColor,
+          points: [{ x: textDraft.x, y: textDraft.y }],
+          text: t,
+          lineWidth: 0.0035,
+          fontSize: 0.018,
+        },
+      ]);
+    }
+    setTextDraft(null);
+    setDraftText('');
+  };
+
+  const toggleAnnotate = () => {
+    setTool((t) => {
+      if (t === 'annotate') {
+        setTextDraft(null);
+        setDraftText('');
+        drawingRef.current = null;
+        return 'hand';
+      }
+      return 'annotate';
+    });
+  };
+
   // ---- Overlay sizing ----------------------------------------------------
 
   useEffect(() => {
@@ -373,6 +589,8 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
     </button>
   );
 
+  const stageCursor = tool === 'laser' ? 'none' : tool === 'annotate' ? 'crosshair' : grabbing ? 'grabbing' : 'grab';
+
   return (
     <div className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col">
         <div className="flex items-center gap-2 px-3 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0 flex-wrap wco-aware">
@@ -384,6 +602,14 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
         <div className="flex items-center gap-1 ml-auto">
           <ToolButton t="laser" icon="fas fa-magic" title="Laser pointer (or use your cursor)" />
           <ToolButton t="hand" icon="fas fa-hand-paper" title="Hand tool — drag to scroll" />
+          <button
+            className="pdf-btn"
+            onClick={toggleAnnotate}
+            title="Annotate — show/hide the annotation toolbar"
+            style={tool === 'annotate' ? { background: 'rgba(251,146,60,0.25)', border: '1px solid rgba(251,146,60,0.6)' } : undefined}
+          >
+            <i className="fas fa-marker"></i>
+          </button>
           <button className="pdf-btn" onClick={() => zoom(-1)} title="Zoom out (Ctrl + -)" disabled={status !== 'ready'}><i className="fas fa-minus"></i></button>
           <span className="text-neutral-400 text-[0.72rem] font-mono min-w-[38px] text-center select-none">{Math.round(scale * 100)}%</span>
           <button className="pdf-btn" onClick={() => zoom(1)} title="Zoom in (Ctrl + +)" disabled={status !== 'ready'}><i className="fas fa-plus"></i></button>
@@ -400,10 +626,55 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
         </div>
       </div>
 
+      {tool === 'annotate' && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 shrink-0 flex-wrap wco-aware">
+          <button
+            className="pdf-btn"
+            onClick={() => setAnnoTool('pen')}
+            title="Pen"
+            style={annoTool === 'pen' ? { background: 'rgba(251,146,60,0.25)', border: '1px solid rgba(251,146,60,0.6)' } : undefined}
+          >
+            <i className="fas fa-pen"></i>
+          </button>
+          <button
+            className="pdf-btn"
+            onClick={() => setAnnoTool('highlight')}
+            title="Highlighter"
+            style={annoTool === 'highlight' ? { background: 'rgba(251,146,60,0.25)', border: '1px solid rgba(251,146,60,0.6)' } : undefined}
+          >
+            <i className="fas fa-highlighter"></i>
+          </button>
+          <button
+            className="pdf-btn"
+            onClick={() => setAnnoTool('text')}
+            title="Text"
+            style={annoTool === 'text' ? { background: 'rgba(251,146,60,0.25)', border: '1px solid rgba(251,146,60,0.6)' } : undefined}
+          >
+            <i className="fas fa-font"></i>
+          </button>
+          <span className="w-px h-5 bg-neutral-700 mx-1"></span>
+          {ANNO_COLORS.map((c) => (
+            <button
+              key={c}
+              className="h-6 w-6 rounded-full border-2"
+              style={{ background: c, borderColor: annoColor === c ? '#fff' : 'transparent' }}
+              onClick={() => setAnnoColor(c)}
+              title={c}
+            />
+          ))}
+          <span className="w-px h-5 bg-neutral-700 mx-1"></span>
+          <button className="pdf-btn" onClick={() => setAnnos((prev) => prev.slice(0, -1))} title="Undo last annotation" disabled={!annos.length}><i className="fas fa-undo"></i></button>
+          <button className="pdf-btn" onClick={() => setAnnos([])} title="Clear all annotations" disabled={!annos.length}><i className="fas fa-trash-alt"></i></button>
+          <span className="ml-auto text-neutral-500 text-[0.7rem] hidden sm:block">
+            {annoTool === 'text' ? 'Click a page to add text' : 'Click & drag on a page to draw'}
+          </span>
+        </div>
+      )}
+
       <div
         ref={stageRef}
         className="flex-1 relative min-h-0 bg-[#0a0f1e]"
-        style={{ cursor: tool === 'laser' ? 'none' : grabbing ? 'grabbing' : 'grab' }}
+        style={{ cursor: stageCursor }}
       >
         <div
           ref={scrollRef}
@@ -414,15 +685,54 @@ export default function PdfViewer({ url, name, onClose }: PdfViewerProps) {
           onPointerCancel={endDrag}
           style={{ cursor: tool === 'laser' ? 'none' : 'inherit', touchAction: 'pan-x pan-y' }}
         >
-          <div className="p-3 flex flex-col gap-3">
+          <div
+            className="p-3 flex flex-col gap-3 min-h-full"
+            style={{ justifyContent: centerV ? 'center' : 'flex-start' }}
+          >
             {Array.from({ length: numPages }).map((_, i) => (
-              <canvas
+              <div
                 key={i}
-                ref={(el) => {
-                  canvasRefs.current[i] = el;
+                className={`relative mx-auto rounded shadow-lg bg-white ${tool === 'annotate' ? 'select-none' : ''}`}
+                style={{ touchAction: tool === 'annotate' ? 'none' : 'auto' }}
+                onPointerDown={(e) => onPagePointerDown(i, e)}
+                onPointerMove={(e) => onPagePointerMove(i, e)}
+                onPointerUp={(e) => onPagePointerUp(i, e)}
+                onPointerCancel={() => {
+                  drawingRef.current = null;
                 }}
-                className="rounded shadow-lg bg-white mx-auto"
-              />
+              >
+                <canvas
+                  ref={(el) => {
+                    canvasRefs.current[i] = el;
+                  }}
+                  className="block rounded"
+                />
+                <canvas
+                  ref={(el) => {
+                    annCanvasRefs.current[i] = el;
+                  }}
+                  className="absolute inset-0 rounded pointer-events-none"
+                />
+                {textDraft && textDraft.page === i + 1 && (
+                  <input
+                    ref={textInputRef}
+                    autoFocus
+                    value={draftText}
+                    onChange={(e) => setDraftText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitText();
+                      else if (e.key === 'Escape') {
+                        setTextDraft(null);
+                        setDraftText('');
+                      }
+                    }}
+                    onBlur={commitText}
+                    className="absolute z-20 bg-white border-2 border-[#22c55e] text-black text-sm px-2 py-0.5 outline-none rounded"
+                    style={{ left: `${textDraft.x * 100}%`, top: `${textDraft.y * 100}%`, transform: 'translateY(-100%)' }}
+                    placeholder="Type…"
+                  />
+                )}
+              </div>
             ))}
           </div>
         </div>

@@ -112,13 +112,14 @@ export default function WordViewer({ item, onClose }: { item: any; onClose: () =
 
   // Once rendered, make the page fit on screen by default and stop the
   // left-edge clipping: the docx page is wider than a phone screen and the
-  // centered wrapper hid its left side. max-content keeps both edges reachable.
+  // centered wrapper hid its left side. max-content keeps both edges reachable
+  // and auto margins keep the page centered no matter the zoom level.
   useEffect(() => {
     if (status !== 'ready') return;
     const wrapper = bodyRef.current?.querySelector('.docx-wrapper') as HTMLElement | null;
     if (wrapper) {
       wrapper.style.width = 'max-content';
-      wrapper.style.alignItems = 'flex-start';
+      wrapper.style.margin = '0 auto';
     }
     const raf = requestAnimationFrame(applyFit);
     return () => cancelAnimationFrame(raf);
@@ -208,7 +209,7 @@ export default function WordViewer({ item, onClose }: { item: any; onClose: () =
         <div
           ref={bodyRef}
           className="px-3 py-4 flex flex-col"
-          style={{ zoom: zoomLevel, alignItems: fitMode ? 'center' : 'flex-start' }}
+          style={{ zoom: zoomLevel, alignItems: 'center' }}
         />
       </div>
     </div>
