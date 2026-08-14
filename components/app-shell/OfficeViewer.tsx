@@ -16,7 +16,7 @@ export default function OfficeViewer({ item, onClose }: { item: any; onClose: ()
   const typeColor = item.mimeType === 'doc' ? '#3b82f6' : item.mimeType === 'sheet' ? '#22c55e' : '#f97316';
 
   return (
-    <div className="fixed inset-0 z-[1500] bg-black flex flex-col">
+    <div className="fixed inset-0 z-[1500] bg-black flex flex-col wco-titlebar-pad">
       <div className="flex items-center gap-2 px-3 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <i className={`fas ${typeIcon}`} style={{ color: typeColor, flexShrink: 0 }}></i>

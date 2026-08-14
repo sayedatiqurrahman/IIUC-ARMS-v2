@@ -405,7 +405,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
     !isPdf ? undefined : tool === 'laser' ? 'none' : tool === 'annotate' ? 'crosshair' : grabbing ? 'grabbing' : 'grab';
 
   return (
-    <div ref={rootRef} className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col">
+    <div ref={rootRef} className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col wco-titlebar-pad">
       <DocToolbar
         isPdf={isPdf}
         name={item.name}

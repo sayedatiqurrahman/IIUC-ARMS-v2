@@ -2135,4 +2135,11 @@ button { font-family: inherit; }
     padding-left: calc(env(titlebar-area-x, 0px) + 12px) !important;
     padding-right: calc((100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)) + 12px) !important;
   }
+  /* Move the viewer's top toolbar fully below the OS title-bar band so its
+     buttons (annotate / zoom out / close) are never covered by the OS
+     minimize-maximize-close controls — even on large windows where the toolbar
+     stays on a single row instead of wrapping below the band. */
+  .wco-titlebar-pad {
+    padding-top: env(titlebar-area-height, 0px);
+  }
 }

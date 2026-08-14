@@ -18,7 +18,7 @@ export default function OfficeDocViewer({ item, onClose }: { item: any; onClose:
   const extension = ext ? ext.toUpperCase() : 'OFFICE';
 
   return (
-    <div className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col">
+    <div className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col wco-titlebar-pad">
       <div className="flex items-center gap-2 px-3 py-2 bg-neutral-900 border-b border-neutral-800 shrink-0 wco-aware">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <i className={`fas ${typeIcon}`} style={{ color: typeColor, flexShrink: 0 }}></i>
