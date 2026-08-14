@@ -497,7 +497,7 @@ export default function WordViewer({ item, onClose }: { item: any; onClose: () =
             className="pdf-btn"
             onClick={toggleAnnotate}
             title="Annotate — show/hide the annotation toolbar"
-            disabled={status !== 'ready'}
+            disabled={status === 'error'}
             style={annotating ? { background: 'rgba(251,146,60,0.25)', border: '1px solid rgba(251,146,60,0.6)' } : undefined}
           >
             <i className="fas fa-marker"></i>

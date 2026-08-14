@@ -174,6 +174,8 @@ button { font-family: inherit; }
 
 .pdf-btn { background:none; border:1px solid transparent; color:inherit; cursor:pointer; width:30px; height:30px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:.8rem; transition:all .15s; }
 .pdf-btn:hover { background:rgba(128,128,128,0.15); border-color:rgba(128,128,128,0.3); }
+.pdf-btn:disabled { opacity:.35; cursor:default; }
+.pdf-btn:disabled:hover { background:none; border-color:transparent; }
 
 .image-viewer-container { display:flex; flex-direction:column; height:100%; }
 .image-toolbar { display:flex; align-items:center; gap:6px; padding:8px 12px; background:#1a2236; border-bottom:1px solid #2a3a5c; flex-wrap:wrap; }

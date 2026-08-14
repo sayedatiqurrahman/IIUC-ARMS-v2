@@ -459,6 +459,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 )}
               </div>
             )}
+            {standalone && session && (
+              <button
+                onClick={() => setShowMoreSheet(true)}
+                className="md:hidden cursor-pointer bg-transparent border-none p-0"
+                title="Profile"
+                aria-label="Profile"
+              >
+                <Image src={profile.image || (session as any)?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent((session as any)?.user?.name || 'User')}&background=22c55e&color=fff&bold=true&size=80`} alt="" width={32} height={32} className="w-8 h-8 rounded-full border-2 border-dark-border hover:border-qsis transition-all object-cover" />
+              </button>
+            )}
             {standalone ? (
               status !== 'loading' && !session && (
                 <button className="px-3 py-1.5 rounded-lg text-[0.78rem] font-medium bg-qsis text-white border-none cursor-pointer hover:opacity-90 transition-opacity" onClick={handleOpenLogin}>
@@ -567,6 +577,46 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             <div className="p-4 space-y-5">
+              {status !== 'loading' && session ? (
+                <div className="bg-dark-bg3 border border-dark-border rounded-2xl p-3">
+                  <div className="flex items-center gap-3">
+                    <Image src={profile.image || (session as any)?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent((session as any)?.user?.name || 'User')}&background=22c55e&color=fff&bold=true&size=80`} alt="" width={44} height={44} className="w-11 h-11 rounded-full border-2 border-qsis object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[0.85rem] font-semibold text-dark-text truncate">{(session as any)?.user?.name || 'User'}</p>
+                      <p className="text-[0.7rem] text-dark-text2 truncate">{(session as any)?.user?.email || ''}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Link href="/dashboard" onClick={() => setShowMoreSheet(false)} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-qsis/15 border border-qsis/30 text-qsis text-[0.78rem] font-semibold no-underline hover:bg-qsis/25 transition-colors">
+                      <i className="fas fa-th-large"></i> Dashboard
+                    </Link>
+                    {(() => {
+                      const email = (session as any)?.user?.email || profile.email || '';
+                      const effectiveRole = config.getEffectiveRole(email, profile.role);
+                      return effectiveRole === 'admin' ? (
+                        <Link href="/admin" onClick={() => setShowMoreSheet(false)} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-[0.78rem] font-semibold no-underline hover:bg-purple-500/25 transition-colors">
+                          <i className="fas fa-shield-alt"></i> Admin Panel
+                        </Link>
+                      ) : null;
+                    })()}
+                  </div>
+                  <button
+                    onClick={() => { setShowMoreSheet(false); fetch('/api/auth/firebase-session', { method: 'DELETE' }); signOut({ callbackUrl: '/' }); }}
+                    className="w-full mt-2 flex items-center justify-center gap-2 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-[0.78rem] font-medium hover:bg-red-500/20 transition-colors cursor-pointer"
+                  >
+                    <i className="fas fa-sign-out-alt"></i> Logout
+                  </button>
+                </div>
+              ) : status !== 'loading' ? (
+                <div className="bg-dark-bg3 border border-dark-border rounded-2xl p-3">
+                  <button
+                    onClick={() => { setShowMoreSheet(false); handleOpenLogin(); }}
+                    className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-qsis text-white text-[0.8rem] font-semibold cursor-pointer border-none hover:opacity-90 transition-opacity"
+                  >
+                    <i className="fas fa-sign-in-alt"></i> Sign In
+                  </button>
+                </div>
+              ) : null}
               {/* Features — native app style icon grid */}
               <div>
                 <h4 className="text-[0.75rem] font-bold text-dark-text3 uppercase tracking-wider mb-2">Features</h4>
