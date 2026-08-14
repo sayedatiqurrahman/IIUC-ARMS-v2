@@ -57,6 +57,18 @@ export default function WordViewer({ item, onClose }: { item: any; onClose: () =
   const zoomFnRef = useRef(zoomBy);
   zoomFnRef.current = zoomBy;
 
+  // Always re-center the page horizontally after any zoom/layout change so the
+  // document never drifts off to one side (double-rAF waits for layout).
+  const recenter = useCallback(() => {
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scroll.scrollLeft = (scroll.scrollWidth - scroll.clientWidth) / 2;
+      });
+    });
+  }, []);
+
   // ---- Load + render the document ----------------------------------------
 
   useEffect(() => {
@@ -121,18 +133,28 @@ export default function WordViewer({ item, onClose }: { item: any; onClose: () =
       wrapper.style.width = 'max-content';
       wrapper.style.margin = '0 auto';
     }
-    const raf = requestAnimationFrame(applyFit);
+    const raf = requestAnimationFrame(() => {
+      applyFit();
+      recenter();
+    });
     return () => cancelAnimationFrame(raf);
-  }, [status, applyFit]);
+  }, [status, applyFit, recenter]);
 
-  // Re-fit on window resize while in fit mode.
+  // Re-center after every zoom step (buttons, Ctrl+/-, Ctrl+wheel).
+  useEffect(() => {
+    if (status !== 'ready') return;
+    recenter();
+  }, [zoomLevel, status, recenter]);
+
+  // Re-fit / re-center on window resize.
   useEffect(() => {
     const onResize = () => {
       if (fitModeRef.current) applyFit();
+      recenter();
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [applyFit]);
+  }, [applyFit, recenter]);
 
   // ---- Keyboard + wheel zoom ---------------------------------------------
 
@@ -209,7 +231,7 @@ export default function WordViewer({ item, onClose }: { item: any; onClose: () =
         <div
           ref={bodyRef}
           className="px-3 py-4 flex flex-col"
-          style={{ zoom: zoomLevel, alignItems: 'center' }}
+          style={{ zoom: zoomLevel, alignItems: 'flex-start' }}
         />
       </div>
     </div>
