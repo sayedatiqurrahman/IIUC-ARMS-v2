@@ -9,12 +9,17 @@ interface DocxStageProps {
   status: 'loading' | 'ready' | 'error';
   error: string;
   zoom: number;
+  annotating: boolean;
   openHref: string;
 }
 
-export default function DocxStage({ scrollRef, bodyRef, status, error, zoom, openHref }: DocxStageProps) {
+export default function DocxStage({ scrollRef, bodyRef, status, error, zoom, annotating, openHref }: DocxStageProps) {
   return (
-    <div ref={scrollRef} className="flex-1 overflow-auto min-h-0" style={{ background: '#0a0f1e' }}>
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-auto min-h-0"
+      style={{ background: '#0a0f1e', cursor: annotating ? 'crosshair' : undefined, touchAction: annotating ? 'pan-y' : 'auto' }}
+    >
       <StatusOverlay status={status} error={error} variant="docx" openHref={openHref} />
       <div ref={bodyRef} className="px-3 py-4 flex flex-col" style={{ zoom, alignItems: 'flex-start' }} />
     </div>

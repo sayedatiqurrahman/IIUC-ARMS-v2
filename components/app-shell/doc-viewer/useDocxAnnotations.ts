@@ -112,6 +112,12 @@ export function useDocxAnnotations({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const cancelDocxTextDraft = useCallback(() => {
+    const d = textDraftDocxRef.current;
+    if (d && d.input) d.input.remove();
+    textDraftDocxRef.current = null;
+  }, []);
+
   useEffect(() => {
     if (isPdf) return;
     const sc = scrollRef.current;
@@ -248,7 +254,7 @@ export function useDocxAnnotations({
       sc.removeEventListener('pointercancel', onPointerCancel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPdf, commitDocxText]);
+  }, [isPdf, status, commitDocxText]);
 
   useEffect(() => {
     const body = bodyRef.current;
@@ -277,5 +283,5 @@ export function useDocxAnnotations({
     });
   }, [annotating, status, isPdf]);
 
-  return { syncOverlays, paintDocxSection };
+  return { syncOverlays, paintDocxSection, cancelDocxTextDraft };
 }

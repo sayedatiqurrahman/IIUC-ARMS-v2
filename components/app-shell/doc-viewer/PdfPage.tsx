@@ -1,6 +1,7 @@
 'use client';
 
-import type { PointerEvent as RPointerEvent, RefObject } from 'react';
+import { useCallback } from 'react';
+import type { MutableRefObject, PointerEvent as RPointerEvent, RefObject } from 'react';
 
 interface PdfPageProps {
   index: number;
@@ -8,8 +9,8 @@ interface PdfPageProps {
   textDraft: { page: number; x: number; y: number } | null;
   draftText: string;
   textInputRef: RefObject<HTMLInputElement | null>;
-  onCanvasRef: (el: HTMLCanvasElement | null, index: number) => void;
-  onAnnCanvasRef: (el: HTMLCanvasElement | null, index: number) => void;
+  canvasRefs: MutableRefObject<(HTMLCanvasElement | null)[]>;
+  annCanvasRefs: MutableRefObject<(HTMLCanvasElement | null)[]>;
   onPointerDown: (index: number, e: RPointerEvent<HTMLDivElement>) => void;
   onPointerMove: (index: number, e: RPointerEvent<HTMLDivElement>) => void;
   onPointerUp: (index: number, e: RPointerEvent<HTMLDivElement>) => void;
@@ -25,8 +26,8 @@ export default function PdfPage({
   textDraft,
   draftText,
   textInputRef,
-  onCanvasRef,
-  onAnnCanvasRef,
+  canvasRefs,
+  annCanvasRefs,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -35,6 +36,20 @@ export default function PdfPage({
   onTextCommit,
   onTextCancel,
 }: PdfPageProps) {
+  const setCanvasRef = useCallback(
+    (el: HTMLCanvasElement | null) => {
+      canvasRefs.current[index] = el;
+    },
+    [canvasRefs, index]
+  );
+
+  const setAnnCanvasRef = useCallback(
+    (el: HTMLCanvasElement | null) => {
+      annCanvasRefs.current[index] = el;
+    },
+    [annCanvasRefs, index]
+  );
+
   return (
     <div
       className={`relative mx-auto rounded shadow-lg bg-white ${annotating ? 'select-none' : ''}`}
@@ -44,18 +59,8 @@ export default function PdfPage({
       onPointerUp={(e) => onPointerUp(index, e)}
       onPointerCancel={onPointerCancel}
     >
-      <canvas
-        ref={(el) => {
-          onCanvasRef(el, index);
-        }}
-        className="block rounded"
-      />
-      <canvas
-        ref={(el) => {
-          onAnnCanvasRef(el, index);
-        }}
-        className="absolute inset-0 rounded pointer-events-none"
-      />
+      <canvas ref={setCanvasRef} className="block rounded" />
+      <canvas ref={setAnnCanvasRef} className="absolute inset-0 rounded pointer-events-none" />
       {textDraft && textDraft.page === index + 1 && (
         <input
           ref={textInputRef}

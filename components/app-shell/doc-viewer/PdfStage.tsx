@@ -83,12 +83,8 @@ export default function PdfStage({
               textDraft={textDraft}
               draftText={draftText}
               textInputRef={textInputRef}
-              onCanvasRef={(el, idx) => {
-                canvasRefs.current[idx] = el;
-              }}
-              onAnnCanvasRef={(el, idx) => {
-                annCanvasRefs.current[idx] = el;
-              }}
+              canvasRefs={canvasRefs}
+              annCanvasRefs={annCanvasRefs}
               onPointerDown={onPagePointerDown}
               onPointerMove={onPagePointerMove}
               onPointerUp={onPagePointerUp}

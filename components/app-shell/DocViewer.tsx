@@ -134,16 +134,15 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   fitFnRef.current = fit;
 
   const toggleAnnotate = () => {
-    setAnnotating((v) => {
-      const next = !v;
-      if (!next) {
-        setTextDraft(null);
-        setDraftText('');
-        drawingRef.current = null;
-      }
-      if (isPdf) setTool(next ? 'annotate' : 'hand');
-      return next;
-    });
+    const next = !annotating;
+    if (!next) {
+      setTextDraft(null);
+      setDraftText('');
+      drawingRef.current = null;
+      cancelDocxTextDraft();
+    }
+    if (isPdf) setTool(next ? 'annotate' : 'hand');
+    setAnnotating(next);
   };
 
   const selectTool = (t: 'laser' | 'hand') => {
@@ -267,7 +266,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
 
   // ---- Feature hooks (each owns its own DOM side-effects) ------------------
 
-  const { syncOverlays } = useDocxAnnotations({
+  const { syncOverlays, cancelDocxTextDraft } = useDocxAnnotations({
     scrollRef,
     bodyRef,
     annosRef,
@@ -471,7 +470,15 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
           }}
         />
       ) : (
-        <DocxStage scrollRef={scrollRef} bodyRef={bodyRef} status={status} error={error} zoom={zoom} openHref={src} />
+        <DocxStage
+          scrollRef={scrollRef}
+          bodyRef={bodyRef}
+          status={status}
+          error={error}
+          zoom={zoom}
+          annotating={annotating}
+          openHref={src}
+        />
       )}
     </div>
   );
