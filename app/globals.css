@@ -61,7 +61,6 @@ button { font-family: inherit; }
     min-height: 42px;
     padding-top: 0;
     padding-bottom: 0;
-    overflow: hidden;
     background: linear-gradient(180deg, #18223a 0%, #0e1626 100%);
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 24px rgba(0, 0, 0, 0.4);
@@ -97,19 +96,14 @@ button { font-family: inherit; }
     flex-wrap: nowrap;
     white-space: nowrap;
     gap: 8px;
-    /* Stay exactly inside the title-bar height: drop the vertical padding and
-       center the row, so nothing pokes out above/below the bar. If the row is
-       too wide (many nav items on a small window), scroll it horizontally
-       instead of letting it spill outside the navbar. */
+    /* Keep the row exactly inside the title-bar height: drop the vertical
+       padding and center it so no inline item pokes out above/below the bar.
+       NOTE: no `overflow` on the bar or the row — the More/profile dropdowns
+       are absolutely-positioned popups that render below the bar and would be
+       clipped (making the More button look broken). */
     height: 100%;
     padding-top: 0;
     padding-bottom: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .app-titlebar .tb-inner::-webkit-scrollbar {
-    width: 0;
-    height: 0;
   }
   /* On narrow installed windows keep all nav items visible inside the bar:
      collapse the labels to icons only (like a slim menu bar), then the row
@@ -166,7 +160,6 @@ button { font-family: inherit; }
     min-height: 44px;
     padding-top: 0;
     padding-bottom: 0;
-    overflow: hidden;
     background: linear-gradient(180deg, #18223a 0%, #0e1626 100%);
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   }
@@ -176,14 +169,6 @@ button { font-family: inherit; }
     padding: 0 !important;
   }
   .app-titlebar .tb-subtitle { display: none; }
-  .app-titlebar .tb-inner {
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .app-titlebar .tb-inner::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-  }
 }
 
 .viewer-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1500; }
