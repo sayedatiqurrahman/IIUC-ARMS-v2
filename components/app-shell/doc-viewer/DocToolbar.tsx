@@ -6,13 +6,12 @@ interface DocToolbarProps {
   status: 'loading' | 'ready' | 'error';
   pages: number;
   zoom: number;
-  annotating: boolean;
-  tool: 'laser' | 'hand' | 'annotate';
   downloadHref: string;
-  xdrawBusy: boolean;
-  onSelectTool: (t: 'laser' | 'hand') => void;
-  onToggleAnnotate: () => void;
-  onOpenExcalidraw: () => void;
+  drawBusy: boolean;
+  canDownloadAnnotated: boolean;
+  annotatedExporting: boolean;
+  onOpenDraw: () => void;
+  onDownloadAnnotated: () => void;
   onZoomBy: (dir: 1 | -1) => void;
   onFit: () => void;
   onClose: () => void;
@@ -24,13 +23,12 @@ export default function DocToolbar({
   status,
   pages,
   zoom,
-  annotating,
-  tool,
   downloadHref,
-  xdrawBusy,
-  onSelectTool,
-  onToggleAnnotate,
-  onOpenExcalidraw,
+  drawBusy,
+  canDownloadAnnotated,
+  annotatedExporting,
+  onOpenDraw,
+  onDownloadAnnotated,
   onZoomBy,
   onFit,
   onClose,
@@ -46,49 +44,31 @@ export default function DocToolbar({
       )}
 
       <div className="flex items-center gap-1 ml-auto">
-        {isPdf && (
-          <>
-            <button
-              className="pdf-btn"
-              onClick={() => onSelectTool('laser')}
-              title="Laser pointer (or use your cursor)"
-              style={tool === 'laser' ? { background: 'rgba(251,146,60,0.25)', border: '1px solid rgba(251,146,60,0.6)' } : undefined}
-            >
-              <i className="fas fa-magic"></i>
-            </button>
-            <button
-              className="pdf-btn"
-              onClick={() => onSelectTool('hand')}
-              title="Hand tool — drag to scroll"
-              style={tool === 'hand' && !annotating ? { background: 'rgba(251,146,60,0.25)', border: '1px solid rgba(251,146,60,0.6)' } : undefined}
-            >
-              <i className="fas fa-hand-paper"></i>
-            </button>
-          </>
-        )}
         <button
           className="pdf-btn"
-          onClick={onOpenExcalidraw}
-          title="Excalidraw — open full art tools to draw on the current page"
-          disabled={status !== 'ready' || xdrawBusy}
+          onClick={onOpenDraw}
+          title="Draw — open the full art tools to draw on the current page"
+          disabled={status !== 'ready' || drawBusy}
           style={{ background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.45)' }}
         >
-          {xdrawBusy ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-bezier-curve"></i>}
-        </button>
-        <button
-          className="pdf-btn"
-          onClick={onToggleAnnotate}
-          title="Annotate — show/hide the annotation toolbar"
-          disabled={status === 'error'}
-          style={annotating ? { background: 'rgba(251,146,60,0.25)', border: '1px solid rgba(251,146,60,0.6)' } : undefined}
-        >
-          <i className="fas fa-marker"></i>
+          {drawBusy ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-bezier-curve"></i>}
         </button>
         <button className="pdf-btn" onClick={() => onZoomBy(-1)} title="Zoom out (Ctrl + -)" disabled={status !== 'ready'}><i className="fas fa-minus"></i></button>
         <span className="text-neutral-400 text-[0.72rem] font-mono min-w-[38px] text-center select-none">{Math.round(zoom * 100)}%</span>
         <button className="pdf-btn" onClick={() => onZoomBy(1)} title="Zoom in (Ctrl + +)" disabled={status !== 'ready'}><i className="fas fa-plus"></i></button>
         <button className="pdf-btn" onClick={onFit} title="Fit to screen (Ctrl + 0)" disabled={status !== 'ready'}><i className="fas fa-expand-arrows-alt"></i></button>
         <a className="pdf-btn no-underline" href={downloadHref} download={name} title="Download" style={{ textDecoration: 'none' }}><i className="fas fa-download"></i></a>
+        {isPdf && (
+          <button
+            className="pdf-btn"
+            onClick={onDownloadAnnotated}
+            title="Download PDF with your drawings baked in"
+            disabled={!canDownloadAnnotated || annotatedExporting}
+            style={canDownloadAnnotated && !annotatedExporting ? { background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.45)' } : undefined}
+          >
+            {annotatedExporting ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-file-pdf"></i>}
+          </button>
+        )}
         <button className="pdf-btn" onClick={onClose} title="Close" style={{ background: '#ef4444', color: 'white', borderRadius: '7px' }}><i className="fas fa-times"></i></button>
       </div>
     </div>

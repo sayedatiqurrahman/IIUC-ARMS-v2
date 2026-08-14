@@ -4,35 +4,36 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { ANNO_COLORS, clearXdrawCache, preloadXdraw, type Annotation, type AnnoType } from '@/lib/annotations';
 import DocToolbar from './doc-viewer/DocToolbar';
-import AnnoToolbar from './doc-viewer/AnnoToolbar';
 import PdfStage from './doc-viewer/PdfStage';
 import DocxStage from './doc-viewer/DocxStage';
 import { useDocxAnnotations } from './doc-viewer/useDocxAnnotations';
 import { usePdfAnnotations } from './doc-viewer/usePdfAnnotations';
-import { useMagicLaser } from './doc-viewer/useMagicLaser';
 import { usePdfPinch } from './doc-viewer/usePdfPinch';
 import { useViewerShortcuts } from './doc-viewer/useViewerShortcuts';
-import type { XdrawSaveData } from './doc-viewer/ExcalidrawAnnoEditor';
+import type { XdrawSaveData } from './doc-viewer/AnnoDrawOverlay';
+import { exportAnnotatedPdf } from './doc-viewer/exportAnnotatedPdf';
 
-// Excalidraw is ~several MB, so it only loads when a document is open AND the
-// user opens the art editor (annotation mode) — never on app startup.
-const ExcalidrawAnnoEditor = dynamic(() => import('./doc-viewer/ExcalidrawAnnoEditor'), { ssr: false });
+// The full art editor is several MB, so it only loads when a document is open
+// AND the user opens the Draw tool — never on app startup.
+const AnnoDrawOverlay = dynamic(() => import('./doc-viewer/AnnoDrawOverlay'), { ssr: false });
 
 // Unified document viewer: renders both PDF (pdf.js) and .docx (docx-preview)
 // through a single toolbar + annotation system, so one lazy-loaded chunk covers
 // every "document" file type. Bytes always come from the same-origin proxy.
 //
 // Zoom: Ctrl+/-/0 and Ctrl+wheel on both formats; pinch on touch for PDF.
-// Annotation: pen / highlighter / text with colour swatches, undo and clear.
-// Marks live in normalized page coordinates and are redrawn on any zoom /
-// layout change so they stay aligned for both canvas pages (PDF) and
-// docx-preview sections (DOCX).
+// Drawing: the Draw button opens a full art canvas that draws directly over the
+// current page snapshot (one drawing layer per page), replacing the old pen /
+// highlighter / text toolbar and the laser tool. Marks live in normalized page
+// coordinates and are redrawn on any zoom / layout change so they stay aligned
+// for both canvas pages (PDF) and docx-preview sections (DOCX).
 //
 // The feature is split into small parts under ./doc-viewer/:
-//   DocToolbar / AnnoToolbar / StatusOverlay  — pure UI
-//   PdfStage / PdfPage / DocxStage           — layout of each format
-//   usePdfAnnotations / useDocxAnnotations   — drawing logic
-//   useMagicLaser / usePdfPinch / useViewerShortcuts — input handling
+//   DocToolbar / StatusOverlay          — pure UI
+//   PdfStage / PdfPage / DocxStage      — layout of each format
+//   AnnoDrawOverlay                     — full art editor over the page snapshot
+//   usePdfAnnotations / useDocxAnnotations — xdraw overlay painting
+//   usePdfPinch / useViewerShortcuts    — input handling
 export default function DocViewer({ item, onClose }: { item: any; onClose: () => void }) {
   const ext = item.path?.split('.').pop()?.toLowerCase() || '';
   const isPdf = ext === 'pdf';
@@ -45,20 +46,20 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   const [pages, setPages] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [fitMode, setFitMode] = useState(true);
-  const [annotating, setAnnotating] = useState(false);
+  const annotating = false; // pen/highlight/text annotation is replaced by the Draw tool
   const [annoTool, setAnnoTool] = useState<AnnoType>('pen');
   const [annoColor, setAnnoColor] = useState(ANNO_COLORS[0]);
   const [annos, setAnnos] = useState<Annotation[]>([]);
   const [textDraft, setTextDraft] = useState<{ page: number; x: number; y: number } | null>(null);
   const [draftText, setDraftText] = useState('');
 
-  // Excalidraw art-annotation state (lazy-loaded editor + raster preload tick).
-  const [xdrawOpen, setXdrawOpen] = useState<{ page: number; image: string; w: number; h: number } | null>(null);
+  // Full art-annotation state (lazy-loaded editor + raster preload tick).
+  const [xdrawOpen, setXdrawOpen] = useState<{ page: number; image: string; w: number; h: number; initialScene?: string } | null>(null);
   const [xdrawPreparing, setXdrawPreparing] = useState(false);
   const [xdrawTick, setXdrawTick] = useState(0);
+  const [annotatedExporting, setAnnotatedExporting] = useState(false);
 
-  // PDF-only tool state (laser / hand / annotate).
-  const [tool, setTool] = useState<'laser' | 'hand' | 'annotate'>('hand');
+  // PDF-only hand-tool state (drag to scroll).
   const [grabbing, setGrabbing] = useState(false);
   const [centerV, setCenterV] = useState(true);
 
@@ -144,27 +145,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   const fitFnRef = useRef(fit);
   fitFnRef.current = fit;
 
-  const toggleAnnotate = () => {
-    const next = !annotating;
-    if (!next) {
-      setTextDraft(null);
-      setDraftText('');
-      drawingRef.current = null;
-      cancelDocxTextDraft();
-    }
-    if (isPdf) setTool(next ? 'annotate' : 'hand');
-    setAnnotating(next);
-  };
-
-  const selectTool = (t: 'laser' | 'hand') => {
-    setTool(t);
-    setAnnotating(false);
-    setTextDraft(null);
-    setDraftText('');
-    drawingRef.current = null;
-  };
-
-  // ---- Excalidraw art annotation -------------------------------------------
+  // ---- Full art annotation ------------------------------------------------
 
   const getCurrentPage = useCallback((): number => {
     const sc = scrollRef.current;
@@ -193,21 +174,22 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   const openXdrawEditor = useCallback(async () => {
     if (status !== 'ready') return;
     const page = getCurrentPage();
+    const existing = annosRef.current.filter((a) => a.type === 'xdraw' && a.page === page).pop();
     setXdrawPreparing(true);
     try {
       if (isPdf) {
         const canvas = canvasRefs.current[page - 1];
         if (!canvas) return;
-        setXdrawOpen({ page, image: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
+        setXdrawOpen({ page, image: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height, initialScene: existing?.scene });
       } else {
         const section = bodyRef.current?.querySelectorAll('.docx-wrapper > section.docx')[page - 1] as HTMLElement | null;
         if (!section) return;
         const { toPng } = await import('dom-to-image-more');
         const image = await toPng(section, { pixelRatio: 2, bgcolor: '#ffffff' });
-        setXdrawOpen({ page, image, w: section.offsetWidth * 2, h: section.offsetHeight * 2 });
+        setXdrawOpen({ page, image, w: section.offsetWidth * 2, h: section.offsetHeight * 2, initialScene: existing?.scene });
       }
     } catch (e) {
-      console.error('Excalidraw page snapshot failed', e);
+      console.error('Draw page snapshot failed', e);
     } finally {
       setXdrawPreparing(false);
     }
@@ -215,11 +197,12 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
 
   const handleXdrawSave = useCallback(
     (data: XdrawSaveData) => {
+      const page = xdrawOpen?.page ?? 1;
       setAnnos((prev) => [
-        ...prev,
+        ...prev.filter((a) => !(a.type === 'xdraw' && a.page === page)),
         {
           id: Math.random().toString(36).slice(2),
-          page: xdrawOpen?.page ?? 1,
+          page,
           type: 'xdraw',
           color: '#ffffff',
           points: [{ x: 0, y: 0 }],
@@ -247,6 +230,21 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   }, [annos]);
 
   useEffect(() => () => clearXdrawCache(), []);
+
+  // ---- Download PDF with annotations baked in ------------------------------
+
+  const downloadAnnotatedPdf = useCallback(async () => {
+    const pdf = pdfRef.current;
+    if (!isPdf || !pdf || annotatedExporting) return;
+    setAnnotatedExporting(true);
+    try {
+      await exportAnnotatedPdf(pdf, annosRef.current, item.name);
+    } catch (e) {
+      console.error('Annotated PDF export failed', e);
+    } finally {
+      setAnnotatedExporting(false);
+    }
+  }, [isPdf, annotatedExporting, item.name]);
 
   // ---- Load + render ------------------------------------------------------
 
@@ -389,7 +387,6 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   });
 
   const pinchRef = usePdfPinch({ isPdf, scrollRef, zoomRef, setZoom });
-  useMagicLaser({ enabled: isPdf && tool === 'laser', overlayRef, containerRef: stageRef });
   useViewerShortcuts({ zoomFnRef, fitFnRef, scrollRef });
 
   // ---- Shared: repaint annotation overlays --------------------------------
@@ -444,7 +441,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   // ---- PDF: hand tool -----------------------------------------------------
 
   const onStagePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isPdf || tool !== 'hand') return;
+    if (!isPdf) return;
     const sc = scrollRef.current;
     if (!sc) return;
     dragRef.current = { active: true, x: e.clientX, y: e.clientY, left: sc.scrollLeft, top: sc.scrollTop };
@@ -455,7 +452,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   const onStagePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = dragRef.current;
     const sc = scrollRef.current;
-    if (isPdf && tool === 'hand' && d.active && sc && !pinchRef.current?.active) {
+    if (isPdf && d.active && sc && !pinchRef.current?.active) {
       sc.scrollLeft = d.left - (e.clientX - d.x);
       sc.scrollTop = d.top - (e.clientY - d.y);
     }
@@ -496,8 +493,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
 
   // ---- UI -------------------------------------------------------------------
 
-  const stageCursor =
-    !isPdf ? undefined : tool === 'laser' ? 'none' : tool === 'annotate' ? 'crosshair' : grabbing ? 'grabbing' : 'grab';
+  const stageCursor = !isPdf ? undefined : grabbing ? 'grabbing' : 'grab';
 
   return (
     <div ref={rootRef} className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col wco-titlebar-pad">
@@ -507,29 +503,16 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
         status={status}
         pages={pages}
         zoom={zoom}
-        annotating={annotating}
-        tool={tool}
         downloadHref={src}
-        xdrawBusy={xdrawPreparing}
-        onSelectTool={selectTool}
-        onToggleAnnotate={toggleAnnotate}
-        onOpenExcalidraw={openXdrawEditor}
+        drawBusy={xdrawPreparing}
+        canDownloadAnnotated={isPdf && status === 'ready' && annos.length > 0}
+        annotatedExporting={annotatedExporting}
+        onOpenDraw={openXdrawEditor}
+        onDownloadAnnotated={downloadAnnotatedPdf}
         onZoomBy={zoomBy}
         onFit={fit}
         onClose={onClose}
       />
-
-      {annotating && (
-        <AnnoToolbar
-          annoTool={annoTool}
-          annoColor={annoColor}
-          canUndo={annos.length > 0}
-          onSetAnnoTool={setAnnoTool}
-          onSetAnnoColor={setAnnoColor}
-          onUndo={() => setAnnos((prev) => prev.slice(0, -1))}
-          onClear={() => setAnnos([])}
-        />
-      )}
 
       {isPdf ? (
         <PdfStage
@@ -542,7 +525,6 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
           status={status}
           error={error}
           pages={pages}
-          tool={tool}
           grabbing={grabbing}
           centerV={centerV}
           annotating={annotating}
@@ -579,12 +561,13 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
       )}
 
       {xdrawOpen && status === 'ready' && (
-        <ExcalidrawAnnoEditor
+        <AnnoDrawOverlay
           title={item.name}
           page={xdrawOpen.page}
           bgImage={xdrawOpen.image}
           bgWidth={xdrawOpen.w}
           bgHeight={xdrawOpen.h}
+          initialScene={xdrawOpen.initialScene}
           onSave={handleXdrawSave}
           onCancel={() => setXdrawOpen(null)}
         />

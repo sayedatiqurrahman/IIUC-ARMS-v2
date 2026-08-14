@@ -21,6 +21,10 @@ button { font-family: inherit; }
 *::-webkit-scrollbar { width: 0; height: 0; }
 * { scrollbar-width: none; -ms-overflow-style: none; }
 
+/* Hide the third-party "Made with Excalidraw" branding inside the embedded
+   boards. The footer-center strip holds the logo; footer-left (zoom) stays. */
+.excalidraw .footer-center { display: none !important; }
+
 /* ── Window Controls Overlay (installed desktop PWA) ────────────────────
    When the app is installed on desktop, the OS draws the system menu +
    minimize/maximize/close buttons as an overlay on top of the app's own

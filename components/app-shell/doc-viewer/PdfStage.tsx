@@ -14,7 +14,6 @@ interface PdfStageProps {
   status: 'loading' | 'ready' | 'error';
   error: string;
   pages: number;
-  tool: 'laser' | 'hand' | 'annotate';
   grabbing: boolean;
   centerV: boolean;
   annotating: boolean;
@@ -44,7 +43,6 @@ export default function PdfStage({
   status,
   error,
   pages,
-  tool,
   grabbing,
   centerV,
   annotating,
@@ -72,7 +70,7 @@ export default function PdfStage({
         onPointerMove={onStagePointerMove}
         onPointerUp={onStagePointerUp}
         onPointerCancel={onStagePointerUp}
-        style={{ cursor: tool === 'laser' ? 'none' : 'inherit', touchAction: 'pan-x pan-y' }}
+        style={{ touchAction: 'pan-x pan-y' }}
       >
         <div className="p-3 flex flex-col gap-3 min-h-full" style={{ justifyContent: centerV ? 'center' : 'flex-start' }}>
           {Array.from({ length: pages }).map((_, i) => (
