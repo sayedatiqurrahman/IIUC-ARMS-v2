@@ -11,6 +11,7 @@ import { signOut, signIn } from 'next-auth/react';
 import { config } from '@/lib/config';
 import { checkAndBustCache, forceResetApp, checkForAppUpdate, startUpdateWatcher, applyAppUpdate } from '@/lib/cache';
 import { useConfirm } from '@/components/ConfirmModal';
+import OperationProgress from '@/components/OperationProgress';
 import { isStandalone, isInBrowser, isIOSBrowser, type BeforeInstallPromptEvent } from '@/lib/standalone';
 import { useTurnstile } from '@/lib/useTurnstile';
 import { handleGoogleRedirectResult } from '@/lib/firebase';
@@ -124,6 +125,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const goHome = useAppStore(s => s.goHome);
   const setUploadOpen = useAppStore(s => s.setUploadOpen);
   const uploadOpen = useAppStore(s => s.uploadOpen);
+  const operationLabel = useAppStore(s => s.operationLabel);
   const viewerOpen = useAppStore(s => s.viewerOpen);
   const viewerItem = useAppStore(s => s.viewerItem);
   const closeViewer = useAppStore(s => s.closeViewer);
@@ -971,6 +973,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* LOGIN MODAL */}
       <LoginModal isOpen={loginModalOpen} onClose={() => setLoginModalOpen(false)} preRenderedTurnstileContainer={preRenderedTurnstile ? turnstileContainerId : undefined} />
       {confirmDialog}
+
+      {/* GLOBAL OPERATION PROGRESS (delete / rename / create course) */}
+      <OperationProgress label={operationLabel} />
     </div>
   );
 }

@@ -29,6 +29,7 @@ export default function CoursesView({
   const { data: session } = useSession();
   const loadTree = useAppStore(s => s.loadTree);
   const invalidateCoursesCache = useAppStore(s => s.invalidateCoursesCache);
+  const setOperationLabel = useAppStore(s => s.setOperationLabel);
   const storeGithubToken = useAppStore(s => s.githubToken);
   const profile = useAppStore(s => s.profile);
 
@@ -59,6 +60,7 @@ export default function CoursesView({
     if (!editTarget || !editTitle.trim()) return;
     setEditLoading(true);
     setEditError('');
+    setOperationLabel('Renaming course…');
     try {
       const res = await fetch('/api/courses', {
         method: 'PUT',
@@ -84,6 +86,7 @@ export default function CoursesView({
       setEditError(e.message);
     } finally {
       setEditLoading(false);
+      setOperationLabel('');
     }
   }
 
@@ -91,6 +94,7 @@ export default function CoursesView({
     if (!deleteTarget) return;
     setDeleteLoading(true);
     setDeleteError('');
+    setOperationLabel('Deleting course…');
     try {
       const res = await fetch('/api/courses', {
         method: 'DELETE',
@@ -112,6 +116,7 @@ export default function CoursesView({
       setDeleteError(e.message);
     } finally {
       setDeleteLoading(false);
+      setOperationLabel('');
     }
   }
 

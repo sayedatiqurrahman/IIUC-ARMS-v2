@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
-import { FACULTIES } from '@/lib/departments';
+import { FACULTIES, getDepartmentFolder } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
 import { CreateCourseModal, type CreateCourseResult } from '@/components/upload';
 
@@ -110,6 +110,7 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
 
   async function handleFileDeleteRequest(id: string, action: 'approve' | 'reject') {
     setHandlingFileRequest(id);
+    useAppStore.getState().setOperationLabel(action === 'approve' ? 'Deleting files from GitHub…' : '');
     try {
       const res = await fetch('/api/github/file-delete-requests', {
         method: 'POST',
@@ -126,11 +127,13 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       await fetch('/api/github/file-delete-requests').then(r => r.json()).then(d => { if (d.success) setFileDeleteRequests(d.requests || []); }).catch(() => {});
     } finally {
       setHandlingFileRequest(null);
+      useAppStore.getState().setOperationLabel('');
     }
   }
 
   async function handleDeleteRequest(id: string, action: 'approve' | 'reject') {
     setHandlingRequest(id);
+    useAppStore.getState().setOperationLabel(action === 'approve' ? 'Deleting course from GitHub…' : '');
     try {
       const res = await fetch('/api/courses/delete-requests', {
         method: 'POST',
@@ -147,25 +150,35 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       await fetch('/api/courses/delete-requests').then(r => r.json()).then(d => { if (d.success) setDeleteRequests(d.requests || []); }).catch(() => {});
     } finally {
       setHandlingRequest(null);
+      useAppStore.getState().setOperationLabel('');
     }
   }
 
   async function handleAddCourse(code: string, title: string): Promise<CreateCourseResult> {
+    useAppStore.getState().setOperationLabel('Creating course on GitHub…');
     try {
       const res = await useAppStore.getState().addCourse(selectedDept, selectedSem, code, title);
       if (!res.success) return { success: false, error: res.error || 'Failed to create course' };
       setShowAdd(false);
+      const finalCode = res.course?.code || code.toUpperCase();
+      const finalTitle = res.course?.title || title.trim() || finalCode;
       useAppStore.getState().invalidateTreeCache();
       await loadTree();
+      const { refreshTreeUntilVisible } = await import('@/lib/tree-refresh');
+      const expectedFolder = `${getDepartmentFolder(selectedDept)}/${selectedSem}/${finalCode} - ${finalTitle}`;
+      await refreshTreeUntilVisible(expectedFolder, (profile as any)?.githubToken || '');
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e.message || 'Failed to create course' };
+    } finally {
+      useAppStore.getState().setOperationLabel('');
     }
   }
 
   async function handleEdit() {
     if (!editCourse || !editTitle.trim()) return;
     setEditLoading(true);
+    useAppStore.getState().setOperationLabel('Renaming course…');
     try {
       const res = await fetch('/api/courses', {
         method: 'PUT',
@@ -178,12 +191,13 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       useAppStore.getState().invalidateTreeCache();
       await loadTree();
     } catch (e: any) { alert(e.message); }
-    finally { setEditLoading(false); }
+    finally { setEditLoading(false); useAppStore.getState().setOperationLabel(''); }
   }
 
   async function handleDelete() {
     if (!deleteCourse) return;
     setDeleteLoading(true);
+    useAppStore.getState().setOperationLabel('Deleting course…');
     try {
       const res = await fetch('/api/courses', {
         method: 'DELETE',
@@ -199,7 +213,7 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       useAppStore.getState().invalidateTreeCache();
       await loadTree();
     } catch (e: any) { alert(e.message); }
-    finally { setDeleteLoading(false); }
+    finally { setDeleteLoading(false); useAppStore.getState().setOperationLabel(''); }
   }
 
   return (

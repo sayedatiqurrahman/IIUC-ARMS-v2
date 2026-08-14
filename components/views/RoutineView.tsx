@@ -9,9 +9,7 @@ import { resolveDepartment, getDepartmentDisplayName } from '@/lib/departments';
 import { showToast } from '@/lib/utils';
 import { useConfirm } from '@/components/ConfirmModal';
 import type { RoutineItem, ViewMode, AllSemesterDraft } from '@/components/routine/types';
-import { SEMESTERS, DEFAULT_PERIODS, DEFAULT_DAYS } from '@/components/routine/types';
 import {
-  getDefaultSession,
   loadMyRoutines,
   saveMyRoutines,
   loadPublishedRoutines,
@@ -27,7 +25,7 @@ import TeacherContacts from '@/components/routine/TeacherContacts';
 import AllSemesterView from '@/components/routine/AllSemesterView';
 import RoutineBuilder from '@/components/routine/RoutineBuilder';
 
-export default function RoutineView({ dept, setDept }: { dept: string; setDept: (val: string) => void }) {
+export default function RoutineView({ dept }: { dept: string }) {
   const router = useRouter();
   const { data: session } = useSession();
   const { confirm, confirmDialog } = useConfirm();
@@ -368,26 +366,7 @@ export default function RoutineView({ dept, setDept }: { dept: string; setDept: 
             </div>
             <div className="routine-page-actions">
               <button className="routine-btn routine-btn-primary" onClick={() => {
-                const draftId = `draft-${Date.now()}`;
-                const draft: RoutineItem = {
-                  id: draftId,
-                  semester: SEMESTERS[0],
-                  branch: null,
-                  gender: null,
-                  session: getDefaultSession(),
-                  room: '',
-                  academicYear: new Date().getFullYear().toString(),
-                  department: profile?.department ? resolveDepartment(profile.department) : 'qsis',
-                  university: 'International Islamic University Chittagong',
-                  periods: [...DEFAULT_PERIODS],
-                  days: [...DEFAULT_DAYS],
-                  courses: [],
-                  slots: [],
-                  createdAt: Date.now(),
-                  isDraft: true,
-                };
-                persistMyRoutines([...myRoutines, draft]);
-                setEditingId(draftId);
+                setEditingId(null);
                 setViewMode('builder');
               }}>
                 <i className="fas fa-plus"></i> Create New

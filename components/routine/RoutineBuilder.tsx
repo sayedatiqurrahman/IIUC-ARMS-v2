@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import CustomSelect from '@/components/CustomSelect';
 import { config } from '@/lib/config';
 import { resolveDepartment, getDepartmentSelectOptions } from '@/lib/departments';
 import { getOnboardingData } from '@/lib/onboarding-storage';
-import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, BuilderStep } from './types';
+import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, BuilderStep, DraftData } from './types';
 import { SEMESTERS, DEFAULT_PERIODS, DEFAULT_DAYS, DEFAULT_FEMALE_PERIODS } from './types';
 import { getDefaultSession, getSlot, loadDraft, saveDraft, clearDraft, to24h, to12h } from './helpers';
 import { showToast } from '@/lib/utils';
@@ -93,15 +93,27 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
     setCourses(semesterCourses.map(c => ({ code: c.code, title: c.title, teacher: c.teacher, room: c.room })));
   }, [semesterCourses, existing, courses.length]);
 
+  const draftRef = useRef<DraftData>({});
+  draftRef.current = { semester, branch, gender, session, room, periods, days, courses, slots, malePeriods, femalePeriods, maleSlots, femaleSlots, step, maleRoom, femaleRoom };
+  const firstAutoSave = useRef(true);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const justSaved = useRef(false);
+
   useEffect(() => {
     if (existing) return;
-    const timer = setTimeout(() => {
-      saveDraft({ semester, branch, gender, session, room, periods, days, courses, slots, malePeriods, femalePeriods, maleSlots, femaleSlots, step, maleRoom, femaleRoom });
-      setDraftSaved(true);
-      setTimeout(() => setDraftSaved(false), 2000);
-    }, 1000);
-    return () => clearTimeout(timer);
+    if (firstAutoSave.current) { firstAutoSave.current = false; return; }
+    saveDraft(draftRef.current);
+    setDraftSaved(true);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setDraftSaved(false), 1500);
   }, [semester, branch, gender, session, room, periods, days, courses, slots, malePeriods, femalePeriods, maleSlots, femaleSlots, step, existing, maleRoom, femaleRoom]);
+
+  useEffect(() => {
+    if (existing) return;
+    return () => {
+      if (!justSaved.current) saveDraft(draftRef.current);
+    };
+  }, [existing]);
 
   const classPeriods = periods.filter(p => !p.isBreak);
   const nonBreakIdx = (pIdx: number, refPeriods: RoutinePeriod[]) => {
@@ -243,6 +255,7 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
       createdAt: existing?.createdAt || Date.now(),
       isDraft: true,
     };
+    justSaved.current = true;
     clearDraft();
     onSave(routine);
   };
@@ -380,7 +393,7 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
                     </div>
                     <input placeholder="Course Title (e.g. Tafsir Bir Rayi)" value={c.title} onChange={e => updateCourse(idx, 'title', e.target.value)} />
                     <div className="routine-course-row-2">
-                      <TeacherAutocomplete value={c.teacher} onChange={(val, sf) => updateCourse(idx, 'teacher', val, sf)} placeholder="Type name or short form (e.g. MER)" />
+                      <TeacherAutocomplete value={c.teacher} onChange={(val, sf) => updateCourse(idx, 'teacher', val, sf)} department={department} placeholder="Type name or short form (e.g. MER)" />
                       <input className="routine-input-sm" placeholder={c.teacher ? `Room (auto: ${toInitials(c.teacher)})` : 'Room (auto from name)'} value={c.room} onChange={e => updateCourse(idx, 'room', e.target.value)} />
                     </div>
                   </div>

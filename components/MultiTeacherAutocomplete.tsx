@@ -1,14 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-
-interface FacultyMember {
-  id: string;
-  name: string;
-  title: string | null;
-  shortForm: string | null;
-  department: string;
-}
+import { useFacultySearch, deptShortName, type FacultyMember } from '@/components/useFacultySearch';
 
 interface MultiTeacherAutocompleteProps {
   value: string;
@@ -19,28 +12,17 @@ interface MultiTeacherAutocompleteProps {
 
 export default function MultiTeacherAutocomplete({ value, onChange, department, placeholder }: MultiTeacherAutocompleteProps) {
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<FacultyMember[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const selected: string[] = value ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const { loading, inDept, outside } = useFacultySearch(query, department || '');
+  const hasDept = !!department;
+  const deptSection = hasDept ? inDept : [];
+  const otherSection = hasDept ? outside : [...inDept, ...outside];
 
-  useEffect(() => {
-    if (query.length < 1) { setSuggestions([]); return; }
-    const timer = setTimeout(() => {
-      setLoading(true);
-      const params = new URLSearchParams({ search: query });
-      if (department) params.set('department', department);
-      fetch(`/api/faculty?${params}`)
-        .then(r => r.json())
-        .then(data => { setSuggestions(data.members || []); setLoading(false); })
-        .catch(() => setLoading(false));
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [query, department]);
+  const selected: string[] = value ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -52,13 +34,16 @@ export default function MultiTeacherAutocomplete({ value, onChange, department, 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  function displayName(m: FacultyMember): string {
+    return m.title ? `${m.name} (${m.title})` : m.name;
+  }
+
   function addTeacher(name: string) {
     if (!selected.includes(name)) {
       const next = [...selected, name].join(', ');
       onChange(next);
     }
     setQuery('');
-    setSuggestions([]);
     setShowDropdown(false);
     inputRef.current?.focus();
   }
@@ -74,16 +59,16 @@ export default function MultiTeacherAutocomplete({ value, onChange, department, 
     }
     if (e.key === 'Enter' && query.trim()) {
       e.preventDefault();
-      if (highlightIdx >= 0 && suggestions.length > 0) {
-        addTeacher(suggestions[highlightIdx].title ? `${suggestions[highlightIdx].name} (${suggestions[highlightIdx].title})` : suggestions[highlightIdx].name);
+      if (highlightIdx >= 0 && results.length > 0) {
+        addTeacher(displayName(results[highlightIdx]));
       } else if (query.trim()) {
         addTeacher(query.trim());
       }
     }
-    if (!showDropdown || suggestions.length === 0) return;
+    if (!showDropdown || results.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setHighlightIdx(i => Math.min(i + 1, suggestions.length - 1));
+      setHighlightIdx(i => Math.min(i + 1, results.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlightIdx(i => Math.max(i - 1, 0));
@@ -92,10 +77,11 @@ export default function MultiTeacherAutocomplete({ value, onChange, department, 
     }
   }
 
-  const filteredSuggestions = suggestions.filter(s => {
-    const display = s.title ? `${s.name} (${s.title})` : s.name;
-    return !selected.includes(display);
-  });
+  const filtered = (members: FacultyMember[]) =>
+    members.filter(m => !selected.includes(displayName(m)));
+  const deptFiltered = filtered(deptSection);
+  const otherFiltered = filtered(otherSection);
+  const results = [...deptFiltered, ...otherFiltered];
 
   return (
     <div ref={wrapperRef} className="relative w-full">
@@ -111,7 +97,7 @@ export default function MultiTeacherAutocomplete({ value, onChange, department, 
           type="text"
           value={query}
           onChange={e => { setQuery(e.target.value); setShowDropdown(true); setHighlightIdx(-1); }}
-          onFocus={() => { if (filteredSuggestions.length > 0) setShowDropdown(true); }}
+          onFocus={() => { if (results.length > 0) setShowDropdown(true); }}
           onKeyDown={handleKeyDown}
           placeholder={selected.length === 0 ? (placeholder || 'Type name or short form...') : ''}
           className="flex-1 min-w-[80px] bg-transparent border-none outline-none text-[0.78rem] text-dark-text placeholder:text-dark-text3"
@@ -119,12 +105,12 @@ export default function MultiTeacherAutocomplete({ value, onChange, department, 
         />
       </div>
       {showDropdown && query.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-[180px] overflow-y-auto bg-dark-bg2 border border-dark-border rounded-lg shadow-lg">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-[220px] overflow-y-auto bg-dark-bg2 border border-dark-border rounded-lg shadow-lg">
           {loading ? (
             <div className="px-3 py-2 text-[0.72rem] text-dark-text3 flex items-center gap-2">
               <i className="fas fa-spinner fa-spin"></i> Searching...
             </div>
-          ) : filteredSuggestions.length === 0 ? (
+          ) : results.length === 0 ? (
             <div
               className="px-3 py-2 text-[0.72rem] text-dark-text3 cursor-pointer hover:bg-dark-bg3"
               onMouseDown={() => { addTeacher(query.trim()); }}
@@ -132,23 +118,48 @@ export default function MultiTeacherAutocomplete({ value, onChange, department, 
               <i className="fas fa-plus mr-1"></i> Add &quot;{query.trim()}&quot;
             </div>
           ) : (
-            filteredSuggestions.map((m, i) => (
-              <div
-                key={m.id}
-                className={`px-3 py-2 cursor-pointer flex items-center gap-2 text-[0.75rem] transition-colors ${
-                  i === highlightIdx ? 'bg-qsis/15 text-qsis' : 'hover:bg-dark-bg3 text-dark-text'
-                }`}
-                onMouseDown={() => {
-                  const display = m.title ? `${m.name} (${m.title})` : m.name;
-                  addTeacher(display);
-                }}
-                onMouseEnter={() => setHighlightIdx(i)}
-              >
-                <span className="font-semibold truncate">{m.name}</span>
-                {m.title && <span className="text-[0.65rem] text-dark-text3 truncate">{m.title}</span>}
-                {m.shortForm && <span className="ml-auto text-[0.62rem] text-dark-text3 font-mono flex-shrink-0">{m.shortForm}</span>}
-              </div>
-            ))
+            (() => {
+              let runningIdx = -1;
+              let lastSection: string | null = null;
+              const nodes: React.ReactNode[] = [];
+              const renderSection = (members: FacultyMember[], header: string, keyPrefix: string) => {
+                if (members.length === 0) return;
+                if (lastSection !== keyPrefix) {
+                  nodes.push(
+                    <div key={`${keyPrefix}-h`} className="px-3 py-1.5 bg-dark-bg3/60 sticky top-0 z-10 text-[0.6rem] font-bold text-dark-text3 uppercase tracking-wider">
+                      {keyPrefix === 'dept' ? <i className="fas fa-building mr-1 text-qsis"></i> : <i className="fas fa-globe mr-1 text-qsis"></i>}
+                      {header}
+                    </div>
+                  );
+                  lastSection = keyPrefix;
+                }
+                members.forEach(m => {
+                  const idx = ++runningIdx;
+                  nodes.push(
+                    <div
+                      key={`${keyPrefix}-${m.id}`}
+                      className={`px-3 py-2 cursor-pointer flex items-center gap-2 text-[0.75rem] transition-colors ${
+                        idx === highlightIdx ? 'bg-qsis/15 text-qsis' : 'hover:bg-dark-bg3 text-dark-text'
+                      }`}
+                      onMouseDown={() => addTeacher(displayName(m))}
+                      onMouseEnter={() => setHighlightIdx(idx)}
+                    >
+                      <span className="font-semibold truncate">{m.name}</span>
+                      {m.title && <span className="text-[0.65rem] text-dark-text3 truncate">{m.title}</span>}
+                      <span className="ml-auto flex items-center gap-1 flex-shrink-0">
+                        {m.shortForm && <span className="text-[0.62rem] text-dark-text3 font-mono">{m.shortForm}</span>}
+                        <span className="text-[0.56rem] px-1.5 py-0.5 rounded bg-dark-bg3 border border-dark-border text-qsis font-bold">
+                          {deptShortName(m.department)}
+                        </span>
+                      </span>
+                    </div>
+                  );
+                });
+              };
+              renderSection(deptFiltered, `In ${deptShortName(department)}`, 'dept');
+              renderSection(otherFiltered, hasDept ? 'Other Departments' : 'Teachers', 'outside');
+              return nodes;
+            })()
           )}
         </div>
       )}

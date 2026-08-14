@@ -250,6 +250,11 @@ button { font-family: inherit; }
 @keyframes fa-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 /* Indeterminate operation progress bar */
+/* Whiteboard: hide library sidebar and Excalidraw footer */
+.default-sidebar-trigger, .sidebar-trigger { display: none !important; }
+.layer-ui__wrapper__footer { display: none !important; }
+
+/* Indeterminate operation progress bar */
 @keyframes progress-indeterminate {
   0% { left: -35%; width: 35%; }
   60% { left: 100%; width: 60%; }

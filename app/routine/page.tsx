@@ -1,9 +1,8 @@
 "use client";
-import { config } from '@/lib/config'; import { resolveDepartment, getDepartmentSelectOptions } from '@/lib/departments';
+import { config } from '@/lib/config'; import { resolveDepartment } from '@/lib/departments';
 import { getOnboardingData } from '@/lib/onboarding-storage';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
-import CustomSelect from '@/components/CustomSelect';
 import dynamic from 'next/dynamic';
 // Each routine tab loads only when opened (class / exam / seat plan / teacher).
 const RoutineView = dynamic(() => import('@/components/views/RoutineView'), { ssr: false });
@@ -84,21 +83,6 @@ export default function RoutinePage() {
 
   return (
     <div>
-      {/* Department Selector */}
-      <div className="mb-3 px-2 py-2 bg-dark-bg2 border border-dark-border rounded-md mb-3">
-        <label className="text-[0.7rem] text-dark-text2 mb-1 block">Department</label>
-        <CustomSelect
-          value={dept || 'All Departments'}
-          onChange={(val) => setDept(val || '')}
-          placeholder="Select department"
-          searchable
-          options={[
-            { value: '', label: 'All Departments' },
-            ...getDepartmentSelectOptions()
-          ]}
-        />
-      </div>
-
       <div className="flex gap-1 mb-5 p-1 bg-dark-bg2 border border-dark-border rounded-xl">
         {tabBtn('class', 'Class Routine', 'Class', 'fas fa-calendar-alt')}
         {tabBtn('exam', 'Exam Routine', 'Exam', 'fas fa-file-alt')}
@@ -106,7 +90,7 @@ export default function RoutinePage() {
         {canUseTeacherTab && tabBtn('teacher', 'My Routine', 'Mine', 'fas fa-chalkboard-teacher')}
       </div>
 
-      {tab === 'class' && <RoutineView dept={dept} setDept={setDept} />}
+      {tab === 'class' && <RoutineView dept={dept} />}
       {tab === 'exam' && <ExamRoutineView />}
       {tab === 'seatplan' && <SeatPlanView />}
       {canUseTeacherTab && tab === 'teacher' && <TeacherRoutineView initialTeacher={teacherName || undefined} onTeacherChange={handleTeacherChange} />}

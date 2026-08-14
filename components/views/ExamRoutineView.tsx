@@ -7,6 +7,7 @@ import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
 import { ExamSlot, loadExamSlots, saveExamSlots, getEnabledSlots } from '@/lib/exam-routine-config';
 import CustomSelect from '@/components/CustomSelect';
+import MultiTeacherAutocomplete from '@/components/MultiTeacherAutocomplete';
 import { FACULTIES, findDepartment } from '@/lib/departments';
 import {
   ExamRoutineItem,
@@ -498,7 +499,7 @@ export default function ExamRoutineView() {
                           <input placeholder="Code" value={row.courses[slot.id]?.code || ''} onChange={e => updateRowCourse(idx, slot.id, 'code', e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
                           <input placeholder="Title" value={row.courses[slot.id]?.title || ''} onChange={e => updateRowCourse(idx, slot.id, 'title', e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
                           <input placeholder="Room (e.g. 301-A)" value={row.courses[slot.id]?.room || ''} onChange={e => updateRowCourse(idx, slot.id, 'room', e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
-                          <input placeholder="Teachers (comma separated)" value={row.courses[slot.id]?.teacher || ''} onChange={e => updateRowCourse(idx, slot.id, 'teacher', e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
+                          <MultiTeacherAutocomplete value={row.courses[slot.id]?.teacher || ''} onChange={val => updateRowCourse(idx, slot.id, 'teacher', val)} department={department} placeholder="Teachers (comma separated)" />
                           <input placeholder="Roll: Q233099-Q233115" value={row.courses[slot.id]?.rollRange || ''} onChange={e => updateRowCourse(idx, slot.id, 'rollRange' as any, e.target.value)} className="w-full px-2 py-1 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] outline-none focus:border-qsis" />
                         </div>
                       </td>

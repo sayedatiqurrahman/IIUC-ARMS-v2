@@ -180,6 +180,9 @@ export const useAppStore = create<AppState>((set, get) => {
     routineData: [],
     routineLoading: false,
 
+    operationLabel: '',
+    setOperationLabel: (label) => set({ operationLabel: label }),
+
     profile: cached?.profile ?? { ...defaultProfile },
     profileLoaded: !!cached,
     loadProfile: async () => {

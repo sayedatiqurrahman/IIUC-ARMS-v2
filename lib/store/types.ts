@@ -126,6 +126,9 @@ export interface AppState {
   editCourse: (id: string, title: string) => Promise<{ success: boolean; error?: string }>;
   deleteCourse: (id: string) => Promise<{ success: boolean; error?: string }>;
 
+  operationLabel: string;
+  setOperationLabel: (label: string) => void;
+
   routineData: any[];
   routineLoading: boolean;
 

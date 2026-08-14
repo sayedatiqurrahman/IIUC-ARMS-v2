@@ -533,6 +533,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   async function handleCreateCourse(code: string, title: string): Promise<CreateCourseResult> {
     if (createCourseFor === null) return { success: false, error: 'Please try again' };
+    useAppStore.getState().setOperationLabel('Creating course on GitHub…');
     try {
       const res = await useAppStore.getState().addCourse(department, semester, code, title);
       if (!res.success) return { success: false, error: res.error || 'Failed to create course' };
@@ -549,6 +550,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       showToast(res.alreadyExisted ? `Course ${finalCode} already exists — selected` : `Course ${finalCode} created on GitHub`, res.alreadyExisted ? 'info' : 'success');
       return { success: true };
     } catch { return { success: false, error: 'Network error' }; }
+    finally { useAppStore.getState().setOperationLabel(''); }
   }
 
   async function handleSubmit() {
