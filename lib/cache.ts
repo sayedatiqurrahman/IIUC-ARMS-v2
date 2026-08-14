@@ -146,6 +146,10 @@ export function forceResetApp(): void {
     localStorage.clear();
   } catch {}
 
+  try {
+    document.cookie = 'qsis_profile_cache=; path=/; max-age=0; SameSite=Lax';
+  } catch {}
+
   if ('caches' in window) {
     deleteCachesExceptImmutable();
   }

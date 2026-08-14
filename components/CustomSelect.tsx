@@ -144,7 +144,7 @@ export default function CustomSelect({ options, value, onChange, placeholder = '
     : 'py-2.5 px-3 text-[0.85rem] rounded-xl';
 
   return (
-    <div ref={ref} className={`relative ${className}`}>
+    <div ref={ref} className={`relative min-w-0 ${className}`}>
       <button
         type="button"
         onClick={() => setOpen(!open)}

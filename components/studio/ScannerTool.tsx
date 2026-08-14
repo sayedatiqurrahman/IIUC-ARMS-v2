@@ -38,7 +38,7 @@ export default function ScannerTool() {
             <span className="text-[0.72rem] font-medium text-dark-text2">Scan filter</span>
             <span className="text-[0.6rem] text-dark-text3">{FILTER_HINTS[filter]}</span>
           </div>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
             {(Object.keys(FILTER_LABELS) as FilterMode[]).map((m) => (
               <button
                 key={m}
@@ -68,6 +68,7 @@ export default function ScannerTool() {
   return (
     <DocumentScanner
       filterMode={filter}
+      fileBaseName="ARMS_DOC_SCANNER"
       onResult={(file) => {
         downloadFile(file);
         showToast(`Saved ${file.name}`, 'success');

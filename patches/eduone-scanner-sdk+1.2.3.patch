@@ -1,0 +1,58 @@
+diff --git a/node_modules/eduone-scanner-sdk/dist/index.mjs b/node_modules/eduone-scanner-sdk/dist/index.mjs
+index 27c8a50..4a53777 100644
+--- a/node_modules/eduone-scanner-sdk/dist/index.mjs
++++ b/node_modules/eduone-scanner-sdk/dist/index.mjs
+@@ -1232,7 +1232,7 @@ console.error = function(...args) {
+ var cv = null;
+ var isOpenCVReady = false;
+ 
+-const MIN_CONTOUR_AREA_RATIO = 0.05;
++const MIN_CONTOUR_AREA_RATIO = 0.03;
+ const initStartTime = Date.now();
+ 
+ // ---- OpenCV Module setup ----
+@@ -2627,13 +2627,13 @@ var _DocumentScanner = class _DocumentScanner {
+       const docArea = getQuadArea(result.corners);
+       const frameArea = this.procWidth * this.procHeight;
+       const areaRatio = docArea / frameArea;
+-      const TOO_FAR_RATIO_THRESHOLD = 0.24;
++      const TOO_FAR_RATIO_THRESHOLD = 0.16;
+       this.isTooFar = areaRatio < TOO_FAR_RATIO_THRESHOLD;
+       this.isBlurry = result.blurScore <= 10;
+       if (!this.targetCorners) {
+         this.targetCorners = mappedCorners;
+       } else {
+-        const alpha = 0.4;
++        const alpha = 0.5;
+         let maxDist = 0;
+         for (let i = 0; i < 4; i++) {
+           const dist = Math.hypot(mappedCorners[i].x - this.targetCorners[i].x, mappedCorners[i].y - this.targetCorners[i].y);
+@@ -2656,7 +2656,7 @@ var _DocumentScanner = class _DocumentScanner {
+           }
+         }
+       }
+-      const STEADY_THRESHOLD = 2;
++      const STEADY_THRESHOLD = 1;
+       const isSteady = this.steadyCameraFrames >= STEADY_THRESHOLD && !this.isTooFar;
+       this.isTargetSteady = isSteady;
+       if (this.config.autoCapture && isSteady) {
+@@ -2665,8 +2665,8 @@ var _DocumentScanner = class _DocumentScanner {
+           if (result.blurScore > 10) {
+             this.stableFramesCount++;
+             this.isTargetStabilizing = true;
+-            this.targetStabilityProgress = Math.min(this.stableFramesCount / 3, 1);
+-            if (this.stableFramesCount >= 3) {
++            this.targetStabilityProgress = Math.min(this.stableFramesCount / 2, 1);
++            if (this.stableFramesCount >= 2) {
+               this.stableFramesCount = 0;
+               this.lastCapturedTimestamp = nowMs;
+               const W = this.overlayCanvas?.width || 0;
+@@ -2694,7 +2694,7 @@ var _DocumentScanner = class _DocumentScanner {
+       this.targetStabilityProgress = 0;
+       this.isTooFar = false;
+       this.isBlurry = false;
+-      if (this.consecutiveLostFrames > 4) {
++      if (this.consecutiveLostFrames > 8) {
+         this.hasDetection = false;
+         this.targetCorners = null;
+         this.borderAnimProgress = 0;

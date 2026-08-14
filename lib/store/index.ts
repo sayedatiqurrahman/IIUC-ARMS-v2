@@ -10,8 +10,50 @@ import { createTreeHelpers } from './tree-helpers';
 
 export type { View, Breadcrumb, ViewerItem, Semester, Category, Profile, AppState } from './types';
 
+const PROFILE_LS_KEY = 'qsis-profile-cache';
+const PROFILE_COOKIE = 'qsis_profile_cache';
+
+function readProfileCache(): { profile: Profile; githubToken: string } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(PROFILE_LS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.profile) {
+        return { profile: { ...defaultProfile, ...parsed.profile }, githubToken: parsed.githubToken || '' };
+      }
+    }
+    const cookieRaw = document.cookie.split('; ').find(c => c.startsWith(`${PROFILE_COOKIE}=`));
+    if (cookieRaw) {
+      const parsed = JSON.parse(decodeURIComponent(cookieRaw.slice(cookieRaw.indexOf('=') + 1)));
+      if (parsed && parsed.profile) {
+        return { profile: { ...defaultProfile, ...parsed.profile }, githubToken: '' };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function writeProfileCache(profile: Profile, githubToken: string) {
+  if (typeof document === 'undefined') return;
+  try {
+    localStorage.setItem(PROFILE_LS_KEY, JSON.stringify({ profile, githubToken }));
+  } catch {}
+  try {
+    const { githubToken: _ignored, ...meta } = profile;
+    document.cookie = `${PROFILE_COOKIE}=${encodeURIComponent(JSON.stringify({ profile: { ...meta, githubToken: '' } }))}; path=/; max-age=2592000; SameSite=Lax`;
+  } catch {}
+}
+
+function clearProfileCache() {
+  if (typeof document === 'undefined') return;
+  try { localStorage.removeItem(PROFILE_LS_KEY); } catch {}
+  try { document.cookie = `${PROFILE_COOKIE}=; path=/; max-age=0; SameSite=Lax`; } catch {}
+}
+
 export const useAppStore = create<AppState>((set, get) => {
   const treeHelpers = createTreeHelpers(get as () => AppState);
+  const cached = readProfileCache();
 
   return {
     tree: [],
@@ -138,8 +180,8 @@ export const useAppStore = create<AppState>((set, get) => {
     routineData: [],
     routineLoading: false,
 
-    profile: { ...defaultProfile },
-    profileLoaded: false,
+    profile: cached?.profile ?? { ...defaultProfile },
+    profileLoaded: !!cached,
     loadProfile: async () => {
       try {
         const res = await fetch('/api/profile');
@@ -153,11 +195,19 @@ export const useAppStore = create<AppState>((set, get) => {
           if (data.githubInstallationId) updates.githubInstallationId = data.githubInstallationId;
           if (data.githubLogin) updates.githubLogin = data.githubLogin;
           if (data.githubAvatar) updates.githubAvatar = data.githubAvatar;
+          writeProfileCache(updates.profile, data.githubToken || '');
           set(updates);
         } else {
           const err = await res.json().catch(() => ({ error: res.statusText }));
+          if (res.status === 401 || res.status === 403) {
+            clearProfileCache();
+            set({ profile: { ...defaultProfile }, profileLoaded: true, githubToken: '' });
+          } else {
+            set({ profileLoaded: true });
+          }
         }
       } catch {
+        set({ profileLoaded: true });
       }
     },
     updateProfile: async (p) => {
@@ -173,7 +223,9 @@ export const useAppStore = create<AppState>((set, get) => {
         });
         if (res.ok) {
           const data = await res.json();
-          set({ profile: { ...defaultProfile, ...data }, profileLoaded: true });
+          const merged = { ...defaultProfile, ...data };
+          writeProfileCache(merged, data.githubToken || '');
+          set({ profile: merged, profileLoaded: true });
         } else {
           const err = await res.json().catch(() => ({ error: res.statusText }));
           set({ profile: snapshot });
@@ -187,7 +239,10 @@ export const useAppStore = create<AppState>((set, get) => {
       }
     },
 
-    githubToken: '',
+    githubToken: cached?.githubToken ?? '',
+    githubLogin: cached?.profile.githubLogin || '',
+    githubInstallationId: cached?.profile.githubInstallationId || '',
+    githubAvatar: cached?.profile.githubAvatar || '',
     setGithubToken: (token: string) => set({ githubToken: token }),
 
     loadTree: async (token?: string) => {

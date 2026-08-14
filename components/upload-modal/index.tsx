@@ -11,7 +11,6 @@ import { UploadForm, CreateCourseModal, type CreateCourseResult } from '@/compon
 import { CURRENT_YEAR, CURRENT_SEASON, isPdf, isImage, isDocsOnly } from '@/components/upload/types';
 import type { CourseGroup, FileWithMeta, Link, UploadModalProps } from '@/components/upload/types';
 import DocumentScanner, { type CapturedPage, warmupScannerEngine } from '@/components/scanner/DocumentScanner';
-import { FILTER_LABELS, FILTER_HINTS, type FilterMode } from '@/lib/image-enhance';
 import { compressUploadFile } from '@/lib/compress';
 import { buildSearchablePdf } from '@/lib/ocr';
 
@@ -139,12 +138,12 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerCourseId, setScannerCourseId] = useState<number | null>(null);
-  const [scannerFilter, setScannerFilter] = useState<FilterMode>('enhance');
+  const [scannerBaseName, setScannerBaseName] = useState('');
 
   const [patInputToken, setPatInputToken] = useState('');
   const [patSaving, setPatSaving] = useState(false);
 
-  const isLoggedIn = !!(session as any)?.user;
+  const isLoggedIn = status === 'authenticated' || (!!(session as any)?.user && status !== 'loading');
   const treeLength = useAppStore(s => s.tree.length);
 
   const existingCourses = useMemo(() => {
@@ -434,6 +433,13 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   }
 
   function openScanner(courseId: number) {
+    const course = courses.find(c => c.id === courseId);
+    const code = (course?.selectedCourseCode || '').trim();
+    const session = (course?.midFinal || course?.examSession || CURRENT_SEASON || '').trim();
+    const year = String(CURRENT_YEAR);
+    const author = (profile?.name || email.split('@')[0] || 'Unknown').trim();
+    const parts = [code, session, year, author, 'ARMS_DOC_SCANNER'].map(p => p.replace(/[<>:"/\\|?*]/g, '')).filter(Boolean);
+    setScannerBaseName(parts.join(' '));
     setScannerCourseId(courseId);
     setScannerOpen(true);
   }
@@ -723,28 +729,6 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           </button>
         </div>
 
-        <div className="px-5 py-2.5 border-b border-dark-border bg-dark-bg/40">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[0.7rem] font-medium text-dark-text2">Scan filter</span>
-            <span className="text-[0.6rem] text-dark-text3">{FILTER_HINTS[scannerFilter]}</span>
-          </div>
-          <div className="grid grid-cols-4 gap-1.5">
-            {(Object.keys(FILTER_LABELS) as FilterMode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => setScannerFilter(m)}
-                className={`px-2 py-1.5 rounded-lg text-[0.7rem] font-semibold border cursor-pointer transition-all ${
-                  scannerFilter === m
-                    ? 'bg-qsis/15 text-qsis border-qsis/40'
-                    : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-dark-text'
-                }`}
-              >
-                {FILTER_LABELS[m]}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <UploadForm
             session={session} profile={profile} githubToken={githubToken} setGithubToken={setGithubToken}
@@ -763,7 +747,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             mergeDialogCourseId={mergeDialogCourseId} mergeImages={mergeImages} mergeSession={mergeSession} mergeYear={mergeYear}
             mergeMerging={mergeMerging} mergeOcr={mergeOcr} setMergeOcr={setMergeOcr} handleMergeImages={handleMergeImages} dismissMerge={() => { setMergeDialogCourseId(null); setMergeImages([]); setMergeOcr(false); }}
             onAddMarkdown={handleAddMarkdown}
-            isLoggedIn={isLoggedIn} onLogin={onLogin} onClose={onClose}
+            isLoggedIn={isLoggedIn} sessionLoading={status === 'loading' && !isLoggedIn} onLogin={onLogin} onClose={onClose}
           />
         </div>
       </div>
@@ -774,7 +758,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         onCancel={() => { setScannerOpen(false); setScannerCourseId(null); }}
         onResult={handleScannerResult}
         docOnly={category === config.categories.notes.folder}
-        filterMode={scannerFilter}
+        fileBaseName={scannerBaseName}
+        filterMode="enhance"
       />
     )}
     {createCourseFor !== null && (

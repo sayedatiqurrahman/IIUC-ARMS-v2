@@ -60,6 +60,7 @@ interface UploadFormProps {
   dismissMerge: () => void;
   onAddMarkdown: (courseId: number, file: File) => void;
   isLoggedIn: boolean;
+  sessionLoading: boolean;
   onLogin: () => void;
   onClose: () => void;
 }
@@ -80,7 +81,7 @@ export default function UploadForm({
   mergeDialogCourseId, mergeImages, mergeSession, mergeYear,
   mergeMerging, mergeOcr, setMergeOcr, handleMergeImages, dismissMerge,
   onAddMarkdown,
-  isLoggedIn, onLogin, onClose,
+  isLoggedIn, sessionLoading, onLogin, onClose,
 }: UploadFormProps) {
   const email = (session as any)?.user?.email || profile.email || '';
   const [chooserCourseId, setChooserCourseId] = useState<number | null>(null);
@@ -226,6 +227,17 @@ export default function UploadForm({
   }
 
   if (!isLoggedIn) {
+    if (sessionLoading) {
+      return (
+        <div className="text-center py-10">
+          <div className="mb-4">
+            <i className="fas fa-spinner fa-spin text-3xl text-qsis"></i>
+          </div>
+          <h3 className="text-[1rem] font-bold text-dark-text mb-2">Checking your session…</h3>
+          <p className="text-[0.82rem] text-dark-text2">Warming up your profile, one moment please.</p>
+        </div>
+      );
+    }
     return (
       <div className="text-center py-10">
         <div className="mb-4">
@@ -323,8 +335,8 @@ export default function UploadForm({
           {!noCoursesAvailable ? (
             <div className="mb-2">
               <label className="text-[0.72rem] text-dark-text2 block mb-1">Select Course *</label>
-              <div className="flex gap-2">
-                <div className="flex-1" data-course-select>
+              <div className="grid grid-cols-[minmax(0,70%)_minmax(0,1fr)] gap-2 sm:flex">
+                <div className="min-w-0 sm:flex-1" data-course-select>
                   <CustomSelect
                     value={course.selectedCourseCode}
                     onChange={v => {
@@ -341,7 +353,7 @@ export default function UploadForm({
                   />
                 </div>
                 <button
-                  className="px-3 py-1.5 rounded-lg border border-qsis/40 bg-qsis/5 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors flex items-center gap-1 whitespace-nowrap"
+                  className="w-full sm:w-auto shrink-0 px-3 py-1.5 rounded-lg border border-qsis/40 bg-qsis/5 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors flex items-center justify-center gap-1 whitespace-nowrap"
                   onClick={() => setCreateCourseFor(course.id)}
                   disabled={!department || !semester}
                   title="Create new course"

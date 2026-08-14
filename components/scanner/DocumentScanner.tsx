@@ -38,6 +38,9 @@ interface DocumentScannerProps {
   docOnly?: boolean;
   // Build the multi-page output as a searchable PDF via OCR. Defaults to false.
   ocrEnabled?: boolean;
+  // Base name (no extension) for the exported scan, e.g. "CSE-2321 Mid 2026
+  // John Doe ARMS_DOC_SCANNER". Falls back to "scan-<timestamp>" when empty.
+  fileBaseName?: string;
   // Post-capture filter applied to every scanned page. Defaults to 'enhance',
   // which sharpens + boosts contrast so small text stays readable.
   filterMode?: FilterMode;
@@ -98,12 +101,13 @@ export default function DocumentScanner({
   onResult,
   docOnly = false,
   ocrEnabled = false,
+  fileBaseName = '',
   filterMode = 'enhance',
 }: DocumentScannerProps) {
   // Keep the latest callbacks/options reachable from the SDK's async callbacks
   // without re-launching the scanner on every parent re-render.
-  const cbRef = useRef({ onDone, onCancel, onResult, docOnly, ocrEnabled });
-  cbRef.current = { onDone, onCancel, onResult, docOnly, ocrEnabled };
+  const cbRef = useRef({ onDone, onCancel, onResult, docOnly, ocrEnabled, fileBaseName });
+  cbRef.current = { onDone, onCancel, onResult, docOnly, ocrEnabled, fileBaseName };
 
   const [phase, setPhase] = useState<Phase>('capture');
   const [mode, setMode] = useState<ScanMode>('auto');
@@ -299,7 +303,7 @@ export default function DocumentScanner({
     if (busyRef.current || !pages.length) return;
     setBusy(true);
     try {
-      const { onDone, onCancel, onResult, docOnly, ocrEnabled } = cbRef.current;
+      const { onDone, onCancel, onResult, docOnly, ocrEnabled, fileBaseName } = cbRef.current;
       const converted = await Promise.all(
         pages.map(async (p) => {
           const url = filteredMap[p.id] ?? p.raw;
@@ -309,9 +313,11 @@ export default function DocumentScanner({
         })
       );
 
+      const baseName = fileBaseName || `scan-${stamp()}`;
+
       if (converted.length === 1 && !docOnly) {
         const { blob } = converted[0];
-        const file = new File([blob], `scan-${stamp()}.jpg`, { type: 'image/jpeg' });
+        const file = new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
         onResult?.(file, false);
         onDone([]);
         return;
@@ -322,7 +328,7 @@ export default function DocumentScanner({
       const file = await buildSearchablePdf(
         converted.map((c) => ({ blob: c.blob, width: c.width, height: c.height })),
         usedOcr,
-        `scan-${stamp()}.pdf`
+        `${baseName}.pdf`
       );
       onResult?.(file, usedOcr);
       onDone([]);

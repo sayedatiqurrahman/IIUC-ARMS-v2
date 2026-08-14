@@ -2,11 +2,12 @@
 // The scanner SDK only returns a perspective-cropped colour image; these
 // filters make scanned text — especially small print — crisp and readable.
 
-export type FilterMode = 'original' | 'bw' | 'enhance' | 'balance';
+export type FilterMode = 'original' | 'bw' | 'document' | 'enhance' | 'balance';
 
 export const FILTER_LABELS: Record<FilterMode, string> = {
   original: 'Original',
   bw: 'B&W',
+  document: 'Doc',
   enhance: 'Enhance',
   balance: 'Balance',
 };
@@ -14,6 +15,7 @@ export const FILTER_LABELS: Record<FilterMode, string> = {
 export const FILTER_HINTS: Record<FilterMode, string> = {
   original: 'Raw cropped image',
   bw: 'Black & white — best for small text',
+  document: 'Crisp black text on white — typed-document look',
   enhance: 'Sharpened + high contrast',
   balance: 'Auto colour / brightness fix',
 };
@@ -136,6 +138,22 @@ function gammaDarken(d: Uint8ClampedArray, gamma: number) {
   }
 }
 
+// Adaptive threshold: each pixel is turned pure black or pure white based on
+// the mean of its neighbourhood, so shadows and uneven lighting collapse into
+// a clean white page with crisp black text — the classic "typed document" look.
+function adaptiveBinarize(d: Uint8ClampedArray, w: number, h: number) {
+  const lum = new Float32Array(w * h);
+  for (let p = 0, i = 0; i < d.length; i += 4, p++) {
+    lum[p] = (d[i] + d[i + 1] + d[i + 2]) / 3;
+  }
+  const radius = Math.max(8, Math.round(Math.min(w, h) / 40));
+  const mean = boxBlur(lum, w, h, radius);
+  for (let p = 0, i = 0; i < d.length; i += 4, p++) {
+    const v = lum[p] > mean[p] * 0.85 ? 255 : 0;
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+}
+
 export async function applyFilter(dataUrl: string, mode: FilterMode): Promise<string> {
   if (mode === 'original') return dataUrl;
   const img = await loadImage(dataUrl);
@@ -158,6 +176,8 @@ export async function applyFilter(dataUrl: string, mode: FilterMode): Promise<st
     gammaDarken(d, 2.6);
     adjustContrast(d, 1.1);
     unsharp(d, w, h, 0.9);
+  } else if (mode === 'document') {
+    adaptiveBinarize(d, w, h);
   } else if (mode === 'enhance') {
     toGray(d);
     adjustContrast(d, 1.3);

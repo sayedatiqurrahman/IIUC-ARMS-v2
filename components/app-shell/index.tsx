@@ -52,6 +52,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
   const handleCheckUpdate = async () => {
     const { showToast } = await import('@/lib/utils');
     showToast('Checking for updates...', 'info');
