@@ -25,6 +25,14 @@ const APPS = [
     title: 'Whiteboard',
     sub: 'Full drawing canvas — shapes, arrows, freehand, text & the magic laser. Save drafts on your device and resume them anytime.',
   },
+  {
+    href: '/studio/creative-hub',
+    icon: 'fas fa-palette',
+    bg: 'bg-indigo-500/15',
+    color: 'text-indigo-400',
+    title: 'Creative Hub',
+    sub: 'Design templates, thesis covers, assignment covers & community gallery. Save locally, publish to GitHub.',
+  },
 ];
 
 export default function StudioPage() {
