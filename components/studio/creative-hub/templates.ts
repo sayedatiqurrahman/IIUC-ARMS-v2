@@ -1,5 +1,6 @@
 import type { FieldSpec, HubTheme } from './types';
 import type { Profile } from '@/lib/store/types';
+import { getAllDepartments, getDepartmentDisplayName } from '@/lib/departments';
 
 // A4 page in CSS px @ 96dpi = 794 x 1123. The design canvas is ALWAYS rendered
 // at the chosen page size — it is only scaled down visually to fit the screen,
@@ -39,6 +40,7 @@ const THEME_HTML: Record<string, string> = {
 <div style="position:absolute;top:0;left:0;right:0;height:16px;background:linear-gradient(90deg,#0f766e,#059669,#22c55e);"></div>
 <div style="position:absolute;top:16px;left:0;right:0;height:6px;background:#14532d;"></div>
 <div style="position:absolute;top:64px;left:0;right:0;text-align:center;">
+<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;object-fit:contain;margin:0 auto 12px;display:block;"/>
 <div style="font-size:22px;font-weight:bold;color:#0f766e;letter-spacing:1px;" data-field-type="university_name">International Islamic University Chittagong</div>
 <div style="font-size:13px;color:#374151;margin-top:6px;" data-field-type="department">Department of Qur'anic Sciences and Islamic Studies</div>
 <div style="width:180px;height:3px;background:#059669;margin:16px auto;"></div></div>
@@ -60,6 +62,7 @@ const THEME_HTML: Record<string, string> = {
 <div style="position:absolute;top:0;left:0;right:0;height:16px;background:linear-gradient(90deg,#0f766e,#059669,#22c55e);"></div>
 <div style="position:absolute;top:16px;left:0;right:0;height:6px;background:#14532d;"></div>
 <div style="position:absolute;top:64px;left:0;right:0;text-align:center;">
+<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;object-fit:contain;margin:0 auto 12px;display:block;"/>
 <div style="font-size:24px;font-weight:bold;color:#0f766e;" data-field-type="university_name">الجامعة الإسلامية العالمية تشيتاغونغ</div>
 <div style="font-size:15px;color:#374151;margin-top:8px;" data-field-type="department">قسم العلوم القرآنية والدراسات الإسلامية</div>
 <div style="width:180px;height:3px;background:#059669;margin:16px auto;"></div></div>
@@ -78,9 +81,11 @@ const THEME_HTML: Record<string, string> = {
 
   'assignment-a-english': `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0">
 <div style="width:794px;height:1123px;background:#ffffff;color:#1f2937;font-family:'Segoe UI',Arial,sans-serif;position:relative;overflow:hidden;box-sizing:border-box;">
-<div style="height:130px;background:linear-gradient(120deg,#1e40af,#2563eb);color:#fff;padding:28px 56px;box-sizing:border-box;">
+<div style="height:130px;background:linear-gradient(120deg,#1e40af,#2563eb);color:#fff;padding:24px 56px;box-sizing:border-box;display:flex;align-items:center;gap:20px;">
+<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;border-radius:10px;background:#ffffff;padding:8px;box-sizing:border-box;object-fit:contain;flex-shrink:0;"/>
+<div style="flex:1;min-width:0;">
 <div style="font-size:13px;letter-spacing:5px;text-transform:uppercase;opacity:.85;" data-field-type="university_name">International Islamic University Chittagong</div>
-<div style="font-size:20px;font-weight:700;margin-top:10px;">Department of <span data-field-type="department">Qur'anic Sciences and Islamic Studies</span></div></div>
+<div style="font-size:20px;font-weight:700;margin-top:10px;">Department of <span data-field-type="department">Qur'anic Sciences and Islamic Studies</span></div></div></div>
 <div style="position:absolute;top:130px;left:0;right:0;height:8px;background:#f59e0b;"></div>
 <div style="padding:70px 56px 0 56px;">
 <div style="display:inline-block;padding:6px 22px;border-radius:999px;background:#dbeafe;color:#1e40af;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">Assignment</div>
@@ -97,9 +102,11 @@ const THEME_HTML: Record<string, string> = {
 
   'assignment-a-arabic': `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0">
 <div style="width:794px;height:1123px;background:#ffffff;color:#1f2937;font-family:'Segoe UI','Traditional Arabic',Arial,sans-serif;position:relative;overflow:hidden;box-sizing:border-box;">
-<div style="height:130px;background:linear-gradient(120deg,#1e40af,#2563eb);color:#fff;padding:28px 56px;box-sizing:border-box;">
+<div style="height:130px;background:linear-gradient(120deg,#1e40af,#2563eb);color:#fff;padding:24px 56px;box-sizing:border-box;display:flex;align-items:center;gap:20px;">
+<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;border-radius:10px;background:#ffffff;padding:8px;box-sizing:border-box;object-fit:contain;flex-shrink:0;"/>
+<div style="flex:1;min-width:0;">
 <div style="font-size:14px;letter-spacing:3px;opacity:.85;" data-field-type="university_name">الجامعة الإسلامية العالمية تشيتاغونغ</div>
-<div style="font-size:21px;font-weight:700;margin-top:10px;"><span data-field-type="department">قسم العلوم القرآنية والدراسات الإسلامية</span></div></div>
+<div style="font-size:21px;font-weight:700;margin-top:10px;"><span data-field-type="department">قسم العلوم القرآنية والدراسات الإسلامية</span></div></div></div>
 <div style="position:absolute;top:130px;left:0;right:0;height:8px;background:#f59e0b;"></div>
 <div style="padding:70px 56px 0 56px;">
 <div style="display:inline-block;padding:6px 22px;border-radius:999px;background:#dbeafe;color:#1e40af;font-size:14px;font-weight:700;letter-spacing:2px;">واجب</div>
@@ -118,7 +125,9 @@ const THEME_HTML: Record<string, string> = {
 <div style="width:794px;height:1123px;background:#fdfcfa;color:#1c1917;font-family:'Palatino','Georgia',serif;position:relative;overflow:hidden;box-sizing:border-box;">
 <div style="position:absolute;inset:28px;border:2px solid #1c1917;border-radius:2px;"></div>
 <div style="position:absolute;inset:38px;border:1px solid #1c1917;border-radius:1px;"></div>
-<div style="position:absolute;top:110px;left:70px;right:70px;text-align:center;">
+<div style="position:absolute;top:60px;left:0;right:0;text-align:center;">
+<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:80px;height:80px;object-fit:contain;margin:0 auto 10px;display:block;"/></div>
+<div style="position:absolute;top:190px;left:70px;right:70px;text-align:center;">
 <div style="font-size:13px;letter-spacing:6px;text-transform:uppercase;color:#a16207;" data-field-type="university_name">International Islamic University Chittagong</div>
 <div style="width:70px;height:1px;background:#a16207;margin:18px auto;"></div></div>
 <div style="position:absolute;top:330px;left:90px;right:90px;text-align:center;">
@@ -140,7 +149,9 @@ const THEME_HTML: Record<string, string> = {
 <div style="width:794px;height:1123px;background:#fdfcfa;color:#1c1917;font-family:'Palatino','Amiri','Traditional Arabic',serif;position:relative;overflow:hidden;box-sizing:border-box;">
 <div style="position:absolute;inset:28px;border:2px solid #1c1917;border-radius:2px;"></div>
 <div style="position:absolute;inset:38px;border:1px solid #1c1917;border-radius:1px;"></div>
-<div style="position:absolute;top:110px;left:70px;right:70px;text-align:center;">
+<div style="position:absolute;top:60px;left:0;right:0;text-align:center;">
+<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:80px;height:80px;object-fit:contain;margin:0 auto 10px;display:block;"/></div>
+<div style="position:absolute;top:190px;left:70px;right:70px;text-align:center;">
 <div style="font-size:14px;letter-spacing:4px;color:#a16207;" data-field-type="university_name">الجامعة الإسلامية العالمية تشيتاغونغ</div>
 <div style="width:70px;height:1px;background:#a16207;margin:18px auto;"></div></div>
 <div style="position:absolute;top:330px;left:90px;right:90px;text-align:center;">
@@ -282,11 +293,21 @@ export interface AutoFillRule {
 export const AUTO_FILL_RULES: AutoFillRule[] = [
   { type: 'student_name', label: 'Student Name', get: (p) => p.name || '' },
   { type: 'student_id', label: 'Student ID', get: (p) => p.universityId || '' },
-  { type: 'department', label: 'Department', get: (p) => p.department || '' },
+  { type: 'department', label: 'Department', get: (p) => getDepartmentDisplayName(p.department) || '' },
   { type: 'university_name', label: 'University Name', get: () => 'International Islamic University Chittagong' },
   { type: 'semester_year', label: 'Session / Year', get: (p) => p.semester || '' },
   { type: 'email', label: 'Email', get: (p) => p.email || '' },
 ];
+
+// Options for a department field in the fill-up form. Values are the FULL
+// department name so official papers always print the full form, while the
+// label shows "Short — Full name" so it is easy to pick.
+export function getDepartmentFieldOptions(): { value: string; label: string }[] {
+  return getAllDepartments().map(({ department }) => ({
+    value: department.name,
+    label: `${department.shortName} — ${department.name}`,
+  }));
+}
 
 // Apply field values to an HTML string and return the re-serialized markup.
 // Falls back to a plain string replace when DOMParser is unavailable.
@@ -339,4 +360,118 @@ export function buildCommunityFolder(name: string, email: string, universityId: 
   const metric = snakeCasePart(universityId || email.split('@')[0] || 'student');
   const sn = String(designSn).padStart(2, '0');
   return `${fullName}-${metric}@${snakeCasePart(email)}_design_${sn}`;
+}
+
+// ─── Template creation (HTML / Markdown) ────────────────────────────────────
+//
+// Anyone can publish a template. The form connects to the design through
+// `data-field-type` attributes:
+//
+//   <div data-field-type="student_name">Your Name Here</div>
+//
+// In Markdown, the same placeholder is written inline:
+//
+//   Student: {{student_name}}
+//
+// and it becomes a <span data-field-type="student_name">Student Name</span>
+// inside an A4-styled page.
+
+const MD_REPLACEMENTS: [RegExp, (m: string, a: string, b?: string, c?: string) => string][] = [
+  [/^###### (.*)$/gm, (_m, a) => `<h6>${a}</h6>`],
+  [/^##### (.*)$/gm, (_m, a) => `<h5>${a}</h5>`],
+  [/^#### (.*)$/gm, (_m, a) => `<h4>${a}</h4>`],
+  [/^### (.*)$/gm, (_m, a) => `<h3>${a}</h3>`],
+  [/^## (.*)$/gm, (_m, a) => `<h2>${a}</h2>`],
+  [/^# (.*)$/gm, (_m, a) => `<h1>${a}</h1>`],
+  [/^---$/gm, () => `<hr/>`],
+  [/^\* (.*)$/gm, (_m, a) => `<li>${a}</li>`],
+  [/^- (.*)$/gm, (_m, a) => `<li>${a}</li>`],
+];
+
+function mdInline(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.*?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+}
+
+export function templateMarkdownToHtml(md: string, pageSize: string = 'a4'): string {
+  const size = PAGE_SIZES[pageSize] || PAGE_SIZES.a4;
+  let body = md.replace(/\r\n/g, '\n');
+
+  // Field placeholders: {{field_type}} or {{field_type:Custom Label}}
+  body = body.replace(/\{\{\s*([a-z0-9_]+)\s*(?::([^}]+))?\s*\}\}/gi, (_m, type: string, label?: string) => {
+    const t = type.toLowerCase().trim();
+    const lb = (label || fieldLabel(t)).trim();
+    return `<span data-field-type="${t}">${escapeXml(lb)}</span>`;
+  });
+
+  for (const [re, fn] of MD_REPLACEMENTS) body = body.replace(re, fn);
+
+  // Paragraphs / list grouping.
+  const lines = body.split('\n');
+  const out: string[] = [];
+  let inList = false;
+  let inTable = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const t = line.trim();
+    if (!t) {
+      if (inList) {
+        out.push('</ul>');
+        inList = false;
+      }
+      if (inTable) {
+        out.push('</table>');
+        inTable = false;
+      }
+      continue;
+    }
+    if (t.startsWith('<li>')) {
+      if (!inList) {
+        out.push('<ul>');
+        inList = true;
+      }
+      out.push(mdInline(t));
+      continue;
+    }
+    if (inList) {
+      out.push('</ul>');
+      inList = false;
+    }
+    if (t.startsWith('|') && t.endsWith('|')) {
+      const cells = t.slice(1, -1).split('|').map((c) => c.trim());
+      if (/^[\-: ]+$/.test(cells.join(''))) continue; // separator row
+      if (!inTable) {
+        out.push('<table><thead><tr>' + cells.map((c) => `<th>${mdInline(c)}</th>`).join('') + '</tr></thead><tbody>');
+        inTable = true;
+      } else {
+        out.push('<tr>' + cells.map((c) => `<td>${mdInline(c)}</td>`).join('') + '</tr>');
+      }
+      continue;
+    }
+    if (inTable) {
+      out.push('</tbody></table>');
+      inTable = false;
+    }
+    if (/^<(h\d|hr|\/ul|\/ol|ul|ol|blockquote)/.test(t)) {
+      out.push(t);
+      continue;
+    }
+    out.push(`<p>${mdInline(t)}</p>`);
+  }
+  if (inList) out.push('</ul>');
+  if (inTable) out.push('</tbody></table>');
+
+  const content = out.join('\n');
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0">
+<div style="width:${size.width}px;height:${size.height}px;background:#ffffff;color:#1f2937;font-family:'Georgia','Times New Roman',serif;position:relative;overflow:hidden;box-sizing:border-box;padding:64px 56px;">
+<div style="text-align:center;margin-bottom:28px;">
+<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;object-fit:contain;"/>
+<div style="font-size:18px;font-weight:bold;color:#0f766e;margin-top:10px;" data-field-type="university_name">International Islamic University Chittagong</div>
+</div>
+<div style="font-size:14px;line-height:1.65;color:#1f2937;">${content}</div>
+</div></body></html>`;
 }

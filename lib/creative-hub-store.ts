@@ -11,6 +11,7 @@ export interface CreativeHubDraft {
   mode: 'form-fill' | 'auto-fill' | 'manual';
   fields: Record<string, string>;
   layers: unknown; // fabric canvas JSON (null for HTML designs)
+  fieldMappings?: Record<string, string>; // objectId -> field type (manual designs)
   html: string; // raw design HTML (from template or published)
   metadata: Record<string, string>;
   pageSize: string;

@@ -84,6 +84,16 @@ export async function POST(req: NextRequest) {
       { path: `${folder}/thumbnail.webp`, content: String(body.thumbnailBase64 || '') },
     ];
 
+    // Extra binary/text assets (e.g. a flattened background image for manual
+    // designs). Paths must stay inside the design folder.
+    if (Array.isArray(body.assets)) {
+      for (const asset of body.assets) {
+        const assetPath = String(asset?.path || '').replace(/\\/g, '/');
+        if (!assetPath || assetPath.includes('..') || assetPath.startsWith('/')) continue;
+        files.push({ path: `${folder}/${assetPath}`, content: String(asset?.content || '') });
+      }
+    }
+
     // Resolve a token with write access to the themes repo: GitHub App bot
     // token first, then the environment token. No database is consulted.
     let token = '';

@@ -2,28 +2,42 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as fabric from 'fabric';
-import { PAGE_SIZES } from './templates';
+import { PAGE_SIZES, FIELD_LABELS } from './templates';
 
 // Full-screen manual design editor (Canva-style) built on fabric.js.
 // Renders ABOVE the app navbar (AppShell navbar is z-[100]) as a fixed
-// inset-0 overlay (z-[200]) and shows ONLY a close/back button in its top
-// bar, so returning to the drafted design is one click. The canvas is always
-// laid out at the real page size in CSS px (A4 = 794x1123 @ 96dpi) and is
-// only scaled with a CSS transform to fit the viewport, so the export is
-// pixel-perfect and text never re-wraps because of a small screen.
+// inset-0 overlay (z-[200]) and shows a close/back button in its top bar. The
+// canvas is always laid out at the real page size in CSS px (A4 = 794x1123 @
+// 96dpi) and is only scaled with a CSS transform to fit the viewport, so the
+// export is pixel-perfect and text never re-wraps because of a small screen.
+//
+// Text can be assigned a FORM FIELD (data-field-type). When the design is
+// published, those text objects become editable fields that other users can
+// fill up — this is how a manual design connects to the fill-up form.
 
 const COLORS = ['#ffffff', '#fdfcfa', '#f8fafc', '#fef2f2', '#ecfdf5', '#eff6ff', '#fefce8', '#1f2937'];
+
+const FIELD_OPTIONS = [
+  { value: '', label: '— Not a form field —' },
+  ...Object.entries(FIELD_LABELS).map(([value, label]) => ({ value, label })),
+];
 
 interface CanvasEditorProps {
   open: boolean;
   pageSize: string;
   initialLayers?: unknown;
+  backgroundImage?: string;
+  initialMappings?: Record<string, string>;
   onClose: () => void;
-  onSave: (layers: unknown) => void;
+  onSave: (payload: { layers: unknown; fieldMappings: Record<string, string> }) => void;
   onSnapshot?: (dataUrl: string) => void;
 }
 
-export default function CanvasEditor({ open, pageSize, initialLayers, onClose, onSave, onSnapshot }: CanvasEditorProps) {
+function newObjectId(): string {
+  return `obj-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export default function CanvasEditor({ open, pageSize, initialLayers, backgroundImage, initialMappings, onClose, onSave, onSnapshot }: CanvasEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -33,6 +47,9 @@ export default function CanvasEditor({ open, pageSize, initialLayers, onClose, o
   const [histIndex, setHistIndex] = useState(-1);
   const restoringRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mappingsRef = useRef<Record<string, string>>(initialMappings || {});
+  const [mappings, setMappings] = useState<Record<string, string>>(initialMappings || {});
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const size = PAGE_SIZES[pageSize] || PAGE_SIZES.a4;
 
@@ -54,7 +71,7 @@ export default function CanvasEditor({ open, pageSize, initialLayers, onClose, o
     saveTimer.current = setTimeout(() => {
       const c = canvasRefObj.current;
       if (c) {
-        onSave(c.toJSON());
+        onSave({ layers: c.toJSON(), fieldMappings: mappingsRef.current });
         onSnapshot?.(c.toDataURL({ format: 'png', multiplier: 2 }));
       }
     }, 800);
@@ -76,19 +93,55 @@ export default function CanvasEditor({ open, pageSize, initialLayers, onClose, o
       pushHistory();
       scheduleSave();
     };
-    canvas.on('object:added', markChange);
+    canvas.on('object:added', (e) => {
+      const obj = e.target as any;
+      if (obj && !obj.id) obj.set('id', newObjectId());
+      markChange();
+    });
     canvas.on('object:modified', markChange);
     canvas.on('object:removed', markChange);
+    canvas.on('selection:created', () => {
+      const a = canvas.getActiveObject();
+      setSelectedId(a && (a as any).id ? (a as any).id : null);
+    });
+    canvas.on('selection:updated', () => {
+      const a = canvas.getActiveObject();
+      setSelectedId(a && (a as any).id ? (a as any).id : null);
+    });
+    canvas.on('selection:cleared', () => setSelectedId(null));
 
     if (initialLayers && typeof initialLayers === 'object') {
       restoringRef.current = true;
       canvas
         .loadFromJSON(JSON.stringify(initialLayers))
-        .then(() => canvas.renderAll())
+        .then(() => {
+          canvas.getObjects().forEach((o: any) => {
+            if (o && !o.id) o.set('id', newObjectId());
+          });
+          canvas.renderAll();
+        })
         .finally(() => {
           restoringRef.current = false;
           pushHistory();
         });
+    } else if (backgroundImage) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        void (async () => {
+          try {
+            const bg = await fabric.FabricImage.fromURL(img.src, { crossOrigin: 'anonymous' });
+            const sx = size.width / (bg.width || size.width);
+            const sy = size.height / (bg.height || size.height);
+            bg.set({ left: 0, top: 0, scaleX: sx, scaleY: sy, originX: 'left', originY: 'top' });
+            canvas.backgroundImage = bg;
+            canvas.requestRenderAll();
+          } catch {}
+          pushHistory();
+        })();
+      };
+      img.onerror = () => pushHistory();
+      img.src = backgroundImage;
     } else {
       pushHistory();
     }
@@ -116,6 +169,19 @@ export default function CanvasEditor({ open, pageSize, initialLayers, onClose, o
     ro.observe(wrapRef.current);
     return () => ro.disconnect();
   }, [open, size.width, size.height]);
+
+  const assignField = useCallback(
+    (type: string) => {
+      if (!selectedId) return;
+      const next = { ...mappingsRef.current };
+      if (type) next[selectedId] = type;
+      else delete next[selectedId];
+      mappingsRef.current = next;
+      setMappings(next);
+      scheduleSave();
+    },
+    [selectedId, scheduleSave]
+  );
 
   const selectAll = useCallback(() => {
     const c = canvasRefObj.current;
@@ -187,23 +253,31 @@ export default function CanvasEditor({ open, pageSize, initialLayers, onClose, o
     reader.readAsDataURL(file);
   }, [size]);
 
-  const setBackground = useCallback((color: string) => {
-    const c = canvasRefObj.current;
-    if (!c) return;
-    c.backgroundColor = color;
-    c.requestRenderAll();
-    markChangeBg();
-    function markChangeBg() {
+  const setBackground = useCallback(
+    (color: string) => {
+      const c = canvasRefObj.current;
+      if (!c) return;
+      c.backgroundColor = color;
+      c.requestRenderAll();
       pushHistory();
       scheduleSave();
-    }
-  }, [pushHistory, scheduleSave]);
+    },
+    [pushHistory, scheduleSave]
+  );
 
   const deleteSelected = useCallback(() => {
     const c = canvasRefObj.current;
     if (!c) return;
     const active = c.getActiveObjects();
     if (active.length) {
+      active.forEach((o: any) => {
+        if (o && o.id && mappingsRef.current[o.id]) {
+          const next = { ...mappingsRef.current };
+          delete next[o.id];
+          mappingsRef.current = next;
+          setMappings(next);
+        }
+      });
       c.remove(...active);
       c.discardActiveObject();
       c.requestRenderAll();
@@ -247,7 +321,7 @@ export default function CanvasEditor({ open, pageSize, initialLayers, onClose, o
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) redo();
@@ -268,29 +342,60 @@ export default function CanvasEditor({ open, pageSize, initialLayers, onClose, o
 
   if (!open) return null;
 
+  const selectedIsText =
+    !!selectedId &&
+    (() => {
+      const c = canvasRefObj.current;
+      if (!c) return false;
+      const o = c.getObjects().find((x: any) => x.id === selectedId);
+      return !!o && (o.type === 'text' || o.type === 'textbox' || o.type === 'i-text');
+    })();
+
   const tools = [
-    { id: 'text', label: 'Aa', title: 'Add text', onClick: addText },
-    { id: 'rect', label: '▭', title: 'Rectangle', onClick: () => addShape('rect') },
-    { id: 'circle', label: '◯', title: 'Circle', onClick: () => addShape('circle') },
-    { id: 'line', label: '／', title: 'Line', onClick: () => addShape('line') },
-    { id: 'image', label: '🖼', title: 'Image', onClick: () => fileRef.current?.click() },
+    { id: 'text', label: 'T', title: 'Add text', onClick: addText },
+    { id: 'rect', label: '□', title: 'Rectangle', onClick: () => addShape('rect') },
+    { id: 'circle', label: '○', title: 'Circle', onClick: () => addShape('circle') },
+    { id: 'line', label: '/', title: 'Line', onClick: () => addShape('line') },
+    { id: 'image', label: '▤', title: 'Image', onClick: () => fileRef.current?.click() },
   ];
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-zinc-900/95" dir="ltr">
-      <div className="flex h-14 shrink-0 items-center justify-between bg-zinc-950 px-4">
-        <div className="flex items-center gap-2 text-sm text-zinc-300">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-3 bg-zinc-950 px-4">
+        <div className="flex min-w-0 items-center gap-2 text-sm text-zinc-300">
           <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-400" />
-          Creative Hub · Canvas Editor
-          <span className="ml-1 rounded bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-400">{PAGE_SIZES[pageSize]?.label || 'A4'}</span>
+          <span className="truncate">Creative Hub · Canvas Editor</span>
+          <span className="ml-1 shrink-0 rounded bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-400">{PAGE_SIZES[pageSize]?.label || 'A4'}</span>
         </div>
-        {/* Only a close button to return to the drafted design */}
         <button
           onClick={onClose}
-          className="rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800"
+          className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800"
         >
-          ← Close
+          Done
         </button>
+      </div>
+
+      {/* Field-mapping bar — shows when a text object is selected */}
+      <div
+        className={`flex min-h-0 shrink-0 items-center gap-3 overflow-hidden border-b border-zinc-800 bg-zinc-950 px-4 transition-all ${
+          selectedIsText ? 'py-2' : 'h-0 border-b-0'
+        }`}
+      >
+        <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Form field</span>
+        <select
+          value={selectedId ? mappings[selectedId] || '' : ''}
+          onChange={(e) => assignField(e.target.value)}
+          className="max-w-full flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-emerald-600"
+        >
+          {FIELD_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <span className="hidden shrink-0 text-[11px] text-zinc-500 md:block">
+          Assigned fields become fill-up inputs for other users when published.
+        </span>
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -300,7 +405,7 @@ export default function CanvasEditor({ open, pageSize, initialLayers, onClose, o
               key={t.id}
               title={t.title}
               onClick={t.onClick}
-              className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-lg text-zinc-200 transition hover:border-emerald-600 hover:text-emerald-400"
+              className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-200 transition hover:border-emerald-600 hover:text-emerald-400"
             >
               {t.label}
             </button>
@@ -325,9 +430,9 @@ export default function CanvasEditor({ open, pageSize, initialLayers, onClose, o
           <button
             title="Delete selected"
             onClick={deleteSelected}
-            className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-lg text-zinc-200 transition hover:border-rose-600 hover:text-rose-400"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-200 transition hover:border-rose-600 hover:text-rose-400"
           >
-            🗑
+            ×
           </button>
           <div className="my-1 h-px w-8 bg-zinc-800" />
           <button

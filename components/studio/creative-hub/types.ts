@@ -35,6 +35,7 @@ export interface IucdProject {
   pageSize: string;
   fields: Record<string, string>;
   layers: unknown;
+  fieldMappings?: Record<string, string>;
   html: string;
   metadata: Record<string, string>;
   exportedAt: string;
