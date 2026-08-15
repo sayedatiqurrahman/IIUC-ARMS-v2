@@ -801,17 +801,9 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
     >
       {/* Header */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <img
-            src="/iiuc-logo.png"
-            alt="IIUC"
-            className="h-11 w-11 rounded-full object-cover ring-2 ring-dark-border"
-            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-          />
-          <div>
-            <h2 className="text-2xl font-bold">Creative Hub</h2>
-            <p className="text-[0.82rem] text-dark-text2">Thesis, assignment cover pages &amp; academic design hub</p>
-          </div>
+        <div>
+          <h2 className="text-2xl font-bold">Creative Hub</h2>
+          <p className="text-[0.82rem] text-dark-text2">Thesis, assignment cover pages &amp; academic design hub</p>
         </div>
         <div className="flex items-center gap-2">
           <button
