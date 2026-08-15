@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Todos</title>
+<style>
+  :root {
+    --bg: #0a0f1e; --bg2: #111827; --bg3: #1a2236; --border: #2a3a5c;
+    --text: #e8edf5; --text2: #94a3b8; --text3: #64748b; --green: #22c55e; --rose: #f43f5e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; padding: 24px 18px 120px; max-width: 640px; margin: 0 auto;
+  }
+  h1 { font-size: 22px; display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
+  h1 .dot.off { background: var(--text3); }
+  .sub { font-size: 12px; color: var(--text2); margin-bottom: 20px; }
+  .add {
+    display: flex; gap: 8px; margin-bottom: 8px;
+  }
+  .add input[type=text] {
+    flex: 1; min-width: 0; background: var(--bg2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; font-size: 14px; outline: none;
+  }
+  .add input[type=text]:focus { border-color: var(--green); }
+  select, .btn {
+    background: var(--bg2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 12px; font-size: 13px; cursor: pointer; outline: none;
+  }
+  select:focus { border-color: var(--green); }
+  .btn.primary { background: var(--green); border-color: var(--green); color: #06210f; font-weight: 700; }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.icon { padding: 0; width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; border-radius: 10px; }
+
+  .list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .todo {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px;
+  }
+  .todo.running { border-color: var(--green); }
+  .todo.done { opacity: .55; }
+  .todo .check {
+    width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--text3); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 13px; color: #06210f;
+    flex: none;
+  }
+  .todo.done .check { background: var(--green); border-color: var(--green); }
+  .todo .body { flex: 1; min-width: 0; }
+  .todo .text { font-size: 14px; word-break: break-word; }
+  .todo.done .text { text-decoration: line-through; color: var(--text3); }
+  .todo .time { font-size: 12px; color: var(--text2); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .todo.running .time { color: var(--green); }
+  .todo .act { display: flex; gap: 6px; flex: none; }
+
+  /* popup modal */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none;
+    align-items: center; justify-content: center; padding: 18px; z-index: 50;
+  }
+  .overlay.show { display: flex; }
+  .popup {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 20px;
+    padding: 24px; width: 100%; max-width: 360px; text-align: center;
+  }
+  .popup .p-label { font-size: 13px; color: var(--text2); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px; }
+  .popup .p-title { font-size: 15px; font-weight: 700; margin-bottom: 18px; word-break: break-word; }
+  .popup .p-time { font-size: 64px; font-weight: 800; letter-spacing: 3px; font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+  .popup .p-time.warn { color: var(--rose); }
+  .popup .p-ctrl { display: flex; gap: 10px; justify-content: center; margin: 16px 0 12px; }
+  .popup .p-ctrl .btn { padding: 12px 22px; font-size: 15px; }
+  .popup .p-min { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
+
+  /* in-app capsule (corner, sports-score style) */
+  .capsule {
+    position: fixed; right: 14px; bottom: 14px; left: 14px; margin: 0 auto; max-width: 420px;
+    background: var(--bg3); border: 1px solid var(--green); border-radius: 999px;
+    display: none; align-items: center; gap: 10px; padding: 8px 12px;
+    box-shadow: 0 12px 30px rgba(0,0,0,.5); z-index: 40;
+  }
+  .capsule.show { display: flex; }
+  .capsule .livedot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); flex: none; }
+  .capsule.running .livedot { animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,.5); } 50% { box-shadow: 0 0 0 7px rgba(34,197,94,0); } }
+  .capsule .c-text { flex: 1; min-width: 0; }
+  .capsule .c-label { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .capsule .c-time { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .capsule .c-btns { display: flex; gap: 6px; flex: none; }
+  .capsule .btn.icon { width: 34px; height: 34px; }
+
+  .empty { text-align: center; color: var(--text3); font-size: 13px; margin-top: 40px; }
+  .note { margin-top: 14px; font-size: 11.5px; color: var(--text3); line-height: 1.5; }
+</style>
+</head>
+<body>
+  <h1><span class="dot" id="hdot"></span>Todos</h1>
+  <p class="sub">Tasks with popup timers — minimize any timer into a floating capsule.</p>
+
+  <div class="add">
+    <input id="newText" type="text" placeholder="Add a task…" maxlength="120" />
+    <select id="newDur">
+      <option value="300">5 min</option>
+      <option value="900">15 min</option>
+      <option value="1500" selected>25 min</option>
+      <option value="2700">45 min</option>
+      <option value="3600">1 hr</option>
+    </select>
+    <button class="btn primary" id="addBtn">Add</button>
+  </div>
+
+  <div class="list" id="list"></div>
+  <div class="empty" id="empty">No tasks yet. Add one above.</div>
+
+  <p class="note">Click the ⏱ on a task to open its popup timer. Use <strong>Float on top</strong> (Chrome/Edge) to shrink the timer into a capsule that stays on top of every window — drag it anywhere with its title bar, like a live score overlay.</p>
+
+  <div class="overlay" id="overlay">
+    <div class="popup">
+      <div class="p-label" id="pLabel">Timer</div>
+      <div class="p-title" id="pTitle"></div>
+      <div class="p-time" id="pTime">25:00</div>
+      <div class="p-ctrl">
+        <button class="btn primary" id="pStart">Start</button>
+        <button class="btn" id="pReset">Reset</button>
+      </div>
+      <div class="p-min">
+        <button class="btn" id="pMin">Minimize</button>
+        <button class="btn" id="pFloat">Float on top</button>
+      </div>
+      <div class="note" style="margin-top:10px" id="pipNote"></div>
+    </div>
+  </div>
+
+  <div class="capsule" id="capsule">
+    <span class="livedot" id="cDot"></span>
+    <div class="c-text">
+      <div class="c-label" id="cLabel"></div>
+      <div class="c-time" id="cTime">25:00</div>
+    </div>
+    <div class="c-btns">
+      <button class="btn icon" id="cPlay" title="Start / Pause">▶</button>
+      <button class="btn icon" id="cReset" title="Reset">⟲</button>
+      <button class="btn icon" id="cFloat" title="Float on top">🗔</button>
+      <button class="btn icon" id="cClose" title="Close capsule">✕</button>
+    </div>
+  </div>
+
+<script>
+  const STORE_KEY = 'qsis_todos_v1';
+  const $ = (id) => document.getElementById(id);
+  const fmt = (s) => {
+    s = Math.max(0, Math.ceil(s));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const mm = String(m).padStart(2, '0'), ss = String(sec).padStart(2, '0');
+    return h > 0 ? h + ':' + mm + ':' + ss : mm + ':' + ss;
+  };
+
+  let todos = loadTodos();
+  let activeId = null;      // id of the running timer
+  let capsuleId = null;     // todo referenced by the capsule
+  let pipWindow = null;
+  let popupId = null;
+
+  const running = () => todos.find((t) => t.running);
+
+  function loadTodos() {
+    try {
+      const data = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      const list = Array.isArray(data && data.todos) ? data.todos : [];
+      return list.map((t) => ({
+        id: String(t.id || Math.random().toString(36).slice(2, 10)),
+        text: String(t.text || ''),
+        duration: Math.max(5, Number(t.duration) || 1500),
+        remaining: Math.max(0, t.remaining !== undefined && t.remaining !== null ? Number(t.remaining) : (Number(t.duration) || 1500)),
+        running: !!t.running,
+        done: !!t.done,
+        lastTick: Number(t.lastTick) || 0,
+        createdAt: Number(t.createdAt) || Date.now(),
+      }));
+    } catch { return []; }
+  }
+  function save() { localStorage.setItem(STORE_KEY, JSON.stringify({ todos })); }
+
+  // Reconcile a timer that was running when the page closed.
+  (function reconcile() {
+    const t = todos.find((x) => x.running);
+    if (t && t.lastTick) {
+      t.remaining = Math.max(0, t.remaining - Math.floor((Date.now() - t.lastTick) / 1000));
+      if (t.remaining <= 0) { t.remaining = 0; t.running = false; t.lastTick = 0; t.done = true; }
+    }
+    activeId = t && t.running ? t.id : null;
+    save();
+  })();
+
+  function beep() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new Ctx();
+      [0, .18, .36, .54].forEach((dt) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = 880;
+        o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(.001, ctx.currentTime + dt);
+        g.gain.exponentialRampToValueAtTime(.4, ctx.currentTime + dt + .02);
+        g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + dt + .35);
+        o.start(ctx.currentTime + dt); o.stop(ctx.currentTime + dt + .4);
+      });
+    } catch {}
+  }
+
+  function find(id) { return todos.find((t) => t.id === id); }
+
+  function complete(t) {
+    t.running = false; t.lastTick = 0; t.done = true;
+    if (activeId === t.id) activeId = null;
+    beep(); save(); render();
+  }
+
+  function startTodo(id) {
+    const t = find(id); if (!t) return;
+    // pause any other running timer
+    const other = todos.find((x) => x.running && x.id !== id);
+    if (other) { other.running = false; other.lastTick = 0; }
+    t.done = false;
+    if (t.remaining <= 0) t.remaining = t.duration;
+    t.running = true; t.lastTick = Date.now();
+    activeId = id;
+    save(); render();
+  }
+  function pauseTodo(id) {
+    const t = find(id); if (!t) return;
+    if (t.running) t.remaining = Math.max(0, t.remaining - Math.floor((Date.now() - t.lastTick) / 1000));
+    t.running = false; t.lastTick = 0;
+    if (activeId === id) activeId = null;
+    save(); render();
+  }
+  function resetTodo(id) {
+    const t = find(id); if (!t) return;
+    t.remaining = t.duration; t.running = false; t.lastTick = 0; t.done = false;
+    if (activeId === id) activeId = null;
+    save(); render();
+  }
+  function toggleDone(id) {
+    const t = find(id); if (!t) return;
+    t.done = !t.done;
+    if (t.done) pauseTodo(id);
+    save(); render();
+  }
+  function deleteTodo(id) {
+    todos = todos.filter((t) => t.id !== id);
+    if (activeId === id) activeId = null;
+    if (capsuleId === id) { capsuleId = null; closePip(); }
+    if (popupId === id) closePopup();
+    save(); render();
+  }
+  function addTodo() {
+    const text = $('newText').value.trim();
+    if (!text) return;
+    todos.unshift({
+      id: Math.random().toString(36).slice(2, 10),
+      text, duration: Number($('newDur').value), remaining: Number($('newDur').value),
+      running: false, done: false, lastTick: 0, createdAt: Date.now(),
+    });
+    $('newText').value = '';
+    save(); render();
+  }
+  function setDuration(id, d) {
+    const t = find(id); if (!t) return;
+    t.duration = d;
+    if (!t.running) t.remaining = d;
+    save(); render();
+  }
+
+  // ── Popup ────────────────────────────────────────────────────────────────
+  function openPopup(id) {
+    const t = find(id); if (!t) return;
+    popupId = id; capsuleId = id;
+    $('overlay').classList.add('show');
+    updatePopup();
+  }
+  function closePopup() { popupId = null; $('overlay').classList.remove('show'); }
+  function updatePopup() {
+    const t = find(popupId); if (!t) return;
+    $('pTitle').textContent = t.text;
+    $('pTime').textContent = fmt(t.remaining);
+    $('pTime').classList.toggle('warn', t.remaining <= 60 && t.remaining > 0 && t.running);
+    $('pStart').textContent = t.running ? 'Pause' : (t.remaining < t.duration && t.remaining > 0 ? 'Resume' : 'Start');
+    $('pipNote').textContent = pipWindow ? 'Floating — look at the small on-top window.' : '';
+  }
+
+  // ── Capsule ──────────────────────────────────────────────────────────────
+  function updateCapsule() {
+    if (!capsuleId || pipWindow) { $('capsule').classList.remove('show'); return; }
+    const t = find(capsuleId);
+    if (!t) { $('capsule').classList.remove('show'); return; }
+    $('capsule').classList.add('show');
+    $('capsule').classList.toggle('running', !!t.running);
+    $('cLabel').textContent = t.text;
+    $('cTime').textContent = fmt(t.remaining);
+    $('cPlay').textContent = t.running ? '❚❚' : '▶';
+  }
+
+  // ── Floating always-on-top window (Document Picture-in-Picture) ──────────
+  async function floatTop() {
+    if (pipWindow) { pipWindow.focus(); return; }
+    if (!('documentPictureInPicture' in window)) {
+      $('pipNote').textContent = 'Floating needs Chrome or Edge. The capsule stays in the corner here instead.';
+      return;
+    }
+    try {
+      pipWindow = await window.documentPictureInPicture.requestWindow({ width: 350, height: 132 });
+      pipWindow.document.title = '⏱ ' + (find(capsuleId) ? find(capsuleId).text : 'Timer');
+      pipWindow.document.body.style.cssText =
+        'margin:0;background:#111827;color:#e8edf5;font-family:-apple-system,Segoe UI,Roboto,sans-serif;user-select:none;';
+      pipWindow.document.body.innerHTML =
+        '<style>' +
+        '.caps{display:flex;align-items:center;gap:10px;padding:10px 12px;height:100%;box-sizing:border-box}' +
+        '.dot{width:9px;height:9px;border-radius:50%;background:#22c55e;flex:none}' +
+        '.dot.running{animation:p1 1.2s infinite}@keyframes p1{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}50%{box-shadow:0 0 0 7px rgba(34,197,94,0)}}' +
+        '.mid{flex:1;min-width:0}.lbl{font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tme{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}' +
+        'button{background:#1a2236;color:#e8edf5;border:1px solid #2a3a5c;border-radius:10px;width:38px;height:38px;font-size:14px;cursor:pointer;flex:none}' +
+        'button:hover{border-color:#22c55e}.cls{border-color:#f43f5e}' +
+        '</style>' +
+        '<div class="caps">' +
+        '<span class="dot" id="pdot"></span>' +
+        '<div class="mid"><div class="lbl" id="plbl"></div><div class="tme" id="ptme">25:00</div></div>' +
+        '<button id="pPlay" title="Start / Pause">▶</button>' +
+        '<button id="pReset" title="Reset">⟲</button>' +
+        '<button class="cls" id="pClose" title="Close">✕</button>' +
+        '</div>';
+      pipWindow.document.getElementById('pPlay').addEventListener('click', () => {
+        const t = find(capsuleId); if (t) t.running ? pauseTodo(t.id) : startTodo(t.id);
+      });
+      pipWindow.document.getElementById('pReset').addEventListener('click', () => { if (capsuleId) resetTodo(capsuleId); });
+      pipWindow.document.getElementById('pClose').addEventListener('click', () => { closePip(); });
+      pipWindow.addEventListener('pagehide', () => { pipWindow = null; updateCapsule(); });
+      syncPip();
+      updatePopup();
+    } catch {}
+  }
+  function closePip() { if (pipWindow) { try { pipWindow.close(); } catch {} pipWindow = null; } updateCapsule(); }
+  function syncPip() {
+    if (!pipWindow) return;
+    const t = find(capsuleId); if (!t) return;
+    const d = pipWindow.document;
+    d.getElementById('ptme').textContent = fmt(t.remaining);
+    d.getElementById('plbl').textContent = t.text;
+    d.getElementById('pdot').classList.toggle('running', !!t.running);
+    d.getElementById('pPlay').textContent = t.running ? '❚❚' : '▶';
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
+  function render() {
+    $('hdot').classList.toggle('off', !activeId);
+    const list = $('list');
+    list.innerHTML = '';
+    $('empty').style.display = todos.length ? 'none' : '';
+    for (const t of todos) {
+      const row = document.createElement('div');
+      row.className = 'todo' + (t.running ? ' running' : '') + (t.done ? ' done' : '');
+      row.innerHTML =
+        '<span class="check">' + (t.done ? '✓' : '') + '</span>' +
+        '<div class="body"><div class="text"></div><div class="time">' + fmt(t.remaining) + ' · ' +
+          (t.duration >= 3600 ? (t.duration / 3600) + ' hr' : t.duration / 60 + ' min') + '</div></div>' +
+        '<div class="act">' +
+          '<button class="btn icon" data-act="popup" title="Open timer popup">⏱</button>' +
+          '<button class="btn icon" data-act="play" title="Start / Pause">' + (t.running ? '❚❚' : '▶') + '</button>' +
+          '<button class="btn icon" data-act="reset" title="Reset">⟲</button>' +
+          '<button class="btn icon" data-act="del" title="Delete">✕</button>' +
+        '</div>';
+      row.querySelector('.text').textContent = t.text;
+      row.querySelector('.check').addEventListener('click', () => toggleDone(t.id));
+      row.querySelector('[data-act="popup"]').addEventListener('click', () => openPopup(t.id));
+      row.querySelector('[data-act="play"]').addEventListener('click', () => (t.running ? pauseTodo(t.id) : startTodo(t.id)));
+      row.querySelector('[data-act="reset"]').addEventListener('click', () => resetTodo(t.id));
+      row.querySelector('[data-act="del"]').addEventListener('click', () => deleteTodo(t.id));
+      list.appendChild(row);
+    }
+    if (!capsuleId && activeId) capsuleId = activeId;
+    updateCapsule();
+    updatePopup();
+  }
+
+  function tick() {
+    const t = running();
+    if (t) {
+      t.remaining = Math.max(0, t.remaining - Math.floor((Date.now() - t.lastTick) / 1000));
+      if (t.remaining <= 0) { complete(t); return; }
+    }
+    if (!document.hidden) renderTimesOnly();
+    updateCapsule();
+    syncPip();
+    updatePopup();
+  }
+  function renderTimesOnly() {
+    document.querySelectorAll('.todo').forEach((row, i) => {
+      const t = todos[i];
+      if (t) row.querySelector('.time').textContent = fmt(t.remaining) + ' · ' +
+        (t.duration >= 3600 ? (t.duration / 3600) + ' hr' : t.duration / 60 + ' min');
+    });
+    $('pTime').textContent = popupId && find(popupId) ? fmt(find(popupId).remaining) : $('pTime').textContent;
+    $('pTime').classList.toggle('warn', !!running() && running().remaining <= 60 && running().remaining > 0);
+  }
+  setInterval(tick, 300);
+
+  // ── Events ───────────────────────────────────────────────────────────────
+  $('addBtn').addEventListener('click', addTodo);
+  $('newText').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+  $('pStart').addEventListener('click', () => { const t = find(popupId); if (t) t.running ? pauseTodo(t.id) : startTodo(t.id); });
+  $('pReset').addEventListener('click', () => { if (popupId) resetTodo(popupId); });
+  $('pMin').addEventListener('click', () => closePopup());
+  $('pFloat').addEventListener('click', () => { if (popupId) { capsuleId = popupId; } void floatTop(); });
+  $('overlay').addEventListener('click', (e) => { if (e.target === $('overlay')) closePopup(); });
+  $('cPlay').addEventListener('click', () => { const t = find(capsuleId); if (t) t.running ? pauseTodo(t.id) : startTodo(t.id); });
+  $('cReset').addEventListener('click', () => { if (capsuleId) resetTodo(capsuleId); });
+  $('cFloat').addEventListener('click', () => void floatTop());
+  $('cClose').addEventListener('click', () => { closePip(); capsuleId = null; updateCapsule(); });
+
+  render();
+</script>
+</body>
+</html>
