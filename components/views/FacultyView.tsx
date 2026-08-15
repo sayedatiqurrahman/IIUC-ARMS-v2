@@ -26,10 +26,15 @@ export default function FacultyView() {
   const { data: session } = useSession();
   const { confirm, confirmDialog } = useConfirm();
   const profile = useAppStore(s => s.profile);
-  const email = session?.user?.email || profile.email || '';
-  const effectiveRole = config.getEffectiveRole(email, profile.role);
+  // Use the best-available email/role for permission calc.
+  // Fall back to 'user' role when neither session nor profile provides data,
+  // so that `canEdit` becomes false and the API returns visible-only members
+  // for non‑logged‑in visitors.
+  const rawEmail = session?.user?.email || profile?.email || '';
+  const rawRole = profile?.role || '';
+  const effectiveRole = config.getEffectiveRole(rawEmail, rawRole);
   const canEdit = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
-  const myDept = profile.department || '';
+  const myDept = profile?.department || '';
 
   const [members, setMembers] = useState<FacultyMember[]>([]);
   const [loading, setLoading] = useState(true);
