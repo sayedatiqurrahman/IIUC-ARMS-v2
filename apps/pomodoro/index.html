@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pomodoro Timer</title>
+<style>
+  :root {
+    --bg: #0a0f1e; --bg2: #111827; --bg3: #1a2236; --border: #2a3a5c;
+    --text: #e8edf5; --text2: #94a3b8; --green: #22c55e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 24px; gap: 22px;
+  }
+  .modes { display: flex; gap: 8px; background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 5px; }
+  .modes button {
+    background: transparent; border: 0; color: var(--text2); font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: 10px; cursor: pointer; transition: all .15s ease;
+  }
+  .modes button.active { background: var(--bg3); color: var(--text); }
+  .modes button[data-mode="focus"].active { color: var(--green); }
+  .timer-wrap { position: relative; width: 300px; height: 300px; }
+  .timer-wrap svg { transform: rotate(-90deg); }
+  .ring-bg { stroke: var(--bg3); }
+  .ring { stroke: var(--green); stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
+  .timer-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 4px;
+  }
+  .time { font-size: 58px; font-weight: 700; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
+  .label { font-size: 13px; color: var(--text2); text-transform: uppercase; letter-spacing: 3px; }
+  .stats { font-size: 12px; color: var(--text2); }
+  .controls { display: flex; gap: 12px; align-items: center; }
+  .controls button {
+    border: 1px solid var(--border); background: var(--bg2); color: var(--text);
+    font-size: 15px; font-weight: 600; padding: 12px 26px; border-radius: 14px; cursor: pointer; transition: all .15s ease;
+  }
+  .controls button:hover { border-color: var(--green); }
+  .controls .primary { background: var(--green); border-color: var(--green); color: #06210f; }
+  .controls .primary:hover { filter: brightness(1.1); }
+  .controls .icon-btn { width: 52px; padding: 12px 0; }
+  .hint { font-size: 12px; color: var(--text2); max-width: 340px; text-align: center; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <div class="modes" id="modes">
+    <button data-mode="focus">Focus</button>
+    <button data-mode="short">Short Break</button>
+    <button data-mode="long">Long Break</button>
+  </div>
+
+  <div class="timer-wrap">
+    <svg width="300" height="300" viewBox="0 0 300 300">
+      <circle class="ring-bg" cx="150" cy="150" r="136" fill="none" stroke-width="14" />
+      <circle class="ring" id="ring" cx="150" cy="150" r="136" fill="none" stroke-width="14"
+        stroke-dasharray="854.5" stroke-dashoffset="0" />
+    </svg>
+    <div class="timer-center">
+      <div class="time" id="time">25:00</div>
+      <div class="label" id="label">Focus</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="reset" class="icon-btn" title="Reset">⟲</button>
+    <button id="start" class="primary">Start</button>
+    <button id="skip" class="icon-btn" title="Skip to next session">⏭</button>
+  </div>
+
+  <div class="stats" id="stats">0 pomodoro completed</div>
+  <div class="hint">Focus 25 min → Short break 5 min. Every 4th focus gets a 15 min long break. A beep marks each session end.</div>
+
+<script>
+  const DURATIONS = { focus: 25 * 60, short: 5 * 60, long: 15 * 60 };
+  const MODE_LABEL = { focus: 'Focus', short: 'Short Break', long: 'Long Break' };
+  const CIRC = 2 * Math.PI * 136;
+
+  const $ = (id) => document.getElementById(id);
+  const timeEl = $('time'), labelEl = $('label'), ringEl = $('ring'), startBtn = $('start');
+  const statsEl = $('stats');
+
+  let mode = 'focus', remaining = DURATIONS[mode], running = false, timerId = null;
+  let completed = 0, cycle = 0;
+
+  function ringR() {
+    ringEl.style.strokeDashoffset = String(CIRC * (1 - remaining / DURATIONS[mode]));
+  }
+  function fmt(s) {
+    const m = Math.floor(s / 60), sec = s % 60;
+    return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+  }
+  function render() {
+    timeEl.textContent = fmt(remaining);
+    labelEl.textContent = MODE_LABEL[mode];
+    statsEl.textContent = completed + (completed === 1 ? ' pomodoro completed' : ' pomodoros completed');
+    ringR();
+    document.title = (running ? '▶ ' : '') + fmt(remaining) + ' — ' + MODE_LABEL[mode];
+  }
+  function nextMode() {
+    if (mode === 'focus') {
+      cycle++;
+      return cycle % 4 === 0 ? 'long' : 'short';
+    }
+    return 'focus';
+  }
+  function beep() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new Ctx();
+      [0, 0.18, 0.36].forEach((t) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = 880;
+        o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.001, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.35);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.4);
+      });
+    } catch {}
+  }
+  function switchMode(m) {
+    mode = m; remaining = DURATIONS[m]; running = false;
+    clearInterval(timerId); timerId = null;
+    startBtn.textContent = 'Start';
+    document.querySelectorAll('.modes button').forEach((b) => b.classList.toggle('active', b.dataset.mode === m));
+    render();
+  }
+  function tick() {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(timerId); timerId = null;
+      if (mode === 'focus') { completed++; }
+      beep();
+      switchMode(nextMode());
+      return;
+    }
+    render();
+  }
+  function toggle() {
+    running = !running;
+    startBtn.textContent = running ? 'Pause' : 'Resume';
+    if (running) timerId = setInterval(tick, 1000);
+    else clearInterval(timerId);
+    render();
+  }
+
+  document.querySelectorAll('.modes button').forEach((b) => b.addEventListener('click', () => switchMode(b.dataset.mode)));
+  startBtn.addEventListener('click', toggle);
+  $('reset').addEventListener('click', () => { running = false; clearInterval(timerId); timerId = null; remaining = DURATIONS[mode]; startBtn.textContent = 'Start'; render(); });
+  $('skip').addEventListener('click', () => { running = false; clearInterval(timerId); timerId = null; if (mode === 'focus') completed++; beep(); switchMode(nextMode()); });
+
+  switchMode('focus');
+</script>
+</body>
+</html>

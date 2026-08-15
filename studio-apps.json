@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "id": "pomodoro",
+      "title": "Pomodoro Timer",
+      "subtitle": "Focus & break study timer",
+      "description": "A simple focus timer with short and long breaks to power your study sessions. Runs entirely in the browser.",
+      "icon": "timer",
+      "source": "community",
+      "entry": "index.html",
+      "author": {
+        "name": "Sayed Atiqur Rahman",
+        "githubLogin": "sayedatiqurrahman",
+        "email": "s.atiqurrahman2003@gmail.com"
+      },
+      "addedAt": "2026-08-15T00:00:00.000Z"
+    }
+  ]
+}

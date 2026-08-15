@@ -81,7 +81,6 @@ export default async function StudioAppHost({ params }: { params: Promise<{ id: 
       </div>
 
       <div className="flex-1 rounded-2xl overflow-hidden border border-dark-border bg-white">
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <iframe src={src} title={app.title} className="h-[calc(100dvh-220px)] min-h-[480px] w-full" allow="clipboard-write; fullscreen" />
       </div>
       <p className="mt-2 text-[0.68rem] text-dark-text3">
