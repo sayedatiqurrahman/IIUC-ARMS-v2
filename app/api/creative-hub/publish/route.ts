@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { config } from '@/lib/config';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { getRepoBotToken, getInstallationAccessToken } from '@/lib/github-app';
+import { getRepoBotToken } from '@/lib/github-app';
 import { commitFilesToBranch } from '@/lib/github-commit';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-import { decrypt, isEncrypted } from '@/lib/crypto';
 import { buildCommunityFolder, extractFieldTypes, FIELD_LABELS } from '@/components/studio/creative-hub/templates';
 
 const GITHUB_API = 'https://api.github.com';
@@ -35,12 +34,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sign in first to publish a design.' }, { status: 401 });
     }
 
-    let profile: any = null;
-    try {
-      const { prisma } = await import('@/lib/prisma');
-      profile = await prisma.profile.findUnique({ where: { userId: email } });
-    } catch {}
-
     const body = await req.json().catch(() => null);
     if (!body?.html || typeof body.html !== 'string') {
       return NextResponse.json({ error: 'No design HTML received.' }, { status: 400 });
@@ -55,11 +48,13 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Resolve the author's identity from their profile (dashboard source of truth).
-    const fullName = (body.authorName as string) || profile?.name || email.split('@')[0] || 'student';
+    // The author's identity is resolved purely from GitHub (session + request
+    // payload) — the themes repo's authors.json is the source of truth, so no
+    // cloud database is involved anywhere in the creative hub pipeline.
+    const fullName = (body.authorName as string) || session.user?.name || email.split('@')[0] || 'student';
     const authorEmail = (body.authorEmail as string) || email;
-    const universityId = (body.universityId as string) || profile?.universityId || '';
-    const githubLogin = (body.githubLogin as string) || profile?.githubLogin || email.split('@')[0];
+    const universityId = (body.universityId as string) || '';
+    const githubLogin = (body.githubLogin as string) || email.split('@')[0];
     const designSn = Number(body.designSn) || 1;
     const folderName = buildCommunityFolder(fullName, authorEmail, universityId, designSn);
     const folder = `${ch.communityPath}/${folderName}`;
@@ -89,20 +84,11 @@ export async function POST(req: NextRequest) {
       { path: `${folder}/thumbnail.webp`, content: String(body.thumbnailBase64 || '') },
     ];
 
-    // Resolve a token with write access to the themes repo: bot app token →
-    // the publisher's own token (if they added one) → env token.
+    // Resolve a token with write access to the themes repo: GitHub App bot
+    // token first, then the environment token. No database is consulted.
     let token = '';
     const botToken = await getRepoBotToken(owner, repo);
     if (botToken) token = botToken;
-    if (!token && profile?.githubToken) {
-      const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
-      if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) token = decrypted;
-    }
-    if (!token && profile?.githubInstallationId) {
-      try {
-        token = await getInstallationAccessToken(Number(profile.githubInstallationId));
-      } catch {}
-    }
     if (!token && process.env.GITHUB_TOKEN) token = process.env.GITHUB_TOKEN;
     if (!token) {
       return NextResponse.json({ error: 'Publishing is temporarily unavailable. Please try again later.' }, { status: 503 });

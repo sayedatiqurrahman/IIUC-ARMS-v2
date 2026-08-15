@@ -228,15 +228,16 @@ const THEME_FIELDS: Record<string, FieldSpec[]> = {
   ],
 };
 
-// Fallback preview URLs (kept for backward-compat; the repo's SVG previews are
-// used when reachable).
+// Fallback preview URLs — the themes repo's own SVG previews (one per theme).
+// These render offline of the API, so gallery thumbnails never depend on the
+// network layer that supplies the manifest (postimg.cc placeholders are dead).
 const THEME_PREVIEWS: Record<string, string> = {
-  'thesis-english': 'https://i.postimg.cc/qM3j54Xn/IMG-20250125-WA0004.jpg',
-  'thesis-arabic': 'https://i.postimg.cc/q7SjGfXn/IMG-20250125-WA0005.jpg',
-  'assignment-a-english': 'https://i.postimg.cc/KckX3HqL/image.png',
-  'assignment-a-arabic': 'https://i.postimg.cc/KckX3HqL/image.png',
-  'assignment-b-english': 'https://i.postimg.cc/Kj5h9Z60/image.png',
-  'assignment-b-arabic': 'https://i.postimg.cc/Kj5h9Z60/image.png',
+  'thesis-english': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/thesis-english/preview.svg',
+  'thesis-arabic': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/thesis-arabic/preview.svg',
+  'assignment-a-english': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/assignment-a-english/preview.svg',
+  'assignment-a-arabic': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/assignment-a-arabic/preview.svg',
+  'assignment-b-english': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/assignment-b-english/preview.svg',
+  'assignment-b-arabic': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/assignment-b-arabic/preview.svg',
 };
 
 export const BUNDLED_THEMES: HubTheme[] = [

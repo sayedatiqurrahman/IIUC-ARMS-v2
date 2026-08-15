@@ -89,9 +89,13 @@ export async function GET() {
       });
     }
 
+    // authors.json is stored as { version, authors: [...] } — always expose a
+    // plain array to the client so it can call .find/.map/.sort on it safely.
+    const authorsList = Array.isArray(authors) ? authors : Array.isArray(authors?.authors) ? authors.authors : [];
+
     return NextResponse.json({
       manifest,
-      authors,
+      authors: authorsList,
       community,
     });
   } catch (err: any) {

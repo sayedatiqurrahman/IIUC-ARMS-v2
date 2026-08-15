@@ -89,7 +89,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
       .then((r) => r.json().catch(() => null))
       .then((data) => {
         if (!mountedRef.current) return;
-        if (data?.authors) setAuthors(data.authors);
+        if (Array.isArray(data?.authors)) setAuthors(data.authors);
         if (Array.isArray(data?.community)) setCommunity(data.community);
         if (data?.manifest?.themes && Array.isArray(data.manifest.themes)) {
           setThemes((cur) =>
@@ -502,7 +502,8 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
   const myDesignSn = useMemo(() => {
     const login = profile?.githubLogin || profile?.email?.split('@')[0] || '';
     const email = profile?.email || '';
-    const mine = authors.find(
+    const list = Array.isArray(authors) ? authors : [];
+    const mine = list.find(
       (a: any) => (a.githubLogin && a.githubLogin === login) || (a.email && email && a.email.toLowerCase() === email.toLowerCase())
     );
     return (mine?.designCount || 0) + 1;
@@ -590,7 +591,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
       fetch('/api/creative-hub/community')
         .then((r) => r.json().catch(() => null))
         .then((d) => {
-          if (d?.authors) setAuthors(d.authors);
+          if (Array.isArray(d?.authors)) setAuthors(d.authors);
           if (Array.isArray(d?.community)) setCommunity(d.community);
         })
         .catch(() => {});
