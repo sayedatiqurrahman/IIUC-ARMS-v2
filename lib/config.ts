@@ -81,7 +81,22 @@ export const config = {
   githubStarRepos: [
     { owner: 'sayedatiqurrahman', repo: 'QSIS-ACADEMIC-FILES-MANAFGER', label: 'QSIS Academic Files' },
     { owner: 'sayedatiqurrahman', repo: 'QSIS-ARMS-v2', label: 'IIUC-ARMS Source Code' },
+    { owner: 'sayedatiqurrahman', repo: 'QSIS-CREATIVE-HUB-THEMES', label: 'Creative Hub Themes' },
   ],
+  // Dedicated repo that hosts the Creative Hub default themes AND community-
+  // published designs. Defaults are served straight from it (raw GitHub); new
+  // designs are committed to `community/` and authors.json is updated per
+  // publish so contributors can be shown with a design count.
+  creativeHub: {
+    owner: 'sayedatiqurrahman',
+    repo: 'QSIS-CREATIVE-HUB-THEMES',
+    branch: 'main',
+    themesPath: 'themes',
+    communityPath: 'community',
+    manifestPath: 'manifest.json',
+    authorsPath: 'authors.json',
+    defaultPageSize: 'a4',
+  },
   semesters: [
     { id: '1st-semister', label: '1st Semester' },
     { id: '2nd-semister', label: '2nd Semester' },

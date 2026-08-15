@@ -14,6 +14,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
   const isFounder = c.role === 'Founder & Lead';
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
+  const isDesigner = (c.designContributions || 0) > 0;
 
   return (
     <div className={`rounded-xl border transition-all hover:border-qsis/40 hover:shadow-[0_2px_12px_rgba(34,197,94,0.1)] ${
@@ -36,6 +37,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
             {isFounder && <span className="px-1.5 py-0.5 rounded-md bg-qsis/20 text-qsis text-[0.58rem] font-bold"><i className="fas fa-crown mr-0.5"></i>Founder</span>}
             {isDev && <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.58rem] font-bold"><i className="fas fa-laptop-code mr-0.5"></i>Developer</span>}
             {isResource && <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.58rem] font-bold"><i className="fas fa-book-open mr-0.5"></i>Resource</span>}
+            {isDesigner && <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[0.58rem] font-bold"><i className="fas fa-palette mr-0.5"></i>Designer</span>}
             {c.profileComplete && <span className="px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-400 text-[0.58rem] font-bold"><i className="fas fa-check-circle mr-0.5"></i>Complete</span>}
           </div>
           <div className="flex items-center gap-2 flex-wrap mt-0.5">
@@ -54,8 +56,9 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="text-center"><div className="text-[0.85rem] font-bold text-blue-400">{c.v2Contributions}</div><div className="text-[0.58rem] text-dark-text3">Code</div></div>
             <div className="text-center"><div className="text-[0.85rem] font-bold text-orange-400">{c.dataContributions}</div><div className="text-[0.58rem] text-dark-text3">Data</div></div>
+            <div className="text-center"><div className="text-[0.85rem] font-bold text-emerald-400">{c.designContributions || 0}</div><div className="text-[0.58rem] text-dark-text3">Design</div></div>
             <div className="text-center"><div className="text-[0.85rem] font-bold text-accent">{c.prCount}</div><div className="text-[0.58rem] text-dark-text3">PRs</div></div>
-            <div className="text-center border-l border-dark-border pl-3 ml-1"><div className="text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions}</div><div className="text-[0.58rem] text-dark-text3">Total</div></div>
+            <div className="text-center border-l border-dark-border pl-3 ml-1"><div className="text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions + (c.designContributions || 0)}</div><div className="text-[0.58rem] text-dark-text3">Total</div></div>
           </div>
         )}
         <button
@@ -103,6 +106,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           {isFounder && <span className="px-1.5 py-0.5 rounded-md bg-qsis/20 text-qsis text-[0.55rem] font-bold"><i className="fas fa-crown mr-0.5"></i>Founder</span>}
           {isDev && <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.55rem] font-bold"><i className="fas fa-laptop-code mr-0.5"></i>Dev</span>}
           {isResource && <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.55rem] font-bold"><i className="fas fa-book-open mr-0.5"></i>Resource</span>}
+          {isDesigner && <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[0.55rem] font-bold"><i className="fas fa-palette mr-0.5"></i>Design</span>}
           {c.profileComplete && <span className="px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-400 text-[0.55rem] font-bold"><i className="fas fa-check-circle mr-0.5"></i>Complete</span>}
         </div>
         {/* Stats */}
@@ -112,9 +116,11 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
             <div className="w-px h-6 bg-dark-border"></div>
             <div className="flex-1 text-center"><div className="text-[0.8rem] font-bold text-orange-400">{c.dataContributions}</div><div className="text-[0.5rem] text-dark-text3">Data</div></div>
             <div className="w-px h-6 bg-dark-border"></div>
+            <div className="flex-1 text-center"><div className="text-[0.8rem] font-bold text-emerald-400">{c.designContributions || 0}</div><div className="text-[0.5rem] text-dark-text3">Design</div></div>
+            <div className="w-px h-6 bg-dark-border"></div>
             <div className="flex-1 text-center"><div className="text-[0.8rem] font-bold text-accent">{c.prCount}</div><div className="text-[0.5rem] text-dark-text3">PRs</div></div>
             <div className="w-px h-6 bg-dark-border"></div>
-            <div className="flex-1 text-center"><div className="text-[0.8rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions}</div><div className="text-[0.5rem] text-dark-text3">Total</div></div>
+            <div className="flex-1 text-center"><div className="text-[0.8rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions + (c.designContributions || 0)}</div><div className="text-[0.5rem] text-dark-text3">Total</div></div>
           </div>
         )}
         {/* Info grid */}

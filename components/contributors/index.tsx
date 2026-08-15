@@ -21,7 +21,7 @@ export default function ContributorsView() {
 
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [userView, setUserView] = useState<'sectioned' | 'grid'>('sectioned');
-  const [activeTab, setActiveTab] = useState<'all' | 'developers' | 'resources'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'developers' | 'resources' | 'designers'>('all');
   const [deptFilter, setDeptFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [historyFor, setHistoryFor] = useState<any>(null);
@@ -62,6 +62,11 @@ export default function ContributorsView() {
     contributors.filter((c: any) => c.v2Contributions > 0 && c.dataContributions > 0),
     [contributors]
   );
+  // Designers = anyone who published a Creative Hub design (themes repo)
+  const designers = useMemo(() =>
+    contributors.filter((c: any) => (c.designContributions || 0) > 0),
+    [contributors]
+  );
 
   // Departments
   const departments = useMemo(() => {
@@ -97,13 +102,19 @@ export default function ContributorsView() {
     if (activeTab === 'resources') {
       return applyFilters(resources).sort((a: any, b: any) => b.dataContributions - a.dataContributions);
     }
-    // 'all' = merged, ranked by combined total (v2 + data)
+    if (activeTab === 'designers') {
+      return applyFilters(designers).sort((a: any, b: any) => (b.designContributions || 0) - (a.designContributions || 0));
+    }
+    // 'all' = merged, ranked by combined total (v2 + data + design)
     const devLogins = new Set(developers.map((c: any) => c.login));
     const merged = [...developers, ...resources.filter((c: any) => !devLogins.has(c.login))];
-    return applyFilters(merged).sort((a: any, b: any) => {
-      return (b.v2Contributions + b.dataContributions) - (a.v2Contributions + a.dataContributions);
+    const resLogins = new Set(merged.map((c: any) => c.login));
+    const mergedAll = [...merged, ...designers.filter((c: any) => !resLogins.has(c.login))];
+    return applyFilters(mergedAll).sort((a: any, b: any) => {
+      return (b.v2Contributions + b.dataContributions + (b.designContributions || 0)) -
+        (a.v2Contributions + a.dataContributions + (a.designContributions || 0));
     });
-  }, [activeTab, developers, resources, deptFilter, searchQuery]);
+  }, [activeTab, developers, resources, designers, deptFilter, searchQuery]);
 
   return (
     <section className="mb-5">
@@ -143,7 +154,7 @@ export default function ContributorsView() {
           {founder && <FounderCard c={founder} onShowHistory={setHistoryFor} />}
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-4 gap-3 mb-5">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-5">
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
               <div className="text-[1.3rem] font-bold text-purple-400">{bothRepos.length}</div>
               <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-code-branch mr-1"></i>Both</div>
@@ -155,6 +166,10 @@ export default function ContributorsView() {
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
               <div className="text-[1.3rem] font-bold text-orange-400">{resources.length}</div>
               <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-book-open mr-1"></i>Resources</div>
+            </div>
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
+              <div className="text-[1.3rem] font-bold text-emerald-400">{designers.length}</div>
+              <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-palette mr-1"></i>Designers</div>
             </div>
             <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
               <div className="text-[1.3rem] font-bold text-qsis">{contributors.length}</div>
@@ -221,6 +236,15 @@ export default function ContributorsView() {
                       <span className="ml-1 text-[0.6rem] opacity-70">({resources.length})</span>
                     </button>
                   )}
+                  <button
+                    onClick={() => { setActiveTab('designers'); setDeptFilter('all'); setSearchQuery(''); }}
+                    className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
+                      activeTab === 'designers' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
+                    }`}
+                  >
+                    <i className="fas fa-palette mr-1"></i>Designers
+                    <span className="ml-1 text-[0.6rem] opacity-70">({designers.length})</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -298,7 +322,7 @@ export default function ContributorsView() {
               <div>
                 <h4 className="text-[0.95rem] font-bold text-dark-text mb-1">Want Your Name Here?</h4>
                 <p className="text-[0.8rem] text-dark-text2 leading-relaxed">
-                  Upload academic documents — notes, sheets, previous questions, or syllabus — for your department. Every valid contribution earns you a spot on this page.
+                  Upload academic documents — notes, sheets, previous questions, or syllabus — for your department, or publish a Creative Hub design (thesis / assignment cover) from the Studio. Every valid contribution earns you a spot on this page.
                 </p>
               </div>
             </div>
@@ -356,6 +380,10 @@ export default function ContributorsView() {
               <a href={`https://github.com/${config.owner}/QSIS-ACADEMIC-FILES-MANAFGER`} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:scale-105 transition-all">
                 <i className="fas fa-star"></i> Star Academic Files
+              </a>
+              <a href={`https://github.com/${config.owner}/QSIS-CREATIVE-HUB-THEMES`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(16,185,129,0.3)] hover:scale-105 transition-all">
+                <i className="fas fa-palette"></i> Star Creative Hub Themes
               </a>
             </div>
           </div>

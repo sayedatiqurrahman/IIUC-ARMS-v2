@@ -7,6 +7,7 @@ import { Settings } from './types';
 export default function GridCard({ c, settings, onShowHistory }: { c: any; settings: Settings; onShowHistory?: (c: any) => void }) {
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
+  const isDesigner = (c.designContributions || 0) > 0;
   const isFounder = c.role === 'Founder & Lead';
 
   return (
@@ -65,6 +66,11 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
           {isResource && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-semibold bg-orange-500/15 text-orange-400">
               <i className="fas fa-book-open text-[0.5rem]"></i>Resource
+            </span>
+          )}
+          {isDesigner && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-semibold bg-emerald-500/15 text-emerald-400">
+              <i className="fas fa-palette text-[0.5rem]"></i>Designer
             </span>
           )}
         </div>
@@ -153,10 +159,13 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
             <span className="text-[0.6rem] text-accent bg-accent/10 px-1.5 py-0.5 rounded" title="Pull requests">
               <i className="fas fa-code-merge mr-0.5"></i>{c.prCount}
             </span>
+            <span className="text-[0.6rem] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Creative Hub designs">
+              <i className="fas fa-palette mr-0.5"></i>{c.designContributions || 0}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[0.65rem] font-bold text-yellow-500" title="Total contributions">
-              {c.v2Contributions + c.dataContributions}
+              {c.v2Contributions + c.dataContributions + (c.designContributions || 0)}
             </span>
             <button
               onClick={() => onShowHistory?.(c)}
