@@ -650,8 +650,9 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         // access, no bot fallback), retry ONCE through the server — its token
         // candidates include the App bot and the env secret, so small uploads
         // always land. Vercel caps request bodies at ~4.5MB, so only retry
-        // payloads small enough to fit.
-        if (!data.success && totalUploadBytes <= 4 * 1024 * 1024) {
+        // payloads small enough to fit. A 400 (e.g. the file itself is not a
+        // valid PDF) won't be fixed by retrying, so surface it right away.
+        if (!data.success && data.status !== 400 && totalUploadBytes <= 4 * 1024 * 1024) {
           data = await runServerUpload();
         }
       } else {

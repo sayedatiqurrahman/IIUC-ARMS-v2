@@ -1,16 +1,18 @@
-// SW BUILD: 2026-08-08-auto-update — never cache this file (see next.config.js
+// SW BUILD: 2026-08-17-network-first — never cache this file (see next.config.js
 // /sw.js Cache-Control: no-store). Updates auto-install via skipWaiting + claim.
 // IMMUTABLE: Next.js hashed build output (/_next/static/*). These files are
 // content-addressed — the hash changes when the file changes — so they can be
 // cached forever and NEVER deleted. Keeping them across updates is what makes
 // the installed app open instantly after a deploy (no re-download of all JS).
-const IMMUTABLE_CACHE = 'iiuc-arms-immutable-v2';
+const IMMUTABLE_CACHE = 'iiuc-arms-immutable-v3';
 
-// SHELL: HTML pages + non-hashed app assets. Revalidated on every navigation.
-const SHELL_CACHE = 'iiuc-arms-shell-v2';
+// SHELL: HTML pages + non-hashed app assets. NETWORK-FIRST so a deploy is
+// visible on the very next reload — stale HTML is what kept users running old
+// (broken) code. Cache only becomes a fallback when offline.
+const SHELL_CACHE = 'iiuc-arms-shell-v3';
 
 // FILE: opened file content from the files repo (offline reopening).
-const FILE_CACHE = 'iiuc-arms-files-v2';
+const FILE_CACHE = 'iiuc-arms-files-v3';
 
 const STATIC_ASSETS = [
   '/',
@@ -177,42 +179,47 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation: stale-while-revalidate. Installed-app launches open instantly
-  // from the cached shell, while the network copy is fetched in the background
-  // to refresh the cache. New chunks referenced by the fresh HTML are prewarmed
-  // into the immutable cache so the following launch is instant.
+  // Next.js App-Router data fetches (client-side navigation payloads). They
+  // carry RSC / router headers and must NEVER be served from cache — a stale
+  // response here keeps old UI code running after a deploy. Network only.
+  if (
+    request.headers.get('rsc') === '1' ||
+    request.headers.has('next-router-prefetch') ||
+    request.headers.has('next-router-state-tree')
+  ) {
+    event.respondWith(fetch(request).catch(() => new Response('', { status: 503 })));
+    return;
+  }
+
+  // Navigation: network-first. A deploy must show on the very next reload —
+  // stale-while-revalidate is why users kept running old broken upload code.
+  // The cache is only a fallback for offline / transient failures.
   if (request.mode === 'navigate') {
     event.respondWith(
       caches.open(SHELL_CACHE).then(async (cache) => {
-        const cached = await cache.match(request);
-        const networkPromise = fetch(request)
-          .then(async (response) => {
-            if (response.ok) {
-              cache.put(request, response.clone()).catch(() => {});
-              try {
-                const text = await response.clone().text();
-                prewarmLinkedAssets(text, url.href).catch(() => {});
-              } catch {}
-            }
-            return response;
-          })
-          .catch(() => null);
-        if (cached) {
-          networkPromise.then(() => {}).catch(() => {});
-          return cached;
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
+            cache.put(request, response.clone()).catch(() => {});
+            try {
+              const text = await response.clone().text();
+              prewarmLinkedAssets(text, url.href).catch(() => {});
+            } catch {}
+          }
+          return response;
+        } catch {
+          const cached = await cache.match(request);
+          if (cached) return cached;
+          const fallback = await caches.match('/');
+          if (fallback) return fallback;
+          return new Response(
+            '<!doctype html><html><head><meta charset="utf-8"><title>Offline</title></head>' +
+            '<body style="font-family:sans-serif;background:#111;color:#eee;display:grid;place-items:center;height:100vh;margin:0">' +
+            '<div style="text-align:center"><h2>You&apos;re offline</h2><p>Connect to the internet and try again.</p></div>' +
+            '</body></html>',
+            { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+          );
         }
-        // Never let respondWith() receive undefined — that throws a TypeError.
-        const networkResponse = await networkPromise;
-        if (networkResponse) return networkResponse;
-        const fallback = await caches.match('/');
-        if (fallback) return fallback;
-        return new Response(
-          '<!doctype html><html><head><meta charset="utf-8"><title>Offline</title></head>' +
-          '<body style="font-family:sans-serif;background:#111;color:#eee;display:grid;place-items:center;height:100vh;margin:0">' +
-          '<div style="text-align:center"><h2>You&apos;re offline</h2><p>Connect to the internet and try again.</p></div>' +
-          '</body></html>',
-          { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-        );
       })
     );
     return;

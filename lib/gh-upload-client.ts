@@ -312,6 +312,20 @@ export async function uploadFilesToGitHub(opts: ClientUploadOptions): Promise<Cl
   );
 }
 
+// PDFs must start with %PDF- and end with %%EOF, or they are broken/truncated.
+// Checked in the browser BEFORE any commit so a corrupt PDF can never land on
+// GitHub (mirrors the server-side corruption gate).
+async function assertPdfIntact(file: File): Promise<void> {
+  const label = file.name || 'file';
+  if (!label.toLowerCase().endsWith('.pdf')) return;
+  if (file.size < 16) throw new ClientUploadError(`${label} is an empty/invalid PDF — upload the original file again.`, 400);
+  const head = new TextDecoder('latin1').decode(new Uint8Array(await file.slice(0, Math.min(1024, file.size)).arrayBuffer()));
+  const tail = new TextDecoder('latin1').decode(new Uint8Array(await file.slice(Math.max(0, file.size - 2048), file.size).arrayBuffer()));
+  if (!head.includes('%PDF-') || !tail.includes('%%EOF')) {
+    throw new ClientUploadError(`${label} looks corrupt (truncated during upload) — please re-upload it.`, 400);
+  }
+}
+
 async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadResult> {
   const { token, owner, repo, files, message, author, onProgress } = opts;
 
@@ -325,11 +339,12 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
       onProgress?.(5, `Preparing ${label}…`);
       const fileBytes = f.file ? f.file.size : (f.text?.length || 0);
       assertWithinGithubLimit(label, fileBytes);
+      if (f.file) await assertPdfIntact(f.file);
 
       let content = '';
       if (f.file) {
         content = await fileToBase64(f.file, pct => {
-          onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(((f.file!.size / totalBytes) * 70 * pct) / 100), `Reading ${label}…`);
+          onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(((f.file!.size / totalBytes) * 70 * pct) / 100), `Preparing ${label}…`);
         });
       } else if (f.text != null) {
         content = textToBase64(f.text);
