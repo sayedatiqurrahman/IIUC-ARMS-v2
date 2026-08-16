@@ -73,6 +73,7 @@ export interface ContributorItem {
   contributions: number;
   v2Contributions: number;
   dataContributions: number;
+  issueContributions: number;
   prCount: number;
   role: string;
   roleType: string;

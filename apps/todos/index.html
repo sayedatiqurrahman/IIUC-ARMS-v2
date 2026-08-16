@@ -35,6 +35,16 @@
   .btn.primary { background: var(--green); border-color: var(--green); color: #06210f; font-weight: 700; }
   .btn:hover { filter: brightness(1.1); }
   .btn.icon { padding: 0; width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; border-radius: 10px; }
+  .btn.icon:hover { border-color: var(--green); }
+  input[type=text]:focus-visible, select:focus-visible, .btn:focus-visible { outline: 2px solid rgba(34,197,94,.45); outline-offset: 2px; }
+
+  .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .counter { font-size: 12px; color: var(--text2); }
+  .counter b { color: var(--text); }
+  .clear { background: none; border: none; color: var(--text3); font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 8px; margin-top: 2px; }
+  .clear:hover { color: var(--rose); background: rgba(244,63,94,.1); }
+  .clear:disabled { opacity: .4; cursor: default; }
+  .clear:disabled:hover { color: var(--text3); background: none; }
 
   .list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
   .todo {
@@ -46,15 +56,28 @@
   .todo .check {
     width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--text3); cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center; font-size: 13px; color: #06210f;
-    flex: none;
+    flex: none; transition: background .15s, transform .1s;
   }
+  .check:active { transform: scale(.88); }
   .todo.done .check { background: var(--green); border-color: var(--green); }
   .todo .body { flex: 1; min-width: 0; }
   .todo .text { font-size: 14px; word-break: break-word; }
   .todo.done .text { text-decoration: line-through; color: var(--text3); }
   .todo .time { font-size: 12px; color: var(--text2); margin-top: 2px; font-variant-numeric: tabular-nums; }
   .todo.running .time { color: var(--green); }
-  .todo .act { display: flex; gap: 6px; flex: none; }
+  .todo .act { display: flex; gap: 6px; flex: none; align-items: center; }
+  .todo .dur {
+    background: var(--bg); color: var(--text2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 4px 5px; font-size: 11px; outline: none; cursor: pointer;
+  }
+  .todo .dur:focus, .todo .dur:hover { border-color: var(--green); }
+  .todo .edit-input {
+    background: var(--bg); color: var(--text); border: 1px solid var(--green);
+    border-radius: 8px; padding: 6px 9px; font-size: 14px; width: 100%; outline: none;
+  }
+
+  .foot { margin-top: 20px; text-align: center; font-size: 11px; color: var(--text3); }
+  .foot a { color: var(--text2); }
 
   /* popup modal */
   .overlay {
@@ -96,8 +119,16 @@
 </style>
 </head>
 <body>
-  <h1><span class="dot" id="hdot"></span>Todos</h1>
-  <p class="sub">Tasks with popup timers — minimize any timer into a floating capsule.</p>
+  <div class="topbar">
+    <div>
+      <h1><span class="dot" id="hdot"></span>Todos</h1>
+      <p class="sub">Tasks with popup timers — minimize any timer into a floating capsule.</p>
+    </div>
+    <div style="text-align:right">
+      <div class="counter" id="counter"></div>
+      <button class="clear" id="clearDone" title="Remove completed tasks">Clear done</button>
+    </div>
+  </div>
 
   <div class="add">
     <input id="newText" type="text" placeholder="Add a task…" maxlength="120" />
@@ -115,6 +146,8 @@
   <div class="empty" id="empty">No tasks yet. Add one above.</div>
 
   <p class="note">Click the ⏱ on a task to open its popup timer. Use <strong>Float on top</strong> (Chrome/Edge) to shrink the timer into a capsule that stays on top of every window — drag it anywhere with its title bar, like a live score overlay.</p>
+
+  <p class="foot">Part of <a href="https://iiuc-arms.eu.cc/studio" target="_blank" rel="noopener">IIUC-ARMS Studio</a> · community app · data stays in your browser</p>
 
   <div class="overlay" id="overlay">
     <div class="popup">
@@ -162,6 +195,7 @@
   let capsuleId = null;     // todo referenced by the capsule
   let pipWindow = null;
   let popupId = null;
+  let editingId = null;     // todo whose text is being edited
 
   const running = () => todos.find((t) => t.running);
 
@@ -272,6 +306,33 @@
     if (!t.running) t.remaining = d;
     save(); render();
   }
+  function clearDone() {
+    todos = todos.filter((t) => !t.done);
+    if (!todos.some((t) => t.running)) activeId = null;
+    save(); render();
+  }
+
+  function durationOptions(selected) {
+    const mins = [5, 15, 25, 45, 60];
+    return mins
+      .map((m) => '<option value="' + m * 60 + '"' + (selected === m * 60 ? ' selected' : '') + '>' + m + ' min</option>')
+      .join('');
+  }
+
+  function editTodo(id) {
+    editingId = id;
+    render();
+    const inp = document.querySelector('.edit-input');
+    if (inp) { inp.focus(); inp.select(); }
+  }
+  function commitEdit(id) {
+    if (editingId !== id) return;
+    const t = find(id);
+    const inp = document.querySelector('.edit-input');
+    if (t && inp && inp.value.trim()) t.text = inp.value.trim();
+    editingId = null;
+    save(); render();
+  }
 
   // ── Popup ────────────────────────────────────────────────────────────────
   function openPopup(id) {
@@ -357,6 +418,12 @@
     const list = $('list');
     list.innerHTML = '';
     $('empty').style.display = todos.length ? 'none' : '';
+    const active = todos.filter((t) => !t.done).length;
+    const done = todos.length - active;
+    $('counter').innerHTML = todos.length
+      ? '<b>' + active + '</b> active · <b>' + done + '</b> done'
+      : '';
+    $('clearDone').disabled = done === 0;
     for (const t of todos) {
       const row = document.createElement('div');
       row.className = 'todo' + (t.running ? ' running' : '') + (t.done ? ' done' : '');
@@ -367,13 +434,28 @@
         '<div class="act">' +
           '<button class="btn icon" data-act="popup" title="Open timer popup">⏱</button>' +
           '<button class="btn icon" data-act="play" title="Start / Pause">' + (t.running ? '❚❚' : '▶') + '</button>' +
+          '<select class="dur" data-act="dur" title="Duration">' + durationOptions(t.duration) + '</select>' +
+          '<button class="btn icon" data-act="edit" title="Edit text">✏</button>' +
           '<button class="btn icon" data-act="reset" title="Reset">⟲</button>' +
           '<button class="btn icon" data-act="del" title="Delete">✕</button>' +
         '</div>';
-      row.querySelector('.text').textContent = t.text;
+      if (editingId === t.id) {
+        row.querySelector('.body').innerHTML = '<input class="edit-input" maxlength="120">';
+        const inp = row.querySelector('.edit-input');
+        inp.value = t.text;
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') commitEdit(t.id);
+          if (e.key === 'Escape') { editingId = null; render(); }
+        });
+        inp.addEventListener('blur', () => commitEdit(t.id));
+      } else {
+        row.querySelector('.text').textContent = t.text;
+      }
       row.querySelector('.check').addEventListener('click', () => toggleDone(t.id));
       row.querySelector('[data-act="popup"]').addEventListener('click', () => openPopup(t.id));
       row.querySelector('[data-act="play"]').addEventListener('click', () => (t.running ? pauseTodo(t.id) : startTodo(t.id)));
+      row.querySelector('[data-act="dur"]').addEventListener('change', (e) => setDuration(t.id, Number(e.target.value)));
+      row.querySelector('[data-act="edit"]').addEventListener('click', () => editTodo(t.id));
       row.querySelector('[data-act="reset"]').addEventListener('click', () => resetTodo(t.id));
       row.querySelector('[data-act="del"]').addEventListener('click', () => deleteTodo(t.id));
       list.appendChild(row);
@@ -397,7 +479,8 @@
   function renderTimesOnly() {
     document.querySelectorAll('.todo').forEach((row, i) => {
       const t = todos[i];
-      if (t) row.querySelector('.time').textContent = fmt(t.remaining) + ' · ' +
+      const el = row.querySelector('.time');
+      if (t && el) el.textContent = fmt(t.remaining) + ' · ' +
         (t.duration >= 3600 ? (t.duration / 3600) + ' hr' : t.duration / 60 + ' min');
     });
     $('pTime').textContent = popupId && find(popupId) ? fmt(find(popupId).remaining) : $('pTime').textContent;
@@ -408,6 +491,7 @@
   // ── Events ───────────────────────────────────────────────────────────────
   $('addBtn').addEventListener('click', addTodo);
   $('newText').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+  $('clearDone').addEventListener('click', clearDone);
   $('pStart').addEventListener('click', () => { const t = find(popupId); if (t) t.running ? pauseTodo(t.id) : startTodo(t.id); });
   $('pReset').addEventListener('click', () => { if (popupId) resetTodo(popupId); });
   $('pMin').addEventListener('click', () => closePopup());

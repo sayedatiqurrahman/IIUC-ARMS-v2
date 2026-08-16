@@ -7,7 +7,8 @@ import StatTip from './StatTip';
 const CODE_TIP = 'Commits to the QSIS-ARMS-v2 source-code repo. Every commit you push there counts as 1, and every pull request you get merged into it also counts as 1.';
 const DATA_TIP = 'Files you uploaded to the Academic Files data repo. Every file you upload is committed to that repo and counts as 1 (merged pull requests there count too).';
 const PR_TIP = 'Pull requests you opened that got merged — counted across both the source-code repo and the data repo.';
-const TOTAL_TIP = 'Code + Data added together. (Pull requests are already counted inside Code and Data.)';
+const BUG_TIP = 'Issues (bug reports, feature requests) you opened on the QSIS-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.';
+const TOTAL_TIP = 'Code + Data + Issues added together. (Pull requests are already counted inside Code and Data.)';
 
 export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistory?: (c: any) => void }) {
   return (
@@ -57,7 +58,9 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
           <div className="w-px h-6 bg-dark-border"></div>
           <StatTip size="sm" icon="fa-code-merge" color="text-accent" value={c.prCount} label="PRs" tip={PR_TIP} />
           <div className="w-px h-6 bg-dark-border"></div>
-          <StatTip size="sm" icon="fa-star" color="text-yellow-500" value={c.v2Contributions + c.dataContributions} label="Total" tip={TOTAL_TIP} />
+          <StatTip size="sm" icon="fa-bug" color="text-rose-400" value={c.issueContributions || 0} label="Issues" tip={BUG_TIP} />
+          <div className="w-px h-6 bg-dark-border"></div>
+          <StatTip size="sm" icon="fa-star" color="text-yellow-500" value={c.v2Contributions + c.dataContributions + (c.issueContributions || 0)} label="Total" tip={TOTAL_TIP} />
         </div>
       </div>
 
@@ -108,8 +111,11 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
             <span className="text-[0.65rem] text-accent bg-accent/10 px-2 py-0.5 rounded-full" title={PR_TIP}>
               <i className="fas fa-code-merge mr-1"></i>{c.prCount} PRs
             </span>
+            <span className="text-[0.65rem] text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full" title={BUG_TIP}>
+              <i className="fas fa-bug mr-1"></i>{c.issueContributions || 0} Issues
+            </span>
             <span className="text-[0.65rem] font-bold text-dark-text bg-dark-bg3 px-2 py-0.5 rounded-full" title={TOTAL_TIP}>
-              <i className="fas fa-star mr-1 text-yellow-500"></i>{c.v2Contributions + c.dataContributions} Total
+              <i className="fas fa-star mr-1 text-yellow-500"></i>{c.v2Contributions + c.dataContributions + (c.issueContributions || 0)} Total
             </span>
           </div>
         </div>

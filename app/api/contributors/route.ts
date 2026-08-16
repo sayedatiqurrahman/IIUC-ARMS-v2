@@ -15,6 +15,7 @@ interface Contributor {
   v2Contributions: number;
   dataContributions: number;
   designContributions: number;
+  issueContributions: number;
   prCount: number;
   role: string;
   roleType: 'developer' | 'resource_provider' | 'both';
@@ -172,11 +173,12 @@ export async function GET() {
     const token = await getGithubToken();
     const GITHUB_API = 'https://api.github.com';
 
-    const [v2Contributors, dataContributors, v2Prs, dataPrs, designAuthors] = await Promise.all([
+    const [v2Contributors, dataContributors, v2Prs, dataPrs, v2Issues, designAuthors] = await Promise.all([
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/QSIS-ARMS-v2/contributors`, token),
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contributors`, token),
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/QSIS-ARMS-v2/pulls?state=all`, token),
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.repo}/pulls?state=all`, token),
+      fetchAllPages(`${GITHUB_API}/repos/${config.owner}/QSIS-ARMS-v2/issues?state=all`, token),
       // Creative Hub design authors (public raw file in the themes repo).
       fetch(`https://raw.githubusercontent.com/${config.creativeHub.owner}/${config.creativeHub.repo}/main/authors.json`, { cache: 'no-store' })
         .then((res) => res.json().catch(() => null)),
@@ -190,7 +192,7 @@ export async function GET() {
       if (map.has(login)) return map.get(login)!;
       const c: Contributor = {
         id, login, name: login, title: '', email: '', avatar_url: avatar, html_url: htmlUrl,
-        contributions: 0, v2Contributions: 0, dataContributions: 0, designContributions: 0, prCount: 0,
+        contributions: 0, v2Contributions: 0, dataContributions: 0, designContributions: 0, issueContributions: 0, prCount: 0,
         role: 'Contributor', roleType: 'developer',
         department: '', section: '',
         universityId: '', whatsapp: '', semester: '',
@@ -261,6 +263,17 @@ export async function GET() {
           }
         }
       }
+    }
+
+    // Process issues (bug reports / feature requests) — each issue opened by a
+    // user counts as 1 contribution (pull requests are filtered out here).
+    for (const issue of v2Issues) {
+      if (issue.pull_request) continue;
+      const u = issue.user;
+      if (!u?.login || isBot(u.login, u.type)) continue;
+      const c = ensure(u.login, u.avatar_url, u.html_url, String(u.id));
+      c.issueContributions += 1;
+      c.contributions += 1;
     }
 
     // Merge DB profiles
@@ -345,9 +358,9 @@ export async function GET() {
         // 1. Founder always first
         if (a.role === 'Founder & Lead') return -1;
         if (b.role === 'Founder & Lead') return 1;
-        // 2. Rank by combined total: commits + PRs from both repos + designs
-        const aTotal = a.v2Contributions + a.dataContributions + a.prCount + a.designContributions;
-        const bTotal = b.v2Contributions + b.dataContributions + b.prCount + b.designContributions;
+        // 2. Rank by combined total: commits + PRs from both repos + designs + issues
+        const aTotal = a.v2Contributions + a.dataContributions + a.prCount + a.designContributions + a.issueContributions;
+        const bTotal = b.v2Contributions + b.dataContributions + b.prCount + b.designContributions + b.issueContributions;
         if (settings.sortBy === 'name') return a.name.localeCompare(b.name);
         if (settings.sortBy === 'commits') return (b.v2Contributions + b.dataContributions) - (a.v2Contributions + a.dataContributions);
         if (settings.sortBy === 'prs') return b.prCount - a.prCount;

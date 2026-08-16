@@ -34,12 +34,15 @@ const nextConfig = {
         ],
       },
       {
-        // Everything except pdf.js viewer and the raw inline proxy (which loads
-        // inside an <iframe> for the PDF viewer / Office embed) gets DENY.
-        source: '/((?!pdfjs/|api/github/raw(?:/|$)).*)',
+        // Everything except pdf.js viewer, the raw inline proxy (which loads
+        // inside an <iframe> for the PDF viewer / Office embed), and the Studio
+        // app host pages + their proxy routes gets SAMEORIGIN. Studio community
+        // apps are iframed under /studio/app/<id> on this same origin, so those
+        // paths must never be blocked by a frame policy.
+        source: '/((?!pdfjs/|api/github/raw(?:/|$)|studio/app/|api/studio-apps/).*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },

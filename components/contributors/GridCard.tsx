@@ -162,10 +162,13 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
             <span className="text-[0.6rem] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Designs you published on the Creative Hub — each published design/theme counts as 1.">
               <i className="fas fa-palette mr-0.5"></i>{c.designContributions || 0}
             </span>
+            <span className="text-[0.6rem] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded" title="Issues (bug reports, feature requests) you opened on the QSIS-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.">
+              <i className="fas fa-bug mr-0.5"></i>{c.issueContributions || 0}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[0.65rem] font-bold text-yellow-500" title="Code + Data + Design added together (pull requests are already included inside Code and Data).">
-              {c.v2Contributions + c.dataContributions + (c.designContributions || 0)}
+            <span className="text-[0.65rem] font-bold text-yellow-500" title="Code + Data + Design + Issues added together (pull requests are already included inside Code and Data).">
+              {c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0)}
             </span>
             <button
               onClick={() => onShowHistory?.(c)}

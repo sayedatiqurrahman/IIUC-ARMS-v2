@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
 import { fetchRegistryFromGitHub, mergeStudioApps, APP_ID_REGEX } from '@/lib/studio-apps';
+import AppChrome from '@/components/studio/AppChrome';
 
-// /studio/app/<id> — runs a contributed static app from GitHub inside an iframe.
-// Built-in apps redirect to their own routes.
+// /studio/app/<id> — info page for a contributed static app; the app itself
+// runs from GitHub inside an iframe. Built-in apps redirect to their own routes.
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const community = await fetchRegistryFromGitHub();
@@ -35,57 +38,8 @@ export default async function StudioAppHost({ params }: { params: Promise<{ id: 
     redirect(app.path);
   }
 
-  const entry = app.entry || 'index.html';
-  const src = `/api/studio-apps/serve/${id}/${entry}`;
-  const author = app.author;
+  const session = await getServerSession(authOptions).catch(() => null);
+  const sessionEmail = session?.user?.email || '';
 
-  return (
-    <div className="min-h-[80vh] flex flex-col">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="h-12 w-12 shrink-0 rounded-2xl bg-indigo-500/15 flex items-center justify-center overflow-hidden">
-            {app.iconSvg ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={app.iconSvg} alt="" className="h-6 w-6 object-contain" />
-            ) : (
-              <span className="material-symbols-outlined text-indigo-400 text-2xl">{app.icon}</span>
-            )}
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold text-dark-text truncate">{app.title}</h1>
-            <p className="text-[0.76rem] text-dark-text2 truncate">{app.subtitle}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {author && (
-            <div className="flex items-center gap-2 rounded-full border border-dark-border bg-dark-bg2 pl-1 pr-3 py-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`https://github.com/${author.githubLogin}.png`}
-                alt={author.githubLogin}
-                className="h-6 w-6 rounded-full"
-              />
-              <span className="text-[0.72rem] text-dark-text2">
-                by <span className="text-dark-text font-medium">{author.name}</span>
-              </span>
-            </div>
-          )}
-          <Link
-            href="/studio"
-            className="rounded-xl border border-dark-border bg-dark-bg2 px-3 py-2 text-[0.72rem] font-medium text-dark-text transition hover:border-qsis hover:text-qsis no-underline"
-          >
-            <i className="fas fa-arrow-left mr-1"></i>Studio
-          </Link>
-        </div>
-      </div>
-
-      <div className="flex-1 rounded-2xl overflow-hidden border border-dark-border bg-white">
-        <iframe src={src} title={app.title} className="h-[calc(100dvh-220px)] min-h-[480px] w-full" allow="clipboard-write; fullscreen; document-picture-in-picture" />
-      </div>
-      <p className="mt-2 text-[0.68rem] text-dark-text3">
-        Community app · runs from GitHub, nothing leaves your browser.
-      </p>
-    </div>
-  );
+  return <AppChrome app={app} sessionEmail={sessionEmail} />;
 }

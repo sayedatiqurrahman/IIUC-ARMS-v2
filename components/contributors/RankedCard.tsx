@@ -9,7 +9,8 @@ const CODE_TIP = 'Commits to the QSIS-ARMS-v2 source-code repo. Every commit you
 const DATA_TIP = 'Files you uploaded to the Academic Files data repo. Every file you upload is committed to that repo and counts as 1 (merged pull requests there count too).';
 const DESIGN_TIP = 'Designs you published on the Creative Hub. Each design/theme you publish counts as 1.';
 const PR_TIP = 'Pull requests you opened that got merged — counted across both the source-code repo and the data repo.';
-const TOTAL_TIP = 'Code + Data + Design added together. (Pull requests are already counted inside Code and Data.)';
+const BUG_TIP = 'Issues (bug reports, feature requests) you opened on the QSIS-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.';
+const TOTAL_TIP = 'Code + Data + Design + Issues added together. (Pull requests are already counted inside Code and Data.)';
 
 export default function RankedCard({ c, rank, settings, onShowHistory }: { c: any; rank: number; settings: Settings; onShowHistory?: (c: any) => void }) {
   const rankColors: Record<number, string> = {
@@ -65,8 +66,9 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
             <StatTip icon="fa-book-open" color="text-orange-400" value={c.dataContributions} label="Data" tip={DATA_TIP} />
             <StatTip icon="fa-palette" color="text-emerald-400" value={c.designContributions || 0} label="Design" tip={DESIGN_TIP} />
             <StatTip icon="fa-code-merge" color="text-accent" value={c.prCount} label="PRs" tip={PR_TIP} />
+            <StatTip icon="fa-bug" color="text-rose-400" value={c.issueContributions || 0} label="Issues" tip={BUG_TIP} />
             <div className="border-l border-dark-border pl-3 ml-1">
-              <StatTip icon="fa-star" color="text-yellow-500" value={c.v2Contributions + c.dataContributions + (c.designContributions || 0)} label="Total" tip={TOTAL_TIP} />
+              <StatTip icon="fa-star" color="text-yellow-500" value={c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0)} label="Total" tip={TOTAL_TIP} />
             </div>
           </div>
         )}
@@ -129,7 +131,9 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
             <div className="w-px h-6 bg-dark-border"></div>
             <StatTip size="sm" icon="fa-code-merge" color="text-accent" value={c.prCount} label="PRs" tip={PR_TIP} />
             <div className="w-px h-6 bg-dark-border"></div>
-            <StatTip size="sm" icon="fa-star" color="text-yellow-500" value={c.v2Contributions + c.dataContributions + (c.designContributions || 0)} label="Total" tip={TOTAL_TIP} />
+            <StatTip size="sm" icon="fa-bug" color="text-rose-400" value={c.issueContributions || 0} label="Issues" tip={BUG_TIP} />
+            <div className="w-px h-6 bg-dark-border"></div>
+            <StatTip size="sm" icon="fa-star" color="text-yellow-500" value={c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0)} label="Total" tip={TOTAL_TIP} />
           </div>
         )}
         {/* Info grid */}

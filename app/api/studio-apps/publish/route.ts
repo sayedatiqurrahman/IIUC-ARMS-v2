@@ -82,47 +82,6 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Files: paths must be safe, content must be base64, total size capped.
-    if (!Array.isArray(body.files) || body.files.length === 0 || body.files.length > MAX_FILES) {
-      return NextResponse.json({ error: `Attach between 1 and ${MAX_FILES} files (your dist folder).` }, { status: 400 });
-    }
-
-    const files: UploadFile[] = [];
-    let totalBytes = 0;
-    for (const f of body.files) {
-      const rawPath = String(f?.path || '').replace(/\\/g, '/');
-      const cleanPath = rawPath.replace(/^\.\/+/, '');
-      if (!cleanPath || cleanPath.startsWith('/') || cleanPath.includes('..') || cleanPath.includes('//')) {
-        return NextResponse.json({ error: `Unsafe file path: ${rawPath}` }, { status: 400 });
-      }
-      const content = String(f?.content || '');
-      if (!content) continue;
-      let bytes = 0;
-      try {
-        bytes = Buffer.from(content, 'base64').length;
-      } catch {
-        return NextResponse.json({ error: `Could not decode ${cleanPath}.` }, { status: 400 });
-      }
-      if (bytes === 0) continue;
-      totalBytes += bytes;
-      if (totalBytes > MAX_TOTAL_BYTES) {
-        return NextResponse.json({ error: 'Total app size exceeds 8 MB.' }, { status: 400 });
-      }
-      files.push({ path: cleanPath, content });
-    }
-    if (files.length === 0) {
-      return NextResponse.json({ error: 'No readable files received.' }, { status: 400 });
-    }
-
-    // Entry: index.html preferred, otherwise the first .html file.
-    const hasHtml = files.some((f) => f.path.toLowerCase().endsWith('.html'));
-    if (!hasHtml) {
-      return NextResponse.json({ error: 'The app needs at least one HTML file (e.g. index.html).' }, { status: 400 });
-    }
-    const entry = files.some((f) => f.path.toLowerCase() === 'index.html')
-      ? 'index.html'
-      : files.find((f) => f.path.toLowerCase().endsWith('.html'))!.path;
-
     // Author identity from the client + session (mirrors the Creative Hub flow).
     const author = {
       name: String(body.author?.name || session.user?.name || '').trim() || sessionEmail.split('@')[0],
@@ -168,8 +127,10 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
+    // An update is allowed only by the same author who originally published it.
     const existingIndex = registry.apps.findIndex((a) => a.id === id);
-    if (existingIndex >= 0) {
+    const isUpdate = existingIndex >= 0;
+    if (isUpdate) {
       const existing = registry.apps[existingIndex];
       const sameAuthor =
         (existing.author?.githubLogin && existing.author.githubLogin === author.githubLogin) ||
@@ -177,6 +138,53 @@ export async function POST(req: NextRequest) {
       if (!sameAuthor) {
         return NextResponse.json({ error: 'That app ID is already taken by another contributor.' }, { status: 409 });
       }
+    }
+
+    // Files: paths must be safe, content must be base64, total size capped.
+    // A metadata-only update may ship no files — the existing build is kept.
+    if (!Array.isArray(body.files) || body.files.length > MAX_FILES) {
+      return NextResponse.json({ error: `Attach between 1 and ${MAX_FILES} files (your dist folder).` }, { status: 400 });
+    }
+
+    const files: UploadFile[] = [];
+    let totalBytes = 0;
+    for (const f of body.files) {
+      const rawPath = String(f?.path || '').replace(/\\/g, '/');
+      const cleanPath = rawPath.replace(/^\.\/+/, '');
+      if (!cleanPath || cleanPath.startsWith('/') || cleanPath.includes('..') || cleanPath.includes('//')) {
+        return NextResponse.json({ error: `Unsafe file path: ${rawPath}` }, { status: 400 });
+      }
+      const content = String(f?.content || '');
+      if (!content) continue;
+      let bytes = 0;
+      try {
+        bytes = Buffer.from(content, 'base64').length;
+      } catch {
+        return NextResponse.json({ error: `Could not decode ${cleanPath}.` }, { status: 400 });
+      }
+      if (bytes === 0) continue;
+      totalBytes += bytes;
+      if (totalBytes > MAX_TOTAL_BYTES) {
+        return NextResponse.json({ error: 'Total app size exceeds 8 MB.' }, { status: 400 });
+      }
+      files.push({ path: cleanPath, content });
+    }
+    if (files.length === 0 && !isUpdate) {
+      return NextResponse.json({ error: `Attach between 1 and ${MAX_FILES} files (your dist folder).` }, { status: 400 });
+    }
+
+    // Entry: index.html preferred, otherwise the first .html file.
+    let entry = '';
+    if (files.length > 0) {
+      const hasHtml = files.some((f) => f.path.toLowerCase().endsWith('.html'));
+      if (!hasHtml) {
+        return NextResponse.json({ error: 'The app needs at least one HTML file (e.g. index.html).' }, { status: 400 });
+      }
+      entry = files.some((f) => f.path.toLowerCase() === 'index.html')
+        ? 'index.html'
+        : files.find((f) => f.path.toLowerCase().endsWith('.html'))!.path;
+    } else {
+      entry = registry.apps[existingIndex].entry || 'index.html';
     }
 
     const now = new Date().toISOString();
@@ -212,7 +220,7 @@ export async function POST(req: NextRequest) {
       branch: STUDIO_REPO.branch,
       baseSha,
       files: commitFiles,
-      message: `feat(studio-apps): add "${title}" by ${author.name}`,
+      message: `feat(studio-apps): ${isUpdate ? 'update' : 'add'} "${title}" by ${author.name}`,
       author: { name: author.name, email: author.email },
     });
 
