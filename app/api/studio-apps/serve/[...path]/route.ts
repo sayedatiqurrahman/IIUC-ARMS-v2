@@ -12,9 +12,9 @@ import {
 // contributed static build runs inside an iframe with relative asset URLs
 // resolved under this same origin — no Vercel rebuild involved.
 //
-// Responses are cached for 60s (tagged 'studio-app-files' + edge s-maxage), so
-// the app and its assets load instantly on repeat visits instead of hitting
-// GitHub every time. Publishing an app purges the tag.
+// Files are cached at the edge for 10 minutes (tagged 'studio-app-files' so a
+// publish purges them), which makes opening a community app and all its assets
+// fast on repeat visits instead of hitting GitHub every time.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -37,12 +37,12 @@ export async function GET(
   const base = `${owner}/${repo}/${branch}/apps/${id}/${filePath}`;
 
   const cacheControl =
-    'public, max-age=60, s-maxage=60, stale-while-revalidate=3600';
+    'public, max-age=600, s-maxage=600, stale-while-revalidate=86400';
 
   // Primary: raw CDN (fast, cached).
   const rawUrl = `https://raw.githubusercontent.com/${base}`;
   const rawRes = await fetch(rawUrl, {
-    next: { revalidate: 60, tags: [STUDIO_APP_FILES_CACHE_TAG] },
+    next: { revalidate: 600, tags: [STUDIO_APP_FILES_CACHE_TAG] },
   });
   if (rawRes.ok) {
     const buf = Buffer.from(await rawRes.arrayBuffer());
@@ -60,7 +60,7 @@ export async function GET(
     const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/apps/${id}/${filePath}?ref=${branch}`;
     const apiRes = await fetch(apiUrl, {
       headers: { Accept: 'application/vnd.github.v3+json' },
-      next: { revalidate: 60, tags: [STUDIO_APP_FILES_CACHE_TAG] },
+      next: { revalidate: 600, tags: [STUDIO_APP_FILES_CACHE_TAG] },
     });
     if (apiRes.ok) {
       const meta = await apiRes.json();
