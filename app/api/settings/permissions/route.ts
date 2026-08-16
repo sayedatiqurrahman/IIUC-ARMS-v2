@@ -6,13 +6,23 @@ import { invalidatePermissionsCache, DEFAULT_PERMISSIONS } from '@/lib/permissio
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const { getPermissions } = await import('@/lib/permissions');
+    const { getPermissions, getCustomRoles } = await import('@/lib/permissions');
     const permissions = await getPermissions();
-    return NextResponse.json({ success: true, permissions });
+    const customRoles = await getCustomRoles();
+    let myRole: string | null = null;
+    try {
+      const email = await getUserEmail(req);
+      if (email) {
+        const { prisma } = await import('@/lib/prisma');
+        const profile = await prisma.profile.findUnique({ where: { userId: email } });
+        myRole = profile?.role || null;
+      }
+    } catch {}
+    return NextResponse.json({ success: true, permissions, customRoles, myRole });
   } catch {
-    return NextResponse.json({ success: true, permissions: DEFAULT_PERMISSIONS });
+    return NextResponse.json({ success: true, permissions: DEFAULT_PERMISSIONS, customRoles: [], myRole: null });
   }
 }
 

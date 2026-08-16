@@ -408,7 +408,10 @@ export async function POST(req: NextRequest) {
     // ─── SET ROLE ───
     if (action === 'setRole') {
       const { newRole } = body;
-      if (!['admin', 'manager', 'teacher', 'student', 'user'].includes(newRole)) {
+      const { getCustomRoles } = await import('@/lib/permissions');
+      const customRoles = await getCustomRoles();
+      const customRoleKeys = customRoles.map(r => r.key);
+      if (!['admin', 'manager', 'teacher', 'student', 'user', ...customRoleKeys].includes(newRole)) {
         return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
       }
       // Only admin can set roles

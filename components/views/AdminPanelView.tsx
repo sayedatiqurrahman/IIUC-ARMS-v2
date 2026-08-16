@@ -13,6 +13,7 @@ import ContributorsTab from '@/components/admin/ContributorsTab';
 import RoomsTab from '@/components/admin/RoomsTab';
 import BatchesTab from '@/components/admin/BatchesTab';
 import PermissionsTab from '@/components/admin/PermissionsTab';
+import RolesTab from '@/components/admin/RolesTab';
 import CoursesTab from '@/components/admin/CoursesTab';
 import TelegramTab from '@/components/admin/TelegramTab';
 import OverviewTab from '@/components/admin/OverviewTab';
@@ -26,7 +27,7 @@ import { useUserAccess } from '@/lib/useUserAccess';
 // Deep-linkable tabs: /admin?tab=users&sub=pending (the `tab` param is only
 // owned here when the panel is rendered standalone — when embedded inside the
 // dashboard, DashboardView owns the `tab`/`admin` URL params).
-const TAB_KEYS: readonly Tab[] = ['overview', 'users', 'activity', 'faculty', 'facultyDept', 'courses', 'permissions', 'rooms', 'batches', 'telegram', 'contributors'];
+const TAB_KEYS: readonly Tab[] = ['overview', 'users', 'activity', 'faculty', 'facultyDept', 'courses', 'permissions', 'roles', 'rooms', 'batches', 'telegram', 'contributors'];
 const SUB_KEYS: readonly UserSubTab[] = ['all', 'admin', 'manager', 'teacher', 'student', 'external', 'pending'];
 
 interface AdminPanelViewProps {
@@ -108,7 +109,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
 
   const email = session?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
-  const { loading: accessLoading, has, hasAdminPanelAccess, hasCoursePerms } = useUserAccess(
+  const { loading: accessLoading, has, hasAdminPanelAccess, hasCoursePerms, customRoles } = useUserAccess(
     email,
     effectiveRole,
     profile?.isCR || false,
@@ -527,6 +528,39 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
     }
   };
 
+  const handleSaveFacultyEdit = async (id: string, form: { name: string; title: string; email: string; phone: string; shortForm: string; memberType: string }) => {
+    setFacultySaving(true);
+    try {
+      const res = await fetch('/api/faculty', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...form }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Updated successfully', 'success');
+        loadFaculty();
+        return true;
+      }
+      showToast(data.error || 'Update failed', 'error');
+      return false;
+    } catch {
+      showToast('Update failed', 'error');
+      return false;
+    } finally {
+      setFacultySaving(false);
+    }
+  };
+
+  // Mirrors canManageFaculty so custom "Manage Faculty" permission holders get
+  // the edit button (scoped to their own department when they have one).
+  const canEditFacultyMember = (m: any) => {
+    if (!(isAdmin || isManager || effectiveRole === 'teacher' || has('manageFaculty'))) return false;
+    if (effectiveRole === 'admin' || effectiveRole === 'teacher') return true;
+    if (profile?.department) return m.department === profile.department;
+    return true;
+  };
+
   const handleBulkImport = async () => {
     if (!bulkInput.trim()) {
       showToast('Paste JSON or CSV data first', 'error');
@@ -651,6 +685,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
     { key: 'rooms', label: 'Rooms', icon: 'fa-door-open', color: 'text-cyan-400', show: isAdmin || isManager || effectiveRole === 'teacher' || has('manageRooms') },
     { key: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR || has('manageBatches') },
     { key: 'permissions', label: 'Permissions', icon: 'fa-key', color: 'text-amber-400', show: isAdmin },
+    { key: 'roles', label: 'Roles', icon: 'fa-user-tag', color: 'text-blue-400', show: isAdmin },
     { key: 'contributors', label: 'Contributors', icon: 'fa-users', color: 'text-teal-400', show: isAdmin },
     { key: 'telegram', label: 'Telegram', icon: 'fa-paper-plane', color: 'text-cyan-400', show: isOwner },
     { key: 'activity', label: 'Activity Log', icon: 'fa-history', color: 'text-yellow-400', show: isAdmin || isManager },
@@ -802,6 +837,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           handleToggleACR={handleToggleACR}
           handleSetRole={handleSetRole}
           handleBan={handleBan}
+          customRoles={customRoles}
           handleToggleManager={handleToggleManager}
           handleApprove={handleApprove}
           handleReject={handleReject}
@@ -840,6 +876,8 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           handleToggleVisibility={handleToggleVisibility}
           handleBulkVisibility={handleBulkVisibility}
           handleDeleteFaculty={handleDeleteFaculty}
+          handleSaveFacultyEdit={handleSaveFacultyEdit}
+          canEditFacultyMember={canEditFacultyMember}
           loadFaculty={loadFaculty}
           loadFacultyRequests={loadFacultyRequests}
         />
@@ -858,7 +896,10 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
       {activeTab === 'batches' && <BatchesTab effectiveRole={effectiveRole} profile={profile} />}
 
       {/* Permissions Tab */}
-      {activeTab === 'permissions' && <PermissionsTab />}
+      {activeTab === 'permissions' && <PermissionsTab customRoles={customRoles} />}
+
+      {/* Roles Tab */}
+      {activeTab === 'roles' && <RolesTab />}
 
       {/* Contributors Tab */}
       {activeTab === 'contributors' && <ContributorsTab />}

@@ -24,14 +24,18 @@ function InfoField({ label, value, icon, link }: { label: string; value: string;
   );
 }
 
-function getRoleBadge(role: string | null) {
+function getRoleBadge(role: string | null, customRoles: { key: string; label: string; icon: string; color: string }[] = []) {
   switch (role) {
     case 'admin': return <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 text-[0.65rem] font-semibold">Admin</span>;
     case 'manager': return <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 text-[0.65rem] font-semibold">Manager</span>;
     case 'teacher': return <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[0.65rem] font-semibold">Teacher</span>;
     case 'student': return <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[0.65rem] font-semibold">Student</span>;
     case 'external': return <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 text-[0.65rem] font-semibold"><i className="fas fa-globe mr-0.5"></i>External</span>;
-    default: return <span className="px-2 py-0.5 rounded-full bg-gray-500/15 text-gray-400 text-[0.65rem] font-semibold">User</span>;
+    default: {
+      const cr = customRoles.find(r => r.key === role);
+      if (cr) return <span className={`px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[0.65rem] font-semibold`}><i className={`fas ${cr.icon} mr-0.5 ${cr.color}`}></i>{cr.label}</span>;
+      return <span className="px-2 py-0.5 rounded-full bg-gray-500/15 text-gray-400 text-[0.65rem] font-semibold">User</span>;
+    }
   }
 }
 
@@ -54,6 +58,7 @@ interface UserRowProps {
   handleToggleACR: (email: string, current: boolean) => void;
   handleSetRole: (email: string, role: string) => void;
   handleBan: (email: string, isBanned: boolean) => void;
+  customRoles?: { key: string; label: string; icon: string; color: string }[];
   handleToggleManager: (email: string, currentRole: string) => void;
   handleApprove?: (email: string) => void;
   handleReject?: (email: string) => void;
@@ -73,6 +78,7 @@ export default function UserRow({
   handleToggleACR,
   handleSetRole,
   handleBan,
+  customRoles = [],
   handleToggleManager,
   handleApprove,
   handleReject,
@@ -104,7 +110,7 @@ export default function UserRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
             <span className="text-[0.85rem] font-semibold text-dark-text truncate">{u.name || u.email.split('@')[0]}</span>
-            {getRoleBadge(u.role)}
+            {getRoleBadge(u.role, customRoles)}
             {u.isCR && <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 text-[0.6rem] font-bold">CR</span>}
             {u.isACR && <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 text-[0.6rem] font-bold">ACR</span>}
             {isOwnerUser && <span className="px-1.5 py-0.5 rounded-md bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-bold"><i className="fas fa-star mr-0.5"></i>Owner</span>}
@@ -151,6 +157,7 @@ export default function UserRow({
                 { value: 'teacher', label: 'Teacher', icon: 'fa-chalkboard-teacher' },
                 ...(isAdmin ? [{ value: 'manager', label: 'Manager', icon: 'fa-user-shield' }] : []),
                 ...(isSuperAdmin ? [{ value: 'admin', label: 'Admin', icon: 'fa-crown' }] : []),
+                ...(isAdmin ? customRoles.map(r => ({ value: r.key, label: r.label, icon: r.icon })) : []),
               ]}
               className="min-w-[120px]"
             />

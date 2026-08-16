@@ -79,6 +79,7 @@ export default function AdminSidebar({
       {isAdmin && section('System', (
         <>
           {btn('permissions', 'fa-key', 'text-amber-400', 'Permissions', isCollapsed)}
+          {btn('roles', 'fa-user-tag', 'text-blue-400', 'Roles', isCollapsed)}
           {btn('contributors', 'fa-users', 'text-teal-400', 'Contributors', isCollapsed)}
         </>
       ), isCollapsed)}

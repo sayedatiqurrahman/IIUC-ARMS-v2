@@ -86,12 +86,14 @@ export default function FacultyView() {
   const facultyCount = members.filter(m => m.memberType === 'faculty').length;
   const staffCount = members.filter(m => m.memberType === 'staff').length;
 
+  // Mirrors server-side canManageFaculty (app/api/faculty + lib/can-manage-faculty.ts):
+  // admins & teachers manage any department; managers and custom "Manage Faculty"
+  // permission holders stay scoped to their own department when they have one.
   const canEditMember = (m: FacultyMember) => {
     if (!canEdit) return false;
-    if (effectiveRole === 'admin') return true;
-    if (effectiveRole === 'teacher') return true;
-    if (effectiveRole === 'manager' && myDept && m.department === myDept) return true;
-    return false;
+    if (effectiveRole === 'admin' || effectiveRole === 'teacher') return true;
+    if (myDept) return m.department === myDept;
+    return true;
   };
 
   const startEdit = (m: FacultyMember) => {

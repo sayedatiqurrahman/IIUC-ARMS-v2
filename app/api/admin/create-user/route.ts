@@ -23,7 +23,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Valid email required' }, { status: 400 });
     }
 
-    const validRoles = ['admin', 'manager', 'teacher', 'student', 'user'];
+    const { getCustomRoles } = await import('@/lib/permissions');
+    const customRoleKeys = (await getCustomRoles()).map(r => r.key);
+    const validRoles = ['admin', 'manager', 'teacher', 'student', 'user', ...customRoleKeys];
     if (role && !validRoles.includes(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
     }

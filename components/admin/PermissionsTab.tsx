@@ -11,7 +11,15 @@ const SETTABLE_ROLES = [
   { key: 'user', label: 'User', icon: 'fa-user', color: 'text-dark-text2' },
 ];
 
-export default function PermissionsTab() {
+interface CustomRole {
+  key: string;
+  label: string;
+  icon: string;
+  color: string;
+  permissions: string[];
+}
+
+export default function PermissionsTab({ customRoles = [] }: { customRoles?: CustomRole[] }) {
   const [permissions, setPermissions] = useState<Record<string, string[] | boolean>>({});
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,16 +234,23 @@ export default function PermissionsTab() {
   };
 
   const specialUsers = useMemo(() => {
+    const customRoleKeys = new Set((customRoles || []).map(r => r.key));
     return allUsers.filter(u =>
       u.role === 'admin' || u.role === 'manager' || u.isCR || u.isACR ||
+      customRoleKeys.has(u.role) ||
       (u.customPermissions && Object.values(u.customPermissions).some(Boolean))
     );
-  }, [allUsers]);
+  }, [allUsers, customRoles]);
 
   const roleBadge = (role?: string) => {
-    const r = ALL_ROLES.find(x => x.key === role);
+    const r = ALL_ROLES.find(x => x.key === role) || (customRoles || []).find(x => x.key === role);
     return r ? { label: r.label, icon: r.icon, color: r.color } : { label: role || 'user', icon: 'fa-user', color: 'text-dark-text2' };
   };
+
+  const assignableRoles = useMemo(() => [
+    ...SETTABLE_ROLES,
+    ...(customRoles || []).map(r => ({ key: r.key, label: r.label, icon: r.icon, color: r.color })),
+  ], [customRoles]);
 
   if (loading) return <div className="text-center py-10"><i className="fas fa-spinner fa-spin text-2xl text-qsis"></i></div>;
 
@@ -404,7 +419,7 @@ export default function PermissionsTab() {
           <i className="fas fa-user-cog text-blue-400"></i>
           <span className="text-[0.82rem] font-semibold text-dark-text">User Roles & Permission Scopes</span>
         </div>
-        <p className="text-[0.7rem] text-dark-text3 mb-3">Search any user to change their role (admin / manager / teacher / student), make them CR or ACR, or grant individual permissions that override role defaults.</p>
+        <p className="text-[0.7rem] text-dark-text3 mb-3">Search any user to change their role (admin / manager / teacher / student / custom roles), make them CR or ACR, or grant individual permissions that override role defaults.</p>
 
         {/* User Search */}
         <div className="relative" ref={scopeDropdownRef}>
@@ -505,7 +520,7 @@ export default function PermissionsTab() {
                 {saving && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</span>}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {SETTABLE_ROLES.map(role => {
+                {assignableRoles.map(role => {
                   const active = selectedUser.role === role.key;
                   return (
                     <button

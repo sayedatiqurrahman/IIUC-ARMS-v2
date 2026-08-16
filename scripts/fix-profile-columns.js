@@ -41,6 +41,7 @@ async function main() {
     { name: 'extraDepartments', table: 'SiteSettings', type: "JSONB DEFAULT '{}'" },
     { name: 'blockedTelegramChats', table: 'SiteSettings', type: "JSONB DEFAULT '[]'" },
     { name: 'blockedTelegramUsernames', table: 'SiteSettings', type: "JSONB DEFAULT '[]'" },
+    { name: 'customRoles', table: 'SiteSettings', type: "JSONB DEFAULT '[]'" },
   ];
 
   for (const col of settingsColumns) {

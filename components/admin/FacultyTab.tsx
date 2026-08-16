@@ -28,6 +28,8 @@ interface FacultyTabProps {
   handleToggleVisibility: (id: string, current: boolean) => void;
   handleBulkVisibility: (dept: string, visible: boolean) => void;
   handleDeleteFaculty: (id: string, name: string) => void;
+  handleSaveFacultyEdit: (id: string, form: { name: string; title: string; email: string; phone: string; shortForm: string; memberType: string }) => Promise<boolean>;
+  canEditFacultyMember: (m: any) => boolean;
   loadFaculty: (dept?: string) => void;
   loadFacultyRequests: () => void;
 }
@@ -55,9 +57,30 @@ export default function FacultyTab({
   handleToggleVisibility,
   handleBulkVisibility,
   handleDeleteFaculty,
+  handleSaveFacultyEdit,
+  canEditFacultyMember,
   loadFaculty,
   loadFacultyRequests,
 }: FacultyTabProps) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', title: '', email: '', phone: '', shortForm: '', memberType: 'faculty' });
+  const [editingSaving, setEditingSaving] = useState(false);
+
+  const startEdit = (m: any) => {
+    setEditingId(m.id);
+    setEditForm({ name: m.name || '', title: m.title || '', email: m.email || '', phone: m.phone || '', shortForm: m.shortForm || '', memberType: m.memberType || 'faculty' });
+  };
+
+  const cancelEdit = () => { setEditingId(null); setEditForm({ name: '', title: '', email: '', phone: '', shortForm: '', memberType: 'faculty' }); };
+
+  const saveEdit = async (id: string) => {
+    setEditingSaving(true);
+    const ok = await handleSaveFacultyEdit(id, editForm);
+    if (ok) cancelEdit();
+    setEditingSaving(false);
+  };
+
+  const editInputClass = 'w-full px-2 py-1 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.7rem] outline-none focus:border-qsis';
   return (
     <div>
       <h3 className="text-sm font-semibold text-dark-text mb-1"><i className="fas fa-building text-teal-400 mr-2"></i>Faculty Management</h3>
@@ -255,33 +278,68 @@ export default function FacultyTab({
                     </div>
                   </div>
                   {/* Members */}
-                  {members.map((m: any) => (
-                    <div key={m.id} className="px-4 py-2.5 flex items-center gap-3 hover:bg-dark-bg/50 transition-colors group">
+                  {members.map((m: any) => {
+                    const isEditing = editingId === m.id;
+                    return (
+                    <div key={m.id} className={`px-4 py-2.5 flex items-center gap-3 transition-colors group ${isEditing ? 'bg-qsis/5' : 'hover:bg-dark-bg/50'}`}>
                       <div className="w-9 h-9 rounded-full bg-gradient-to-br from-qsis/20 to-accent/20 border border-dark-border flex items-center justify-center flex-shrink-0">
                         <span className="text-[0.68rem] font-bold text-qsis">{m.shortForm || m.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}</span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[0.82rem] font-medium text-dark-text truncate">{m.name}</span>
-                          {m.title && <span className="text-[0.65rem] text-qsis">{m.title}</span>}
-                          {m.memberType === 'staff' && <span className="text-[0.6rem] px-1 py-0.5 rounded bg-orange-500/15 text-orange-400">Staff</span>}
+                      {isEditing ? (
+                        <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          <input type="text" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" className={editInputClass} />
+                          <input type="text" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} placeholder="Designation" className={editInputClass} />
+                          <input type="text" value={editForm.shortForm} onChange={e => setEditForm(f => ({ ...f, shortForm: e.target.value.toUpperCase() }))} placeholder="Short form" className={editInputClass} />
+                          <input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder="Email" className={editInputClass} />
+                          <input type="tel" value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="Phone" className={editInputClass} />
+                          <select value={editForm.memberType} onChange={e => setEditForm(f => ({ ...f, memberType: e.target.value }))} className={`${editInputClass} cursor-pointer`}>
+                            <option value="faculty">Faculty</option>
+                            <option value="staff">Staff</option>
+                          </select>
                         </div>
-                        <p className="text-[0.7rem] text-dark-text3">{m.email ? `${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</p>
-                      </div>
-                      <button onClick={() => handleToggleVisibility(m.id, m.isVisible)}
-                        className={`px-2 py-1 rounded text-[0.62rem] font-semibold cursor-pointer border transition-all ${
-                          m.isVisible
-                            ? 'bg-green-500/15 text-green-400 border-green-500/30 hover:bg-green-500/25'
-                            : 'bg-dark-bg3 text-dark-text3 border-dark-border hover:text-dark-text'
-                        }`} title={m.isVisible ? 'Visible publicly — click to hide' : 'Hidden — click to show publicly'}>
-                        <i className={`fas ${m.isVisible ? 'fa-eye' : 'fa-eye-slash'} mr-0.5`}></i>
-                        {m.isVisible ? 'Public' : 'Hidden'}
-                      </button>
-                      <button onClick={() => handleDeleteFaculty(m.id, m.name)} className="px-2 py-1 rounded bg-red-500/10 text-red-400 text-[0.65rem] cursor-pointer hover:bg-red-500/20 border-none opacity-0 group-hover:opacity-100 transition-opacity" title="Remove">
-                        <i className="fas fa-trash"></i>
-                      </button>
+                      ) : (
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[0.82rem] font-medium text-dark-text truncate">{m.name}</span>
+                            {m.title && <span className="text-[0.65rem] text-qsis">{m.title}</span>}
+                            {m.memberType === 'staff' && <span className="text-[0.6rem] px-1 py-0.5 rounded bg-orange-500/15 text-orange-400">Staff</span>}
+                          </div>
+                          <p className="text-[0.7rem] text-dark-text3">{m.email ? `${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</p>
+                        </div>
+                      )}
+                      {isEditing ? (
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button onClick={() => saveEdit(m.id)} disabled={editingSaving} className="px-2 py-1 rounded bg-qsis text-white text-[0.62rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">
+                            {editingSaving ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Save</>}
+                          </button>
+                          <button onClick={cancelEdit} disabled={editingSaving} className="px-2 py-1 rounded bg-dark-bg border border-dark-border text-dark-text2 text-[0.62rem] font-semibold cursor-pointer hover:text-dark-text disabled:opacity-50">
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button onClick={() => handleToggleVisibility(m.id, m.isVisible)}
+                            className={`px-2 py-1 rounded text-[0.62rem] font-semibold cursor-pointer border transition-all ${
+                              m.isVisible
+                                ? 'bg-green-500/15 text-green-400 border-green-500/30 hover:bg-green-500/25'
+                                : 'bg-dark-bg3 text-dark-text3 border-dark-border hover:text-dark-text'
+                            }`} title={m.isVisible ? 'Visible publicly — click to hide' : 'Hidden — click to show publicly'}>
+                            <i className={`fas ${m.isVisible ? 'fa-eye' : 'fa-eye-slash'} mr-0.5`}></i>
+                            {m.isVisible ? 'Public' : 'Hidden'}
+                          </button>
+                          {canEditFacultyMember(m) && (
+                            <button onClick={() => startEdit(m)} className="px-2 py-1 rounded bg-dark-bg text-dark-text2 text-[0.65rem] cursor-pointer hover:text-qsis border border-dark-border opacity-0 group-hover:opacity-100 transition-opacity" title="Edit member">
+                              <i className="fas fa-pen"></i>
+                            </button>
+                          )}
+                          <button onClick={() => handleDeleteFaculty(m.id, m.name)} className="px-2 py-1 rounded bg-red-500/10 text-red-400 text-[0.65rem] cursor-pointer hover:bg-red-500/20 border-none opacity-0 group-hover:opacity-100 transition-opacity" title="Remove">
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })}

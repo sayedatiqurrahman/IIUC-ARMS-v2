@@ -1,10 +1,20 @@
 import { prisma } from './prisma';
+import { Prisma } from '@prisma/client';
 import { config } from './config';
 import { DEFAULT_PERMISSIONS } from './permission-defaults';
 
 export { DEFAULT_PERMISSIONS };
 
+export interface CustomRole {
+  key: string;
+  label: string;
+  icon: string;
+  color: string;
+  permissions: string[];
+}
+
 let cachedPermissions: Record<string, string[]> | null = null;
+let cachedRoles: CustomRole[] | null = null;
 let lastFetch = 0;
 const CACHE_TTL = 30_000;
 
@@ -17,6 +27,10 @@ export async function getPermissions(): Promise<Record<string, string[]>> {
     const merged: Record<string, string[]> = {};
     for (const key of Object.keys(DEFAULT_PERMISSIONS)) {
       merged[key] = saved[key] || DEFAULT_PERMISSIONS[key];
+      // Preserve the per-email allowlist (`<action>_users`) entries so both the
+      // server hasPermission and the client mirror can honour them.
+      const perUserKey = `${key}_users`;
+      if (Array.isArray(saved[perUserKey])) merged[perUserKey] = saved[perUserKey];
     }
     cachedPermissions = merged;
   } catch {
@@ -28,7 +42,49 @@ export async function getPermissions(): Promise<Record<string, string[]>> {
 
 export function invalidatePermissionsCache() {
   cachedPermissions = null;
+  cachedRoles = null;
   lastFetch = 0;
+}
+
+export async function getCustomRoles(): Promise<CustomRole[]> {
+  const now = Date.now();
+  if (cachedRoles && now - lastFetch < CACHE_TTL) return cachedRoles;
+  try {
+    const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
+    const roles = (settings?.customRoles as unknown as CustomRole[]) || [];
+    cachedRoles = Array.isArray(roles) ? roles : [];
+  } catch {
+    cachedRoles = [];
+  }
+  lastFetch = now;
+  return cachedRoles;
+}
+
+export async function saveCustomRoles(roles: CustomRole[]): Promise<void> {
+  await prisma.siteSettings.upsert({
+    where: { id: 'site-settings' },
+    create: { id: 'site-settings', customRoles: roles as unknown as Prisma.InputJsonValue },
+    update: { customRoles: roles as unknown as Prisma.InputJsonValue },
+  });
+  invalidatePermissionsCache();
+}
+
+// Resolves a profile's custom grants in one pass: the permission bundle of the
+// custom role assigned to the profile (if any) plus the per-user customPermissions.
+export async function getProfileGrantData(email: string): Promise<{ rolePermissions: string[]; customPermissions: Record<string, boolean> }> {
+  try {
+    const profile = await prisma.profile.findUnique({ where: { userId: email } });
+    const customPermissions = (profile?.customPermissions as Record<string, boolean>) || {};
+    let rolePermissions: string[] = [];
+    if (profile?.role) {
+      const roles = await getCustomRoles();
+      const matched = roles.find(r => r.key === profile.role);
+      if (matched && Array.isArray(matched.permissions)) rolePermissions = matched.permissions;
+    }
+    return { rolePermissions, customPermissions };
+  } catch {
+    return { rolePermissions: [], customPermissions: {} };
+  }
 }
 
 export async function hasPermission(action: string, role: string, isCR: boolean = false, email?: string): Promise<boolean> {
@@ -38,8 +94,9 @@ export async function hasPermission(action: string, role: string, isCR: boolean 
   if (allowedRoles.includes(roleKey)) return true;
 
   if (email) {
-    const custom = await getCustomPermissions(email);
-    if (custom[action] === true) return true;
+    const { rolePermissions, customPermissions } = await getProfileGrantData(email);
+    if (rolePermissions.includes(action)) return true;
+    if (customPermissions[action] === true) return true;
 
     const perUserKey = `${action}_users`;
     const allowedUsers = (perms[perUserKey] as string[]) || [];
@@ -50,12 +107,8 @@ export async function hasPermission(action: string, role: string, isCR: boolean 
 }
 
 export async function getCustomPermissions(email: string): Promise<Record<string, boolean>> {
-  try {
-    const profile = await prisma.profile.findUnique({ where: { userId: email } });
-    return (profile?.customPermissions as Record<string, boolean>) || {};
-  } catch {
-    return {};
-  }
+  const { customPermissions } = await getProfileGrantData(email);
+  return customPermissions;
 }
 
 export async function setCustomPermissions(email: string, permissions: Record<string, boolean>): Promise<void> {

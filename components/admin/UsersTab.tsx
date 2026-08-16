@@ -44,6 +44,7 @@ interface UsersTabProps {
   handleToggleACR: (email: string, current: boolean) => void;
   handleSetRole: (email: string, role: string) => void;
   handleBan: (email: string, isBanned: boolean) => void;
+  customRoles?: { key: string; label: string; icon: string; color: string }[];
   handleToggleManager: (email: string, currentRole: string) => void;
   handleApprove: (email: string) => void;
   handleReject: (email: string) => void;
@@ -91,6 +92,7 @@ export default function UsersTab({
   handleToggleACR,
   handleSetRole,
   handleBan,
+  customRoles = [],
   handleToggleManager,
   handleApprove,
   handleReject,
@@ -290,6 +292,7 @@ export default function UsersTab({
             handleToggleACR={handleToggleACR}
             handleSetRole={handleSetRole}
             handleBan={handleBan}
+            customRoles={customRoles}
             handleToggleManager={handleToggleManager}
             handleApprove={handleApprove}
             handleReject={handleReject}
