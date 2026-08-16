@@ -24,6 +24,7 @@ button { font-family: inherit; }
 /* Hide the third-party "Made with Excalidraw" branding inside the embedded
    boards. The footer-center strip holds the logo; footer-left (zoom) stays. */
 .excalidraw .footer-center { display: none !important; }
+.excalidraw .dropdown-menu-group  { display: none !important; }
 
 /* ── Window Controls Overlay (installed desktop PWA) ────────────────────
    When the app is installed on desktop, the OS draws the system menu +

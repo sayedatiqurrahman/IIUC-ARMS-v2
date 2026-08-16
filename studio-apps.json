@@ -4,8 +4,8 @@
     {
       "id": "todos",
       "title": "Todos",
-      "subtitle": "Task list with floating popup timers",
-      "description": "Add tasks with per-task timers, then minimize any timer into a small capsule that floats on top of every window — like a live score overlay. Runs entirely in the browser.",
+      "subtitle": "Task list with a draggable floating timer bubble",
+      "description": "Add tasks with per-task timers. The timer shows as a compact draggable bubble — click it for controls, or float it on top of every window like a live score overlay. Runs entirely in the browser.",
       "icon": "checklist",
       "source": "community",
       "entry": "index.html",

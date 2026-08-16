@@ -122,6 +122,12 @@ export default function Whiteboard({ draftId }: WhiteboardProps) {
           >
             <i className="fas fa-arrow-left"></i> Back
           </Link>
+          <Link
+            href="/studio"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-dark-border bg-dark-bg px-3 py-1.5 text-[0.72rem] font-semibold text-dark-text no-underline transition hover:border-indigo-500 hover:text-indigo-400"
+          >
+            <i className="fas fa-grid-2"></i> Studio
+          </Link>
           <input
             value={title}
             onChange={(e) => handleTitleChange(e.target.value)}

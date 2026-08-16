@@ -97,22 +97,37 @@
   .popup .p-ctrl .btn { padding: 12px 22px; font-size: 15px; }
   .popup .p-min { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
 
-  /* in-app capsule (corner, sports-score style) */
+  /* floating timer bubble (sports-score style) */
   .capsule {
-    position: fixed; right: 14px; bottom: 14px; left: 14px; margin: 0 auto; max-width: 420px;
-    background: var(--bg3); border: 1px solid var(--green); border-radius: 999px;
-    display: none; align-items: center; gap: 10px; padding: 8px 12px;
-    box-shadow: 0 12px 30px rgba(0,0,0,.5); z-index: 40;
+    position: fixed; right: 14px; bottom: 14px; left: auto; top: auto;
+    display: none; align-items: center; gap: 9px; padding: 6px 13px 6px 8px;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 999px;
+    box-shadow: 0 10px 28px rgba(0,0,0,.55); z-index: 40;
+    cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none;
+    transition: box-shadow .15s, border-color .15s, border-radius .15s, padding .15s;
+    max-width: min(360px, calc(100vw - 24px));
   }
   .capsule.show { display: flex; }
-  .capsule .livedot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); flex: none; }
-  .capsule.running .livedot { animation: pulse 1.2s infinite; }
+  .capsule:hover { border-color: var(--text3); box-shadow: 0 14px 34px rgba(0,0,0,.65); }
+  .capsule:focus-visible { outline: 2px solid rgba(34,197,94,.6); outline-offset: 2px; }
+  .capsule.dragging { cursor: grabbing; transition: none; }
+  .capsule .livedot { width: 9px; height: 9px; border-radius: 50%; background: var(--text3); flex: none; }
+  .capsule.running .livedot { background: var(--green); animation: pulse 1.2s infinite; }
+  .capsule.done .livedot { background: var(--text3); }
+  .capsule .c-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.15; }
+  .capsule .c-label { font-size: 11.5px; font-weight: 600; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+  .capsule .c-row { display: flex; align-items: baseline; gap: 7px; }
+  .capsule .c-time { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+  .capsule.running .c-time { color: var(--green); }
+  .capsule .c-state { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text3); }
+  .capsule.running .c-state { color: var(--green); }
+  .capsule .c-panel { display: none; flex: 1 0 100%; }
+  .capsule.expanded { flex-wrap: wrap; border-radius: 18px; padding: 10px 12px; }
+  .capsule.expanded .c-panel { display: block; margin-top: 6px; }
+  .capsule.expanded .c-time { font-size: 24px; letter-spacing: 1px; }
+  .capsule.expanded .cp-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .capsule.expanded .btn.icon { width: 36px; height: 36px; border-radius: 12px; }
   @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,.5); } 50% { box-shadow: 0 0 0 7px rgba(34,197,94,0); } }
-  .capsule .c-text { flex: 1; min-width: 0; }
-  .capsule .c-label { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .capsule .c-time { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
-  .capsule .c-btns { display: flex; gap: 6px; flex: none; }
-  .capsule .btn.icon { width: 34px; height: 34px; }
 
   .empty { text-align: center; color: var(--text3); font-size: 13px; margin-top: 40px; }
   .note { margin-top: 14px; font-size: 11.5px; color: var(--text3); line-height: 1.5; }
@@ -122,7 +137,7 @@
   <div class="topbar">
     <div>
       <h1><span class="dot" id="hdot"></span>Todos</h1>
-      <p class="sub">Tasks with popup timers — minimize any timer into a floating capsule.</p>
+      <p class="sub">Tasks with popup timers — minimize any timer into a draggable floating bubble.</p>
     </div>
     <div style="text-align:right">
       <div class="counter" id="counter"></div>
@@ -145,7 +160,7 @@
   <div class="list" id="list"></div>
   <div class="empty" id="empty">No tasks yet. Add one above.</div>
 
-  <p class="note">Click the ⏱ on a task to open its popup timer. Use <strong>Float on top</strong> (Chrome/Edge) to shrink the timer into a capsule that stays on top of every window — drag it anywhere with its title bar, like a live score overlay.</p>
+  <p class="note">Click the ⏱ on a task to open its popup timer. The timer then shows as a compact bubble — <strong>drag it</strong> anywhere, <strong>click it</strong> to expand controls, or use <strong>Float on top</strong> (Chrome/Edge) to keep it over every window like a live score overlay.</p>
 
   <p class="foot">Part of <a href="https://iiuc-arms.eu.cc/studio" target="_blank" rel="noopener">IIUC-ARMS Studio</a> · community app · data stays in your browser</p>
 
@@ -166,17 +181,23 @@
     </div>
   </div>
 
-  <div class="capsule" id="capsule">
+  <div class="capsule" id="capsule" role="button" tabindex="0" aria-expanded="false" aria-label="Timer">
     <span class="livedot" id="cDot"></span>
     <div class="c-text">
       <div class="c-label" id="cLabel"></div>
-      <div class="c-time" id="cTime">25:00</div>
+      <div class="c-row">
+        <span class="c-time" id="cTime">25:00</span>
+        <span class="c-state" id="cState">Paused</span>
+      </div>
     </div>
-    <div class="c-btns">
-      <button class="btn icon" id="cPlay" title="Start / Pause">▶</button>
-      <button class="btn icon" id="cReset" title="Reset">⟲</button>
-      <button class="btn icon" id="cFloat" title="Float on top">🗔</button>
-      <button class="btn icon" id="cClose" title="Close capsule">✕</button>
+    <div class="c-panel">
+      <div class="cp-btns">
+        <button class="btn icon" id="cPlay" title="Start / Pause">▶</button>
+        <button class="btn icon" id="cMin5" title="Add 5 minutes">+5</button>
+        <button class="btn icon" id="cStop" title="Complete task">✓</button>
+        <button class="btn icon" id="cFloat" title="Float on top">🗔</button>
+        <button class="btn icon" id="cClose" title="Close bubble">✕</button>
+      </div>
     </div>
   </div>
 
@@ -261,6 +282,7 @@
     if (t.remaining <= 0) t.remaining = t.duration;
     t.running = true; t.lastTick = Date.now();
     activeId = id;
+    if (capDismissed === id) capDismissed = null;
     save(); render();
   }
   function pauseTodo(id) {
@@ -338,6 +360,7 @@
   function openPopup(id) {
     const t = find(id); if (!t) return;
     popupId = id; capsuleId = id;
+    if (capDismissed === id) capDismissed = null;
     $('overlay').classList.add('show');
     updatePopup();
   }
@@ -351,17 +374,84 @@
     $('pipNote').textContent = pipWindow ? 'Floating — look at the small on-top window.' : '';
   }
 
-  // ── Capsule ──────────────────────────────────────────────────────────────
-  function updateCapsule() {
-    if (!capsuleId || pipWindow) { $('capsule').classList.remove('show'); return; }
-    const t = find(capsuleId);
-    if (!t) { $('capsule').classList.remove('show'); return; }
-    $('capsule').classList.add('show');
-    $('capsule').classList.toggle('running', !!t.running);
-    $('cLabel').textContent = t.text;
-    $('cTime').textContent = fmt(t.remaining);
-    $('cPlay').textContent = t.running ? '❚❚' : '▶';
+  // ── Floating timer bubble (sports-score style) ───────────────────────────
+  const CAP_POS_KEY = 'qsis_todos_capsule_pos';
+  const CAP_DRAG_THRESHOLD = 6;
+  const CAP_MARGIN = 8;
+
+  let capPos = null;        // saved {x,y} top-left position (px)
+  let capExpanded = false;
+  let capDragging = false;
+  let capMoved = false;
+  let capDragStart = null;
+  let capDragBase = null;
+  let capDismissed = null;  // todo whose bubble the user closed
+
+  function loadCapPos() {
+    try {
+      const p = JSON.parse(localStorage.getItem(CAP_POS_KEY) || 'null');
+      if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) capPos = { x: p.x, y: p.y };
+    } catch {}
   }
+  function saveCapPos() {
+    try { localStorage.setItem(CAP_POS_KEY, JSON.stringify(capPos)); } catch {}
+  }
+  function clampCap() {
+    const c = $('capsule');
+    const maxX = Math.max(CAP_MARGIN, window.innerWidth - c.offsetWidth - CAP_MARGIN);
+    const maxY = Math.max(CAP_MARGIN, window.innerHeight - c.offsetHeight - CAP_MARGIN);
+    capPos.x = Math.max(CAP_MARGIN, Math.min(maxX, capPos.x));
+    capPos.y = Math.max(CAP_MARGIN, Math.min(maxY, capPos.y));
+  }
+  function applyCapPos() {
+    const c = $('capsule');
+    if (!capPos) return;
+    clampCap();
+    c.style.left = capPos.x + 'px';
+    c.style.top = capPos.y + 'px';
+    c.style.right = 'auto';
+    c.style.bottom = 'auto';
+  }
+  function capsuleState(t) {
+    if (t.running) return 'Focus';
+    if (t.done || t.remaining <= 0) return 'Done';
+    if (t.remaining < t.duration) return 'Paused';
+    return 'Ready';
+  }
+  function setCapExpanded(on) {
+    capExpanded = on;
+    const c = $('capsule');
+    c.classList.toggle('expanded', on);
+    c.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (on) {
+      if (capPos) { clampCap(); applyCapPos(); }
+      $('cPlay').focus();
+    }
+  }
+  function toggleCapExpanded() { setCapExpanded(!capExpanded); }
+
+  function updateCapsule() {
+    const c = $('capsule');
+    if (!capsuleId || pipWindow) {
+      c.classList.remove('show');
+      setCapExpanded(false);
+      return;
+    }
+    const t = find(capsuleId);
+    if (!t) { c.classList.remove('show'); setCapExpanded(false); return; }
+    c.classList.add('show');
+    c.classList.toggle('running', !!t.running);
+    c.classList.toggle('done', !!t.done);
+    $('cLabel').textContent = t.text;
+    $('cLabel').title = t.text;
+    $('cTime').textContent = fmt(t.remaining);
+    $('cState').textContent = capsuleState(t);
+    $('cPlay').textContent = t.running ? '❚❚' : (t.remaining < t.duration && t.remaining > 0 ? '▶' : '↺');
+    $('cPlay').title = t.running ? 'Pause' : (t.remaining < t.duration && t.remaining > 0 ? 'Resume' : 'Restart');
+    c.setAttribute('aria-label', 'Timer: ' + t.text + ', ' + fmt(t.remaining) + ', ' + capsuleState(t) + '. Enter to open controls.');
+    applyCapPos();
+  }
+  loadCapPos();
 
   // ── Floating always-on-top window (Document Picture-in-Picture) ──────────
   async function floatTop() {
@@ -380,13 +470,15 @@
         '.caps{display:flex;align-items:center;gap:10px;padding:10px 12px;height:100%;box-sizing:border-box}' +
         '.dot{width:9px;height:9px;border-radius:50%;background:#22c55e;flex:none}' +
         '.dot.running{animation:p1 1.2s infinite}@keyframes p1{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}50%{box-shadow:0 0 0 7px rgba(34,197,94,0)}}' +
-        '.mid{flex:1;min-width:0}.lbl{font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tme{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}' +
+        '.mid{flex:1;min-width:0}.lbl{font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+        '.row2{display:flex;align-items:baseline;gap:8px}.tme{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}' +
+        '.st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b}' +
         'button{background:#1a2236;color:#e8edf5;border:1px solid #2a3a5c;border-radius:10px;width:38px;height:38px;font-size:14px;cursor:pointer;flex:none}' +
         'button:hover{border-color:#22c55e}.cls{border-color:#f43f5e}' +
         '</style>' +
         '<div class="caps">' +
         '<span class="dot" id="pdot"></span>' +
-        '<div class="mid"><div class="lbl" id="plbl"></div><div class="tme" id="ptme">25:00</div></div>' +
+        '<div class="mid"><div class="lbl" id="plbl"></div><div class="row2"><div class="tme" id="ptme">25:00</div><span class="st" id="pst">Paused</span></div></div>' +
         '<button id="pPlay" title="Start / Pause">▶</button>' +
         '<button id="pReset" title="Reset">⟲</button>' +
         '<button class="cls" id="pClose" title="Close">✕</button>' +
@@ -408,6 +500,7 @@
     const d = pipWindow.document;
     d.getElementById('ptme').textContent = fmt(t.remaining);
     d.getElementById('plbl').textContent = t.text;
+    d.getElementById('pst').textContent = capsuleState(t);
     d.getElementById('pdot').classList.toggle('running', !!t.running);
     d.getElementById('pPlay').textContent = t.running ? '❚❚' : '▶';
   }
@@ -460,7 +553,7 @@
       row.querySelector('[data-act="del"]').addEventListener('click', () => deleteTodo(t.id));
       list.appendChild(row);
     }
-    if (!capsuleId && activeId) capsuleId = activeId;
+    if (!capsuleId && activeId && activeId !== capDismissed) capsuleId = activeId;
     updateCapsule();
     updatePopup();
   }
@@ -498,9 +591,72 @@
   $('pFloat').addEventListener('click', () => { if (popupId) { capsuleId = popupId; } void floatTop(); });
   $('overlay').addEventListener('click', (e) => { if (e.target === $('overlay')) closePopup(); });
   $('cPlay').addEventListener('click', () => { const t = find(capsuleId); if (t) t.running ? pauseTodo(t.id) : startTodo(t.id); });
-  $('cReset').addEventListener('click', () => { if (capsuleId) resetTodo(capsuleId); });
+  $('cMin5').addEventListener('click', () => {
+    const t = find(capsuleId); if (!t) return;
+    t.remaining = Math.max(0, t.remaining + 300);
+    t.done = false;
+    save(); render();
+  });
+  $('cStop').addEventListener('click', () => { const t = find(capsuleId); if (t) complete(t); });
   $('cFloat').addEventListener('click', () => void floatTop());
-  $('cClose').addEventListener('click', () => { closePip(); capsuleId = null; updateCapsule(); });
+  $('cClose').addEventListener('click', () => {
+    capDismissed = capsuleId;
+    capsuleId = null;
+    closePip();
+    setCapExpanded(false);
+    updateCapsule();
+  });
+
+  // bubble drag (move) vs click (expand)
+  $('capsule').addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    capDragging = true;
+    capMoved = false;
+    capDragStart = { x: e.clientX, y: e.clientY };
+    const r = $('capsule').getBoundingClientRect();
+    capDragBase = { left: r.left, top: r.top };
+    try { $('capsule').setPointerCapture(e.pointerId); } catch {}
+  });
+  $('capsule').addEventListener('pointermove', (e) => {
+    if (!capDragging) return;
+    const dx = e.clientX - capDragStart.x;
+    const dy = e.clientY - capDragStart.y;
+    if (!capMoved && Math.hypot(dx, dy) < CAP_DRAG_THRESHOLD) return;
+    capMoved = true;
+    $('capsule').classList.add('dragging');
+    if (!capPos) capPos = { x: capDragBase.left, y: capDragBase.top };
+    capPos.x = capDragBase.left + dx;
+    capPos.y = capDragBase.top + dy;
+    clampCap();
+    $('capsule').style.left = capPos.x + 'px';
+    $('capsule').style.top = capPos.y + 'px';
+    $('capsule').style.right = 'auto';
+    $('capsule').style.bottom = 'auto';
+  });
+  $('capsule').addEventListener('pointerup', () => {
+    if (!capDragging) return;
+    capDragging = false;
+    $('capsule').classList.remove('dragging');
+    if (capMoved) saveCapPos();
+    else toggleCapExpanded();
+  });
+  $('capsule').addEventListener('pointercancel', () => {
+    capDragging = false;
+    $('capsule').classList.remove('dragging');
+  });
+  $('capsule').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleCapExpanded();
+    } else if (e.key === 'Escape') {
+      setCapExpanded(false);
+      $('capsule').focus();
+    }
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (capExpanded && !$('capsule').contains(e.target)) setCapExpanded(false);
+  });
+  window.addEventListener('resize', () => { if (capPos) { clampCap(); applyCapPos(); } });
 
   render();
 </script>

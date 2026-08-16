@@ -43,14 +43,9 @@ export default function AppChrome({
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
-  const startApp = async () => {
+  const startApp = () => {
     setStarted(true);
-    try {
-      if (wrapRef.current && !document.fullscreenElement && wrapRef.current.requestFullscreen) {
-        await wrapRef.current.requestFullscreen();
-      }
-      frameRef.current?.focus();
-    } catch {}
+    frameRef.current?.focus();
   };
 
   const openNewTab = () => {
@@ -194,10 +189,14 @@ export default function AppChrome({
         </p>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => {
-              if (started) {
+            onClick={async () => {
+              if (document.fullscreenElement) {
                 try {
-                  if (document.fullscreenElement) document.exitFullscreen();
+                  await document.exitFullscreen();
+                } catch {}
+              } else if (started) {
+                try {
+                  await wrapRef.current?.requestFullscreen();
                 } catch {}
               } else {
                 setStarted(true);
