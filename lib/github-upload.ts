@@ -1,7 +1,10 @@
 import { NextRequest } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { getRepoBotToken } from '@/lib/github-app';
+import { decrypt, isEncrypted } from '@/lib/crypto';
 import { hasPermission } from '@/lib/permissions';
 import { commitFilesToBranch, ghFetch, type FileToCommit } from '@/lib/github-commit';
 import { validateRepoPath } from '@/lib/repo-path';
@@ -31,7 +34,7 @@ export interface UploadResult {
 
 // Resolve the authenticated user + a server-side write token (bot/env) for
 // direct-to-main uploads. Returns { ctx } on success or { error, status, code }.
-export async function resolveUploadContext(req: NextRequest, _bodyToken = ''): Promise<{ ctx: UploadContext } | { error: string; status: number; code?: string }> {
+export async function resolveUploadContext(req: NextRequest, bodyToken = ''): Promise<{ ctx: UploadContext } | { error: string; status: number; code?: string }> {
   let userEmail = '';
   let userName = '';
   let githubLogin = '';
@@ -39,7 +42,8 @@ export async function resolveUploadContext(req: NextRequest, _bodyToken = ''): P
   let isOwner = false;
   let isBanned = false;
   let canUpload = false;
-  let profile: { role?: string; isBanned?: boolean; name?: string | null; githubLogin?: string | null; githubInstallationId?: string | null } | null = null;
+  let storedToken = '';
+  let profile: { role?: string; isBanned?: boolean; name?: string | null; githubLogin?: string | null; githubInstallationId?: string | null; githubToken?: string | null } | null = null;
 
   try {
     const email = await getUserEmail(req);
@@ -50,6 +54,10 @@ export async function resolveUploadContext(req: NextRequest, _bodyToken = ''): P
       isBanned = !!profile?.isBanned;
       userName = profile?.name || email.split('@')[0];
       githubLogin = profile?.githubLogin || '';
+      if (profile?.githubToken) {
+        const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
+        if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) storedToken = decrypted;
+      }
       if (profile?.githubInstallationId) {
         installationId = Number(profile.githubInstallationId);
       }
@@ -66,15 +74,33 @@ export async function resolveUploadContext(req: NextRequest, _bodyToken = ''): P
   }
 
   // ── Resolve a write-capable token (server-authoritative) ─────────────
-  // Uploads ALWAYS commit straight to main via the GitHub App bot (or the
-  // server GITHUB_TOKEN) — no fork, no PR, no review. A user PAT/session token
-  // is never used for the actual commit, so contributor uploads can never
-  // create a pull request. If no server-side write token is available we fail
-  // with a clear error instead of falling back to a PR.
+  // Priority:
+  //   1. The uploader's OWN GitHub credential (stored PAT → PAT pasted in the
+  //      modal → NextAuth session user token), so their upload is pushed by
+  //      THEIR account when they have access to the repo.
+  //   2. The GitHub App bot token — lets any logged-in uploader still upload
+  //      (commit is attributed to their GitHub identity), no GitHub needed.
+  //   3. The server GITHUB_TOKEN.
+  // There is never a fork/PR path: uploads always commit straight to main.
   let token = '';
   let tokenKind: 'pat' | 'session' | 'bot' | 'env' = 'pat';
 
-  if (canUpload || installationId) {
+  if ((canUpload || installationId) && (storedToken || bodyToken)) {
+    token = storedToken || bodyToken;
+    tokenKind = 'pat';
+  }
+
+  if (!token && (canUpload || installationId)) {
+    try {
+      const session = await getServerSession(authOptions);
+      if (session?.accessToken) {
+        token = session.accessToken;
+        tokenKind = 'session';
+      }
+    } catch {}
+  }
+
+  if (!token && (canUpload || installationId)) {
     const botToken = await getRepoBotToken(config.owner, config.repo);
     if (botToken) {
       token = botToken;
@@ -92,6 +118,22 @@ export async function resolveUploadContext(req: NextRequest, _bodyToken = ''): P
       status: 503,
       code: 'NO_SERVER_TOKEN',
     };
+  }
+
+  // Best effort: if the uploader connected GitHub but isn't a collaborator yet,
+  // try to add them so their own account can push in the future. Requires the
+  // GitHub App to have Administration: read & write — otherwise this is skipped
+  // and uploads simply fall back to the bot token.
+  if (tokenKind === 'pat' && githubLogin && githubLogin !== config.owner) {
+    try {
+      const botToken = await getRepoBotToken(config.owner, config.repo);
+      if (botToken) {
+        await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/collaborators/${githubLogin}`, botToken, {
+          method: 'PUT',
+          body: JSON.stringify({ permission: 'write' }),
+        });
+      }
+    } catch {}
   }
 
   return {
@@ -131,51 +173,83 @@ export async function commitUpload(ctx: UploadContext, files: FileToCommit[], me
   const fullFiles = files.map(f => ({ ...f, path: `${config.uploadPath}/${f.path}` }));
   const commitMessage = `Add ${fullFiles.map(f => f.path).join(', ')}`;
 
-  const repoRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}`, ctx.token);
-  if (repoRes.status === 401 || repoRes.status === 403) {
-    return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
+  // Commit under the uploader's OWN GitHub identity (name + noreply email from
+  // their connected account) so the commit shows as authored AND committed by
+  // the user, not by the bot — their GitHub graph and the contributors page
+  // credit them automatically. Falls back to the app profile identity when no
+  // GitHub account is connected.
+  const identity = ctx.githubLogin
+    ? { name: ctx.userName || ctx.githubLogin, email: `${ctx.githubLogin}@users.noreply.github.com` }
+    : ctx.userEmail
+      ? { name: ctx.userName || ctx.userEmail.split('@')[0], email: ctx.userEmail }
+      : undefined;
+
+  // Try the user's own token first (so their account pushes); if they don't
+  // have write access to the repo yet, fall back to the GitHub App bot token so
+  // the upload still lands (still credited to the user's identity).
+  const candidates: { token: string; kind: string }[] = [{ token: ctx.token, kind: ctx.tokenKind }];
+  if (ctx.tokenKind === 'pat' || ctx.tokenKind === 'session') {
+    const botToken = await getRepoBotToken(config.owner, config.repo);
+    if (botToken) candidates.push({ token: botToken, kind: 'bot' });
   }
-  if (!repoRes.ok) return { success: false, error: `Cannot access repo: ${repoRes.status}`, status: 500 };
-  const defaultBranch = (await repoRes.json()).default_branch;
 
-  const refRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${defaultBranch}`, ctx.token);
-  if (!refRes.ok) return { success: false, error: `Cannot read branch: ${refRes.status}`, status: 500 };
-  const baseSha = (await refRes.json()).object.sha;
+  let lastError = '';
+  for (const cand of candidates) {
+    const isUserToken = cand.kind === 'pat' || cand.kind === 'session';
+    try {
+      const repoRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}`, cand.token);
+      if (repoRes.status === 404 || repoRes.status === 403) {
+        if (isUserToken) { lastError = `access:${repoRes.status}`; continue; }
+        if (repoRes.status === 403) {
+          return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
+        }
+        return { success: false, error: 'Cannot access repo: 404', status: 500 };
+      }
+      if (!repoRes.ok) return { success: false, error: `Cannot access repo: ${repoRes.status}`, status: 500 };
+      const defaultBranch = (await repoRes.json()).default_branch;
 
-  try {
-    // Commit under the uploader's OWN GitHub identity (name + noreply email from
-    // their connected account) so the commit shows as authored AND committed by
-    // the user, not by the bot — their GitHub graph and the contributors page
-    // credit them automatically. Falls back to the app profile identity when no
-    // GitHub account is connected.
-    const identity = ctx.githubLogin
-      ? { name: ctx.userName || ctx.githubLogin, email: `${ctx.githubLogin}@users.noreply.github.com` }
-      : ctx.userEmail
-        ? { name: ctx.userName || ctx.userEmail.split('@')[0], email: ctx.userEmail }
-        : undefined;
-    await commitFilesToBranch({
-      token: ctx.token,
-      owner: config.owner,
-      repo: config.repo,
-      branch: defaultBranch,
-      baseSha,
-      files: fullFiles,
-      message: commitMessage,
-      author: identity,
-      committer: identity,
-    });
-  } catch (e: any) {
-    const msg = e?.message || '';
-    if (msg.includes('401') || msg.includes('403') || msg.includes('Bad credentials') || msg.includes('Requires authentication')) {
-      return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
+      const refRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${defaultBranch}`, cand.token);
+      if (!refRes.ok) {
+        if (isUserToken) { lastError = `ref:${refRes.status}`; continue; }
+        return { success: false, error: `Cannot read branch: ${refRes.status}`, status: 500 };
+      }
+      const baseSha = (await refRes.json()).object.sha;
+
+      await commitFilesToBranch({
+        token: cand.token,
+        owner: config.owner,
+        repo: config.repo,
+        branch: defaultBranch,
+        baseSha,
+        files: fullFiles,
+        message: commitMessage,
+        author: identity,
+        committer: identity,
+      });
+
+      return {
+        success: true,
+        pr: { url: `https://github.com/${config.owner}/${config.repo}/commit/${defaultBranch}`, number: 0 },
+        direct: true,
+      };
+    } catch (e: any) {
+      const msg = e?.message || '';
+      const isAuthErr = msg.includes('401') || msg.includes('403') || msg.includes('Bad credentials') || msg.includes('Requires authentication');
+      if (isUserToken && isAuthErr) { lastError = msg; continue; }
+      if (isAuthErr) {
+        return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
+      }
+      return { success: false, error: `Failed to commit to GitHub (${msg})`, status: 500 };
     }
-    return { success: false, error: `Failed to commit to GitHub (${msg})`, status: 500 };
   }
 
   return {
-    success: true,
-    pr: { url: `https://github.com/${config.owner}/${config.repo}/commit/${defaultBranch}`, number: 0 },
-    direct: true,
+    success: false,
+    error: lastError.includes('401') || lastError.includes('Bad credentials')
+      ? 'GitHub token expired or invalid. Please reconnect your GitHub account.'
+      : 'You do not have write access to the repository yet. Try again in a moment.',
+    status: 403,
+    code: 'TOKEN_NO_ACCESS',
   };
 }
 

@@ -3,6 +3,7 @@ import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getUserEmail } from '@/lib/get-user';
 import { getRepoBotToken } from '@/lib/github-app';
+import { decrypt, isEncrypted } from '@/lib/crypto';
 import { hasPermission } from '@/lib/permissions';
 
 export const maxDuration = 60;
@@ -39,11 +40,26 @@ export async function POST(req: NextRequest) {
     const isOwner = config.ownerEmails.includes(email) || profile?.githubLogin === config.owner;
     const installationId = profile?.githubInstallationId ? Number(profile.githubInstallationId) : null;
 
+    let storedPat = '';
+    if (profile?.githubToken) {
+      const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
+      if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) storedPat = decrypted;
+    }
+    const body = await req.json().catch(() => ({}));
+    const bodyToken = typeof body.githubToken === 'string' && (body.githubToken.startsWith('ghp_') || body.githubToken.startsWith('github_pat_'))
+      ? body.githubToken
+      : '';
+
     // ── Resolve a browser-safe token (server-authoritative) ──
-    // Uploads ALWAYS commit straight to main — via the GitHub App bot token
-    // (repo-scoped, 1h expiry, safe to hand to the browser) or the server
-    // GITHUB_TOKEN (never leaves the server; client falls back to the
-    // server-side upload routes). There is no fork/PR path anymore.
+    // Uploads ALWAYS commit straight to main — there is no fork/PR path.
+    // Priority: the uploader's OWN credential (stored PAT / pasted PAT) so they
+    // push with their account → GitHub App bot token → server GITHUB_TOKEN
+    // (never leaves the server; client falls back to server-side routes).
+    if ((canUpload || installationId) && (storedPat || bodyToken)) {
+      const token = storedPat || bodyToken;
+      return NextResponse.json({ tokenKind: 'pat', token, isOwner, directCommit: true, credit: false });
+    }
+
     if (canUpload || installationId) {
       const botToken = await getRepoBotToken(config.owner, config.repo);
       if (botToken) {
