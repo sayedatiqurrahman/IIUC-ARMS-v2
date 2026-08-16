@@ -742,16 +742,16 @@ export default function UploadForm({
         disabled={uploading || !!compressing}
       >
         {uploading ? (
-          <span className="flex flex-col items-center gap-1.5 w-full max-w-[340px]">
-            <span className="flex items-center gap-2 w-full justify-center">
-              <i className="fas fa-spinner fa-spin mr-1"></i>
-              <span className="flex-1 text-left truncate">{uploadProgress?.label || 'Uploading...'}</span>
+          <span className="flex flex-col items-center gap-1.5 w-full">
+            <span className="flex items-center justify-center gap-2 w-full">
+              <i className="fas fa-spinner fa-spin"></i>
+              <span className="truncate">{uploadProgress?.label || 'Uploading...'}</span>
               {uploadProgress && uploadProgress.percent > 0 && (
-                <span className="font-bold tabular-nums shrink-0">{Math.round(uploadProgress.percent)}%</span>
+                <span className="font-bold tabular-nums">{Math.round(uploadProgress.percent)}%</span>
               )}
             </span>
             {(uploadProgress && uploadProgress.percent > 0) && (
-              <span className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+              <span className="w-full max-w-[340px] h-2 bg-white/20 rounded-full overflow-hidden">
                 <span className="block h-full bg-white rounded-full transition-all" style={{ width: `${Math.max(3, uploadProgress.percent)}%` }}></span>
               </span>
             )}
