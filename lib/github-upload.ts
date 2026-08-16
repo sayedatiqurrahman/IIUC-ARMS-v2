@@ -11,6 +11,7 @@ const GITHUB_API = 'https://api.github.com';
 export interface UploadContext {
   userEmail: string;
   userName: string;
+  githubLogin: string;
   isOwner: boolean;
   isBanned: boolean;
   canUpload: boolean;
@@ -33,11 +34,12 @@ export interface UploadResult {
 export async function resolveUploadContext(req: NextRequest, _bodyToken = ''): Promise<{ ctx: UploadContext } | { error: string; status: number; code?: string }> {
   let userEmail = '';
   let userName = '';
+  let githubLogin = '';
   let installationId: number | null = null;
   let isOwner = false;
   let isBanned = false;
   let canUpload = false;
-  let profile: { role?: string; isBanned?: boolean; name?: string | null; githubInstallationId?: string | null; githubLogin?: string | null } | null = null;
+  let profile: { role?: string; isBanned?: boolean; name?: string | null; githubLogin?: string | null; githubInstallationId?: string | null } | null = null;
 
   try {
     const email = await getUserEmail(req);
@@ -47,6 +49,7 @@ export async function resolveUploadContext(req: NextRequest, _bodyToken = ''): P
       profile = await prisma.profile.findUnique({ where: { userId: email } });
       isBanned = !!profile?.isBanned;
       userName = profile?.name || email.split('@')[0];
+      githubLogin = profile?.githubLogin || '';
       if (profile?.githubInstallationId) {
         installationId = Number(profile.githubInstallationId);
       }
@@ -92,7 +95,7 @@ export async function resolveUploadContext(req: NextRequest, _bodyToken = ''): P
   }
 
   return {
-    ctx: { userEmail, userName, isOwner, isBanned, canUpload, installationId, token, tokenKind },
+    ctx: { userEmail, userName, githubLogin, isOwner, isBanned, canUpload, installationId, token, tokenKind },
   };
 }
 
@@ -140,6 +143,16 @@ export async function commitUpload(ctx: UploadContext, files: FileToCommit[], me
   const baseSha = (await refRes.json()).object.sha;
 
   try {
+    // Commit under the uploader's OWN GitHub identity (name + noreply email from
+    // their connected account) so the commit shows as authored AND committed by
+    // the user, not by the bot — their GitHub graph and the contributors page
+    // credit them automatically. Falls back to the app profile identity when no
+    // GitHub account is connected.
+    const identity = ctx.githubLogin
+      ? { name: ctx.userName || ctx.githubLogin, email: `${ctx.githubLogin}@users.noreply.github.com` }
+      : ctx.userEmail
+        ? { name: ctx.userName || ctx.userEmail.split('@')[0], email: ctx.userEmail }
+        : undefined;
     await commitFilesToBranch({
       token: ctx.token,
       owner: config.owner,
@@ -148,7 +161,8 @@ export async function commitUpload(ctx: UploadContext, files: FileToCommit[], me
       baseSha,
       files: fullFiles,
       message: commitMessage,
-      author: ctx.userEmail ? { name: ctx.userName || ctx.userEmail.split('@')[0], email: ctx.userEmail } : undefined,
+      author: identity,
+      committer: identity,
     });
   } catch (e: any) {
     const msg = e?.message || '';

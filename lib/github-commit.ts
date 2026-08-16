@@ -28,6 +28,9 @@ export interface CommitFilesOptions {
   // Optional authorship so uploads pushed with a shared bot/server token still
   // credit the real uploader in the repo's commit history.
   author?: { name: string; email: string };
+  // Optional committer — when set, the commit shows the uploader's own GitHub
+  // account as both author and committer (instead of the bot).
+  committer?: { name: string; email: string };
 }
 
 export async function ghFetch(url: string, token: string, opts?: RequestInit) {
@@ -42,7 +45,7 @@ export async function ghPut(url: string, token: string, body: any) {
 export async function commitFilesToBranch(opts: CommitFilesOptions): Promise<string> {
   const { token, owner, repo, branch, baseSha, files, message } = opts;
   if (files.length === 0) throw new Error('no-files');
-  const authorPayload = opts.author ? { author: opts.author } : {};
+  const identityPayload = opts.author ? { author: opts.author, committer: opts.committer || opts.author } : {};
 
   // 1. Create a blob for each file in parallel
   const blobs = await Promise.all(files.map(async (f) => {
@@ -73,7 +76,7 @@ export async function commitFilesToBranch(opts: CommitFilesOptions): Promise<str
   // 4. Commit pointing at the new tree
   const newCommitRes = await ghFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/commits`, token, {
     method: 'POST',
-    body: JSON.stringify({ message, tree: newTreeSha, parents: [baseSha], ...authorPayload }),
+    body: JSON.stringify({ message, tree: newTreeSha, parents: [baseSha], ...identityPayload }),
   });
   if (!newCommitRes.ok) throw new Error(`commit2:${newCommitRes.status}`);
   const newCommitSha = (await newCommitRes.json()).sha;
@@ -104,7 +107,7 @@ export async function commitFilesToBranch(opts: CommitFilesOptions): Promise<str
             if (retryTreeRes.ok) {
               const retryCommitRes = await ghFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/commits`, token, {
                 method: 'POST',
-                body: JSON.stringify({ message, tree: (await retryTreeRes.json()).sha, parents: [freshSha], ...authorPayload }),
+                body: JSON.stringify({ message, tree: (await retryTreeRes.json()).sha, parents: [freshSha], ...identityPayload }),
               });
               if (retryCommitRes.ok) {
                 const retrySha = (await retryCommitRes.json()).sha;

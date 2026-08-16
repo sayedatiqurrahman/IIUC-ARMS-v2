@@ -159,7 +159,7 @@ async function commitBlobs(opts: {
       message,
       tree: newTreeSha,
       parents: [baseSha],
-      ...(author ? { author: { name: author.name, email: author.email, date: new Date().toISOString() } } : {}),
+      ...(author ? { author: { name: author.name, email: author.email, date: new Date().toISOString() }, committer: { name: author.name, email: author.email, date: new Date().toISOString() } } : {}),
     }),
   });
   if (!newCommitRes.ok) throw new ClientUploadError(`Cannot create commit: ${newCommitRes.status}`, newCommitRes.status);
