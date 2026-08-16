@@ -52,7 +52,7 @@ export default function PdfPage({
 
   return (
     <div
-      className={`relative mx-auto rounded shadow-lg bg-white ${annotating ? 'select-none' : ''}`}
+      className={`relative mx-auto w-fit rounded shadow-lg bg-white ${annotating ? 'select-none' : ''}`}
       style={{ touchAction: annotating ? 'none' : 'auto' }}
       onPointerDown={(e) => onPointerDown(index, e)}
       onPointerMove={(e) => onPointerMove(index, e)}

@@ -170,6 +170,7 @@ export default function ContributeModal({
         return;
       }
       const token = tokenData.token as string;
+      const fallbackToken = tokenData.fallbackToken as string | undefined;
 
       // 2. Merge into the live registry (guards against a taken ID and lets an
       //    update keep its original addedAt).
@@ -235,6 +236,7 @@ export default function ContributeModal({
 
       const res = await commitBase64FilesToGitHub({
         token,
+        ...(fallbackToken ? { fallbackToken } : {}),
         owner: STUDIO_OWNER,
         repo: STUDIO_REPO_NAME,
         files: commitFiles,

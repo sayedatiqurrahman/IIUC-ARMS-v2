@@ -32,6 +32,10 @@ export interface ClientUploadFile {
 
 export interface ClientUploadOptions {
   token: string;
+  // When the primary token (e.g. a stored OAuth token) turns out not to have
+  // access to the repo, fall back to a freshly-minted App bot token so uploads
+  // never die with "blob:404" — mirroring the old server-side candidates loop.
+  fallbackToken?: string;
   owner: string;
   repo: string;
   files: ClientUploadFile[];
@@ -57,6 +61,24 @@ class ClientUploadError extends Error {
     this.status = status;
     this.code = code;
   }
+}
+
+// 401 = bad/expired credential, 403 = no permission, 404 = token can't see the
+// repo at all (GitHub hides access problems as 404). All three mean "try the
+// next token".
+const ACCESS_FAILURE = new Set([401, 403, 404]);
+
+async function withTokenFallback(
+  tokens: string[],
+  run: (token: string) => Promise<ClientUploadResult>,
+): Promise<ClientUploadResult> {
+  let last: ClientUploadResult = { success: false, error: 'Upload failed' };
+  for (const t of tokens) {
+    last = await run(t);
+    if (last.success) return last;
+    if (!(typeof last.status === 'number' && ACCESS_FAILURE.has(last.status))) return last;
+  }
+  return last;
 }
 
 function ghHeaders(token: string) {
@@ -232,11 +254,11 @@ async function directCommitToBranch(opts: {
   if (repoRes.status === 401 || repoRes.status === 403) {
     throw new ClientUploadError('GitHub token expired or invalid. Please reconnect your GitHub account.', 401, 'TOKEN_EXPIRED');
   }
-  if (!repoRes.ok) throw new ClientUploadError(`Cannot access repo: ${repoRes.status}`, 500);
+  if (!repoRes.ok) throw new ClientUploadError(`Cannot access repo: ${repoRes.status}`, repoRes.status);
   const defaultBranch = (await repoRes.json()).default_branch;
 
   const refRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/refs/heads/${defaultBranch}`, token, {});
-  if (!refRes.ok) throw new ClientUploadError(`Cannot read branch: ${refRes.status}`, 500);
+  if (!refRes.ok) throw new ClientUploadError(`Cannot read branch: ${refRes.status}`, refRes.status);
   const baseSha = (await refRes.json()).object.sha;
 
   await commitBlobs({ token, owner, repo, branch: defaultBranch, baseSha, blobs, message, author });
@@ -249,11 +271,19 @@ async function directCommitToBranch(opts: {
 }
 
 // Main entry: uploads files from the browser directly to GitHub (always
-// commits to main — no fork/PR).
+// commits to main — no fork/PR). Tries the primary token, then the App bot
+// fallback if the primary can't access the repo.
 // Progress scale: 0..85 during blob creation, 85..100 during commit/finalize.
 export async function uploadFilesToGitHub(opts: ClientUploadOptions): Promise<ClientUploadResult> {
+  const { token, fallbackToken, ...rest } = opts;
+  if (rest.files.length === 0) return { success: false, error: 'No files to upload' };
+  return withTokenFallback(fallbackToken ? [token, fallbackToken] : [token], t =>
+    runFileUpload({ ...rest, token: t }),
+  );
+}
+
+async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadResult> {
   const { token, owner, repo, files, message, author, onProgress } = opts;
-  if (files.length === 0) return { success: false, error: 'No files to upload' };
 
   const totalBytes = files.reduce((s, f) => s + (f.file ? f.file.size : (f.text?.length || 0)), 0) || 1;
   const blobs: { path: string; sha: string }[] = [];
@@ -312,6 +342,23 @@ export async function uploadFilesToGitHub(opts: ClientUploadOptions): Promise<Cl
 // GitHub git-data API from the browser — the commit never touches our server.
 export async function commitBase64FilesToGitHub(opts: {
   token: string;
+  fallbackToken?: string;
+  owner: string;
+  repo: string;
+  files: { path: string; content: string }[];
+  message: string;
+  author?: { name: string; email: string };
+  onProgress?: (percent: number, label: string) => void;
+}): Promise<ClientUploadResult> {
+  const { token, fallbackToken, ...rest } = opts;
+  if (rest.files.length === 0) return { success: false, error: 'No files to commit' };
+  return withTokenFallback(fallbackToken ? [token, fallbackToken] : [token], t =>
+    runBase64Commit({ ...rest, token: t }),
+  );
+}
+
+async function runBase64Commit(opts: {
+  token: string;
   owner: string;
   repo: string;
   files: { path: string; content: string }[];
@@ -320,7 +367,6 @@ export async function commitBase64FilesToGitHub(opts: {
   onProgress?: (percent: number, label: string) => void;
 }): Promise<ClientUploadResult> {
   const { token, owner, repo, files, message, author, onProgress } = opts;
-  if (files.length === 0) return { success: false, error: 'No files to commit' };
 
   const blobs: { path: string; sha: string }[] = [];
   try {

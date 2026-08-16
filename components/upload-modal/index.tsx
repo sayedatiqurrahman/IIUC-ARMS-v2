@@ -608,6 +608,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           : { name: profile.name || email.split('@')[0], email };
         data = await uploadFilesToGitHub({
           token: tokenData.token,
+          ...(tokenData.fallbackToken ? { fallbackToken: tokenData.fallbackToken } : {}),
           owner: config.owner,
           repo: config.repo,
           files,

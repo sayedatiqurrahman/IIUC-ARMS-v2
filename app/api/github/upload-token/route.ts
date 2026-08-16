@@ -57,7 +57,18 @@ export async function POST(req: NextRequest) {
     // (never leaves the server; client falls back to server-side routes).
     if ((canUpload || installationId) && (storedPat || bodyToken)) {
       const token = storedPat || bodyToken;
-      return NextResponse.json({ tokenKind: 'pat', token, isOwner, directCommit: true, credit: false });
+      // The stored credential may be an OAuth token that has no write access to
+      // the repo (GitHub reports that as 404). Hand the browser a fresh App bot
+      // token as a fallback so the client retries and the upload still succeeds.
+      const fallbackToken = await getRepoBotToken(config.owner, config.repo);
+      return NextResponse.json({
+        tokenKind: 'pat',
+        token,
+        ...(fallbackToken ? { fallbackToken } : {}),
+        isOwner,
+        directCommit: true,
+        credit: false,
+      });
     }
 
     if (canUpload || installationId) {

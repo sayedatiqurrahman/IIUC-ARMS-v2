@@ -44,7 +44,12 @@ export async function POST(req: NextRequest) {
         : '';
 
     if (storedPat || bodyToken) {
-      return NextResponse.json({ tokenKind: 'pat', token: storedPat || bodyToken });
+      const token = storedPat || bodyToken;
+      // Stored credentials are often OAuth tokens without write access to the
+      // repo (reported by GitHub as 404). Include a fresh App bot token so the
+      // browser can retry and publish anyway.
+      const fallbackToken = await getRepoBotToken(STUDIO_REPO.owner, STUDIO_REPO.repo);
+      return NextResponse.json({ tokenKind: 'pat', token, ...(fallbackToken ? { fallbackToken } : {}) });
     }
 
     const botToken = await getRepoBotToken(STUDIO_REPO.owner, STUDIO_REPO.repo);
