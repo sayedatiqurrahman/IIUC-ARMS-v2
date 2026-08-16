@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
-import { ANNO_COLORS, clearXdrawCache, preloadXdraw, type Annotation, type AnnoType } from '@/lib/annotations';
+import { ANNO_COLORS, clearXdrawCache, preloadXdraw, type Annotation, type AnnoTool } from '@/lib/annotations';
 import DocToolbar from './doc-viewer/DocToolbar';
 import PdfStage from './doc-viewer/PdfStage';
 import DocxStage from './doc-viewer/DocxStage';
@@ -10,29 +9,24 @@ import { useDocxAnnotations } from './doc-viewer/useDocxAnnotations';
 import { usePdfAnnotations } from './doc-viewer/usePdfAnnotations';
 import { usePdfPinch } from './doc-viewer/usePdfPinch';
 import { useViewerShortcuts } from './doc-viewer/useViewerShortcuts';
-import type { XdrawSaveData } from './doc-viewer/AnnoDrawOverlay';
 import { exportAnnotatedPdf } from './doc-viewer/exportAnnotatedPdf';
-
-// The full art editor is several MB, so it only loads when a document is open
-// AND the user opens the Draw tool — never on app startup.
-const AnnoDrawOverlay = dynamic(() => import('./doc-viewer/AnnoDrawOverlay'), { ssr: false });
 
 // Unified document viewer: renders both PDF (pdf.js) and .docx (docx-preview)
 // through a single toolbar + annotation system, so one lazy-loaded chunk covers
 // every "document" file type. Bytes always come from the same-origin proxy.
 //
 // Zoom: Ctrl+/-/0 and Ctrl+wheel on both formats; pinch on touch for PDF.
-// Drawing: the Draw button opens a full art canvas that draws directly over the
-// current page snapshot (one drawing layer per page), replacing the old pen /
-// highlighter / text toolbar and the laser tool. Marks live in normalized page
-// coordinates and are redrawn on any zoom / layout change so they stay aligned
-// for both canvas pages (PDF) and docx-preview sections (DOCX).
+// Annotation: the Annotate button turns on a Zoom / Excalidraw-style toolbar
+// (pen, highlighter, text, rectangle, ellipse, line, arrow + colors) and lets
+// you draw straight onto the page — no separate canvas, nothing leaves the
+// viewer. Marks live in normalized page coordinates and are redrawn on any
+// zoom / layout change so they stay aligned for both canvas pages (PDF) and
+// docx-preview sections (DOCX). The annotated PDF can be downloaded baked in.
 //
 // The feature is split into small parts under ./doc-viewer/:
 //   DocToolbar / StatusOverlay          — pure UI
 //   PdfStage / PdfPage / DocxStage      — layout of each format
-//   AnnoDrawOverlay                     — full art editor over the page snapshot
-//   usePdfAnnotations / useDocxAnnotations — xdraw overlay painting
+//   usePdfAnnotations / useDocxAnnotations — in-place annotation painting
 //   usePdfPinch / useViewerShortcuts    — input handling
 export default function DocViewer({ item, onClose }: { item: any; onClose: () => void }) {
   const ext = item.path?.split('.').pop()?.toLowerCase() || '';
@@ -46,16 +40,15 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   const [pages, setPages] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [fitMode, setFitMode] = useState(true);
-  const annotating = false; // pen/highlight/text annotation is replaced by the Draw tool
-  const [annoTool, setAnnoTool] = useState<AnnoType>('pen');
+  const [annotating, setAnnotating] = useState(false);
+  const [annoTool, setAnnoTool] = useState<AnnoTool>('pen');
   const [annoColor, setAnnoColor] = useState(ANNO_COLORS[0]);
   const [annos, setAnnos] = useState<Annotation[]>([]);
   const [textDraft, setTextDraft] = useState<{ page: number; x: number; y: number } | null>(null);
   const [draftText, setDraftText] = useState('');
 
-  // Full art-annotation state (lazy-loaded editor + raster preload tick).
-  const [xdrawOpen, setXdrawOpen] = useState<{ page: number; image: string; w: number; h: number; initialScene?: string } | null>(null);
-  const [xdrawPreparing, setXdrawPreparing] = useState(false);
+  // Repaint tick for previously-drawn Excalidraw (xdraw) layers as their rasters
+  // finish decoding — keeps older annotations visible without the old editor.
   const [xdrawTick, setXdrawTick] = useState(0);
   const [annotatedExporting, setAnnotatedExporting] = useState(false);
 
@@ -145,79 +138,24 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
   const fitFnRef = useRef(fit);
   fitFnRef.current = fit;
 
-  // ---- Full art annotation ------------------------------------------------
+  // ---- In-place annotation ------------------------------------------------
 
-  const getCurrentPage = useCallback((): number => {
-    const sc = scrollRef.current;
-    if (!sc) return 1;
-    const vmid = sc.clientHeight / 2;
-    if (isPdf) {
-      const canvases = canvasRefs.current;
-      let acc = 0;
-      for (let i = 0; i < canvases.length; i++) {
-        const c = canvases[i];
-        if (!c) break;
-        acc += c.clientHeight + 12;
-        if (sc.scrollTop + vmid < acc) return i + 1;
-      }
-      return canvases.length || 1;
-    }
-    const sections = bodyRef.current?.querySelectorAll('.docx-wrapper > section.docx') || [];
-    const top = sc.getBoundingClientRect().top;
-    for (let i = 0; i < sections.length; i++) {
-      const r = (sections[i] as HTMLElement).getBoundingClientRect();
-      if (r.top - top <= vmid && r.bottom - top >= vmid) return i + 1;
-    }
-    return sections.length || 1;
-  }, [isPdf]);
+  const toggleAnnotate = () => {
+    if (annotating) drawingRef.current = null;
+    setAnnotating((v) => !v);
+  };
 
-  const openXdrawEditor = useCallback(async () => {
-    if (status !== 'ready') return;
-    const page = getCurrentPage();
-    const existing = annosRef.current.filter((a) => a.type === 'xdraw' && a.page === page).pop();
-    setXdrawPreparing(true);
-    try {
-      if (isPdf) {
-        const canvas = canvasRefs.current[page - 1];
-        if (!canvas) return;
-        setXdrawOpen({ page, image: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height, initialScene: existing?.scene });
-      } else {
-        const section = bodyRef.current?.querySelectorAll('.docx-wrapper > section.docx')[page - 1] as HTMLElement | null;
-        if (!section) return;
-        const { toPng } = await import('dom-to-image-more');
-        const image = await toPng(section, { pixelRatio: 2, bgcolor: '#ffffff' });
-        setXdrawOpen({ page, image, w: section.offsetWidth * 2, h: section.offsetHeight * 2, initialScene: existing?.scene });
-      }
-    } catch (e) {
-      console.error('Draw page snapshot failed', e);
-    } finally {
-      setXdrawPreparing(false);
-    }
-  }, [status, isPdf, getCurrentPage]);
+  const undoLastAnno = () => setAnnos((prev) => prev.slice(0, -1));
 
-  const handleXdrawSave = useCallback(
-    (data: XdrawSaveData) => {
-      const page = xdrawOpen?.page ?? 1;
-      setAnnos((prev) => [
-        ...prev.filter((a) => !(a.type === 'xdraw' && a.page === page)),
-        {
-          id: Math.random().toString(36).slice(2),
-          page,
-          type: 'xdraw',
-          color: '#ffffff',
-          points: [{ x: 0, y: 0 }],
-          lineWidth: 0,
-          fontSize: 0,
-          image: data.image,
-          imgW: data.imgW,
-          imgH: data.imgH,
-          scene: data.scene,
-        },
-      ]);
-      setXdrawOpen(null);
-    },
-    [xdrawOpen]
-  );
+  const ANNO_TOOLS: { id: AnnoTool; label: string; icon: string }[] = [
+    { id: 'pen', label: 'Pen', icon: 'fa-pen' },
+    { id: 'highlight', label: 'Highlight', icon: 'fa-highlighter' },
+    { id: 'text', label: 'Text', icon: 'fa-font' },
+    { id: 'rect', label: 'Rectangle', icon: 'fa-vector-square' },
+    { id: 'ellipse', label: 'Ellipse', icon: 'fa-circle' },
+    { id: 'line', label: 'Line', icon: 'fa-slash' },
+    { id: 'arrow', label: 'Arrow', icon: 'fa-long-arrow-alt-right' },
+  ];
 
   useEffect(() => {
     const images = annos.filter((a) => a.type === 'xdraw' && a.image);
@@ -493,7 +431,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
 
   // ---- UI -------------------------------------------------------------------
 
-  const stageCursor = !isPdf ? undefined : grabbing ? 'grabbing' : 'grab';
+  const stageCursor = !isPdf ? undefined : annotating ? 'crosshair' : grabbing ? 'grabbing' : 'grab';
 
   return (
     <div ref={rootRef} className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col wco-titlebar-pad">
@@ -504,15 +442,61 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
         pages={pages}
         zoom={zoom}
         downloadHref={src}
-        drawBusy={xdrawPreparing}
+        annotating={annotating}
         canDownloadAnnotated={isPdf && status === 'ready' && annos.length > 0}
         annotatedExporting={annotatedExporting}
-        onOpenDraw={openXdrawEditor}
+        onToggleAnnotate={toggleAnnotate}
         onDownloadAnnotated={downloadAnnotatedPdf}
         onZoomBy={zoomBy}
         onFit={fit}
         onClose={onClose}
       />
+
+      {annotating && status === 'ready' && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 shrink-0 wco-aware flex-wrap">
+          {ANNO_TOOLS.map((tool) => (
+            <button
+              key={tool.id}
+              onClick={() => setAnnoTool(tool.id)}
+              className="pdf-btn capitalize"
+              title={tool.label}
+              style={
+                annoTool === tool.id
+                  ? { background: 'rgba(139,92,246,0.35)', border: '1px solid rgba(139,92,246,0.9)', color: '#fff' }
+                  : undefined
+              }
+            >
+              <i className={`fas ${tool.icon} mr-1`}></i>
+              {tool.label}
+            </button>
+          ))}
+          <span className="w-px h-6 bg-neutral-700 mx-1"></span>
+          {ANNO_COLORS.map((c) => (
+            <button
+              key={c}
+              onClick={() => setAnnoColor(c)}
+              className="h-5 w-5 rounded-full border transition cursor-pointer"
+              title={c}
+              style={{
+                background: c,
+                borderColor: annoColor === c ? '#fff' : 'rgba(255,255,255,0.25)',
+                boxShadow: annoColor === c ? '0 0 0 2px rgba(139,92,246,0.8)' : undefined,
+              }}
+            />
+          ))}
+          <button
+            className="pdf-btn"
+            onClick={undoLastAnno}
+            disabled={annos.length === 0}
+            title="Undo last annotation"
+          >
+            <i className="fas fa-undo"></i>
+          </button>
+          <span className="text-neutral-500 text-[0.7rem] ml-auto hidden md:block">
+            Click &amp; drag on a page to draw · text tool: click, then type
+          </span>
+        </div>
+      )}
 
       {isPdf ? (
         <PdfStage
@@ -557,19 +541,6 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
           zoom={zoom}
           annotating={annotating}
           openHref={src}
-        />
-      )}
-
-      {xdrawOpen && status === 'ready' && (
-        <AnnoDrawOverlay
-          title={item.name}
-          page={xdrawOpen.page}
-          bgImage={xdrawOpen.image}
-          bgWidth={xdrawOpen.w}
-          bgHeight={xdrawOpen.h}
-          initialScene={xdrawOpen.initialScene}
-          onSave={handleXdrawSave}
-          onCancel={() => setXdrawOpen(null)}
         />
       )}
     </div>

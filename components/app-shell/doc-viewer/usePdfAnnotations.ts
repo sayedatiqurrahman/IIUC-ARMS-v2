@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
 import type { Dispatch, MutableRefObject, PointerEvent as RPointerEvent, SetStateAction } from 'react';
-import { clamp01, drawAnno, type Annotation, type AnnoPoint, type AnnoType } from '@/lib/annotations';
+import { clamp01, drawAnno, makeAnno, type Annotation, type AnnoPoint, type AnnoTool } from '@/lib/annotations';
 
 interface UsePdfAnnotationsOptions {
   isPdf: boolean;
   annotating: boolean;
-  annoTool: AnnoType;
+  annoTool: AnnoTool;
   annoColor: string;
   setAnnos: Dispatch<SetStateAction<Annotation[]>>;
   annosRef: MutableRefObject<Annotation[]>;
@@ -27,6 +27,9 @@ export function usePdfAnnotations({
   setTextDraft,
   setDraftText,
 }: UsePdfAnnotationsOptions) {
+  const isShapeTool = (t: AnnoTool) =>
+    t === 'rect' || t === 'ellipse' || t === 'line' || t === 'arrow';
+
   const paintPdfPage = useCallback(
     (pageIndex: number, extra?: Annotation) => {
       const canvas = annCanvasRefs.current[pageIndex];
@@ -72,6 +75,8 @@ export function usePdfAnnotations({
     }
     drawingRef.current = {
       page: pageIndex + 1,
+      tool: annoTool,
+      start: getNorm(e, e.currentTarget),
       points: [getNorm(e, e.currentTarget)],
       id: Math.random().toString(36).slice(2),
     };
@@ -82,16 +87,12 @@ export function usePdfAnnotations({
     const d = drawingRef.current;
     if (!isPdf || !d) return;
     e.preventDefault();
-    d.points.push(getNorm(e, e.currentTarget));
-    const temp: Annotation = {
-      id: d.id,
-      page: d.page,
-      type: annoTool,
-      color: annoColor,
-      points: d.points,
-      lineWidth: 0.0035,
-      fontSize: 0.018,
-    };
+    if (isShapeTool(d.tool)) {
+      d.points = [d.start, getNorm(e, e.currentTarget)];
+    } else {
+      d.points.push(getNorm(e, e.currentTarget));
+    }
+    const temp = makeAnno(d.id, d.page, d.tool, annoColor, d.points);
     paintPdfPage(pageIndex, temp);
   };
 
@@ -105,18 +106,7 @@ export function usePdfAnnotations({
     const first = pts[0];
     const last = pts[pts.length - 1];
     if (Math.hypot(last.x - first.x, last.y - first.y) < 0.004) return;
-    setAnnos((prev) => [
-      ...prev,
-      {
-        id: d.id,
-        page: d.page,
-        type: annoTool,
-        color: annoColor,
-        points: pts,
-        lineWidth: 0.0035,
-        fontSize: 0.018,
-      },
-    ]);
+    setAnnos((prev) => [...prev, makeAnno(d.id, d.page, d.tool, annoColor, pts)]);
   };
 
   return { paintPdfPage, onPdfPagePointerDown, onPdfPagePointerMove, onPdfPagePointerUp };

@@ -7,10 +7,10 @@ interface DocToolbarProps {
   pages: number;
   zoom: number;
   downloadHref: string;
-  drawBusy: boolean;
+  annotating: boolean;
   canDownloadAnnotated: boolean;
   annotatedExporting: boolean;
-  onOpenDraw: () => void;
+  onToggleAnnotate: () => void;
   onDownloadAnnotated: () => void;
   onZoomBy: (dir: 1 | -1) => void;
   onFit: () => void;
@@ -24,10 +24,10 @@ export default function DocToolbar({
   pages,
   zoom,
   downloadHref,
-  drawBusy,
+  annotating,
   canDownloadAnnotated,
   annotatedExporting,
-  onOpenDraw,
+  onToggleAnnotate,
   onDownloadAnnotated,
   onZoomBy,
   onFit,
@@ -46,12 +46,17 @@ export default function DocToolbar({
       <div className="flex items-center gap-1 ml-auto">
         <button
           className="pdf-btn"
-          onClick={onOpenDraw}
-          title="Draw — open the full art tools to draw on the current page"
-          disabled={status !== 'ready' || drawBusy}
-          style={{ background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.45)' }}
+          onClick={onToggleAnnotate}
+          title={annotating ? 'Stop annotating' : 'Annotate — pen, highlighter, shapes & text drawn straight on the page'}
+          disabled={status !== 'ready'}
+          style={
+            annotating
+              ? { background: 'rgba(139,92,246,0.35)', border: '1px solid rgba(139,92,246,0.9)', color: '#fff' }
+              : { background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.45)' }
+          }
         >
-          {drawBusy ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-bezier-curve"></i>}
+          {annotating ? <i className="fas fa-pen-nib mr-1"></i> : <i className="fas fa-pen mr-1"></i>}
+          Annotate
         </button>
         <button className="pdf-btn" onClick={() => onZoomBy(-1)} title="Zoom out (Ctrl + -)" disabled={status !== 'ready'}><i className="fas fa-minus"></i></button>
         <span className="text-neutral-400 text-[0.72rem] font-mono min-w-[38px] text-center select-none">{Math.round(zoom * 100)}%</span>

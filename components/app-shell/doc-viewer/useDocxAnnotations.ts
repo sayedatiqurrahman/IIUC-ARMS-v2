@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
-import { ANNO_COLORS, clamp01, drawAnno, type Annotation, type AnnoType } from '@/lib/annotations';
+import { ANNO_COLORS, clamp01, drawAnno, makeAnno, type Annotation, type AnnoTool } from '@/lib/annotations';
 
 interface UseDocxAnnotationsOptions {
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -12,7 +12,7 @@ interface UseDocxAnnotationsOptions {
   isPdf: boolean;
   status: 'loading' | 'ready' | 'error';
   annotating: boolean;
-  annoTool: AnnoType;
+  annoTool: AnnoTool;
   annoColor: string;
 }
 
@@ -33,10 +33,12 @@ export function useDocxAnnotations({
   const sectionsRef = useRef<HTMLElement[]>([]);
   const textDraftDocxRef = useRef<{ idx: number; x: number; y: number; input: HTMLInputElement } | null>(null);
 
-  const annoToolRef = useRef<AnnoType>('pen');
+  const annoToolRef = useRef<AnnoTool>('pen');
   annoToolRef.current = annoTool;
   const annoColorRef = useRef(ANNO_COLORS[0]);
   annoColorRef.current = annoColor;
+
+  const isShapeTool = (t: AnnoTool) => t === 'rect' || t === 'ellipse' || t === 'line' || t === 'arrow';
 
   const paintDocxSection = useCallback(
     (idx: number) => {
@@ -173,7 +175,7 @@ export function useDocxAnnotations({
         return;
       }
 
-      drawingRef.current = { idx: hit.idx, el: hit.sec, points: [p], id: Math.random().toString(36).slice(2) };
+      drawingRef.current = { idx: hit.idx, el: hit.sec, tool: annoToolRef.current, start: p, points: [p], id: Math.random().toString(36).slice(2) };
       hit.sec.setPointerCapture(e.pointerId);
     };
 
@@ -182,10 +184,12 @@ export function useDocxAnnotations({
       if (!d) return;
       e.preventDefault();
       const r = d.el.getBoundingClientRect();
-      d.points.push({
+      const cur = {
         x: clamp01(r.width ? (e.clientX - r.left) / r.width : 0),
         y: clamp01(r.height ? (e.clientY - r.top) / r.height : 0),
-      });
+      };
+      if (isShapeTool(d.tool)) d.points = [d.start, cur];
+      else d.points.push(cur);
       const canvas = overlayRefs.current[d.idx];
       const sec = sectionsRef.current[d.idx];
       const ctx = canvas?.getContext('2d');
@@ -204,16 +208,7 @@ export function useDocxAnnotations({
       for (const a of annosRef.current) {
         if (a.page === d.idx) drawAnno(ctx, a, w, h);
       }
-      const temp: Annotation = {
-        id: d.id,
-        page: d.idx,
-        type: annoToolRef.current,
-        color: annoColorRef.current,
-        points: d.points,
-        lineWidth: 0.0035,
-        fontSize: 0.018,
-      };
-      drawAnno(ctx, temp, w, h);
+      drawAnno(ctx, makeAnno(d.id, d.idx, d.tool, annoColorRef.current, d.points), w, h);
     };
 
     const onPointerUp = (e: PointerEvent) => {
@@ -225,18 +220,7 @@ export function useDocxAnnotations({
       const first = pts[0];
       const last = pts[pts.length - 1];
       if (Math.hypot(last.x - first.x, last.y - first.y) < 0.004) return;
-      setAnnos((prev) => [
-        ...prev,
-        {
-          id: d.id,
-          page: d.idx,
-          type: annoToolRef.current,
-          color: annoColorRef.current,
-          points: pts,
-          lineWidth: 0.0035,
-          fontSize: 0.018,
-        },
-      ]);
+      setAnnos((prev) => [...prev, makeAnno(d.id, d.idx, d.tool, annoColorRef.current, pts)]);
     };
 
     const onPointerCancel = () => {
