@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
-const REPO = 'sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER';
+const REPO = 'sayedatiqurrahman/IIUC-ACADEMIC-FILES-MANAFGER';
 
 function getPrivateKey() { return (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/"/g, ''); }
 function generateJWT() {
@@ -14,12 +14,12 @@ function generateJWT() {
   return si+'.'+s.sign(pk,'base64url');
 }
 
-const NEW_README = `# QSIS-ACADEMIC-FILES-MANAFGER
+const NEW_README = `# IIUC-ACADEMIC-FILES-MANAFGER
 
-Academic file storage for the **QSIS-ARMS** platform — International Islamic University Chittagong (IIUC).
+Academic file storage for the **IIUC-ARMS** platform — International Islamic University Chittagong (IIUC).
 
 ## Browse Files
-Files are viewable at **[qsis-arms.eu.cc](https://qsis-arms.eu.cc)**
+Files are viewable at **[iiuc-arms.eu.cc](https://iiuc-arms.eu.cc)**
 
 ## Folder Structure
 

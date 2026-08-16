@@ -13,7 +13,7 @@
 
 const GITHUB_API = 'https://api.github.com';
 const OWNER = 'sayedatiqurrahman';
-const REPO = 'QSIS-ACADEMIC-FILES-MANAFGER';
+const REPO = 'IIUC-ACADEMIC-FILES-MANAFGER';
 const BRANCH = 'main';
 const UPLOAD_PATH = 'upload_academic_files';
 

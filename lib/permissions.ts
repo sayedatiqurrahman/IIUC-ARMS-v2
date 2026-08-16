@@ -13,24 +13,29 @@ export interface CustomRole {
   permissions: string[];
 }
 
-let cachedPermissions: Record<string, string[]> | null = null;
+let cachedPermissions: Record<string, any> | null = null;
 let cachedRoles: CustomRole[] | null = null;
 let lastFetch = 0;
 const CACHE_TTL = 30_000;
 
-export async function getPermissions(): Promise<Record<string, string[]>> {
+export async function getPermissions(): Promise<Record<string, any>> {
   const now = Date.now();
   if (cachedPermissions && now - lastFetch < CACHE_TTL) return cachedPermissions;
   try {
     const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
-    const saved = (settings?.permissions as Record<string, string[]>) || {};
-    const merged: Record<string, string[]> = {};
+    const saved = (settings?.permissions as Record<string, any>) || {};
+    const merged: Record<string, any> = {};
     for (const key of Object.keys(DEFAULT_PERMISSIONS)) {
       merged[key] = saved[key] || DEFAULT_PERMISSIONS[key];
       // Preserve the per-email allowlist (`<action>_users`) entries so both the
       // server hasPermission and the client mirror can honour them.
       const perUserKey = `${key}_users`;
       if (Array.isArray(saved[perUserKey])) merged[perUserKey] = saved[perUserKey];
+    }
+    // Preserve any other saved settings (e.g. restrictCRToOwnSemester) so saving
+    // the matrix back never drops them.
+    for (const key of Object.keys(saved)) {
+      if (!(key in merged)) merged[key] = saved[key];
     }
     cachedPermissions = merged;
   } catch {

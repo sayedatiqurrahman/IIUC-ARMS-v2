@@ -209,7 +209,7 @@ export default function ContributeModal({
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-[0.78rem] text-dark-text2 leading-relaxed">
                 <span className="material-symbols-outlined text-amber-400 align-middle mr-1 text-[1rem]">link_off</span>
                 <strong className="text-amber-400">Connect GitHub to contribute.</strong> Your app is published to the
-                QSIS-ARMS-v2 repo with your name, and you get credited as a code contributor.
+                IIUC-ARMS-v2 repo with your name, and you get credited as a code contributor.
                 Connect your GitHub account from your{' '}
                 <Link href="/dashboard" className="text-qsis underline" onClick={onClose}>Dashboard</Link> first.
               </div>
@@ -383,7 +383,7 @@ export default function ContributeModal({
 
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[0.62rem] text-dark-text3 leading-snug max-w-[220px]">
-                    Published to the QSIS-ARMS-v2 repo under your GitHub identity — you&apos;ll appear in Contributors.
+                    Published to the IIUC-ARMS-v2 repo under your GitHub identity — you&apos;ll appear in Contributors.
                   </p>
                   <button
                     onClick={submit}

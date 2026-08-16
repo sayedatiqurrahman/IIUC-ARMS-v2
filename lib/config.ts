@@ -9,7 +9,8 @@ export const BUILD_SHA = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || '';
 
 export const config = {
   owner: 'sayedatiqurrahman',
-  repo: 'QSIS-ACADEMIC-FILES-MANAFGER',
+  repo: 'IIUC-ACADEMIC-FILES-MANAFGER',
+  sourceRepo: 'IIUC-ARMS-v2',
   branch: 'main',
   uploadPath: 'upload_academic_files',
   relatedKitabsFolder: 'related-kitabs',
@@ -79,9 +80,9 @@ export const config = {
   maxSingleFileUploadMB: 50,
   academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','webp','csv'],
   githubStarRepos: [
-    { owner: 'sayedatiqurrahman', repo: 'QSIS-ACADEMIC-FILES-MANAFGER', label: 'QSIS Academic Files' },
-    { owner: 'sayedatiqurrahman', repo: 'QSIS-ARMS-v2', label: 'IIUC-ARMS Source Code' },
-    { owner: 'sayedatiqurrahman', repo: 'QSIS-CREATIVE-HUB-THEMES', label: 'Creative Hub Themes' },
+    { owner: 'sayedatiqurrahman', repo: 'IIUC-ACADEMIC-FILES-MANAFGER', label: 'IIUC Academic Files' },
+    { owner: 'sayedatiqurrahman', repo: 'IIUC-ARMS-v2', label: 'IIUC-ARMS Source Code' },
+    { owner: 'sayedatiqurrahman', repo: 'IIUC-CREATIVE-HUB-THEMES', label: 'Creative Hub Themes' },
   ],
   // Dedicated repo that hosts the Creative Hub default themes AND community-
   // published designs. Defaults are served straight from it (raw GitHub); new
@@ -89,7 +90,7 @@ export const config = {
   // publish so contributors can be shown with a design count.
   creativeHub: {
     owner: 'sayedatiqurrahman',
-    repo: 'QSIS-CREATIVE-HUB-THEMES',
+    repo: 'IIUC-CREATIVE-HUB-THEMES',
     branch: 'main',
     themesPath: 'themes',
     communityPath: 'community',
@@ -97,6 +98,17 @@ export const config = {
     authorsPath: 'authors.json',
     defaultPageSize: 'a4',
   },
+  // ─── Central GitHub repo links ────────────────────────────────
+  // Single source of truth for repo names & URLs so a rename (QSIS→IIUC) or a
+  // link change only ever needs one edit.
+  repoUrl: (name: string, path = '') => `https://github.com/${config.owner}/${name}${path}`,
+  rawRepoUrl: (owner: string, name: string, path = '') =>
+    `https://raw.githubusercontent.com/${owner}/${name}/main${path ? `/${path}` : ''}`,
+  sourceRepoUrl: (path = '') => `https://github.com/${config.owner}/${config.sourceRepo}${path}`,
+  dataRepoUrl: (path = '') => `https://github.com/${config.owner}/${config.repo}${path}`,
+  creativeHubUrl: (path = '') => `https://github.com/${config.creativeHub.owner}/${config.creativeHub.repo}${path}`,
+  creativeHubRaw: (path = '') =>
+    `https://raw.githubusercontent.com/${config.creativeHub.owner}/${config.creativeHub.repo}/main${path ? `/${path}` : ''}`,
   semesters: [
     { id: '1st-semister', label: '1st Semester' },
     { id: '2nd-semister', label: '2nd Semester' },

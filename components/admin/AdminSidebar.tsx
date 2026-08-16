@@ -2,16 +2,12 @@
 
 import { useState } from 'react';
 import { type Tab } from './types';
+import { type AdminNavGroup } from './nav';
 
 interface AdminSidebarProps {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
-  isAdmin: boolean;
-  isManager: boolean;
-  isOwner: boolean;
-  effectiveRole: string;
-  profileIsCR?: boolean;
-  canManageFacultyDepts?: boolean;
+  groups: AdminNavGroup[];
   mobileOpen?: boolean;
   onClose?: () => void;
 }
@@ -19,12 +15,7 @@ interface AdminSidebarProps {
 export default function AdminSidebar({
   activeTab,
   setActiveTab,
-  isAdmin,
-  isManager,
-  isOwner,
-  effectiveRole,
-  profileIsCR,
-  canManageFacultyDepts,
+  groups,
   mobileOpen,
   onClose,
 }: AdminSidebarProps) {
@@ -57,39 +48,11 @@ export default function AdminSidebar({
 
   const navContent = (isCollapsed: boolean) => (
     <nav className="p-2 max-h-[calc(100vh-180px)] overflow-y-auto scrollbar-thin">
-      {(isAdmin || isManager) && section('Overview', btn('overview', 'fa-chart-pie', 'text-qsis', 'Overview', isCollapsed), isCollapsed)}
-
-      {(isAdmin || isManager) && section('Users', btn('users', 'fa-users', 'text-blue-400', 'All Users', isCollapsed), isCollapsed)}
-
-      {isAdmin || isManager || canManageFacultyDepts ? section('Academic', (
-        <>
-          {(isAdmin || isManager) && btn('faculty', 'fa-chalkboard-teacher', 'text-teal-400', 'Faculty Members', isCollapsed)}
-          {canManageFacultyDepts && btn('facultyDept', 'fa-building', 'text-purple-400', 'Faculties & Depts', isCollapsed)}
-        </>
-      ), isCollapsed) : null}
-
-      {(isAdmin || isManager || effectiveRole === 'teacher' || !!profileIsCR) && section('Content', (
-        <>
-          {(isAdmin || isManager || effectiveRole === 'teacher' || !!profileIsCR) && btn('courses', 'fa-book', 'text-indigo-400', 'Courses', isCollapsed)}
-          {(isAdmin || isManager || effectiveRole === 'teacher') && btn('rooms', 'fa-door-open', 'text-cyan-400', 'Rooms', isCollapsed)}
-          {(isAdmin || isManager || effectiveRole === 'teacher' || !!profileIsCR) && btn('batches', 'fa-layer-group', 'text-purple-400', 'Batches', isCollapsed)}
-        </>
-      ), isCollapsed)}
-
-      {isAdmin && section('System', (
-        <>
-          {btn('permissions', 'fa-key', 'text-amber-400', 'Permissions', isCollapsed)}
-          {btn('roles', 'fa-user-tag', 'text-blue-400', 'Roles', isCollapsed)}
-          {btn('contributors', 'fa-users', 'text-teal-400', 'Contributors', isCollapsed)}
-        </>
-      ), isCollapsed)}
-
-      {(isAdmin || isManager || isOwner) && section('Other', (
-        <>
-          {isOwner && btn('telegram', 'fa-paper-plane', 'text-cyan-400', 'Telegram', isCollapsed)}
-          {(isAdmin || isManager) && btn('activity', 'fa-history', 'text-yellow-400', 'Activity Log', isCollapsed)}
-        </>
-      ), isCollapsed)}
+      {groups.map(group => section(
+        group.title,
+        group.items.map(item => btn(item.key, item.icon, item.color, item.label, isCollapsed)),
+        isCollapsed
+      ))}
     </nav>
   );
 

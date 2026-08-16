@@ -128,7 +128,7 @@ export default function GitHubConnection({
                   {patLoading ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-1"></i>Save</>}
                 </button>
               </div>
-              <a href="https://github.com/settings/tokens/new?scopes=repo&description=IIUC-ARMS" target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text2 hover:text-qsis mt-2 inline-block no-underline">
+              <a href="https://github.com/settings/tokens/new?scopes=repo,user:follow&description=IIUC-ARMS" target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text2 hover:text-qsis mt-2 inline-block no-underline">
                 <i className="fas fa-external-link-alt mr-1"></i>Create new token (No expiry, repo scope)
               </a>
             </div>
@@ -179,7 +179,7 @@ export default function GitHubConnection({
                     Cancel
                   </button>
                 </div>
-                <a href="https://github.com/settings/tokens/new?scopes=repo&description=IIUC-ARMS" target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text2 hover:text-qsis mt-2 inline-block no-underline">
+                <a href="https://github.com/settings/tokens/new?scopes=repo,user:follow&description=IIUC-ARMS" target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text2 hover:text-qsis mt-2 inline-block no-underline">
                   <i className="fas fa-external-link-alt mr-1"></i>Create new token (No expiry, repo scope)
                 </a>
               </div>

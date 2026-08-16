@@ -30,7 +30,7 @@ interface UploadFile {
 //   author: { name, githubLogin, email, universityId }
 // }
 //
-// Writes apps/<id>/… + studio-apps.json to the QSIS-ARMS-v2 repo in one atomic
+// Writes apps/<id>/… + studio-apps.json to the IIUC-ARMS-v2 repo in one atomic
 // commit authored as the uploader, so the app shows up in Studio immediately
 // (no rebuild) and the author is credited as a code contributor.
 

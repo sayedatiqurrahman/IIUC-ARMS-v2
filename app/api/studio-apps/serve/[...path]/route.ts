@@ -7,7 +7,7 @@ import {
 } from '@/lib/studio-apps';
 
 // GET /api/studio-apps/serve/<id>/[...path]
-// Proxies a community app file straight from the QSIS-ARMS-v2 repo so a
+// Proxies a community app file straight from the IIUC-ARMS-v2 repo so a
 // contributed static build runs inside an iframe with relative asset URLs
 // resolved under this same origin — no Vercel rebuild involved.
 export async function GET(

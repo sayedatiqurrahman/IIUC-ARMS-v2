@@ -79,4 +79,6 @@ export interface ContributorItem {
   roleType: string;
   department: string;
   source: string;
+  systemRoleKey?: string;
+  systemRole?: string;
 }

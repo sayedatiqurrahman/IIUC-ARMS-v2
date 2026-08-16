@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { config } from '@/lib/config';
 import { Settings } from './types';
+import SystemRoleBadge from './SystemRoleBadge';
 
 export default function GridCard({ c, settings, onShowHistory }: { c: any; settings: Settings; onShowHistory?: (c: any) => void }) {
   const isDev = c.v2Contributions > 0;
@@ -73,6 +74,7 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
               <i className="fas fa-palette text-[0.5rem]"></i>Designer
             </span>
           )}
+          <SystemRoleBadge roleKey={c.systemRoleKey} label={c.systemRole} />
         </div>
       </div>
 
@@ -150,7 +152,7 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
       <div className="px-4 py-2.5 border-t border-dark-border bg-dark-bg3/50 rounded-b-2xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className="text-[0.6rem] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded" title="Commits to the QSIS-ARMS-v2 source-code repo — every commit counts as 1, and each merged pull request adds 1 too.">
+            <span className="text-[0.6rem] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded" title="Commits to the IIUC-ARMS-v2 source-code repo — every commit counts as 1, and each merged pull request adds 1 too.">
               <i className="fas fa-laptop-code mr-0.5"></i>{c.v2Contributions}
             </span>
             <span className="text-[0.6rem] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded" title="Files uploaded to the Academic Files data repo — every file you upload counts as 1 (merged pull requests there count too).">
@@ -162,7 +164,7 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
             <span className="text-[0.6rem] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Designs you published on the Creative Hub — each published design/theme counts as 1.">
               <i className="fas fa-palette mr-0.5"></i>{c.designContributions || 0}
             </span>
-            <span className="text-[0.6rem] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded" title="Issues (bug reports, feature requests) you opened on the QSIS-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.">
+            <span className="text-[0.6rem] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded" title="Issues (bug reports, feature requests) you opened on the IIUC-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.">
               <i className="fas fa-bug mr-0.5"></i>{c.issueContributions || 0}
             </span>
           </div>

@@ -446,9 +446,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">App</div>
                     <button onClick={async () => { setMoreOpen(false); if (await confirm({ message: 'Reset App? This will clear all cached data and reload.', danger: true, title: 'Force Reset' })) forceResetApp(); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] text-red-400 hover:bg-red-500/10 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-trash-alt w-4 text-center"></i><span>Reset App</span></button>
                     <button onClick={() => { setMoreOpen(false); handleCheckUpdate(); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-cloud-arrow-down w-4 text-center"></i><span>Check Update</span></button>
-                    <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-star w-4 text-center text-yellow-500"></i><span>Star Repo</span></a>
-                    <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-code-fork w-4 text-center text-qsis"></i><span>Fork to Contribute</span></a>
-                    <a href="https://github.com/sayedatiqurrahman/QSIS-ARMS-v2" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fab fa-github w-4 text-center"></i><span>Source Code</span></a>
+                    <a href={config.dataRepoUrl()} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-star w-4 text-center text-yellow-500"></i><span>Star Repo</span></a>
+                    <a href={config.dataRepoUrl('/fork')} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-code-fork w-4 text-center text-qsis"></i><span>Fork to Contribute</span></a>
+                    <a href={config.sourceRepoUrl()} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fab fa-github w-4 text-center"></i><span>Source Code</span></a>
                     <div className="my-1 h-px bg-dark-border" />
                     <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">Go To</div>
                     <Link href="/" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-home w-4 text-center"></i><span>Dashboard</span></Link>
@@ -458,7 +458,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <Link href="/contributors" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-users w-4 text-center"></i><span>Contributors</span></Link>
                     <Link href="/faculty" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-chalkboard-teacher w-4 text-center"></i><span>Faculty</span></Link>
                     <Link href="/studio" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-tools w-4 text-center"></i><span>Studio</span></Link>
-                    <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fab fa-github w-4 text-center"></i><span>GitHub Repo</span></a>
+                    <a href={config.dataRepoUrl()} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fab fa-github w-4 text-center"></i><span>GitHub Repo</span></a>
                     <div className="my-1 h-px bg-dark-border" />
                     <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">Organizations</div>
                     <a href="https://www.iiuc.ac.bd/" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><Image src="/iiuc-logo.png" alt="" width={20} height={20} className="w-5 h-5 rounded object-contain bg-white" /><span className="text-[0.78rem]">IIUC</span></a>
@@ -654,7 +654,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       <button key={key} onClick={() => { handleOpenUpload(); setShowMoreSheet(false); }} className={`${cls} cursor-pointer`}>{inner}</button>
                     );
                     return (
-                      <a key={key} href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" className={cls}>{inner}</a>
+                      <a key={key} href={config.dataRepoUrl()} target="_blank" className={cls}>{inner}</a>
                     );
                   })}
                 </div>
@@ -776,7 +776,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link href="/contributors" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2"></i>Contributors</Link>
                 <Link href="/faculty" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-chalkboard-teacher mr-2"></i>Faculty</Link>
                <Link href="/studio" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-tools mr-2"></i>Studio</Link>
-                <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" className="text-[0.8rem] text-dark-text2 hover:text-qsis transition-colors"><i className="fab fa-github mr-2"></i>GitHub Repo</a>
+                <a href={config.dataRepoUrl()} target="_blank" className="text-[0.8rem] text-dark-text2 hover:text-qsis transition-colors"><i className="fab fa-github mr-2"></i>GitHub Repo</a>
               </div>
             </div>
             <div>
@@ -846,13 +846,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <i className="fas fa-cloud-arrow-down"></i> Check Update
               </button>
-              <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+              <a href={config.dataRepoUrl()} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
                 <i className="fas fa-star text-yellow-500"></i> Star Files Repo
               </a>
-              <a href="https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER/fork" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+              <a href={config.dataRepoUrl('/fork')} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
                 <i className="fas fa-code-fork text-qsis"></i> Fork to Contribute
               </a>
-              <a href="https://github.com/sayedatiqurrahman/QSIS-ARMS-v2" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
+              <a href={config.sourceRepoUrl()} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.65rem] sm:text-[0.72rem] text-dark-text2 hover:text-qsis hover:border-qsis transition-all">
                 <i className="fab fa-github"></i> Source Code
               </a>
             </div>

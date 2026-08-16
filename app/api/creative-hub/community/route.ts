@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { config } from '@/lib/config';
 
 // Serves the Creative Hub gallery from the dedicated themes repo
-// (sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES):
+// (sayedatiqurrahman/IIUC-CREATIVE-HUB-THEMES):
 //  - manifest.json    → the default theme list
 //  - authors.json     → community design contributors + their design counts
 //  - community/*      → user-published designs (folder per design)

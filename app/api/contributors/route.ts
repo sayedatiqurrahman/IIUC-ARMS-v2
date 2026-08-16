@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { config } from '@/lib/config';
 import { FACULTIES } from '@/lib/departments';
 import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
+import { getCustomRoles } from '@/lib/permissions';
 
 interface Contributor {
   id: string;
@@ -38,6 +39,8 @@ interface Contributor {
   hideCompany: boolean;
   profileComplete: boolean;
   source: 'github' | 'db' | 'both';
+  systemRoleKey?: string;
+  systemRole?: string;
 }
 
 interface ContributorSettings {
@@ -174,11 +177,11 @@ export async function GET() {
     const GITHUB_API = 'https://api.github.com';
 
     const [v2Contributors, dataContributors, v2Prs, dataPrs, v2Issues, designAuthors] = await Promise.all([
-      fetchAllPages(`${GITHUB_API}/repos/${config.owner}/QSIS-ARMS-v2/contributors`, token),
+      fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.sourceRepo}/contributors`, token),
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contributors`, token),
-      fetchAllPages(`${GITHUB_API}/repos/${config.owner}/QSIS-ARMS-v2/pulls?state=all`, token),
+      fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.sourceRepo}/pulls?state=all`, token),
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.repo}/pulls?state=all`, token),
-      fetchAllPages(`${GITHUB_API}/repos/${config.owner}/QSIS-ARMS-v2/issues?state=all`, token),
+      fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.sourceRepo}/issues?state=all`, token),
       // Creative Hub design authors (public raw file in the themes repo).
       fetch(`https://raw.githubusercontent.com/${config.creativeHub.owner}/${config.creativeHub.repo}/main/authors.json`, { cache: 'no-store' })
         .then((res) => res.json().catch(() => null)),
@@ -200,6 +203,7 @@ export async function GET() {
         company: '', companyUrl: '', publicEmail: '',
         hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false,
         profileComplete: false, source: 'github',
+        systemRoleKey: '', systemRole: '',
       };
       map.set(login, c);
       return c;
@@ -276,6 +280,9 @@ export async function GET() {
       c.contributions += 1;
     }
 
+    const customRoles = await getCustomRoles();
+    const customRoleByKey = new Map(customRoles.map(r => [r.key.toLowerCase(), r.label]));
+
     // Merge DB profiles
     for (const p of dbProfiles) {
       let matchedContributor: Contributor | undefined;
@@ -312,6 +319,18 @@ export async function GET() {
         matchedContributor.hideCompany = !!(p as any).hideCompany;
         matchedContributor.profileComplete = profileComplete;
         matchedContributor.source = 'both';
+
+        // Surface the system role (admin / manager / teacher / custom role) so
+        // special-role users are recognizable on the contributor list.
+        const SPECIAL_ROLE_LABELS: Record<string, string> = { admin: 'Admin', manager: 'Manager', teacher: 'Teacher' };
+        const roleKey = String(p.role || 'user').toLowerCase();
+        if (SPECIAL_ROLE_LABELS[roleKey]) {
+          matchedContributor.systemRoleKey = roleKey;
+          matchedContributor.systemRole = SPECIAL_ROLE_LABELS[roleKey];
+        } else if (roleKey !== 'user' && roleKey !== 'student' && roleKey !== 'external' && roleKey !== 'cr' && roleKey !== 'acr') {
+          matchedContributor.systemRoleKey = roleKey;
+          matchedContributor.systemRole = customRoleByKey.get(roleKey) || roleKey;
+        }
       }
     }
 

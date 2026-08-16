@@ -4,10 +4,10 @@ import Image from 'next/image';
 import { config } from '@/lib/config';
 import StatTip from './StatTip';
 
-const CODE_TIP = 'Commits to the QSIS-ARMS-v2 source-code repo. Every commit you push there counts as 1, and every pull request you get merged into it also counts as 1.';
+const CODE_TIP = 'Commits to the IIUC-ARMS-v2 source-code repo. Every commit you push there counts as 1, and every pull request you get merged into it also counts as 1.';
 const DATA_TIP = 'Files you uploaded to the Academic Files data repo. Every file you upload is committed to that repo and counts as 1 (merged pull requests there count too).';
 const PR_TIP = 'Pull requests you opened that got merged — counted across both the source-code repo and the data repo.';
-const BUG_TIP = 'Issues (bug reports, feature requests) you opened on the QSIS-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.';
+const BUG_TIP = 'Issues (bug reports, feature requests) you opened on the IIUC-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.';
 const TOTAL_TIP = 'Code + Data + Issues added together. (Pull requests are already counted inside Code and Data.)';
 
 export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistory?: (c: any) => void }) {

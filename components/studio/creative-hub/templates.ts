@@ -1,6 +1,10 @@
 import type { FieldSpec, HubTheme } from './types';
 import type { Profile } from '@/lib/store/types';
 import { getAllDepartments, getDepartmentDisplayName } from '@/lib/departments';
+import { config } from '@/lib/config';
+
+// Central raw-CDN base for the themes repo — see config.creativeHubRaw().
+const IIUC_LOGO = config.creativeHubRaw('assets/iiuc-logo.png');
 
 // A4 page in CSS px @ 96dpi = 794 x 1123. The design canvas is ALWAYS rendered
 // at the chosen page size — it is only scaled down visually to fit the screen,
@@ -40,7 +44,7 @@ const THEME_HTML: Record<string, string> = {
 <div style="position:absolute;top:0;left:0;right:0;height:16px;background:linear-gradient(90deg,#0f766e,#059669,#22c55e);"></div>
 <div style="position:absolute;top:16px;left:0;right:0;height:6px;background:#14532d;"></div>
 <div style="position:absolute;top:64px;left:0;right:0;text-align:center;">
-<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;object-fit:contain;margin:0 auto 12px;display:block;"/>
+<img src="${IIUC_LOGO}" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;object-fit:contain;margin:0 auto 12px;display:block;"/>
 <div style="font-size:22px;font-weight:bold;color:#0f766e;letter-spacing:1px;" data-field-type="university_name">International Islamic University Chittagong</div>
 <div style="font-size:13px;color:#374151;margin-top:6px;" data-field-type="department">Department of Qur'anic Sciences and Islamic Studies</div>
 <div style="width:180px;height:3px;background:#059669;margin:16px auto;"></div></div>
@@ -62,7 +66,7 @@ const THEME_HTML: Record<string, string> = {
 <div style="position:absolute;top:0;left:0;right:0;height:16px;background:linear-gradient(90deg,#0f766e,#059669,#22c55e);"></div>
 <div style="position:absolute;top:16px;left:0;right:0;height:6px;background:#14532d;"></div>
 <div style="position:absolute;top:64px;left:0;right:0;text-align:center;">
-<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;object-fit:contain;margin:0 auto 12px;display:block;"/>
+<img src="${IIUC_LOGO}" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;object-fit:contain;margin:0 auto 12px;display:block;"/>
 <div style="font-size:24px;font-weight:bold;color:#0f766e;" data-field-type="university_name">الجامعة الإسلامية العالمية تشيتاغونغ</div>
 <div style="font-size:15px;color:#374151;margin-top:8px;" data-field-type="department">قسم العلوم القرآنية والدراسات الإسلامية</div>
 <div style="width:180px;height:3px;background:#059669;margin:16px auto;"></div></div>
@@ -82,7 +86,7 @@ const THEME_HTML: Record<string, string> = {
   'assignment-a-english': `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0">
 <div style="width:794px;height:1123px;background:#ffffff;color:#1f2937;font-family:'Segoe UI',Arial,sans-serif;position:relative;overflow:hidden;box-sizing:border-box;">
 <div style="height:130px;background:linear-gradient(120deg,#1e40af,#2563eb);color:#fff;padding:24px 56px;box-sizing:border-box;display:flex;align-items:center;gap:20px;">
-<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;border-radius:10px;background:#ffffff;padding:8px;box-sizing:border-box;object-fit:contain;flex-shrink:0;"/>
+<img src="${IIUC_LOGO}" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;border-radius:10px;background:#ffffff;padding:8px;box-sizing:border-box;object-fit:contain;flex-shrink:0;"/>
 <div style="flex:1;min-width:0;">
 <div style="font-size:13px;letter-spacing:5px;text-transform:uppercase;opacity:.85;" data-field-type="university_name">International Islamic University Chittagong</div>
 <div style="font-size:20px;font-weight:700;margin-top:10px;">Department of <span data-field-type="department">Qur'anic Sciences and Islamic Studies</span></div></div></div>
@@ -103,7 +107,7 @@ const THEME_HTML: Record<string, string> = {
   'assignment-a-arabic': `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0">
 <div style="width:794px;height:1123px;background:#ffffff;color:#1f2937;font-family:'Segoe UI','Traditional Arabic',Arial,sans-serif;position:relative;overflow:hidden;box-sizing:border-box;">
 <div style="height:130px;background:linear-gradient(120deg,#1e40af,#2563eb);color:#fff;padding:24px 56px;box-sizing:border-box;display:flex;align-items:center;gap:20px;">
-<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;border-radius:10px;background:#ffffff;padding:8px;box-sizing:border-box;object-fit:contain;flex-shrink:0;"/>
+<img src="${IIUC_LOGO}" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;border-radius:10px;background:#ffffff;padding:8px;box-sizing:border-box;object-fit:contain;flex-shrink:0;"/>
 <div style="flex:1;min-width:0;">
 <div style="font-size:14px;letter-spacing:3px;opacity:.85;" data-field-type="university_name">الجامعة الإسلامية العالمية تشيتاغونغ</div>
 <div style="font-size:21px;font-weight:700;margin-top:10px;"><span data-field-type="department">قسم العلوم القرآنية والدراسات الإسلامية</span></div></div></div>
@@ -126,7 +130,7 @@ const THEME_HTML: Record<string, string> = {
 <div style="position:absolute;inset:28px;border:2px solid #1c1917;border-radius:2px;"></div>
 <div style="position:absolute;inset:38px;border:1px solid #1c1917;border-radius:1px;"></div>
 <div style="position:absolute;top:60px;left:0;right:0;text-align:center;">
-<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:80px;height:80px;object-fit:contain;margin:0 auto 10px;display:block;"/></div>
+<img src="${IIUC_LOGO}" alt="IIUC" crossorigin="anonymous" style="width:80px;height:80px;object-fit:contain;margin:0 auto 10px;display:block;"/></div>
 <div style="position:absolute;top:190px;left:70px;right:70px;text-align:center;">
 <div style="font-size:13px;letter-spacing:6px;text-transform:uppercase;color:#a16207;" data-field-type="university_name">International Islamic University Chittagong</div>
 <div style="width:70px;height:1px;background:#a16207;margin:18px auto;"></div></div>
@@ -150,7 +154,7 @@ const THEME_HTML: Record<string, string> = {
 <div style="position:absolute;inset:28px;border:2px solid #1c1917;border-radius:2px;"></div>
 <div style="position:absolute;inset:38px;border:1px solid #1c1917;border-radius:1px;"></div>
 <div style="position:absolute;top:60px;left:0;right:0;text-align:center;">
-<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:80px;height:80px;object-fit:contain;margin:0 auto 10px;display:block;"/></div>
+<img src="${IIUC_LOGO}" alt="IIUC" crossorigin="anonymous" style="width:80px;height:80px;object-fit:contain;margin:0 auto 10px;display:block;"/></div>
 <div style="position:absolute;top:190px;left:70px;right:70px;text-align:center;">
 <div style="font-size:14px;letter-spacing:4px;color:#a16207;" data-field-type="university_name">الجامعة الإسلامية العالمية تشيتاغونغ</div>
 <div style="width:70px;height:1px;background:#a16207;margin:18px auto;"></div></div>
@@ -243,12 +247,12 @@ const THEME_FIELDS: Record<string, FieldSpec[]> = {
 // These render offline of the API, so gallery thumbnails never depend on the
 // network layer that supplies the manifest (postimg.cc placeholders are dead).
 const THEME_PREVIEWS: Record<string, string> = {
-  'thesis-english': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/thesis-english/preview.svg',
-  'thesis-arabic': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/thesis-arabic/preview.svg',
-  'assignment-a-english': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/assignment-a-english/preview.svg',
-  'assignment-a-arabic': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/assignment-a-arabic/preview.svg',
-  'assignment-b-english': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/assignment-b-english/preview.svg',
-  'assignment-b-arabic': 'https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/themes/assignment-b-arabic/preview.svg',
+  'thesis-english': config.creativeHubRaw('themes/thesis-english/preview.svg'),
+  'thesis-arabic': config.creativeHubRaw('themes/thesis-arabic/preview.svg'),
+  'assignment-a-english': config.creativeHubRaw('themes/assignment-a-english/preview.svg'),
+  'assignment-a-arabic': config.creativeHubRaw('themes/assignment-a-arabic/preview.svg'),
+  'assignment-b-english': config.creativeHubRaw('themes/assignment-b-english/preview.svg'),
+  'assignment-b-arabic': config.creativeHubRaw('themes/assignment-b-arabic/preview.svg'),
 };
 
 export const BUNDLED_THEMES: HubTheme[] = [
@@ -469,7 +473,7 @@ export function templateMarkdownToHtml(md: string, pageSize: string = 'a4'): str
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0">
 <div style="width:${size.width}px;height:${size.height}px;background:#ffffff;color:#1f2937;font-family:'Georgia','Times New Roman',serif;position:relative;overflow:hidden;box-sizing:border-box;padding:64px 56px;">
 <div style="text-align:center;margin-bottom:28px;">
-<img src="https://raw.githubusercontent.com/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main/assets/iiuc-logo.png" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;object-fit:contain;"/>
+<img src="${IIUC_LOGO}" alt="IIUC" crossorigin="anonymous" style="width:84px;height:84px;object-fit:contain;"/>
 <div style="font-size:18px;font-weight:bold;color:#0f766e;margin-top:10px;" data-field-type="university_name">International Islamic University Chittagong</div>
 </div>
 <div style="font-size:14px;line-height:1.65;color:#1f2937;">${content}</div>

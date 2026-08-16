@@ -26,7 +26,7 @@
 
 ## File Storage
 All academic files (PDFs, documents) are stored in a separate repo:
-- **[QSIS-ACADEMIC-FILES-MANAFGER](https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER)** — Fork this to contribute files directly
+- **[IIUC-ACADEMIC-FILES-MANAFGER](https://github.com/sayedatiqurrahman/IIUC-ACADEMIC-FILES-MANAFGER)** — Fork this to contribute files directly
 
 ## Repository Structure
 
@@ -91,7 +91,7 @@ npm run dev
 4. Upload files — they're submitted as a Pull Request
 
 ### Upload via GitHub
-1. Fork [QSIS-ACADEMIC-FILES-MANAFGER](https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER)
+1. Fork [IIUC-ACADEMIC-FILES-MANAFGER](https://github.com/sayedatiqurrahman/IIUC-ACADEMIC-FILES-MANAFGER)
 2. Navigate to `{department}/{semester}/{CODE} - {Title}/`
 3. Place files in the correct category:
    - Notes → `Mid/NOTES/` or `Final/NOTES/`

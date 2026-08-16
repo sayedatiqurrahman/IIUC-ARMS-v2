@@ -10,7 +10,7 @@ const GITHUB_API = 'https://api.github.com';
 // POST /api/studio-apps/issues
 // Body: { id, title?, description }
 //
-// Opens a GitHub issue on the QSIS-ARMS-v2 repo for a community Studio app:
+// Opens a GitHub issue on the IIUC-ARMS-v2 repo for a community Studio app:
 //   - labeled `bug` + `studio-app`
 //   - titled against the app, pointing at the apps/<id>/ directory
 //   - assigned to the app's author (when they're a collaborator), which notifies

@@ -47,12 +47,12 @@ export default function ContributorsView() {
   const founder = useMemo(() => contributors.find((c: any) => c.role === 'Founder & Lead'), [contributors]);
 
   // Simple repo-based categories — ALL contributors including founder
-  // Developers = anyone who contributed to QSIS-ARMS-v2 (code repo)
+  // Developers = anyone who contributed to IIUC-ARMS-v2 (code repo)
   const developers = useMemo(() =>
     contributors.filter((c: any) => c.v2Contributions > 0),
     [contributors]
   );
-  // Resources = anyone who contributed to QSIS-ACADEMIC-FILES-MANAFGER (data repo)
+  // Resources = anyone who contributed to IIUC-ACADEMIC-FILES-MANAFGER (data repo)
   const resources = useMemo(() =>
     contributors.filter((c: any) => c.dataContributions > 0),
     [contributors]
@@ -373,15 +373,15 @@ export default function ContributorsView() {
               If this project helps you, please give us a star on GitHub. It motivates us to keep building and maintaining this resource for the IIUC community.
             </p>
             <div className="flex items-center justify-center gap-3 flex-wrap">
-              <a href={`https://github.com/${config.owner}/QSIS-ARMS-v2`} target="_blank" rel="noopener noreferrer"
+              <a href={`https://github.com/${config.owner}/${config.sourceRepo}`} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-qsis to-accent text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(34,197,94,0.3)] hover:scale-105 transition-all">
                 <i className="fas fa-star"></i> Star IIUC-ARMS v2
               </a>
-              <a href={`https://github.com/${config.owner}/QSIS-ACADEMIC-FILES-MANAFGER`} target="_blank" rel="noopener noreferrer"
+              <a href={`https://github.com/${config.owner}/${config.repo}`} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:scale-105 transition-all">
                 <i className="fas fa-star"></i> Star Academic Files
               </a>
-              <a href={`https://github.com/${config.owner}/QSIS-CREATIVE-HUB-THEMES`} target="_blank" rel="noopener noreferrer"
+              <a href={`https://github.com/${config.creativeHub.owner}/${config.creativeHub.repo}`} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(16,185,129,0.3)] hover:scale-105 transition-all">
                 <i className="fas fa-palette"></i> Star Creative Hub Themes
               </a>

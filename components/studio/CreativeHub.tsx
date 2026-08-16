@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
+import { config } from '@/lib/config';
 import type { HubTheme, IucdProject } from './creative-hub/types';
 import {
   BUNDLED_THEMES,
@@ -41,9 +42,8 @@ import {
 //    and .iucd project files that can be re-imported.
 // ============================================================
 
-const THEMES_RAW = 'https://raw.githubusercontent.com';
-const THEMES_RAW_BASE = `${THEMES_RAW}/sayedatiqurrahman/QSIS-CREATIVE-HUB-THEMES/main`;
-const PREVIEW_RAW = (themeId: string) => `${THEMES_RAW_BASE}/themes/${themeId}/preview.svg`;
+const THEMES_RAW_BASE = config.creativeHubRaw();
+const PREVIEW_RAW = (themeId: string) => config.creativeHubRaw(`themes/${themeId}/preview.svg`);
 
 interface CreativeHubProps {
   onClose: () => void;

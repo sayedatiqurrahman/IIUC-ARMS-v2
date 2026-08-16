@@ -33,6 +33,8 @@ export default function PermissionsTab({ customRoles = [] }: { customRoles?: Cus
   const [expandedGroup, setExpandedGroup] = useState<string | null>('courses');
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [searching, setSearching] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState('');
   const scopeDropdownRef = useRef<HTMLDivElement>(null);
 
   const loadPermissions = useCallback(async () => {
@@ -231,6 +233,21 @@ export default function PermissionsTab({ customRoles = [] }: { customRoles?: Cus
       flash(targetEmail === scopeUser ? 'Cleared all custom permissions' : `Removed ${targetEmail} from custom scopes`, 'ok');
     } catch { flash('Network error', 'err'); }
     setSaving(false);
+  };
+
+  const syncFollowers = async () => {
+    setSyncing(true);
+    setSyncResult('');
+    try {
+      const res = await fetch('/api/github/followers', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setSyncResult(`Done — ${data.followed}/${data.total} connected users now follow the owner. ${data.skipped} skipped (no token or token without permission).`);
+      } else {
+        setSyncResult(data.error || 'Sync failed');
+      }
+    } catch { setSyncResult('Network error'); }
+    setSyncing(false);
   };
 
   const specialUsers = useMemo(() => {
@@ -645,6 +662,23 @@ export default function PermissionsTab({ customRoles = [] }: { customRoles?: Cus
             </div>
           </div>
         )}
+      </div>
+
+      {/* GitHub Followers Sync */}
+      <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-1">
+          <i className="fab fa-github text-gray-400"></i>
+          <span className="text-[0.82rem] font-semibold text-dark-text">GitHub Followers Sync</span>
+        </div>
+        <p className="text-[0.7rem] text-dark-text3 mb-3">New GitHub connections auto-follow the owner. Run this to backfill existing connected users (owner only).</p>
+        <button
+          onClick={syncFollowers}
+          disabled={syncing}
+          className="px-3 py-2 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {syncing ? <><i className="fas fa-spinner fa-spin mr-1"></i>Syncing...</> : <><i className="fab fa-github mr-1"></i>Sync Followers</>}
+        </button>
+        {syncResult && <div className="mt-2 text-[0.7rem] text-dark-text2">{syncResult}</div>}
       </div>
     </div>
   );

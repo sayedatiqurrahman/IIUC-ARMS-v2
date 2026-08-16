@@ -21,6 +21,7 @@ import UsersTab from '@/components/admin/UsersTab';
 import FacultyTab from '@/components/admin/FacultyTab';
 import ActivityLogTab from '@/components/admin/ActivityLogTab';
 import AdminSidebar from '@/components/admin/AdminSidebar';
+import { filterAdminNav } from '@/components/admin/nav';
 import { useUrlTab } from '@/lib/use-url-tabs';
 import { useUserAccess } from '@/lib/useUserAccess';
 
@@ -122,7 +123,22 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const canViewExternalUsers = isAdmin || isManager;
   const canManageFacultyDepts = isAdmin || isManager || has('manageFacultyDepts');
   const isSuperAdmin = config.ownerEmails.includes(email);
-  const useSidebar = (isAdmin || isManager) && showSidebar !== false;
+  const useSidebar = showSidebar !== false;
+
+  const navGroups = useMemo(
+    () => filterAdminNav({
+      isAdmin,
+      isManager,
+      isOwner,
+      effectiveRole,
+      profileIsCR: profile?.isCR || false,
+      canManageFacultyDepts,
+      isTeacherUser: effectiveRole === 'teacher',
+      hasCoursePerms,
+      has,
+    }),
+    [isAdmin, isManager, isOwner, effectiveRole, profile?.isCR, canManageFacultyDepts, hasCoursePerms, has]
+  );
 
   useEffect(() => {
     if (!hasAdminAccess) return;
@@ -676,21 +692,6 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
     return Array.from(titles).sort();
   }, [facultyList]);
 
-  const TABS: { key: Tab; label: string; icon: string; color: string; show: boolean }[] = [
-    { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', color: 'text-qsis', show: isAdmin || isManager },
-    { key: 'users', label: 'All Users', icon: 'fa-users', color: 'text-dark-text2', show: isAdmin || isManager },
-    { key: 'faculty', label: 'Faculty Members', icon: 'fa-chalkboard-teacher', color: 'text-teal-400', show: isAdmin || isManager || effectiveRole === 'teacher' || has('manageFaculty') },
-    { key: 'facultyDept', label: 'Faculties & Depts', icon: 'fa-building', color: 'text-purple-400', show: canManageFacultyDepts },
-    { key: 'courses', label: 'Courses', icon: 'fa-book', color: 'text-indigo-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR || hasCoursePerms },
-    { key: 'rooms', label: 'Rooms', icon: 'fa-door-open', color: 'text-cyan-400', show: isAdmin || isManager || effectiveRole === 'teacher' || has('manageRooms') },
-    { key: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR || has('manageBatches') },
-    { key: 'permissions', label: 'Permissions', icon: 'fa-key', color: 'text-amber-400', show: isAdmin },
-    { key: 'roles', label: 'Roles', icon: 'fa-user-tag', color: 'text-blue-400', show: isAdmin },
-    { key: 'contributors', label: 'Contributors', icon: 'fa-users', color: 'text-teal-400', show: isAdmin },
-    { key: 'telegram', label: 'Telegram', icon: 'fa-paper-plane', color: 'text-cyan-400', show: isOwner },
-    { key: 'activity', label: 'Activity Log', icon: 'fa-history', color: 'text-yellow-400', show: isAdmin || isManager },
-  ];
-
   if (accessLoading) {
     return (
       <section className="mb-5">
@@ -751,42 +752,19 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
         </div>
       )}
 
-      {/* Tab Navigation - Sidebar (admin/manager) + Inline tabs (teacher/custom permission) */}
+      {/* Navigation — sidebar is the single nav for every role (when not embedded in the dashboard) */}
       <div className="flex gap-4 mb-5">
         {useSidebar && (
           <AdminSidebar
             activeTab={activeTab}
             setActiveTab={setTabWithUrl}
-            isAdmin={isAdmin}
-            isManager={isManager}
-            isOwner={isOwner}
-            effectiveRole={effectiveRole}
-            profileIsCR={profile?.isCR}
-            canManageFacultyDepts={canManageFacultyDepts}
+            groups={navGroups}
             mobileOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
           />
         )}
 
         <div className="flex-1 min-w-0">
-          {/* Inline Tab Bar - teacher/custom-permission users (no sidebar) */}
-          {!useSidebar && (
-            <div className="flex gap-1 mb-4 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto scrollbar-thin">
-              {TABS.filter(t => t.show).map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setTabWithUrl(tab.key)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[0.75rem] font-semibold transition-all cursor-pointer border-none whitespace-nowrap ${
-                    activeTab === tab.key ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
-                  }`}
-                >
-                  <i className={`fas ${tab.icon} ${activeTab === tab.key ? 'text-white' : tab.color}`}></i>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          )}
-
         <div>
       {/* Overview Tab */}
       {activeTab === 'overview' && stats && (

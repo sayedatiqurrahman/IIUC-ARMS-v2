@@ -39,7 +39,7 @@ How to use:
 • /connect yourid@ugram.iiuc.ac.bd — link your account
 
 App: ${SITE_URL}
-Repos: https://github.com/sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER and https://github.com/sayedatiqurrahman/QSIS-ARMS-v2"
+Repos: https://github.com/sayedatiqurrahman/IIUC-ACADEMIC-FILES-MANAFGER and https://github.com/sayedatiqurrahman/IIUC-ARMS-v2"
 
 BOT_SHORT="Academic resources for IIUC courses — notes, questions, slides & books. Made by Sayed Atiqur Rahman (Programming Light)."
 

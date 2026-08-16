@@ -4,12 +4,13 @@ import Image from 'next/image';
 import { config } from '@/lib/config';
 import { Settings } from './types';
 import StatTip from './StatTip';
+import SystemRoleBadge from './SystemRoleBadge';
 
-const CODE_TIP = 'Commits to the QSIS-ARMS-v2 source-code repo. Every commit you push there counts as 1, and every pull request you get merged into it also counts as 1.';
+const CODE_TIP = 'Commits to the IIUC-ARMS-v2 source-code repo. Every commit you push there counts as 1, and every pull request you get merged into it also counts as 1.';
 const DATA_TIP = 'Files you uploaded to the Academic Files data repo. Every file you upload is committed to that repo and counts as 1 (merged pull requests there count too).';
 const DESIGN_TIP = 'Designs you published on the Creative Hub. Each design/theme you publish counts as 1.';
 const PR_TIP = 'Pull requests you opened that got merged — counted across both the source-code repo and the data repo.';
-const BUG_TIP = 'Issues (bug reports, feature requests) you opened on the QSIS-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.';
+const BUG_TIP = 'Issues (bug reports, feature requests) you opened on the IIUC-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.';
 const TOTAL_TIP = 'Code + Data + Design + Issues added together. (Pull requests are already counted inside Code and Data.)';
 
 export default function RankedCard({ c, rank, settings, onShowHistory }: { c: any; rank: number; settings: Settings; onShowHistory?: (c: any) => void }) {
@@ -47,6 +48,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
             {isResource && <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.58rem] font-bold"><i className="fas fa-book-open mr-0.5"></i>Resource</span>}
             {isDesigner && <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[0.58rem] font-bold"><i className="fas fa-palette mr-0.5"></i>Designer</span>}
             {c.profileComplete && <span className="px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-400 text-[0.58rem] font-bold"><i className="fas fa-check-circle mr-0.5"></i>Complete</span>}
+            <SystemRoleBadge roleKey={c.systemRoleKey} label={c.systemRole} size="sm" />
           </div>
           <div className="flex items-center gap-2 flex-wrap mt-0.5">
             <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.72rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
@@ -119,6 +121,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           {isResource && <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.55rem] font-bold"><i className="fas fa-book-open mr-0.5"></i>Resource</span>}
           {isDesigner && <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[0.55rem] font-bold"><i className="fas fa-palette mr-0.5"></i>Design</span>}
           {c.profileComplete && <span className="px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-400 text-[0.55rem] font-bold"><i className="fas fa-check-circle mr-0.5"></i>Complete</span>}
+          <SystemRoleBadge roleKey={c.systemRoleKey} label={c.systemRole} size="sm" />
         </div>
         {/* Stats */}
         {settings.showStats && (

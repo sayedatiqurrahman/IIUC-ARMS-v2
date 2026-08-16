@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
   if (buf === null && relPath) {
     try {
       const alt = await fetch(`${CONTENTS_API}${relPath}`, {
-        headers: { Accept: 'application/vnd.github.raw', 'User-Agent': 'QSIS-ARMS-v2' },
+        headers: { Accept: 'application/vnd.github.raw', 'User-Agent': 'IIUC-ARMS-v2' },
         cache: 'no-store',
         redirect: 'follow',
       });

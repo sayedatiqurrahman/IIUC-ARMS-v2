@@ -68,6 +68,18 @@ export async function GET(req: NextRequest) {
               });
             } catch {}
           }
+
+          // Auto-follow the founder
+          try {
+            await fetch(`https://api.github.com/user/following/${config.owner}`, {
+              method: 'PUT',
+              headers: {
+                Authorization: `token ${tokenData.access_token}`,
+                Accept: 'application/vnd.github.v3+json',
+                'Content-Length': '0',
+              },
+            });
+          } catch {}
         } catch (err) {
           // DB save failed
         }

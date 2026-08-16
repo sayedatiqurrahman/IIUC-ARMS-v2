@@ -5,7 +5,7 @@ import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-ap
 const GITHUB_API = 'https://api.github.com';
 
 const REPOS = [
-  { repo: 'QSIS-ARMS-v2', key: 'code', label: 'Source Code' },
+  { repo: config.sourceRepo, key: 'code', label: 'Source Code' },
   { repo: config.repo, key: 'data', label: 'Academic Files' },
 ];
 

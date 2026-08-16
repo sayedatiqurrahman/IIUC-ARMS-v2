@@ -1,7 +1,7 @@
 // Studio Apps registry.
 //
 // Built-in apps are defined here (they ship inside the Next.js bundle). Community
-// apps live in the QSIS-ARMS-v2 repo under apps/<id>/ and are listed in
+// apps live in the IIUC-ARMS-v2 repo under apps/<id>/ and are listed in
 // studio-apps.json at the repo root. Nothing here needs a server rebuild — the
 // registry and app files are fetched straight from GitHub at request time.
 
@@ -38,7 +38,7 @@ export interface StudioAppRegistry {
 
 export const STUDIO_REPO = {
   owner: 'sayedatiqurrahman',
-  repo: 'QSIS-ARMS-v2',
+  repo: 'IIUC-ARMS-v2',
   branch: 'main',
   registryPath: 'studio-apps.json',
   appsPath: 'apps',

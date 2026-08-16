@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
-const REPO = 'sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER';
+const REPO = 'sayedatiqurrahman/IIUC-ACADEMIC-FILES-MANAFGER';
 const GITHUB_API = 'https://api.github.com';
 
 function getPrivateKey() { return (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/"/g, ''); }

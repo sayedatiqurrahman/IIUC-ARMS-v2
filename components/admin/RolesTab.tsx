@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { PERMISSION_GROUPS } from './constants';
+import { ALL_ROLES, PERMISSION_GROUPS, ALL_PERMISSION_ACTIONS } from './constants';
 import { showToast } from '@/lib/utils';
 
 interface CustomRole {
@@ -11,6 +11,17 @@ interface CustomRole {
   color: string;
   permissions: string[];
 }
+
+interface RoleDraft {
+  type: 'system' | 'custom';
+  key: string;
+  label: string;
+  icon: string;
+  color: string;
+  permissions: string[];
+}
+
+const SYSTEM_ROLES = ALL_ROLES.filter(r => r.key !== 'cr');
 
 const COLOR_OPTIONS = [
   { value: 'text-blue-400', label: 'Blue' },
@@ -30,14 +41,15 @@ const ICON_OPTIONS = [
   'fa-users', 'fa-user-shield', 'fa-chalkboard-teacher', 'fa-book', 'fa-building',
 ];
 
-const EMPTY_DRAFT: CustomRole = { key: '', label: '', icon: 'fa-user-tag', color: 'text-blue-400', permissions: [] };
+const EMPTY_DRAFT: RoleDraft = { type: 'custom', key: '', label: '', icon: 'fa-user-tag', color: 'text-blue-400', permissions: [] };
 
 export default function RolesTab() {
   const [roles, setRoles] = useState<CustomRole[]>([]);
+  const [permissions, setPermissions] = useState<Record<string, string[]>>({});
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState<CustomRole>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<RoleDraft>(EMPTY_DRAFT);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
 
@@ -46,6 +58,11 @@ export default function RolesTab() {
       const res = await fetch('/api/admin/roles');
       const data = await res.json();
       if (data.success) setRoles(data.roles || []);
+    } catch {}
+    try {
+      const res = await fetch('/api/settings/permissions');
+      const data = await res.json();
+      if (data.permissions) setPermissions(data.permissions);
     } catch {}
     try {
       const res = await fetch('/api/admin/users?limit=1000');
@@ -57,28 +74,88 @@ export default function RolesTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  const permsForRole = useCallback(
+    (roleKey: string) => ALL_PERMISSION_ACTIONS.filter(a => (permissions[a.key] || []).includes(roleKey)).map(a => a.key),
+    [permissions]
+  );
+
   const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+
+  const saveSystemRole = async () => {
+    const next = { ...permissions };
+    for (const a of ALL_PERMISSION_ACTIONS) {
+      const arr = Array.isArray(next[a.key]) ? [...next[a.key]] : [];
+      const withoutKey = arr.filter(r => r !== draft.key);
+      next[a.key] = draft.permissions.includes(a.key) ? [...withoutKey, draft.key] : withoutKey;
+    }
+    const res = await fetch('/api/settings/permissions', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permissions: next }),
+    });
+    return res;
+  };
 
   const saveRole = async () => {
     if (!draft.label.trim()) { showToast('Role name is required', 'error'); return; }
-    const key = slugify(draft.label);
-    if (!key) { showToast('Role name must contain letters or numbers', 'error'); return; }
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/roles', {
-        method: 'POST',
+      if (draft.type === 'system') {
+        const res = await saveSystemRole();
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`"${draft.label}" permissions updated`, 'success');
+          setDraft(EMPTY_DRAFT);
+          setEditingKey(null);
+          load();
+        } else {
+          showToast(data.error || 'Failed to save', 'error');
+        }
+      } else {
+        const key = slugify(draft.label);
+        if (!key) { showToast('Role name must contain letters or numbers', 'error'); return; }
+        const res = await fetch('/api/admin/roles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: { ...draft, key } }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          setDraft(EMPTY_DRAFT);
+          setEditingKey(null);
+          setExpandedRole(key);
+          load();
+        } else {
+          showToast(data.error || 'Failed to save', 'error');
+        }
+      }
+    } catch {
+      showToast('Network error', 'error');
+    }
+    setSaving(false);
+  };
+
+  const resetRole = async (roleKey: string, label: string) => {
+    if (!window.confirm(`Reset "${label}" permissions to defaults?`)) return;
+    setSaving(true);
+    try {
+      const next = { ...permissions };
+      for (const a of ALL_PERMISSION_ACTIONS) {
+        const arr = Array.isArray(next[a.key]) ? [...next[a.key]] : [];
+        next[a.key] = arr.filter(r => r !== roleKey);
+      }
+      const res = await fetch('/api/settings/permissions', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: { ...draft, key } }),
+        body: JSON.stringify({ permissions: next }),
       });
       const data = await res.json();
-      if (data.success) {
-        showToast(data.message, 'success');
-        setDraft(EMPTY_DRAFT);
-        setEditingKey(null);
-        setExpandedRole(key);
+      if (res.ok) {
+        showToast(`"${label}" reset to defaults`, 'success');
         load();
       } else {
-        showToast(data.error || 'Failed to save', 'error');
+        showToast(data.error || 'Failed to reset', 'error');
       }
     } catch {
       showToast('Network error', 'error');
@@ -106,9 +183,17 @@ export default function RolesTab() {
     setSaving(false);
   };
 
+  const startEditSystem = (roleKey: string) => {
+    const meta = SYSTEM_ROLES.find(r => r.key === roleKey);
+    if (!meta) return;
+    setEditingKey(roleKey);
+    setDraft({ type: 'system', key: roleKey, label: meta.label, icon: meta.icon, color: meta.color, permissions: permsForRole(roleKey) });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const startEdit = (r: CustomRole) => {
     setEditingKey(r.key);
-    setDraft({ ...r });
+    setDraft({ type: 'custom', ...r });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -131,8 +216,8 @@ export default function RolesTab() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-user-tag text-blue-400 mr-2"></i>Custom Roles</h3>
-          <p className="text-[0.7rem] text-dark-text3 mt-0.5">Create role bundles with any combination of permissions, then assign them to users. Custom roles stack on top of the role defaults and per-user scopes.</p>
+          <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-user-tag text-blue-400 mr-2"></i>Role Management</h3>
+          <p className="text-[0.7rem] text-dark-text3 mt-0.5">System roles (admin, manager, teacher, student, user) control what each role can do by default. Custom roles are permission bundles you create and assign to any user. Custom roles and per-user scopes stack on top of the system role defaults.</p>
         </div>
         {saving && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</span>}
       </div>
@@ -142,7 +227,9 @@ export default function RolesTab() {
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-[0.82rem] font-semibold text-dark-text">
             <i className={`fas ${editingKey ? 'fa-edit' : 'fa-plus-circle'} text-qsis mr-1.5`}></i>
-            {editingKey ? `Edit Role — ${draft.label}` : 'Create New Role'}
+            {editingKey
+              ? draft.type === 'system' ? `Edit Permissions — ${draft.label}` : `Edit Role — ${draft.label}`
+              : 'Create New Custom Role'}
           </h4>
           {editingKey && (
             <button onClick={resetDraft} className="text-[0.68rem] text-dark-text3 hover:text-dark-text bg-transparent border-none cursor-pointer"><i className="fas fa-times mr-0.5"></i>Cancel edit</button>
@@ -152,49 +239,61 @@ export default function RolesTab() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
           <div>
             <label className="text-[0.7rem] text-dark-text2 block mb-1">Role Name *</label>
-            <input
-              type="text"
-              value={draft.label}
-              onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
-              placeholder="e.g. Moderator, Library Assistant..."
-              className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
-            />
-            {draft.label.trim() && (
+            {draft.type === 'system' ? (
+              <div className="px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.82rem] flex items-center gap-2">
+                <i className={`fas ${draft.icon} ${draft.color} text-[0.7rem]`}></i>
+                {draft.label}
+                <span className="ml-auto text-[0.55rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3 uppercase tracking-wide">system</span>
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={draft.label}
+                onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
+                placeholder="e.g. Moderator, Library Assistant..."
+                className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis"
+              />
+            )}
+            {draft.type === 'custom' && draft.label.trim() && (
               <p className="text-[0.6rem] text-dark-text3 mt-1">Key: <code className="bg-dark-bg px-1 rounded text-qsis">{slugify(draft.label) || '—'}</code></p>
             )}
           </div>
-          <div>
-            <label className="text-[0.7rem] text-dark-text2 block mb-1">Color</label>
-            <div className="flex flex-wrap gap-1.5">
-              {COLOR_OPTIONS.map(c => (
-                <button
-                  key={c.value}
-                  onClick={() => setDraft(d => ({ ...d, color: c.value }))}
-                  className={`w-7 h-7 rounded-lg border cursor-pointer transition-all ${draft.color === c.value ? 'border-dark-text bg-dark-bg' : 'border-dark-border bg-dark-bg3'}`}
-                  title={c.label}
-                >
-                  <i className={`fas fa-circle text-[0.5rem] ${c.value}`}></i>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="text-[0.7rem] text-dark-text2 block mb-1">Icon</label>
-            <div className="flex flex-wrap gap-1.5">
-              {ICON_OPTIONS.map(ic => (
-                <button
-                  key={ic}
-                  onClick={() => setDraft(d => ({ ...d, icon: ic }))}
-                  className={`w-7 h-7 rounded-lg border cursor-pointer transition-all flex items-center justify-center ${draft.icon === ic ? 'border-qsis bg-qsis/10 text-qsis' : 'border-dark-border bg-dark-bg3 text-dark-text3 hover:text-dark-text'}`}
-                >
-                  <i className={`fas ${ic} text-[0.6rem]`}></i>
-                </button>
-              ))}
-            </div>
-          </div>
+          {draft.type === 'custom' && (
+            <>
+              <div>
+                <label className="text-[0.7rem] text-dark-text2 block mb-1">Color</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {COLOR_OPTIONS.map(c => (
+                    <button
+                      key={c.value}
+                      onClick={() => setDraft(d => ({ ...d, color: c.value }))}
+                      className={`w-7 h-7 rounded-lg border cursor-pointer transition-all ${draft.color === c.value ? 'border-dark-text bg-dark-bg' : 'border-dark-border bg-dark-bg3'}`}
+                      title={c.label}
+                    >
+                      <i className={`fas fa-circle text-[0.5rem] ${c.value}`}></i>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-[0.7rem] text-dark-text2 block mb-1">Icon</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {ICON_OPTIONS.map(ic => (
+                    <button
+                      key={ic}
+                      onClick={() => setDraft(d => ({ ...d, icon: ic }))}
+                      className={`w-7 h-7 rounded-lg border cursor-pointer transition-all flex items-center justify-center ${draft.icon === ic ? 'border-qsis bg-qsis/10 text-qsis' : 'border-dark-border bg-dark-bg3 text-dark-text3 hover:text-dark-text'}`}
+                    >
+                      <i className={`fas ${ic} text-[0.6rem]`}></i>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
           <div className="flex items-end">
             <button onClick={saveRole} disabled={saving || !draft.label.trim()} className="w-full px-3 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">
-              {saving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : <><i className={`fas ${editingKey ? 'fa-save' : 'fa-plus'} mr-1`}></i>{editingKey ? 'Save Role' : 'Create Role'}</>}
+              {saving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : <><i className={`fas ${editingKey ? 'fa-save' : 'fa-plus'} mr-1`}></i>{draft.type === 'system' ? 'Save Permissions' : editingKey ? 'Save Role' : 'Create Role'}</>}
             </button>
           </div>
         </div>
@@ -202,7 +301,7 @@ export default function RolesTab() {
         {draft.label.trim() && (
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className={`text-[0.7rem] font-semibold text-dark-text2`}><i className={`fas ${draft.icon} ${draft.color} mr-1.5`}></i>Permissions</span>
+              <span className="text-[0.7rem] font-semibold text-dark-text2"><i className={`fas ${draft.icon} ${draft.color} mr-1.5`}></i>Permissions</span>
               <span className="text-[0.65rem] text-dark-text3">{draft.permissions.length} selected</span>
             </div>
             <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
@@ -211,7 +310,7 @@ export default function RolesTab() {
                 return (
                   <div key={group.key} className="rounded-lg bg-dark-bg border border-dark-border/60 p-2.5">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className={`text-[0.72rem] font-semibold text-dark-text2`}><i className={`fas ${group.icon} ${group.color} mr-1.5 text-[0.6rem]`}></i>{group.label}</span>
+                      <span className="text-[0.72rem] font-semibold text-dark-text2"><i className={`fas ${group.icon} ${group.color} mr-1.5 text-[0.6rem]`}></i>{group.label}</span>
                       <button onClick={() => toggleGroup(group.actions.map(a => a.key))} className={`text-[0.62rem] cursor-pointer bg-transparent border-none ${allOn ? 'text-qsis' : 'text-dark-text3 hover:text-dark-text'}`}>
                         <i className={`fas ${allOn ? 'fa-check-circle' : 'fa-circle'} mr-0.5`}></i>{allOn ? 'All granted' : 'Grant all'}
                       </button>
@@ -243,71 +342,130 @@ export default function RolesTab() {
         )}
       </div>
 
-      {/* Role List */}
-      {roles.length === 0 ? (
-        <div className="bg-dark-bg2 border border-dark-border rounded-xl p-8 text-center">
-          <i className="fas fa-user-tag text-3xl text-dark-text3 mb-3 block"></i>
-          <p className="text-[0.9rem] text-dark-text2">No custom roles yet</p>
-          <p className="text-[0.75rem] text-dark-text3 mt-1">Create your first role above to bundle permissions for users.</p>
+      {/* System Roles */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-shield-alt text-red-400 mr-2"></i>System Roles</h3>
+            <p className="text-[0.7rem] text-dark-text3 mt-0.5">Built-in roles with default permissions. Edit to control which actions each role can perform, or reset to defaults.</p>
+          </div>
         </div>
-      ) : (
         <div className="space-y-3">
-          {roles.map(role => {
-            const isExpanded = expandedRole === role.key;
-            const count = countFor(role.key);
+          {SYSTEM_ROLES.map(meta => {
+            const sysPerms = permsForRole(meta.key);
+            const count = countFor(meta.key);
             return (
-              <div key={role.key} className="bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden">
-                <div className="flex items-center gap-3 px-4 py-3">
+              <div key={meta.key} className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
+                <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-dark-bg3 border border-dark-border flex items-center justify-center">
-                    <i className={`fas ${role.icon} ${role.color} text-[0.8rem]`}></i>
+                    <i className={`fas ${meta.icon} ${meta.color} text-[0.8rem]`}></i>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[0.82rem] font-semibold text-dark-text">{role.label}</span>
-                      <code className="text-[0.58rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3">{role.key}</code>
+                      <span className="text-[0.82rem] font-semibold text-dark-text">{meta.label}</span>
+                      <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3 uppercase tracking-wide">system</span>
                     </div>
                     <p className="text-[0.65rem] text-dark-text3">
-                      <span className={count > 0 ? 'text-qsis font-semibold' : ''}>{count} user{count === 1 ? '' : 's'}</span> assigned · {role.permissions.length} permission{role.permissions.length === 1 ? '' : 's'}
+                      <span className={count > 0 ? 'text-qsis font-semibold' : ''}>{count} user{count === 1 ? '' : 's'}</span> assigned · {sysPerms.length} permission{sysPerms.length === 1 ? '' : 's'}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button onClick={() => setExpandedRole(isExpanded ? null : role.key)} className="px-2.5 py-1.5 rounded-lg bg-dark-bg text-dark-text2 text-[0.68rem] font-semibold cursor-pointer hover:text-dark-text border border-dark-border">
-                      {isExpanded ? 'Hide' : 'View'}
+                    <button onClick={() => startEditSystem(meta.key)} className="px-2.5 py-1.5 rounded-lg bg-dark-bg text-dark-text2 text-[0.68rem] font-semibold cursor-pointer hover:text-qsis border border-dark-border" title="Edit permissions">
+                      <i className="fas fa-pen mr-1"></i>Edit
                     </button>
-                    <button onClick={() => startEdit(role)} className="px-2.5 py-1.5 rounded-lg bg-dark-bg text-dark-text2 text-[0.68rem] font-semibold cursor-pointer hover:text-qsis border border-dark-border" title="Edit role">
-                      <i className="fas fa-pen"></i>
-                    </button>
-                    <button onClick={() => deleteRole(role.key)} disabled={saving} className="px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-[0.68rem] cursor-pointer hover:bg-red-500/20 border-none disabled:opacity-50" title="Delete role">
-                      <i className="fas fa-trash"></i>
+                    <button onClick={() => resetRole(meta.key, meta.label)} disabled={saving} className="px-2.5 py-1.5 rounded-lg bg-dark-bg text-dark-text3 text-[0.68rem] font-semibold cursor-pointer hover:text-dark-text border border-dark-border disabled:opacity-50" title="Reset to default permissions">
+                      <i className="fas fa-undo"></i>
                     </button>
                   </div>
                 </div>
-                {isExpanded && (
-                  <div className="px-4 pb-3 border-t border-dark-border pt-3">
-                    <div className="flex flex-wrap gap-1.5">
-                      {role.permissions.length === 0 && <span className="text-[0.7rem] text-dark-text3">No permissions granted</span>}
-                      {PERMISSION_GROUPS.flatMap(g => g.actions).filter(a => role.permissions.includes(a.key)).map(a => (
-                        <span key={a.key} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-qsis/10 border border-qsis/20 text-[0.66rem] text-dark-text">
-                          <i className={`fas ${a.icon} ${a.color} text-[0.55rem]`}></i>{a.label}
-                        </span>
-                      ))}
-                    </div>
-                    {count > 0 && (
-                      <div className="mt-2.5 flex flex-wrap gap-1.5">
-                        {users.filter(u => u.role === role.key).map(u => (
-                          <span key={u.email} className="text-[0.6rem] px-2 py-0.5 rounded-full bg-dark-bg border border-dark-border text-dark-text2 truncate max-w-[200px]">
-                            {u.name || u.email}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-dark-border/60">
+                  {sysPerms.length === 0 && <span className="text-[0.7rem] text-dark-text3">No permissions granted</span>}
+                  {ALL_PERMISSION_ACTIONS.filter(a => sysPerms.includes(a.key)).map(a => (
+                    <span key={a.key} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-qsis/10 border border-qsis/20 text-[0.66rem] text-dark-text">
+                      <i className={`fas ${a.icon} ${a.color} text-[0.55rem]`}></i>{a.label}
+                    </span>
+                  ))}
+                </div>
               </div>
             );
           })}
         </div>
-      )}
+      </div>
+
+      {/* Custom Roles */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-dark-text"><i className="fas fa-user-tag text-blue-400 mr-2"></i>Custom Roles</h3>
+            <p className="text-[0.7rem] text-dark-text3 mt-0.5">Create role bundles with any combination of permissions, then assign them to users. Custom roles stack on top of the role defaults and per-user scopes.</p>
+          </div>
+        </div>
+
+        {roles.length === 0 ? (
+          <div className="bg-dark-bg2 border border-dark-border rounded-xl p-8 text-center">
+            <i className="fas fa-user-tag text-3xl text-dark-text3 mb-3 block"></i>
+            <p className="text-[0.9rem] text-dark-text2">No custom roles yet</p>
+            <p className="text-[0.75rem] text-dark-text3 mt-1">Create your first role above to bundle permissions for users.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {roles.map(role => {
+              const isExpanded = expandedRole === role.key;
+              const count = countFor(role.key);
+              return (
+                <div key={role.key} className="bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden">
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <div className="w-9 h-9 rounded-full bg-dark-bg3 border border-dark-border flex items-center justify-center">
+                      <i className={`fas ${role.icon} ${role.color} text-[0.8rem]`}></i>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[0.82rem] font-semibold text-dark-text">{role.label}</span>
+                        <code className="text-[0.58rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3">{role.key}</code>
+                      </div>
+                      <p className="text-[0.65rem] text-dark-text3">
+                        <span className={count > 0 ? 'text-qsis font-semibold' : ''}>{count} user{count === 1 ? '' : 's'}</span> assigned · {role.permissions.length} permission{role.permissions.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button onClick={() => setExpandedRole(isExpanded ? null : role.key)} className="px-2.5 py-1.5 rounded-lg bg-dark-bg text-dark-text2 text-[0.68rem] font-semibold cursor-pointer hover:text-dark-text border border-dark-border">
+                        {isExpanded ? 'Hide' : 'View'}
+                      </button>
+                      <button onClick={() => startEdit(role)} className="px-2.5 py-1.5 rounded-lg bg-dark-bg text-dark-text2 text-[0.68rem] font-semibold cursor-pointer hover:text-qsis border border-dark-border" title="Edit role">
+                        <i className="fas fa-pen"></i>
+                      </button>
+                      <button onClick={() => deleteRole(role.key)} disabled={saving} className="px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-[0.68rem] cursor-pointer hover:bg-red-500/20 border-none disabled:opacity-50" title="Delete role">
+                        <i className="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <div className="px-4 pb-3 border-t border-dark-border pt-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {role.permissions.length === 0 && <span className="text-[0.7rem] text-dark-text3">No permissions granted</span>}
+                        {PERMISSION_GROUPS.flatMap(g => g.actions).filter(a => role.permissions.includes(a.key)).map(a => (
+                          <span key={a.key} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-qsis/10 border border-qsis/20 text-[0.66rem] text-dark-text">
+                            <i className={`fas ${a.icon} ${a.color} text-[0.55rem]`}></i>{a.label}
+                          </span>
+                        ))}
+                      </div>
+                      {count > 0 && (
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {users.filter(u => u.role === role.key).map(u => (
+                            <span key={u.email} className="text-[0.6rem] px-2 py-0.5 rounded-full bg-dark-bg border border-dark-border text-dark-text2 truncate max-w-[200px]">
+                              {u.name || u.email}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -8,7 +8,7 @@ require('dotenv').config();
 const crypto = require('crypto');
 
 const REPO_OWNER = 'sayedatiqurrahman';
-const REPO_NAME = 'QSIS-ACADEMIC-FILES-MANAFGER';
+const REPO_NAME = 'IIUC-ACADEMIC-FILES-MANAFGER';
 const BRANCH = 'main';
 const GITHUB_API = 'https://api.github.com';
 

@@ -5,7 +5,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const GITHUB_API = 'https://api.github.com';
-const REPO = 'sayedatiqurrahman/QSIS-ACADEMIC-FILES-MANAFGER';
+const REPO = 'sayedatiqurrahman/IIUC-ACADEMIC-FILES-MANAFGER';
 
 function getPrivateKey() {
   const key = process.env.GITHUB_PRIVATE_KEY || '';

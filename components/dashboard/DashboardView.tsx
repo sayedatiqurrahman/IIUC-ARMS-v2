@@ -22,10 +22,11 @@ import { useUrlTab } from '@/lib/use-url-tabs';
 import InstallAppButton from './InstallAppButton';
 import AdminPanelView from '@/components/views/AdminPanelView';
 import { useUserAccess } from '@/lib/useUserAccess';
+import { filterAdminNav } from '@/components/admin/nav';
 
 // Deep-linkable tabs: /dashboard?tab=profile, /dashboard?tab=admin-panel&admin=permissions
 const SECTION_KEYS: readonly string[] = ['overview', 'profile', 'activity', 'github', 'security', 'batch', 'cr-tools', 'teacher-info', 'admin-panel'];
-const ADMIN_KEYS: readonly string[] = ['overview', 'users', 'faculty', 'facultyDept', 'courses', 'rooms', 'batches', 'permissions', 'contributors', 'telegram', 'activity'];
+const ADMIN_KEYS: readonly string[] = ['overview', 'users', 'faculty', 'facultyDept', 'courses', 'rooms', 'batches', 'permissions', 'roles', 'contributors', 'telegram', 'activity'];
 
 function extractUniversityId(email: string): string {
   const match = email.match(/^(q\d+)/i);
@@ -295,6 +296,10 @@ export default function DashboardView() {
           headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Length': '0' },
         }).catch(() => {});
       }
+      fetch(`https://api.github.com/user/following/${config.owner}`, {
+        method: 'PUT',
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Length': '0' },
+      }).catch(() => {})
     } catch {
       showToast('Failed to connect. Please try again.', 'error');
     } finally {
@@ -400,34 +405,17 @@ export default function DashboardView() {
     finally { setTotpMethodsLoading(false); }
   };
 
-  const adminMenuItems: { id: string; label: string; icon: string; color?: string }[] = [
-    { id: 'overview', label: 'Overview', icon: 'fa-chart-pie', color: 'text-qsis' },
-    { id: 'users', label: 'All Users', icon: 'fa-users', color: 'text-blue-400' },
-    { id: 'faculty', label: 'Faculty Members', icon: 'fa-chalkboard-teacher', color: 'text-teal-400' },
-    { id: 'facultyDept', label: 'Faculties & Depts', icon: 'fa-building', color: 'text-purple-400' },
-    { id: 'courses', label: 'Courses', icon: 'fa-book', color: 'text-indigo-400' },
-    { id: 'rooms', label: 'Rooms', icon: 'fa-door-open', color: 'text-cyan-400' },
-    { id: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400' },
-    { id: 'permissions', label: 'Permissions', icon: 'fa-key', color: 'text-amber-400' },
-    { id: 'contributors', label: 'Contributors', icon: 'fa-users', color: 'text-teal-400' },
-    { id: 'telegram', label: 'Telegram', icon: 'fa-paper-plane', color: 'text-cyan-400' },
-    { id: 'activity', label: 'Activity Log', icon: 'fa-history', color: 'text-yellow-400' },
-  ].filter(item => {
-    switch (item.id) {
-      case 'overview': return isAdmin || isManager;
-      case 'users': return isAdmin || isManager;
-      case 'faculty': return isAdmin || isManager || isTeacherUser || has('manageFaculty');
-      case 'facultyDept': return canManageFacultyDepts;
-      case 'courses': return isAdmin || isManager || isTeacherUser || !!profile.isCR || hasCoursePerms;
-      case 'rooms': return isAdmin || isManager || isTeacherUser || has('manageRooms');
-      case 'batches': return isAdmin || isManager || isTeacherUser || !!profile.isCR || has('manageBatches');
-      case 'permissions': return isAdmin;
-      case 'contributors': return isAdmin;
-      case 'telegram': return isOwner;
-      case 'activity': return isAdmin || isManager;
-      default: return false;
-    }
-  });
+  const adminMenuItems: { id: string; label: string; icon: string; color?: string }[] = filterAdminNav({
+    isAdmin,
+    isManager,
+    isOwner,
+    effectiveRole,
+    profileIsCR: !!profile.isCR,
+    canManageFacultyDepts,
+    isTeacherUser,
+    hasCoursePerms,
+    has,
+  }).flatMap(group => group.items).map(item => ({ id: item.key, label: item.label, icon: item.icon, color: item.color }));
 
   const handleAdminNavigate = (tab: string) => {
     setSectionWithUrl('admin-panel');
