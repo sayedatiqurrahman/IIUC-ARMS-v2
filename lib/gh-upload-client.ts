@@ -129,23 +129,53 @@ export function textToBase64(text: string): string {
   return btoa(bin);
 }
 
-// Reads a File into base64 incrementally (2.5MB slices), calling onSlice after
+// Reads a File into base64 incrementally (0.6MB slices), calling onSlice after
 // each slice so the UI can show live progress without holding the whole
 // encoded string in memory twice.
+//
+// Uses Blob.arrayBuffer() (NOT FileReader.readAsDataURL, which is known to
+// silently return null/truncated data for larger files on some mobile
+// browsers — that used to commit ~one slice + garbage to GitHub). Bytes are
+// counted from the ACTUAL data, so a partial read can never be committed.
 async function fileToBase64(file: File, onSlice?: (percent: number) => void): Promise<string> {
   let result = '';
   let readBytes = 0;
   const total = file.size || 1;
-  for (let offset = 0; offset < file.size; offset += SLICE_BYTES) {
-    const slice = file.slice(offset, Math.min(file.size, offset + SLICE_BYTES));
+
+  const sliceToBase64 = async (slice: Blob): Promise<string> => {
+    if (typeof slice.arrayBuffer === 'function') {
+      const buf = await slice.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      if (bytes.length !== slice.size) throw new Error('Failed to read file');
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(bytes.length, i + 0x8000)));
+      }
+      return btoa(bin);
+    }
+    // Legacy fallback (very old browsers): FileReader with a null-result guard.
     const dataUrl: string = await new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
+      reader.onload = () => resolve(String(reader.result || ''));
       reader.onerror = () => reject(new Error('Failed to read file'));
       reader.readAsDataURL(slice);
     });
-    result += dataUrl.slice(dataUrl.indexOf(',') + 1);
-    readBytes += slice.size;
+    if (!dataUrl || dataUrl === 'null' || dataUrl === '') throw new Error('Failed to read file');
+    return dataUrl.slice(dataUrl.indexOf(',') + 1);
+  };
+
+  for (let offset = 0; offset < file.size; offset += SLICE_BYTES) {
+    const slice = file.slice(offset, Math.min(file.size, offset + SLICE_BYTES));
+    const b64 = await sliceToBase64(slice);
+    // Exact accounting: decode the slice and require the real byte count to
+    // match the blob's — a truncated file must NEVER reach GitHub.
+    let decodedLength = -1;
+    try { decodedLength = atob(b64).length; } catch {}
+    if (decodedLength !== slice.size) {
+      throw new Error(`Failed to read entire file (${readBytes + decodedLength}/${file.size} bytes). Please re-select the file.`);
+    }
+    result += b64;
+    readBytes += decodedLength;
     onSlice?.(Math.min(100, Math.round((offset + slice.size) / total * 100)));
   }
   // Integrity guard: if the browser read back fewer bytes than the blob claims
