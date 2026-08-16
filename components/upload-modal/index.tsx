@@ -590,6 +590,36 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       }
 
       let data: any;
+      const totalUploadBytes = uploads.reduce((s, u) => s + u.files.reduce((ss, f) => ss + f.meta.file.size, 0), 0);
+
+      const runServerUpload = async () => {
+        // ── Server fallback: no browser-safe token OR the direct commit failed.
+        // Still NON-chunked: one request, nothing staged in the DB. Its own
+        // token candidates include the App bot + env secret, so it rarely fails.
+        const formData = new FormData();
+        for (const u of uploads) {
+          for (const f of u.files) {
+            formData.append('files', f.meta.file, f.path);
+          }
+          if (u.readmePath) {
+            formData.append('files', new Blob([linksToReadmeContent(u.course.links)], { type: 'text/markdown' }), u.readmePath);
+          }
+        }
+        formData.append('message', message);
+        formData.append('sizes', JSON.stringify(sizes));
+        if (token) formData.append('githubToken', token);
+
+        setUploadProgress({ percent: 40, label: 'Uploading to GitHub...' });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 85000);
+        try {
+          const res = await fetch('/api/github/upload', { method: 'POST', body: formData, signal: controller.signal });
+          return await readUploadResponse(res);
+        } finally {
+          clearTimeout(timeout);
+        }
+      };
+
       if (tokenData.token) {
         // ── Direct commit from the browser ─────────────────────────────
         // Every file goes as ONE blob straight to the GitHub git-data API. No
@@ -616,37 +646,16 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           author: identity,
           onProgress: (percent, label) => setUploadProgress({ percent, label }),
         });
-        if (!data.success) {
-          setResult({ success: false, error: data.error, tokenExpired: data.code === 'TOKEN_EXPIRED', needsPAT: data.code === 'TOKEN_NO_ACCESS' });
-          setUploadProgress(null);
-          return;
+        // Safety net: if the direct commit still failed (stale PAT, revoked
+        // access, no bot fallback), retry ONCE through the server — its token
+        // candidates include the App bot and the env secret, so small uploads
+        // always land. Vercel caps request bodies at ~4.5MB, so only retry
+        // payloads small enough to fit.
+        if (!data.success && totalUploadBytes <= 4 * 1024 * 1024) {
+          data = await runServerUpload();
         }
       } else {
-        // ── Fallback: no browser-safe token (only the server GITHUB_TOKEN
-        //    exists) — use the server commit. Still NON-chunked: one request,
-        //    nothing staged in the DB.
-        const formData = new FormData();
-        for (const u of uploads) {
-          for (const f of u.files) {
-            formData.append('files', f.meta.file, f.path);
-          }
-          if (u.readmePath) {
-            formData.append('files', new Blob([linksToReadmeContent(u.course.links)], { type: 'text/markdown' }), u.readmePath);
-          }
-        }
-        formData.append('message', message);
-        formData.append('sizes', JSON.stringify(sizes));
-        if (token) formData.append('githubToken', token);
-
-        setUploadProgress({ percent: 40, label: 'Uploading to GitHub...' });
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 85000);
-        try {
-          const res = await fetch('/api/github/upload', { method: 'POST', body: formData, signal: controller.signal });
-          data = await readUploadResponse(res);
-        } finally {
-          clearTimeout(timeout);
-        }
+        data = await runServerUpload();
       }
 
       if (data.success) {

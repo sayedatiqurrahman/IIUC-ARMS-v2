@@ -185,33 +185,32 @@ export async function commitUpload(ctx: UploadContext, files: FileToCommit[], me
       : undefined;
 
   // Try the user's own token first (so their account pushes); if they don't
-  // have write access to the repo yet, fall back to the GitHub App bot token so
-  // the upload still lands (still credited to the user's identity).
+  // have write access to the repo yet (GitHub reports that as 404), fall back
+  // to the GitHub App bot token so the upload still lands (still credited to
+  // the user's identity). The bot is appended after ANY non-bot primary — a
+  // stale PAT, an OAuth session token, or the env GITHUB_TOKEN all get the
+  // safety net.
   const candidates: { token: string; kind: string }[] = [{ token: ctx.token, kind: ctx.tokenKind }];
-  if (ctx.tokenKind === 'pat' || ctx.tokenKind === 'session') {
+  if (ctx.tokenKind !== 'bot') {
     const botToken = await getRepoBotToken(config.owner, config.repo);
     if (botToken) candidates.push({ token: botToken, kind: 'bot' });
   }
 
   let lastError = '';
   for (const cand of candidates) {
-    const isUserToken = cand.kind === 'pat' || cand.kind === 'session';
     try {
       const repoRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}`, cand.token);
-      if (repoRes.status === 404 || repoRes.status === 403) {
-        if (isUserToken) { lastError = `access:${repoRes.status}`; continue; }
-        if (repoRes.status === 403) {
-          return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
-        }
-        return { success: false, error: 'Cannot access repo: 404', status: 500 };
+      if (repoRes.status === 401 || repoRes.status === 403 || repoRes.status === 404) {
+        lastError = `access:${repoRes.status}`;
+        continue;
       }
       if (!repoRes.ok) return { success: false, error: `Cannot access repo: ${repoRes.status}`, status: 500 };
       const defaultBranch = (await repoRes.json()).default_branch;
 
       const refRes = await ghFetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${defaultBranch}`, cand.token);
       if (!refRes.ok) {
-        if (isUserToken) { lastError = `ref:${refRes.status}`; continue; }
-        return { success: false, error: `Cannot read branch: ${refRes.status}`, status: 500 };
+        lastError = `ref:${refRes.status}`;
+        continue;
       }
       const baseSha = (await refRes.json()).object.sha;
 
@@ -234,11 +233,8 @@ export async function commitUpload(ctx: UploadContext, files: FileToCommit[], me
       };
     } catch (e: any) {
       const msg = e?.message || '';
-      const isAuthErr = msg.includes('401') || msg.includes('403') || msg.includes('Bad credentials') || msg.includes('Requires authentication');
-      if (isUserToken && isAuthErr) { lastError = msg; continue; }
-      if (isAuthErr) {
-        return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
-      }
+      const isAuthErr = msg.includes('401') || msg.includes('403') || msg.includes('404') || msg.includes('Bad credentials') || msg.includes('Requires authentication');
+      if (isAuthErr) { lastError = msg; continue; }
       return { success: false, error: `Failed to commit to GitHub (${msg})`, status: 500 };
     }
   }
