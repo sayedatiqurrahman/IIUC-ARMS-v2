@@ -7,16 +7,20 @@
 // Uploads always commit straight to main — there is no fork/PR path.
 //
 // The git-data API requires ONE blob per file (git cannot split a file across
-// blobs), so per-file base64 is built incrementally in 2.5MB slices to keep
+// blobs), so per-file base64 is built incrementally in 0.6MB slices to keep
 // memory flat and to drive progress.
 
 const GITHUB_API = 'https://api.github.com';
 // GitHub refuses blobs/files larger than 100 MB. Keep the browser honest about
 // that BEFORE we spend minutes base64-encoding and uploading a doomed file.
 const GITHUB_MAX_BYTES = 100 * 1024 * 1024;
-// Files are read and base64-encoded in 0.6MB slices (chunk by chunk) to keep
-// memory flat and to drive live progress.
-const SLICE_BYTES = 0.6 * 1024 * 1024;
+// Files are read and base64-encoded in 0.6MB slices to keep memory flat and to
+// drive live progress. The slice size is a multiple of 3 BYTES (base64 encodes
+// 3 bytes as 4 chars), so every intermediate slice encodes to base64 WITHOUT
+// padding and the concatenated string stays the exact base64 of the whole file.
+// Slicing at non-multiples of 3 used to embed '=' padding mid-string, which
+// GitHub's decoder treats as end-of-data — truncating every file to one slice.
+const SLICE_BYTES = Math.floor(0.6 * 1024 * 1024 / 3) * 3;
 
 function assertWithinGithubLimit(label: string, bytes: number) {
   if (bytes > GITHUB_MAX_BYTES) {
