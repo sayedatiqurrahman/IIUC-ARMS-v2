@@ -3,6 +3,7 @@ import {
   APP_ID_REGEX,
   contentTypeFor,
   isSafeAssetPath,
+  STUDIO_APP_FILES_CACHE_TAG,
   STUDIO_REPO,
 } from '@/lib/studio-apps';
 
@@ -10,6 +11,10 @@ import {
 // Proxies a community app file straight from the IIUC-ARMS-v2 repo so a
 // contributed static build runs inside an iframe with relative asset URLs
 // resolved under this same origin — no Vercel rebuild involved.
+//
+// Responses are cached for 60s (tagged 'studio-app-files' + edge s-maxage), so
+// the app and its assets load instantly on repeat visits instead of hitting
+// GitHub every time. Publishing an app purges the tag.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -31,14 +36,20 @@ export async function GET(
   const branch = STUDIO_REPO.branch;
   const base = `${owner}/${repo}/${branch}/apps/${id}/${filePath}`;
 
+  const cacheControl =
+    'public, max-age=60, s-maxage=60, stale-while-revalidate=3600';
+
   // Primary: raw CDN (fast, cached).
   const rawUrl = `https://raw.githubusercontent.com/${base}`;
-  const rawRes = await fetch(rawUrl, { cache: 'no-store' });
+  const rawRes = await fetch(rawUrl, {
+    next: { revalidate: 60, tags: [STUDIO_APP_FILES_CACHE_TAG] },
+  });
   if (rawRes.ok) {
-    return new Response(rawRes.body, {
+    const buf = Buffer.from(await rawRes.arrayBuffer());
+    return new NextResponse(new Uint8Array(buf), {
       headers: {
         'Content-Type': contentTypeFor(filePath),
-        'Cache-Control': 'no-store',
+        'Cache-Control': cacheControl,
       },
     });
   }
@@ -49,16 +60,16 @@ export async function GET(
     const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/apps/${id}/${filePath}?ref=${branch}`;
     const apiRes = await fetch(apiUrl, {
       headers: { Accept: 'application/vnd.github.v3+json' },
-      cache: 'no-store',
+      next: { revalidate: 60, tags: [STUDIO_APP_FILES_CACHE_TAG] },
     });
     if (apiRes.ok) {
       const meta = await apiRes.json();
       if (meta?.encoding === 'base64' && typeof meta.content === 'string') {
         const buf = Buffer.from(meta.content.replace(/\n/g, ''), 'base64');
-        return new NextResponse(buf, {
+        return new NextResponse(new Uint8Array(buf), {
           headers: {
             'Content-Type': contentTypeFor(filePath),
-            'Cache-Control': 'no-store',
+            'Cache-Control': cacheControl,
           },
         });
       }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getRepoBotToken } from '@/lib/github-app';
@@ -8,6 +9,8 @@ import {
   APP_ID_REGEX,
   MATERIAL_ICON_REGEX,
   RESERVED_APP_IDS,
+  STUDIO_APP_FILES_CACHE_TAG,
+  STUDIO_REGISTRY_CACHE_TAG,
   STUDIO_REPO,
   StudioApp,
 } from '@/lib/studio-apps';
@@ -223,6 +226,12 @@ export async function POST(req: NextRequest) {
       message: `feat(studio-apps): ${isUpdate ? 'update' : 'add'} "${title}" by ${author.name}`,
       author: { name: author.name, email: author.email },
     });
+
+    // Drop the 60s registry/app-file caches so the update shows up immediately.
+    try {
+      revalidateTag(STUDIO_REGISTRY_CACHE_TAG);
+      revalidateTag(STUDIO_APP_FILES_CACHE_TAG);
+    } catch {}
 
     return NextResponse.json({
       ok: true,

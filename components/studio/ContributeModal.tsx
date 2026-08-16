@@ -48,7 +48,16 @@ export default function ContributeModal({
   const [error, setError] = useState('');
   const [publishing, setPublishing] = useState(false);
   const [publishedId, setPublishedId] = useState('');
+  const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Allow picking a whole dist folder instead of individual files.
+  useEffect(() => {
+    if (fileInputRef.current) {
+      (fileInputRef.current as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory = true;
+      (fileInputRef.current as HTMLInputElement & { directory: boolean }).directory = true;
+    }
+  }, []);
 
   // Searchable Material icon picker.
   const [iconSearch, setIconSearch] = useState('');
@@ -346,13 +355,51 @@ export default function ContributeModal({
                     className="hidden"
                     onChange={(e) => handlePickFolder(e.target.files)}
                   />
-                  <button
+                  <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full rounded-lg border border-dashed border-dark-border bg-dark-bg px-3 py-3 text-[0.74rem] text-dark-text2 cursor-pointer hover:border-qsis transition"
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDragging(true);
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      setDragging(false);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDragging(false);
+                      handlePickFolder(e.dataTransfer.files);
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click();
+                    }}
+                    className={`w-full rounded-xl border-2 border-dashed px-4 py-10 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-1.5 ${
+                      dragging
+                        ? 'border-qsis bg-qsis/10'
+                        : 'border-dark-border bg-dark-bg hover:border-qsis/50 hover:bg-dark-bg3'
+                    }`}
                   >
-                    <span className="material-symbols-outlined align-middle mr-1 text-[1rem]">folder_open</span>
-                    Choose your dist folder (any static build — React, plain HTML, etc.)
-                  </button>
+                    <span
+                      className={`material-symbols-outlined text-3xl mb-1 ${
+                        dragging ? 'text-qsis' : 'text-dark-text3'
+                      }`}
+                    >
+                      cloud_upload
+                    </span>
+                    <p className="text-[0.84rem] font-semibold text-dark-text">
+                      {dragging ? 'Drop it here' : 'Drag & drop your dist folder'}
+                    </p>
+                    <p className="text-[0.72rem] text-dark-text2">
+                      or <span className="text-qsis underline">browse for a folder</span>
+                    </p>
+                    <p className="text-[0.62rem] text-dark-text3">
+                      Any static build — React, plain HTML, Vite, Next.js export · up to 8 MB
+                    </p>
+                  </div>
                   {isUpdate && files.length === 0 && (
                     <p className="mt-1.5 text-[0.66rem] text-dark-text3">
                       Skip to keep the current build — this only updates the app details.

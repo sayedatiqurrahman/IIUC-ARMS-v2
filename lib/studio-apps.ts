@@ -4,6 +4,12 @@
 // apps live in the IIUC-ARMS-v2 repo under apps/<id>/ and are listed in
 // studio-apps.json at the repo root. Nothing here needs a server rebuild — the
 // registry and app files are fetched straight from GitHub at request time.
+//
+// The GitHub registry read is cached for 60s (tagged 'studio-registry') so the
+// Studio pages and app-info pages don't hit GitHub on every request; publishing
+// an app purges the tag so new apps appear right away.
+
+import { unstable_cache } from 'next/cache';
 
 export interface StudioAppAuthor {
   name: string;
@@ -158,8 +164,11 @@ export function contentTypeFor(path: string): string {
   return map[ext] || 'application/octet-stream';
 }
 
+export const STUDIO_REGISTRY_CACHE_TAG = 'studio-registry';
+export const STUDIO_APP_FILES_CACHE_TAG = 'studio-app-files';
+
 /** Community apps from the repo registry (raw GitHub first, contents API fallback). */
-export async function fetchRegistryFromGitHub(): Promise<StudioApp[]> {
+async function fetchRegistryRaw(): Promise<StudioApp[]> {
   const rawUrl = `https://raw.githubusercontent.com/${STUDIO_REPO.owner}/${STUDIO_REPO.repo}/${STUDIO_REPO.branch}/${STUDIO_REPO.registryPath}`;
   try {
     const rawRes = await fetch(rawUrl, { cache: 'no-store' });
@@ -194,3 +203,13 @@ export async function fetchRegistryFromGitHub(): Promise<StudioApp[]> {
 
   return [];
 }
+
+/**
+ * Cached community-app registry. Revalidated every 60s or on demand via
+ * revalidateTag(STUDIO_REGISTRY_CACHE_TAG) (done after a publish), so Studio
+ * pages never block on a GitHub round-trip more than once a minute.
+ */
+export const fetchRegistryFromGitHub = unstable_cache(fetchRegistryRaw, ['studio-registry'], {
+  revalidate: 60,
+  tags: [STUDIO_REGISTRY_CACHE_TAG],
+});
