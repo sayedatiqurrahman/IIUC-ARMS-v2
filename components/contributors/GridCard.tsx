@@ -150,21 +150,21 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
       <div className="px-4 py-2.5 border-t border-dark-border bg-dark-bg3/50 rounded-b-2xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className="text-[0.6rem] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded" title="Code commits">
+            <span className="text-[0.6rem] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded" title="Commits to the QSIS-ARMS-v2 source-code repo — every commit counts as 1, and each merged pull request adds 1 too.">
               <i className="fas fa-laptop-code mr-0.5"></i>{c.v2Contributions}
             </span>
-            <span className="text-[0.6rem] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded" title="Data commits">
+            <span className="text-[0.6rem] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded" title="Files uploaded to the Academic Files data repo — every file you upload counts as 1 (merged pull requests there count too).">
               <i className="fas fa-book-open mr-0.5"></i>{c.dataContributions}
             </span>
-            <span className="text-[0.6rem] text-accent bg-accent/10 px-1.5 py-0.5 rounded" title="Pull requests">
+            <span className="text-[0.6rem] text-accent bg-accent/10 px-1.5 py-0.5 rounded" title="Pull requests you opened that got merged — counted across both the source-code repo and the data repo.">
               <i className="fas fa-code-merge mr-0.5"></i>{c.prCount}
             </span>
-            <span className="text-[0.6rem] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Creative Hub designs">
+            <span className="text-[0.6rem] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Designs you published on the Creative Hub — each published design/theme counts as 1.">
               <i className="fas fa-palette mr-0.5"></i>{c.designContributions || 0}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[0.65rem] font-bold text-yellow-500" title="Total contributions">
+            <span className="text-[0.65rem] font-bold text-yellow-500" title="Code + Data + Design added together (pull requests are already included inside Code and Data).">
               {c.v2Contributions + c.dataContributions + (c.designContributions || 0)}
             </span>
             <button

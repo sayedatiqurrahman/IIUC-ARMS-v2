@@ -3,6 +3,13 @@
 import Image from 'next/image';
 import { config } from '@/lib/config';
 import { Settings } from './types';
+import StatTip from './StatTip';
+
+const CODE_TIP = 'Commits to the QSIS-ARMS-v2 source-code repo. Every commit you push there counts as 1, and every pull request you get merged into it also counts as 1.';
+const DATA_TIP = 'Files you uploaded to the Academic Files data repo. Every file you upload is committed to that repo and counts as 1 (merged pull requests there count too).';
+const DESIGN_TIP = 'Designs you published on the Creative Hub. Each design/theme you publish counts as 1.';
+const PR_TIP = 'Pull requests you opened that got merged — counted across both the source-code repo and the data repo.';
+const TOTAL_TIP = 'Code + Data + Design added together. (Pull requests are already counted inside Code and Data.)';
 
 export default function RankedCard({ c, rank, settings, onShowHistory }: { c: any; rank: number; settings: Settings; onShowHistory?: (c: any) => void }) {
   const rankColors: Record<number, string> = {
@@ -54,11 +61,13 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
         </div>
         {settings.showStats && (
           <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="text-center"><div className="text-[0.85rem] font-bold text-blue-400">{c.v2Contributions}</div><div className="text-[0.58rem] text-dark-text3">Code</div></div>
-            <div className="text-center"><div className="text-[0.85rem] font-bold text-orange-400">{c.dataContributions}</div><div className="text-[0.58rem] text-dark-text3">Data</div></div>
-            <div className="text-center"><div className="text-[0.85rem] font-bold text-emerald-400">{c.designContributions || 0}</div><div className="text-[0.58rem] text-dark-text3">Design</div></div>
-            <div className="text-center"><div className="text-[0.85rem] font-bold text-accent">{c.prCount}</div><div className="text-[0.58rem] text-dark-text3">PRs</div></div>
-            <div className="text-center border-l border-dark-border pl-3 ml-1"><div className="text-[0.85rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions + (c.designContributions || 0)}</div><div className="text-[0.58rem] text-dark-text3">Total</div></div>
+            <StatTip icon="fa-laptop-code" color="text-blue-400" value={c.v2Contributions} label="Code" tip={CODE_TIP} />
+            <StatTip icon="fa-book-open" color="text-orange-400" value={c.dataContributions} label="Data" tip={DATA_TIP} />
+            <StatTip icon="fa-palette" color="text-emerald-400" value={c.designContributions || 0} label="Design" tip={DESIGN_TIP} />
+            <StatTip icon="fa-code-merge" color="text-accent" value={c.prCount} label="PRs" tip={PR_TIP} />
+            <div className="border-l border-dark-border pl-3 ml-1">
+              <StatTip icon="fa-star" color="text-yellow-500" value={c.v2Contributions + c.dataContributions + (c.designContributions || 0)} label="Total" tip={TOTAL_TIP} />
+            </div>
           </div>
         )}
         <button
@@ -112,15 +121,15 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
         {/* Stats */}
         {settings.showStats && (
           <div className="flex items-center gap-2 mb-2.5 bg-dark-bg3/50 rounded-lg px-3 py-2">
-            <div className="flex-1 text-center"><div className="text-[0.8rem] font-bold text-blue-400">{c.v2Contributions}</div><div className="text-[0.5rem] text-dark-text3">Code</div></div>
+            <StatTip size="sm" icon="fa-laptop-code" color="text-blue-400" value={c.v2Contributions} label="Code" tip={CODE_TIP} />
             <div className="w-px h-6 bg-dark-border"></div>
-            <div className="flex-1 text-center"><div className="text-[0.8rem] font-bold text-orange-400">{c.dataContributions}</div><div className="text-[0.5rem] text-dark-text3">Data</div></div>
+            <StatTip size="sm" icon="fa-book-open" color="text-orange-400" value={c.dataContributions} label="Data" tip={DATA_TIP} />
             <div className="w-px h-6 bg-dark-border"></div>
-            <div className="flex-1 text-center"><div className="text-[0.8rem] font-bold text-emerald-400">{c.designContributions || 0}</div><div className="text-[0.5rem] text-dark-text3">Design</div></div>
+            <StatTip size="sm" icon="fa-palette" color="text-emerald-400" value={c.designContributions || 0} label="Design" tip={DESIGN_TIP} />
             <div className="w-px h-6 bg-dark-border"></div>
-            <div className="flex-1 text-center"><div className="text-[0.8rem] font-bold text-accent">{c.prCount}</div><div className="text-[0.5rem] text-dark-text3">PRs</div></div>
+            <StatTip size="sm" icon="fa-code-merge" color="text-accent" value={c.prCount} label="PRs" tip={PR_TIP} />
             <div className="w-px h-6 bg-dark-border"></div>
-            <div className="flex-1 text-center"><div className="text-[0.8rem] font-bold text-yellow-500">{c.v2Contributions + c.dataContributions + (c.designContributions || 0)}</div><div className="text-[0.5rem] text-dark-text3">Total</div></div>
+            <StatTip size="sm" icon="fa-star" color="text-yellow-500" value={c.v2Contributions + c.dataContributions + (c.designContributions || 0)} label="Total" tip={TOTAL_TIP} />
           </div>
         )}
         {/* Info grid */}

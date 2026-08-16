@@ -209,9 +209,9 @@ export default function ContributorsTab() {
               {/* Stats */}
               {settings.showStats && (
                 <div className="flex gap-3 text-[0.7rem]">
-                  <span className="text-blue-400" title="V2 commits"><i className="fas fa-code-branch mr-1"></i>{c.v2Contributions}</span>
-                  <span className="text-green-400" title="Data commits"><i className="fas fa-database mr-1"></i>{c.dataContributions}</span>
-                  <span className="text-purple-400" title="PRs"><i className="fas fa-code-merge mr-1"></i>{c.prCount}</span>
+                  <span className="text-blue-400" title="Commits to the QSIS-ARMS-v2 source-code repo — every commit counts as 1, and each merged pull request adds 1 too."><i className="fas fa-code-branch mr-1"></i>{c.v2Contributions}</span>
+                  <span className="text-green-400" title="Files uploaded to the Academic Files data repo — every file you upload counts as 1 (merged pull requests there count too)."><i className="fas fa-database mr-1"></i>{c.dataContributions}</span>
+                  <span className="text-purple-400" title="Pull requests you opened that got merged — counted across both the source-code repo and the data repo."><i className="fas fa-code-merge mr-1"></i>{c.prCount}</span>
                   <span className="text-dark-text3" title="Total"><i className="fas fa-star mr-1"></i>{c.contributions}</span>
                 </div>
               )}
