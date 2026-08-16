@@ -92,17 +92,18 @@ export default function ContributeModal({
     };
   }, [iconSearch]);
 
-  const readAsBase64 = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = String(reader.result || '');
-        const idx = result.indexOf('base64,');
-        resolve(idx >= 0 ? result.slice(idx + 7) : result);
-      };
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
+  const readAsBase64 = async (file: File) => {
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    if (bytes.length !== file.size) throw new Error(`Failed to read ${file.name}`);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(bytes.length, i + 0x8000)));
+    }
+    const b64 = btoa(bin);
+    if (atob(b64).length !== file.size) throw new Error(`Failed to read ${file.name}`);
+    return b64;
+  };
 
   const handlePickFolder = async (list: FileList | null) => {
     if (!list || list.length === 0) return;

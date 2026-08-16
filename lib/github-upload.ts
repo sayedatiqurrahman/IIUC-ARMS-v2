@@ -264,24 +264,3 @@ export async function logUploadActivity(userEmail: string, files: string[], prUr
     });
   } catch {}
 }
-
-// Lightweight authorization for chunk-staging requests (they don't carry file
-// content that needs GitHub write access, just need to be an allowed uploader).
-export async function authorizeChunkUpload(req: NextRequest): Promise<{ email: string } | { error: string; status: number }> {
-  let email = '';
-  try {
-    email = (await getUserEmail(req)) || '';
-  } catch {}
-
-  if (!email) return { error: 'Unauthorized — please login', status: 401 };
-
-  try {
-    const { prisma } = await import('@/lib/prisma');
-    const profile = await prisma.profile.findUnique({ where: { userId: email } });
-    if (profile?.isBanned) return { error: 'Account banned — upload not allowed', status: 403 };
-    const allowed = await hasPermission('uploadFile', config.getEffectiveRole(email, profile?.role), false, email);
-    if (!allowed && !profile?.githubInstallationId) return { error: 'You do not have permission to upload files', status: 403 };
-  } catch {}
-
-  return { email };
-}
