@@ -2,9 +2,9 @@
 //
 // Sends file bytes straight from the browser to the GitHub git-data API, so the
 // bytes never touch our Vercel server or the database. Only a browser-safe token
-// (PAT / NextAuth session token / short-lived App bot token) is used here; the
-// server-level GITHUB_TOKEN secret never leaves the server (those uploads fall
-// back to the server-side routes).
+// (short-lived App bot token) is used here; the server-level GITHUB_TOKEN secret
+// never leaves the server (those uploads fall back to the server-side routes).
+// Uploads always commit straight to main — there is no fork/PR path.
 //
 // The git-data API requires ONE blob per file (git cannot split a file across
 // blobs), so per-file base64 is built incrementally in 2.5MB slices to keep
@@ -25,9 +25,9 @@ export interface ClientUploadOptions {
   token: string;
   owner: string;
   repo: string;
-  directCommit: boolean; // owner/bot => commit to main; else fork + PR
   files: ClientUploadFile[];
   message: string;
+  author?: { name: string; email: string };
   onProgress?: (percent: number, label: string) => void;
 }
 
@@ -135,8 +135,9 @@ async function commitBlobs(opts: {
   baseSha: string;
   blobs: { path: string; sha: string }[];
   message: string;
+  author?: { name: string; email: string };
 }): Promise<string> {
-  const { token, owner, repo, branch, baseSha, blobs, message } = opts;
+  const { token, owner, repo, branch, baseSha, blobs, message, author } = opts;
 
   const commitRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/commits/${baseSha}`, token, {});
   if (!commitRes.ok) throw new ClientUploadError(`Cannot read parent commit: ${commitRes.status}`, commitRes.status);
@@ -154,7 +155,12 @@ async function commitBlobs(opts: {
 
   const newCommitRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/commits`, token, {
     method: 'POST',
-    body: JSON.stringify({ message, tree: newTreeSha, parents: [baseSha] }),
+    body: JSON.stringify({
+      message,
+      tree: newTreeSha,
+      parents: [baseSha],
+      ...(author ? { author: { name: author.name, email: author.email, date: new Date().toISOString() } } : {}),
+    }),
   });
   if (!newCommitRes.ok) throw new ClientUploadError(`Cannot create commit: ${newCommitRes.status}`, newCommitRes.status);
   const newCommitSha = (await newCommitRes.json()).sha;
@@ -209,8 +215,9 @@ async function directCommitToBranch(opts: {
   repo: string;
   blobs: { path: string; sha: string }[];
   message: string;
+  author?: { name: string; email: string };
 }): Promise<ClientUploadResult> {
-  const { token, owner, repo, blobs, message } = opts;
+  const { token, owner, repo, blobs, message, author } = opts;
 
   const repoRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}`, token, {});
   if (repoRes.status === 401 || repoRes.status === 403) {
@@ -223,7 +230,7 @@ async function directCommitToBranch(opts: {
   if (!refRes.ok) throw new ClientUploadError(`Cannot read branch: ${refRes.status}`, 500);
   const baseSha = (await refRes.json()).object.sha;
 
-  await commitBlobs({ token, owner, repo, branch: defaultBranch, baseSha, blobs, message });
+  await commitBlobs({ token, owner, repo, branch: defaultBranch, baseSha, blobs, message, author });
 
   return {
     success: true,
@@ -232,114 +239,11 @@ async function directCommitToBranch(opts: {
   };
 }
 
-async function forkAndPr(opts: {
-  token: string;
-  owner: string;
-  repo: string;
-  blobs: { path: string; sha: string }[];
-  message: string;
-}): Promise<ClientUploadResult> {
-  const { token, owner, repo, blobs, message } = opts;
-
-  const userRes = await retryFetch(`${GITHUB_API}/user`, token, {});
-  if (userRes.status === 401) {
-    throw new ClientUploadError('Token expired or invalid. Go to Dashboard → GitHub Connection → paste a new PAT.', 401, 'TOKEN_EXPIRED');
-  }
-  if (userRes.status === 403) {
-    throw new ClientUploadError('Token lacks permissions. Create a new PAT at https://github.com/settings/tokens/new with "repo" scope, then paste it in Dashboard.', 403, 'TOKEN_NO_ACCESS');
-  }
-  if (!userRes.ok) {
-    throw new ClientUploadError('Invalid token. Go to Dashboard → GitHub Connection → paste a valid PAT.', 401, 'TOKEN_INVALID');
-  }
-  const githubUser = await userRes.json();
-
-  const forkFullName = `${githubUser.login}/${repo}`;
-  const forkCheckRes = await retryFetch(`${GITHUB_API}/repos/${forkFullName}`, token, {});
-  if (forkCheckRes.status === 404) {
-    const forkRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/forks`, token, {
-      method: 'POST',
-      body: JSON.stringify({ default_branch_only: true }),
-    });
-    if (!forkRes.ok) {
-      const msg = await extractError(forkRes);
-      throw new ClientUploadError(msg || 'Failed to fork repository. Make sure your PAT has "repo" scope.', 500);
-    }
-    let forked = false;
-    for (let i = 0; i < 6; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      const check = await retryFetch(`${GITHUB_API}/repos/${forkFullName}`, token, {});
-      if (check.ok) { forked = true; break; }
-    }
-    if (!forked) throw new ClientUploadError('Fork is taking too long. Please try again.', 500);
-  } else if (!forkCheckRes.ok) {
-    throw new ClientUploadError('Cannot access your fork', 500);
-  }
-
-  const targetOwner = githubUser.login;
-  const targetRepo = repo;
-
-  const repoRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}`, token, {});
-  if (repoRes.status === 401 || repoRes.status === 403) {
-    throw new ClientUploadError('GitHub token expired or invalid. Please reconnect your GitHub account.', 401, 'TOKEN_EXPIRED');
-  }
-  if (!repoRes.ok) throw new ClientUploadError('Cannot access repo', 500);
-  const defaultBranch = (await repoRes.json()).default_branch;
-
-  const baseRefRes = await retryFetch(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/git/refs/heads/${defaultBranch}`, token, {});
-  if (baseRefRes.status === 401 || baseRefRes.status === 403) {
-    throw new ClientUploadError('GitHub token expired or invalid. Please reconnect your GitHub account.', 401, 'TOKEN_EXPIRED');
-  }
-  if (!baseRefRes.ok) throw new ClientUploadError('Cannot read branch', 500);
-  const baseBranchSha = (await baseRefRes.json()).object.sha;
-
-  const branch = `upload/${Date.now()}`;
-  const createBranchRes = await retryFetch(`${GITHUB_API}/repos/${targetOwner}/${targetRepo}/git/refs`, token, {
-    method: 'POST',
-    body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: baseBranchSha }),
-  });
-  if (!createBranchRes.ok && createBranchRes.status !== 422) {
-    const msg = await extractError(createBranchRes);
-    if (createBranchRes.status === 403) {
-      throw new ClientUploadError('Permission denied (403). Token needs Contents + Pull requests access. Create a classic PAT at: https://github.com/settings/tokens/new?description=IIUC-ARMS&scopes=repo', 403, 'TOKEN_NO_ACCESS');
-    }
-    throw new ClientUploadError(msg || 'Failed to create branch', 500);
-  }
-
-  await commitBlobs({ token, owner: targetOwner, repo: targetRepo, branch, baseSha: baseBranchSha, blobs, message });
-
-  const prRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/pulls`, token, {
-    method: 'POST',
-    body: JSON.stringify({
-      title: message || `Upload: ${blobs.map((b: any) => b.path.split('/').pop()).join(', ')}`,
-      body: [
-        `## IIUC-ARMS File Upload`,
-        ``,
-        `**Contributor:** ${githubUser.name || githubUser.login} (@${githubUser.login})`,
-        `**Email:** ${githubUser.email || 'N/A'}`,
-        ``,
-        `### Files`,
-        blobs.map((b: any) => `- \`${b.path}\``).join('\n'),
-        ``,
-        `---`,
-        `*Submitted via IIUC-ARMS v2*`,
-      ].join('\n'),
-      head: `${githubUser.login}:${branch}`,
-      base: defaultBranch,
-    }),
-  });
-
-  if (!prRes.ok) {
-    const msg = await extractError(prRes);
-    throw new ClientUploadError(msg || 'Failed to create Pull Request', 500);
-  }
-  const prData = await prRes.json();
-  return { success: true, pr: { url: prData.html_url, number: prData.number }, direct: false };
-}
-
-// Main entry: uploads files from the browser directly to GitHub.
+// Main entry: uploads files from the browser directly to GitHub (always
+// commits to main — no fork/PR).
 // Progress scale: 0..85 during blob creation, 85..100 during commit/finalize.
 export async function uploadFilesToGitHub(opts: ClientUploadOptions): Promise<ClientUploadResult> {
-  const { token, owner, repo, directCommit, files, message, onProgress } = opts;
+  const { token, owner, repo, files, message, author, onProgress } = opts;
   if (files.length === 0) return { success: false, error: 'No files to upload' };
 
   const totalBytes = files.reduce((s, f) => s + (f.file ? f.file.size : (f.text?.length || 0)), 0) || 1;
@@ -378,10 +282,8 @@ export async function uploadFilesToGitHub(opts: ClientUploadOptions): Promise<Cl
       onProgress?.(Math.min(85, 5 + Math.round((doneBytes / totalBytes) * 80)), `Uploaded ${label}…`);
     }
 
-    onProgress?.(88, directCommit ? 'Committing to GitHub…' : 'Creating pull request…');
-    const result = directCommit
-      ? await directCommitToBranch({ token, owner, repo, blobs, message })
-      : await forkAndPr({ token, owner, repo, blobs, message });
+    onProgress?.(88, 'Committing to GitHub…');
+    const result = await directCommitToBranch({ token, owner, repo, blobs, message, author });
 
     onProgress?.(98, 'Done');
     return result;

@@ -3,10 +3,7 @@ import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getUserEmail } from '@/lib/get-user';
 import { getRepoBotToken } from '@/lib/github-app';
-import { decrypt, isEncrypted } from '@/lib/crypto';
 import { hasPermission } from '@/lib/permissions';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
 
 export const maxDuration = 60;
 
@@ -42,23 +39,11 @@ export async function POST(req: NextRequest) {
     const isOwner = config.ownerEmails.includes(email) || profile?.githubLogin === config.owner;
     const installationId = profile?.githubInstallationId ? Number(profile.githubInstallationId) : null;
 
-    let storedPat = '';
-    if (profile?.githubToken) {
-      const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
-      if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) storedPat = decrypted;
-    }
-
-    // PAT pasted in the upload modal this session (used only when no stored PAT).
-    const body = await req.json().catch(() => ({}));
-    const bodyToken = typeof body.githubToken === 'string' && (body.githubToken.startsWith('ghp_') || body.githubToken.startsWith('github_pat_'))
-      ? body.githubToken
-      : '';
-
-    // ── Resolve a browser-safe token (same priority as the server upload path) ──
-    // Fully-automatic: prefer the GitHub App bot token (repo-scoped, 1h expiry,
-    // safe to hand to the browser) and the server GITHUB_TOKEN so uploads commit
-    // straight to main with no review. A user PAT/session token is only a
-    // fallback (fork + PR for credit) when no server token exists.
+    // ── Resolve a browser-safe token (server-authoritative) ──
+    // Uploads ALWAYS commit straight to main — via the GitHub App bot token
+    // (repo-scoped, 1h expiry, safe to hand to the browser) or the server
+    // GITHUB_TOKEN (never leaves the server; client falls back to the
+    // server-side upload routes). There is no fork/PR path anymore.
     if (canUpload || installationId) {
       const botToken = await getRepoBotToken(config.owner, config.repo);
       if (botToken) {
@@ -72,27 +57,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ tokenKind: 'env', needsServer: true, isOwner, directCommit: true, credit: false });
     }
 
-    if (storedPat || bodyToken) {
-      const token = storedPat || bodyToken;
-      return NextResponse.json({ tokenKind: 'pat', token, isOwner, directCommit: isOwner, credit: !isOwner });
-    }
-
-    try {
-      const session = await getServerSession(authOptions);
-      if (session?.accessToken) {
-        return NextResponse.json({
-          tokenKind: 'session',
-          token: session.accessToken,
-          isOwner,
-          directCommit: isOwner,
-          credit: !isOwner,
-        });
-      }
-    } catch {}
-
     return NextResponse.json(
-      { error: 'GitHub not connected. Connect with GitHub or ask admin for upload access.', code: 'AUTH_REQUIRED' },
-      { status: 401 }
+      { error: 'Upload service is unavailable right now. Please try again in a minute, or ask the admin to check the GitHub App setup.', code: 'NO_SERVER_TOKEN' },
+      { status: 503 }
     );
   } catch (e: any) {
     console.error('[upload-token] error:', e?.message || e);

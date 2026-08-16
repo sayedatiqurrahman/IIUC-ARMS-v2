@@ -94,7 +94,14 @@ export async function getRepoInstallation(owner: string, repo: string): Promise<
 /** Fresh installation access token scoped to the repo the app is installed on (or null). */
 export async function getRepoBotToken(owner: string, repo: string): Promise<string | null> {
   try {
-    const installationId = await getRepoInstallation(owner, repo);
+    let installationId = await getRepoInstallation(owner, repo);
+    if (!installationId) {
+      // Fallback: resolve the installation by account so a repo-rename/redirect
+      // hiccup on the repo-scoped lookup can never silently break uploads.
+      const installations = await getAppInstallations();
+      const match = installations.find((i: any) => i.account?.login === owner) || installations[0];
+      installationId = match?.id || null;
+    }
     if (!installationId) return null;
     return await getInstallationAccessToken(installationId);
   } catch {
