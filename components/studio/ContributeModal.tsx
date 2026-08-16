@@ -4,8 +4,17 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { StudioApp } from '@/lib/studio-apps';
 import { APP_ID_REGEX } from '@/lib/studio-apps';
+import { commitBase64FilesToGitHub, textToBase64 } from '@/lib/gh-upload-client';
 
 const MAX_TOTAL_BYTES = 8 * 1024 * 1024;
+
+// Community apps live in the IIUC-ARMS-v2 repo under apps/<id>/ and are listed
+// in studio-apps.json at the repo root. The browser commits there directly.
+const STUDIO_OWNER = 'sayedatiqurrahman';
+const STUDIO_REPO_NAME = 'IIUC-ARMS-v2';
+const STUDIO_BRANCH = 'main';
+const STUDIO_REGISTRY_PATH = 'studio-apps.json';
+const STUDIO_APPS_PATH = 'apps';
 
 interface PublishFile {
   path: string;
@@ -47,6 +56,7 @@ export default function ContributeModal({
   const [totalBytes, setTotalBytes] = useState(0);
   const [error, setError] = useState('');
   const [publishing, setPublishing] = useState(false);
+  const [publishLabel, setPublishLabel] = useState('');
   const [publishedId, setPublishedId] = useState('');
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,36 +140,120 @@ export default function ContributeModal({
     }
     if (!iconCustom && !/^[a-z0-9_]{2,40}$/.test(icon)) return setError('Pick a valid icon.');
 
+    const author = {
+      name: profile?.name || profile?.email?.split('@')[0] || '',
+      githubLogin: profile?.githubLogin || '',
+      email: profile?.email || '',
+      universityId: profile?.universityId || '',
+    };
+
     setPublishing(true);
     try {
-      const res = await fetch('/api/studio-apps/publish', {
+      // 1. Browser-safe token: the user's OWN PAT when available, else a fresh
+      //    GitHub App bot token. Only the token crosses our server — the files
+      //    and the commit go straight to GitHub from this browser.
+      setPublishLabel('Getting a GitHub token…');
+      const tokenRes = await fetch('/api/studio-apps/publish-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: finalId,
-          title: finalTitle,
-          subtitle: subtitle.trim(),
-          description: description.trim(),
-          icon: iconCustom ? '' : icon,
-          iconSvg: iconCustom && iconSvg ? iconSvg : '',
-          files,
-          author: {
-            name: profile?.name || profile?.email?.split('@')[0] || '',
-            githubLogin: profile?.githubLogin || '',
-            email: profile?.email || '',
-            universityId: profile?.universityId || '',
-          },
-        }),
+        body: JSON.stringify({ githubToken: profile?.githubToken || '' }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || (isUpdate ? 'Update failed. Please try again.' : 'Publish failed. Please try again.'));
+      const tokenData = await tokenRes.json().catch(() => ({}));
+      if (!tokenRes.ok) {
+        setError(tokenData.error || 'Could not get a GitHub token. Please try again in a minute.');
         setPublishing(false);
         return;
       }
-      setPublishedId(data.id || finalId);
+      if (tokenData.needsServer) {
+        setError('Publishing is temporarily unavailable on the server. Please try again in a minute.');
+        setPublishing(false);
+        return;
+      }
+      const token = tokenData.token as string;
+
+      // 2. Merge into the live registry (guards against a taken ID and lets an
+      //    update keep its original addedAt).
+      setPublishLabel('Checking the apps registry…');
+      const regRes = await fetch(`https://raw.githubusercontent.com/${STUDIO_OWNER}/${STUDIO_REPO_NAME}/${STUDIO_BRANCH}/${STUDIO_REGISTRY_PATH}`, { cache: 'no-store' });
+      let registry: { version: number; apps: any[] } = { version: 1, apps: [] };
+      if (regRes.ok) {
+        const parsed = await regRes.json().catch(() => null);
+        if (parsed && Array.isArray(parsed.apps)) registry = { version: Number(parsed.version) || 1, apps: parsed.apps };
+      }
+      const existingIndex = registry.apps.findIndex((a) => a.id === finalId);
+      const updateExisting = existingIndex >= 0;
+      if (updateExisting) {
+        const existing = registry.apps[existingIndex];
+        const sameAuthor =
+          (existing.author?.githubLogin && existing.author.githubLogin === author.githubLogin) ||
+          (existing.author?.email && existing.author.email.toLowerCase() === author.email.toLowerCase());
+        if (!sameAuthor) {
+          setError('That app ID is already taken by another contributor.');
+          setPublishing(false);
+          return;
+        }
+      }
+
+      let entry = 'index.html';
+      if (files.length > 0) {
+        entry = files.some((f) => f.path.toLowerCase() === 'index.html')
+          ? 'index.html'
+          : files.find((f) => f.path.toLowerCase().endsWith('.html'))?.path || 'index.html';
+      } else if (updateExisting) {
+        entry = registry.apps[existingIndex].entry || 'index.html';
+      }
+
+      const now = new Date().toISOString();
+      const registryEntry = {
+        id: finalId,
+        title: finalTitle,
+        subtitle: subtitle.trim(),
+        description: description.trim(),
+        icon: iconCustom ? '' : icon,
+        ...(iconCustom && iconSvg ? { iconSvg } : {}),
+        source: 'community',
+        entry,
+        author,
+        addedAt: updateExisting ? registry.apps[existingIndex].addedAt || now : now,
+      };
+      if (updateExisting) registry.apps[existingIndex] = registryEntry;
+      else registry.apps.push(registryEntry);
+
+      // 3. Commit apps/<id>/… + the merged registry DIRECTLY to GitHub.
+      const commitFiles = files.map((f) => ({
+        path: `${STUDIO_APPS_PATH}/${finalId}/${f.path}`,
+        content: f.content,
+      }));
+      commitFiles.push({
+        path: STUDIO_REGISTRY_PATH,
+        content: textToBase64(JSON.stringify({ version: registry.version, apps: registry.apps }, null, 2)),
+      });
+
+      const identity = author.githubLogin
+        ? { name: author.name || author.githubLogin, email: `${author.githubLogin}@users.noreply.github.com` }
+        : { name: author.name, email: author.email };
+
+      const res = await commitBase64FilesToGitHub({
+        token,
+        owner: STUDIO_OWNER,
+        repo: STUDIO_REPO_NAME,
+        files: commitFiles,
+        message: `feat(studio-apps): ${updateExisting ? 'update' : 'add'} "${finalTitle}" by ${author.name}`,
+        author: identity,
+        onProgress: (_p, label) => setPublishLabel(label),
+      });
+      if (!res.success) {
+        setError(res.error || (isUpdate ? 'Update failed. Please try again.' : 'Publish failed. Please try again.'));
+        setPublishing(false);
+        return;
+      }
+
+      // 4. Drop the server's 60s registry / 10-min file caches so the app shows
+      //    up immediately (best effort — the commit itself is already done).
+      fetch('/api/studio-apps/revalidate', { method: 'POST' }).catch(() => {});
+      setPublishedId(finalId);
       setPublishing(false);
-      onPublished(data.id || finalId);
+      onPublished(finalId);
     } catch {
       setError('Network error — please try again.');
       setPublishing(false);

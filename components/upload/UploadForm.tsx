@@ -654,7 +654,7 @@ export default function UploadForm({
             {' '}across {courses.filter(c => c.files.length > 0 || c.links.length > 0).length} course{courses.filter(c => c.files.length > 0 || c.links.length > 0).length !== 1 ? 's' : ''}
           </span>
           <span className={`font-semibold ${totalSizeMB > config.maxUploadSizeMB - 10 ? 'text-red-400' : 'text-qsis'}`}>
-            {totalSizeMB.toFixed(1)} / {config.maxUploadSizeMB} MB
+            {totalSizeMB.toFixed(1)} MB total
           </span>
         </div>
         <div className="w-full h-1.5 bg-dark-bg3 rounded-full overflow-hidden mt-2">

@@ -12,17 +12,9 @@ import { CURRENT_YEAR, CURRENT_SEASON, isPdf, isImage, isDocsOnly } from '@/comp
 import type { CourseGroup, FileWithMeta, Link, UploadModalProps } from '@/components/upload/types';
 import DocumentScanner, { type CapturedPage, warmupScannerEngine } from '@/components/scanner/DocumentScanner';
 import { compressUploadFile } from '@/lib/compress';
+import { uploadFilesToGitHub, type ClientUploadFile } from '@/lib/gh-upload-client';
 import { buildSearchablePdf } from '@/lib/ocr';
 import { refreshTreeUntilVisible } from '@/lib/tree-refresh';
-
-// Files are ALWAYS uploaded from the browser to our backend, which stores the
-// chunks (staging) and commits them to GitHub in one atomic commit. There is no
-// browser → GitHub direct path, so a user's PAT never leaves the server and the
-// bytes are verified before the commit.
-// CHUNK_BYTES is an INTEGER (629145) — float slice boundaries (629145.6) round
-// differently across browsers/Blob.slice() and were the historical cause of
-// files landing truncated exactly at a chunk boundary.
-const CHUNK_BYTES = Math.floor(0.6 * 1024 * 1024);
 
 export interface UploadProgress {
   percent: number;
@@ -328,8 +320,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const newTotal = totalFiles - currentCourseFiles + valid2.length;
     if (newTotal > 10) { alert(`Max 10 files total across all courses. You can add ${10 - totalFiles + currentCourseFiles} more.`); return; }
 
-    const newTotalSize = (totalSizeMB * 1024 * 1024 - (course?.files.reduce((s, f) => s + f.file.size, 0) || 0) + valid2.reduce((s, f) => s + f.size, 0)) / (1024 * 1024);
-    if (newTotalSize > config.maxUploadSizeMB) { alert(`Total upload size cannot exceed ${config.maxUploadSizeMB}MB.`); return; }
+    const oversized = valid2.find(f => f.size > config.maxUploadSizeMB * 1024 * 1024);
+    if (oversized) { alert(`"${oversized.name}" is ${(oversized.size / 1024 / 1024).toFixed(1)}MB — GitHub allows files up to ${config.maxUploadSizeMB}MB.`); return; }
 
     const newFiles: FileWithMeta[] = valid2.map(f => {
       if (isNotes) return { file: f, year: String(CURRENT_YEAR), yearRange: '' };
@@ -516,9 +508,6 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const newTotal = totalFiles + 1;
     if (newTotal > 10) { alert('Max 10 files total across all courses.'); return; }
 
-    const newTotalSize = (totalSizeMB * 1024 * 1024 + file.size) / (1024 * 1024);
-    if (newTotalSize > config.maxUploadSizeMB) { alert(`Total upload size cannot exceed ${config.maxUploadSizeMB}MB.`); return; }
-
     const meta: FileWithMeta = isQuestions
       ? isPdf(file.name)
         ? { file, year: '', yearRange: `${CURRENT_YEAR}-${CURRENT_YEAR}` }
@@ -561,63 +550,6 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     await doUpload();
   }
 
-  async function uploadChunked(
-    uploads: { course: CourseGroup; files: { path: string; meta: FileWithMeta }[]; readmePath: string }[],
-    totalBytes: number,
-    message: string,
-    token: string,
-    sizes?: Record<string, number>
-  ): Promise<any> {
-    const sessionId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-      ? crypto.randomUUID()
-      : `s-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    let uploadedBytes = 0;
-    for (const u of uploads) {
-      for (const f of u.files) {
-        const file = f.meta.file;
-        const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_BYTES));
-        for (let i = 0; i < totalChunks; i++) {
-          const start = i * CHUNK_BYTES;
-          const blob = file.slice(start, Math.min(file.size, start + CHUNK_BYTES));
-          const fd = new FormData();
-          fd.append('sessionId', sessionId);
-          fd.append('path', f.path);
-          fd.append('index', String(i));
-          fd.append('total', String(totalChunks));
-          fd.append('chunk', blob, file.name);
-          const res = await fetch('/api/github/upload-chunk', { method: 'POST', body: fd });
-          const cdata = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(cdata.error || `Failed to upload ${file.name}`);
-          uploadedBytes += blob.size;
-          setUploadProgress({
-            percent: Math.min(90, Math.round((uploadedBytes / totalBytes) * 90)),
-            label: `Uploading ${file.name} (${Math.round(((i + 1) / totalChunks) * 100)}%)...`,
-          });
-        }
-      }
-      if (u.readmePath) {
-        const fd = new FormData();
-        fd.append('sessionId', sessionId);
-        fd.append('path', u.readmePath);
-        fd.append('index', '0');
-        fd.append('total', '1');
-        fd.append('chunk', new Blob([linksToReadmeContent(u.course.links)], { type: 'text/markdown' }), u.readmePath.split('/').pop() || 'README.md');
-        const res = await fetch('/api/github/upload-chunk', { method: 'POST', body: fd });
-        const cdata = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(cdata.error || 'Failed to upload links');
-      }
-    }
-
-    setUploadProgress({ percent: 95, label: 'Committing to GitHub...' });
-    const res = await fetch('/api/github/upload-finalize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, message, githubToken: token || undefined, sizes }),
-    });
-    return readUploadResponse(res);
-  }
-
   async function doUpload(tokenOverride?: string) {
     const token = tokenOverride || githubToken || profile.githubToken || (session as any)?.accessToken || '';
     const validCourses = courses.filter(c => c.selectedCourseCode && (c.files.length > 0 || c.links.length > 0));
@@ -631,22 +563,18 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         return { course, files: built.files, readmePath: built.readmePath };
       });
 
-      // Expected sizes per relative path — the server verifies each assembled
-      // file matches this byte count before committing, so a truncated upload
-      // can never reach GitHub.
+      // Expected sizes per relative path — used to verify the server-side
+      // fallback so a truncated file can never reach GitHub.
       const sizes: Record<string, number> = {};
       for (const u of uploads) {
         for (const f of u.files) sizes[f.path] = f.meta.file.size;
         if (u.readmePath) sizes[u.readmePath] = new Blob([linksToReadmeContent(u.course.links)]).size;
       }
 
-      const allFiles = uploads.flatMap(u => u.files);
-      const totalBytes = allFiles.reduce((sum, f) => sum + f.meta.file.size, 0);
-      const needsChunking = totalBytes > 0 && (allFiles.some(f => f.meta.file.size > CHUNK_BYTES) || totalBytes > CHUNK_BYTES * 2);
-
-      // Browser-safe token from the server: PAT / NextAuth session / short-lived
-      // App bot token. We only use this for the AUTH_REQUIRED UX — the actual
-      // commit always happens server-side, so the secret never reaches the browser.
+      // Browser-safe token from the server: the user's PAT (or a short-lived
+      // App bot token). Only the TOKEN crosses our server — the files are
+      // committed straight to GitHub from this browser, so our free DB and
+      // server are never used for file bytes and nothing is chunked.
       const tokenRes = await fetch('/api/github/upload-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -662,9 +590,40 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       }
 
       let data: any;
-      if (needsChunking) {
-        data = await uploadChunked(uploads, totalBytes, message, token, sizes);
+      if (tokenData.token) {
+        // ── Direct commit from the browser ─────────────────────────────
+        // Every file goes as ONE blob straight to the GitHub git-data API. No
+        // chunking, no DB staging — a file can never be corrupted in transit.
+        const files: ClientUploadFile[] = [];
+        for (const u of uploads) {
+          for (const f of u.files) {
+            files.push({ path: `${config.uploadPath}/${f.path}`, file: f.meta.file });
+          }
+          if (u.readmePath) {
+            files.push({ path: `${config.uploadPath}/${u.readmePath}`, text: linksToReadmeContent(u.course.links) });
+          }
+        }
+        const identity = profile.githubLogin
+          ? { name: profile.name || profile.githubLogin, email: `${profile.githubLogin}@users.noreply.github.com` }
+          : { name: profile.name || email.split('@')[0], email };
+        data = await uploadFilesToGitHub({
+          token: tokenData.token,
+          owner: config.owner,
+          repo: config.repo,
+          files,
+          message,
+          author: identity,
+          onProgress: (percent, label) => setUploadProgress({ percent, label }),
+        });
+        if (!data.success) {
+          setResult({ success: false, error: data.error, tokenExpired: data.code === 'TOKEN_EXPIRED', needsPAT: data.code === 'TOKEN_NO_ACCESS' });
+          setUploadProgress(null);
+          return;
+        }
       } else {
+        // ── Fallback: no browser-safe token (only the server GITHUB_TOKEN
+        //    exists) — use the server commit. Still NON-chunked: one request,
+        //    nothing staged in the DB.
         const formData = new FormData();
         for (const u of uploads) {
           for (const f of u.files) {
@@ -681,9 +640,12 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         setUploadProgress({ percent: 40, label: 'Uploading to GitHub...' });
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 85000);
-        const res = await fetch('/api/github/upload', { method: 'POST', body: formData, signal: controller.signal });
-        clearTimeout(timeout);
-        data = await readUploadResponse(res);
+        try {
+          const res = await fetch('/api/github/upload', { method: 'POST', body: formData, signal: controller.signal });
+          data = await readUploadResponse(res);
+        } finally {
+          clearTimeout(timeout);
+        }
       }
 
       if (data.success) {

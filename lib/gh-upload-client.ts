@@ -11,9 +11,18 @@
 // memory flat and to drive progress.
 
 const GITHUB_API = 'https://api.github.com';
+// GitHub refuses blobs/files larger than 100 MB. Keep the browser honest about
+// that BEFORE we spend minutes base64-encoding and uploading a doomed file.
+const GITHUB_MAX_BYTES = 100 * 1024 * 1024;
 // Files are read and base64-encoded in 0.6MB slices (chunk by chunk) to keep
 // memory flat and to drive live progress.
 const SLICE_BYTES = 0.6 * 1024 * 1024;
+
+function assertWithinGithubLimit(label: string, bytes: number) {
+  if (bytes > GITHUB_MAX_BYTES) {
+    throw new ClientUploadError(`${label} is ${(bytes / 1024 / 1024).toFixed(1)} MB — GitHub allows files up to 100 MB.`, 413);
+  }
+}
 
 export interface ClientUploadFile {
   path: string;   // repo-root-relative path (uploadPath is prepended by the caller)
@@ -86,7 +95,7 @@ async function retryFetch(url: string, token: string, opts: RequestInit, attempt
   throw lastErr;
 }
 
-function textToBase64(text: string): string {
+export function textToBase64(text: string): string {
   const bytes = new TextEncoder().encode(text);
   let bin = '';
   const chunkSize = 0x8000;
@@ -254,6 +263,8 @@ export async function uploadFilesToGitHub(opts: ClientUploadOptions): Promise<Cl
     for (const f of files) {
       const label = f.path.split('/').pop() || f.path;
       onProgress?.(5, `Preparing ${label}…`);
+      const fileBytes = f.file ? f.file.size : (f.text?.length || 0);
+      assertWithinGithubLimit(label, fileBytes);
 
       let content = '';
       if (f.file) {
@@ -293,5 +304,58 @@ export async function uploadFilesToGitHub(opts: ClientUploadOptions): Promise<Cl
     }
     const msg = e instanceof Error ? e.message : 'Network error during upload';
     return { success: false, error: msg.includes('fetch') || msg.includes('NetworkError') ? 'Network error during upload. Check your connection and try again.' : msg, status: 0 };
+  }
+}
+
+// Commits files whose content is ALREADY base64 (e.g. Studio app dist files
+// encoded in the browser with FileReader). Everything goes straight to the
+// GitHub git-data API from the browser — the commit never touches our server.
+export async function commitBase64FilesToGitHub(opts: {
+  token: string;
+  owner: string;
+  repo: string;
+  files: { path: string; content: string }[];
+  message: string;
+  author?: { name: string; email: string };
+  onProgress?: (percent: number, label: string) => void;
+}): Promise<ClientUploadResult> {
+  const { token, owner, repo, files, message, author, onProgress } = opts;
+  if (files.length === 0) return { success: false, error: 'No files to commit' };
+
+  const blobs: { path: string; sha: string }[] = [];
+  try {
+    for (const f of files) {
+      const label = f.path.split('/').pop() || f.path;
+      onProgress?.(10, `Uploading ${label}…`);
+      // Content is already base64 — decode once just to size-check it (a base64
+      // blob's byte length is content.length * 3/4, but the exact check against
+      // a fresh Buffer is cheap and airtight).
+      const approxBytes = Math.floor(f.content.length * 0.75);
+      assertWithinGithubLimit(label, approxBytes);
+      const blobRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, token, {
+        method: 'POST',
+        body: JSON.stringify({ content: f.content, encoding: 'base64' }),
+      });
+      if (!blobRes.ok) {
+        const msg = await extractError(blobRes);
+        if (blobRes.status === 401 || blobRes.status === 403) {
+          throw new ClientUploadError('GitHub token expired or invalid. Please reconnect your GitHub account.', 401, 'TOKEN_EXPIRED');
+        }
+        throw new ClientUploadError(msg || `Failed to upload ${label}`, blobRes.status);
+      }
+      blobs.push({ path: f.path, sha: (await blobRes.json()).sha });
+      onProgress?.(Math.min(85, 10 + Math.round((blobs.length / files.length) * 75)), `Uploaded ${label}…`);
+    }
+
+    onProgress?.(90, 'Committing to GitHub…');
+    const result = await directCommitToBranch({ token, owner, repo, blobs, message, author });
+    onProgress?.(99, 'Done');
+    return result;
+  } catch (e) {
+    if (e instanceof ClientUploadError) {
+      return { success: false, error: e.message, status: e.status, code: e.code };
+    }
+    const msg = e instanceof Error ? e.message : 'Network error during commit';
+    return { success: false, error: msg.includes('fetch') || msg.includes('NetworkError') ? 'Network error during commit. Check your connection and try again.' : msg, status: 0 };
   }
 }
