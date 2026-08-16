@@ -14,6 +14,7 @@ import { useConfirm } from '@/components/ConfirmModal';
 import OperationProgress from '@/components/OperationProgress';
 import { isStandalone, isInBrowser, isIOSBrowser, type BeforeInstallPromptEvent } from '@/lib/standalone';
 import { useTurnstile } from '@/lib/useTurnstile';
+import { useUserAccess } from '@/lib/useUserAccess';
 import { handleGoogleRedirectResult } from '@/lib/firebase';
 import dynamic from 'next/dynamic';
 const DocumentViewer = dynamic(() => import('./DocumentViewer'), { ssr: false });
@@ -130,6 +131,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const viewerItem = useAppStore(s => s.viewerItem);
   const closeViewer = useAppStore(s => s.closeViewer);
   const profile = useAppStore(s => s.profile);
+  const appEmail = (session as any)?.user?.email || profile.email || '';
+  const appEffectiveRole = config.getEffectiveRole(appEmail, profile.role);
+  const { hasAdminPanelAccess } = useUserAccess(
+    appEmail,
+    appEffectiveRole,
+    profile?.isCR || false,
+    profile?.customPermissions || {}
+  );
   const loadTree = useAppStore(s => s.loadTree);
   const loadCourses = useAppStore(s => s.loadCourses);
   const loadProfile = useAppStore(s => s.loadProfile);
@@ -421,13 +430,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                           </div>
                         </div>
                         <Link href="/dashboard" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-th-large w-4 text-center"></i><span>Dashboard</span></Link>
-                        {(() => {
-                          const email = (session as any)?.user?.email || profile.email || '';
-                          const effectiveRole = config.getEffectiveRole(email, profile.role);
-                          return effectiveRole === 'admin' ? (
-                            <Link href="/admin" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-shield-alt w-4 text-center text-qsis"></i><span>Admin Panel</span></Link>
-                          ) : null;
-                        })()}
+                        {hasAdminPanelAccess && (
+                          <Link href="/admin" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-shield-alt w-4 text-center text-qsis"></i><span>Admin Panel</span></Link>
+                        )}
                         <button onClick={() => { setMoreOpen(false); fetch('/api/auth/firebase-session', { method: 'DELETE' }); signOut({ callbackUrl: '/' }); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] text-red-400 hover:bg-red-500/10 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-sign-out-alt w-4 text-center"></i><span>Logout</span></button>
                         <div className="my-1 h-px bg-dark-border" />
                       </>
@@ -510,19 +515,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                         >
                           <i className="fas fa-th-large w-4 text-center text-dark-text2"></i> Dashboard
                         </button>
-                        {(() => {
-                          const email = (session as any)?.user?.email || profile.email || '';
-                          const effectiveRole = config.getEffectiveRole(email, profile.role);
-                          const canAccessAdminPanel = effectiveRole === 'admin';
-                          return canAccessAdminPanel ? (
-                            <button
-                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-dark-text hover:bg-dark-bg3 cursor-pointer bg-transparent border-none text-left transition-colors"
-                              onClick={() => { setProfileDropdownOpen(false); router.push('/admin'); }}
-                            >
-                              <i className="fas fa-shield-alt w-4 text-center text-qsis"></i> Admin Panel
-                            </button>
-                          ) : null;
-                        })()}
+                        {hasAdminPanelAccess && (
+                          <button
+                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-dark-text hover:bg-dark-bg3 cursor-pointer bg-transparent border-none text-left transition-colors"
+                            onClick={() => { setProfileDropdownOpen(false); router.push('/admin'); }}
+                          >
+                            <i className="fas fa-shield-alt w-4 text-center text-qsis"></i> Admin Panel
+                          </button>
+                        )}
                         <button
                           className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8rem] text-red-400 hover:bg-red-500/10 cursor-pointer bg-transparent border-none text-left transition-colors"
                           onClick={() => { setProfileDropdownOpen(false); fetch('/api/auth/firebase-session', { method: 'DELETE' }); signOut({ callbackUrl: '/' }); }}
@@ -601,15 +601,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <Link href="/dashboard" onClick={() => setShowMoreSheet(false)} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-qsis/15 border border-qsis/30 text-qsis text-[0.78rem] font-semibold no-underline hover:bg-qsis/25 transition-colors">
                       <i className="fas fa-th-large"></i> Dashboard
                     </Link>
-                    {(() => {
-                      const email = (session as any)?.user?.email || profile.email || '';
-                      const effectiveRole = config.getEffectiveRole(email, profile.role);
-                      return effectiveRole === 'admin' ? (
-                        <Link href="/admin" onClick={() => setShowMoreSheet(false)} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-[0.78rem] font-semibold no-underline hover:bg-purple-500/25 transition-colors">
-                          <i className="fas fa-shield-alt"></i> Admin Panel
-                        </Link>
-                      ) : null;
-                    })()}
+                    {hasAdminPanelAccess && (
+                      <Link href="/admin" onClick={() => setShowMoreSheet(false)} className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-[0.78rem] font-semibold no-underline hover:bg-purple-500/25 transition-colors">
+                        <i className="fas fa-shield-alt"></i> Admin Panel
+                      </Link>
+                    )}
                   </div>
                   <button
                     onClick={() => { setShowMoreSheet(false); fetch('/api/auth/firebase-session', { method: 'DELETE' }); signOut({ callbackUrl: '/' }); }}

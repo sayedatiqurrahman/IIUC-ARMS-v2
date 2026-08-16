@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
-import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { config } from '@/lib/config';
+import { hasPermission } from '@/lib/permissions';
+import { canManageFaculty } from '@/lib/can-manage-faculty';
 
-function canReviewFaculty(email: string, profileRole?: string): boolean {
+async function canReviewFaculty(email: string, profileRole?: string): Promise<boolean> {
   const role = config.getEffectiveRole(email, profileRole);
-  return role === 'admin' || role === 'teacher' || role === 'manager';
+  return hasPermission('manageFaculty', role, false, email);
 }
 
 export async function GET(req: NextRequest) {
@@ -20,7 +22,7 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const status = url.searchParams.get('status') || 'pending';
 
-    if (canReviewFaculty(callerEmail, callerProfile?.role || undefined)) {
+    if (await canReviewFaculty(callerEmail, callerProfile?.role || undefined)) {
       const where: any = {};
       if (status !== 'all') where.status = status;
       const requests = await prisma.facultyRequest.findMany({
@@ -87,7 +89,7 @@ export async function PUT(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     const callerProfile = await prisma.profile.findUnique({ where: { userId: callerEmail } });
 
-    if (!canReviewFaculty(callerEmail, callerProfile?.role || undefined)) {
+    if (!(await canReviewFaculty(callerEmail, callerProfile?.role || undefined))) {
       return NextResponse.json({ error: 'Only admin/teacher/manager can review requests' }, { status: 403 });
     }
 
@@ -102,6 +104,10 @@ export async function PUT(req: NextRequest) {
     if (!request) return NextResponse.json({ error: 'Request not found' }, { status: 404 });
     if (request.status !== 'pending') {
       return NextResponse.json({ error: 'Request already reviewed' }, { status: 400 });
+    }
+
+    if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, request.department))) {
+      return NextResponse.json({ error: 'No permission for this department' }, { status: 403 });
     }
 
     if (action === 'approve') {

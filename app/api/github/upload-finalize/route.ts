@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { authorizeChunkUpload, resolveUploadContext, commitUpload, logUploadActivity } from '@/lib/github-upload';
+import { canUploadToSemester, extractUploadSemester } from '@/lib/permissions';
 
 export const maxDuration = 300;
 
@@ -88,6 +89,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: resolved.error, code: resolved.code }, { status: resolved.status });
     }
     const ctx = resolved.ctx;
+
+    // Semester scoping: admins/managers/teachers and "Add to Any Semester"
+    // holders can upload anywhere; other users stay in their own semester or
+    // one previous (Related Sources / Kitabs are always allowed).
+    if (!ctx.isOwner && ctx.userEmail) {
+      const profile = await prisma.profile.findUnique({ where: { userId: ctx.userEmail } });
+      const role = config.getEffectiveRole(ctx.userEmail, profile?.role);
+      const isCR = profile?.isCR || false;
+      const userSemester = profile?.semester || null;
+      for (const f of files) {
+        const sem = extractUploadSemester(f.path);
+        if (!sem) continue;
+        const semCheck = await canUploadToSemester(ctx.userEmail, role, isCR, userSemester, sem);
+        if (!semCheck.allowed) {
+          return NextResponse.json({ error: semCheck.reason }, { status: 403 });
+        }
+      }
+    }
 
     const result = await commitUpload(ctx, files, message);
 

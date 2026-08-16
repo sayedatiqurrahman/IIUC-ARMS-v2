@@ -92,6 +92,11 @@ export async function canAddCourseToSemester(
     return { allowed: false, reason: 'You do not have permission to add courses.' };
   }
 
+  // "Add to Any Semester" lifts the semester restriction for this user.
+  if (await hasPermission('addToAnySemester', role, isCR, email)) {
+    return { allowed: true };
+  }
+
   const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
   const perms = (settings?.permissions as Record<string, any>) || {};
   const restrictCR = perms.restrictCRToOwnSemester === true;
@@ -118,6 +123,58 @@ export async function canAddCourseToSemester(
   return {
     allowed: false,
     reason: `You can only add courses to your current semester or one previous semester.`,
+  };
+}
+
+// The semester a relative upload path targets (2nd path segment). Related
+// Sources and Related Kitabs are cross-semester folders — never restricted.
+export function extractUploadSemester(relPath: string): string {
+  const parts = relPath.split('/');
+  if (parts.length >= 2 && parts[1] === config.relatedSourcesFolder) return config.relatedSourcesFolder;
+  if (parts.length >= 2 && parts[1] === config.relatedKitabsFolder) return config.relatedKitabsFolder;
+  return parts[1] || '';
+}
+
+// Whether a caller may upload files to the given semester. Admins/managers/
+// teachers and holders of the "Add to Any Semester" permission may upload
+// anywhere; everyone else stays scoped to their own semester or one previous.
+export async function canUploadToSemester(
+  email: string,
+  role: string,
+  isCR: boolean,
+  userSemester: string | null,
+  targetSemester: string
+): Promise<{ allowed: boolean; reason?: string }> {
+  if (role === 'admin' || role === 'manager' || role === 'teacher') {
+    return { allowed: true };
+  }
+
+  if (!(await hasPermission('uploadFile', role, isCR, email))) {
+    return { allowed: false, reason: 'You do not have permission to upload files.' };
+  }
+
+  if (await hasPermission('addToAnySemester', role, isCR, email)) {
+    return { allowed: true };
+  }
+
+  if (targetSemester === config.relatedSourcesFolder || targetSemester === config.relatedKitabsFolder) {
+    return { allowed: true };
+  }
+
+  if (!userSemester) {
+    return { allowed: false, reason: 'Your profile does not have a semester set. Please contact admin.' };
+  }
+
+  const targetIdx = semesterIndex(targetSemester);
+  const userIdx = semesterIndex(userSemester);
+
+  if (targetIdx === userIdx || targetIdx === userIdx - 1) {
+    return { allowed: true };
+  }
+
+  return {
+    allowed: false,
+    reason: `You can only upload files to your current semester or one previous semester.`,
   };
 }
 

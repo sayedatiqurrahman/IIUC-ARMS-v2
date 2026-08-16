@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { hasPermission } from '@/lib/permissions';
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
@@ -32,14 +33,14 @@ export async function POST(req: NextRequest) {
   try {
     const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const role = config.getEffectiveRole(email);
-    const profileRole = (await (await import('@/lib/prisma')).prisma.profile.findUnique({ where: { userId: email } }))?.role;
-    const effective = config.getEffectiveRole(email, profileRole);
-    const isCR = (await (await import('@/lib/prisma')).prisma.profile.findUnique({ where: { userId: email } }))?.isCR;
-    if (effective !== 'admin' && effective !== 'manager' && effective !== 'teacher' && !isCR) {
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findUnique({ where: { userId: email } });
+    const effective = config.getEffectiveRole(email, profile?.role);
+    const isCR = profile?.isCR || false;
+    const isACR = profile?.isACR || false;
+    if (!(await hasPermission('manageBatches', effective, isCR || isACR, email))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    const { prisma } = await import('@/lib/prisma');
     const body = await req.json();
     const { action } = body;
 

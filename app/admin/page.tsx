@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 const AdminPanelView = dynamic(() => import('@/components/views/AdminPanelView'), { ssr: false });
 import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
+import { useUserAccess } from '@/lib/useUserAccess';
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -15,15 +16,21 @@ export default function AdminPage() {
 
   const email = (session as any)?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, (profile as any)?.role);
+  const { loading: accessLoading, hasAdminPanelAccess } = useUserAccess(
+    email,
+    effectiveRole,
+    (profile as any)?.isCR || false,
+    (profile as any)?.customPermissions || {}
+  );
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/');
     }
-    if (status === 'authenticated' && !['admin', 'manager', 'teacher'].includes(effectiveRole)) {
+    if (status === 'authenticated' && !accessLoading && !hasAdminPanelAccess) {
       router.push('/');
     }
-  }, [status, effectiveRole, router]);
+  }, [status, effectiveRole, router, accessLoading, hasAdminPanelAccess]);
 
   if (status === 'loading') {
     return (
@@ -46,7 +53,28 @@ export default function AdminPage() {
     );
   }
 
-  if (!session || !['admin', 'manager', 'teacher'].includes(effectiveRole)) return null;
+  if (accessLoading) {
+    return (
+      <div className="loading-container">
+        <div className="book-loader">
+          <div className="book-base"></div>
+          <div className="book-spine-loader"></div>
+          <div className="book-cover"></div>
+          <div className="book-page-stack">
+            <div className="book-page"></div>
+            <div className="book-page"></div>
+            <div className="book-page"></div>
+          </div>
+          <div className="page-shadow"></div>
+          <div className="page-shadow"></div>
+          <div className="page-shadow"></div>
+        </div>
+        <div className="loading-text">Checking access<span className="loading-dots"></span></div>
+      </div>
+    );
+  }
+
+  if (!session || !hasAdminPanelAccess) return null;
 
   return <AdminPanelView />;
 }

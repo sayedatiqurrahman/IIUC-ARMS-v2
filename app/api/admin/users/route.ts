@@ -487,7 +487,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Only admins can grant permissions' }, { status: 403 });
       }
       const { permission } = body;
-        const validPerms = ['addCourse', 'editCourse', 'deleteCourse', 'moveFile', 'copyFile', 'renameFile', 'deleteFile', 'uploadFile', 'manageFaculty', 'manageFacultyDepts', 'publishRoutine', 'manageUsers', 'manageSettings', 'editLinks'];
+        const validPerms = ['addCourse', 'addToAnySemester', 'editCourse', 'deleteCourse', 'moveFile', 'copyFile', 'renameFile', 'deleteFile', 'uploadFile', 'manageFaculty', 'manageFacultyDepts', 'publishRoutine', 'manageUsers', 'manageSettings', 'editLinks'];
       if (!permission || !validPerms.includes(permission)) {
         return NextResponse.json({ error: 'Invalid permission' }, { status: 400 });
       }

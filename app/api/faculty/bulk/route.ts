@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
-import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-
-function canManageFaculty(email: string, profileRole?: string, profileDept?: string, targetDept?: string): boolean {
-  const role = config.getEffectiveRole(email, profileRole);
-  if (role === 'admin') return true;
-  if (role === 'manager' && profileDept && profileDept === targetDept) return true;
-  if (role === 'teacher') return true;
-  return false;
-}
+import { canManageFaculty } from '@/lib/can-manage-faculty';
 
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.faculty);
@@ -55,7 +47,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      if (!canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, m.department)) {
+      if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, m.department))) {
         errors.push(`No permission for dept: ${m.department}`);
         skipped++;
         continue;

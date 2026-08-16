@@ -436,7 +436,7 @@ export async function DELETE(req: NextRequest) {
     const role = config.getEffectiveRole(email, profile?.role);
     const isCR = profile?.isCR || false;
     const isOwner = config.ownerEmails.includes(email.toLowerCase());
-    const canDeleteByRole = isOwner || ['admin', 'manager', 'teacher'].includes(role) || isCR;
+    const canDeleteByRole = isOwner || (await hasPermission('deleteCourse', role, isCR, email));
 
     const body = await req.json().catch(() => ({}));
     const { code, semester, department, folderPath: rawFolderPath, title } = body;

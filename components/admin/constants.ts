@@ -17,6 +17,7 @@ export const PERMISSION_GROUPS = [
     color: 'text-indigo-400',
     actions: [
       { key: 'addCourse', label: 'Add Course', desc: 'Create new course codes', icon: 'fa-book-medical', color: 'text-indigo-400' },
+      { key: 'addToAnySemester', label: 'Add to Any Semester', desc: 'Add courses & files to any semester', icon: 'fa-calendar-plus', color: 'text-purple-400' },
       { key: 'editCourse', label: 'Edit Course', desc: 'Edit course titles', icon: 'fa-edit', color: 'text-blue-400' },
       { key: 'deleteCourse', label: 'Delete Course', desc: 'Remove courses', icon: 'fa-trash', color: 'text-red-400' },
       { key: 'saveCourseToGitHub', label: 'Save to GitHub', desc: 'Push courses to repo', icon: 'fab fa-github', color: 'text-purple-400' },

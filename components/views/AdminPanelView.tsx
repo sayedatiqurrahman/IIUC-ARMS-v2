@@ -21,6 +21,7 @@ import FacultyTab from '@/components/admin/FacultyTab';
 import ActivityLogTab from '@/components/admin/ActivityLogTab';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import { useUrlTab } from '@/lib/use-url-tabs';
+import { useUserAccess } from '@/lib/useUserAccess';
 
 // Deep-linkable tabs: /admin?tab=users&sub=pending (the `tab` param is only
 // owned here when the panel is rendered standalone — when embedded inside the
@@ -107,12 +108,18 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
 
   const email = session?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
+  const { loading: accessLoading, has, hasAdminPanelAccess, hasCoursePerms } = useUserAccess(
+    email,
+    effectiveRole,
+    profile?.isCR || false,
+    profile?.customPermissions || {}
+  );
   const isAdmin = effectiveRole === 'admin';
   const isManager = effectiveRole === 'manager';
   const isOwner = config.ownerEmails.includes(email.toLowerCase());
-  const hasAdminAccess = isAdmin || isManager || effectiveRole === 'teacher';
+  const hasAdminAccess = hasAdminPanelAccess;
   const canViewExternalUsers = isAdmin || isManager;
-  const canManageFacultyDepts = isAdmin || isManager || profile.customPermissions?.manageFacultyDepts === true;
+  const canManageFacultyDepts = isAdmin || isManager || has('manageFacultyDepts');
   const isSuperAdmin = config.ownerEmails.includes(email);
   const useSidebar = (isAdmin || isManager) && showSidebar !== false;
 
@@ -638,16 +645,27 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const TABS: { key: Tab; label: string; icon: string; color: string; show: boolean }[] = [
     { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', color: 'text-qsis', show: isAdmin || isManager },
     { key: 'users', label: 'All Users', icon: 'fa-users', color: 'text-dark-text2', show: isAdmin || isManager },
-    { key: 'faculty', label: 'Faculty Members', icon: 'fa-chalkboard-teacher', color: 'text-teal-400', show: isAdmin || isManager },
+    { key: 'faculty', label: 'Faculty Members', icon: 'fa-chalkboard-teacher', color: 'text-teal-400', show: isAdmin || isManager || effectiveRole === 'teacher' || has('manageFaculty') },
     { key: 'facultyDept', label: 'Faculties & Depts', icon: 'fa-building', color: 'text-purple-400', show: canManageFacultyDepts },
-    { key: 'courses', label: 'Courses', icon: 'fa-book', color: 'text-indigo-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR },
-    { key: 'rooms', label: 'Rooms', icon: 'fa-door-open', color: 'text-cyan-400', show: isAdmin || isManager || effectiveRole === 'teacher' },
-    { key: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR },
+    { key: 'courses', label: 'Courses', icon: 'fa-book', color: 'text-indigo-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR || hasCoursePerms },
+    { key: 'rooms', label: 'Rooms', icon: 'fa-door-open', color: 'text-cyan-400', show: isAdmin || isManager || effectiveRole === 'teacher' || has('manageRooms') },
+    { key: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400', show: isAdmin || isManager || effectiveRole === 'teacher' || profile.isCR || has('manageBatches') },
     { key: 'permissions', label: 'Permissions', icon: 'fa-key', color: 'text-amber-400', show: isAdmin },
     { key: 'contributors', label: 'Contributors', icon: 'fa-users', color: 'text-teal-400', show: isAdmin },
     { key: 'telegram', label: 'Telegram', icon: 'fa-paper-plane', color: 'text-cyan-400', show: isOwner },
     { key: 'activity', label: 'Activity Log', icon: 'fa-history', color: 'text-yellow-400', show: isAdmin || isManager },
   ];
+
+  if (accessLoading) {
+    return (
+      <section className="mb-5">
+        <div className="text-center py-20">
+          <i className="fas fa-spinner fa-spin text-2xl text-qsis"></i>
+          <p className="text-dark-text2 mt-2 text-sm">Checking access...</p>
+        </div>
+      </section>
+    );
+  }
 
   if (!hasAdminAccess) {
     return (
@@ -680,7 +698,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           </h2>
         </div>
         <p className="text-[0.82rem] text-dark-text2 mt-1">
-          {isAdmin ? 'Full admin access' : isManager ? 'Manager access — you can manage users but cannot change admin roles' : 'Teacher access — you can manage faculty, courses, rooms, and batches'}
+          {isAdmin ? 'Full admin access' : isManager ? 'Manager access — you can manage users but cannot change admin roles' : effectiveRole === 'teacher' ? 'Teacher access — you can manage faculty, courses, rooms, and batches' : 'Custom access — granted by explicit permissions'}
         </p>
       </div>
 

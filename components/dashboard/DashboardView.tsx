@@ -21,6 +21,7 @@ import TelegramVerify from './TelegramVerify';
 import { useUrlTab } from '@/lib/use-url-tabs';
 import InstallAppButton from './InstallAppButton';
 import AdminPanelView from '@/components/views/AdminPanelView';
+import { useUserAccess } from '@/lib/useUserAccess';
 
 // Deep-linkable tabs: /dashboard?tab=profile, /dashboard?tab=admin-panel&admin=permissions
 const SECTION_KEYS: readonly string[] = ['overview', 'profile', 'activity', 'github', 'security', 'batch', 'cr-tools', 'teacher-info', 'admin-panel'];
@@ -87,10 +88,16 @@ export default function DashboardView() {
   // the versity email decides. Teacher info never shows for students and vice versa.
   const showStudentSection = isNonVersityAdmin ? profileType === 'student' : (isStudent || effectiveRole === 'manager' || (isAdmin && isStudentEmail));
   const showTeacherSection = isNonVersityAdmin ? profileType === 'teacher' : isTeacherUser;
-  const hasAdminAccess = config.isAdminOrAbove(email, profile.role) || effectiveRole === 'manager' || effectiveRole === 'teacher';
+  const { has, hasAdminPanelAccess, hasCoursePerms } = useUserAccess(
+    email,
+    effectiveRole,
+    !!profile.isCR,
+    (profile as any).customPermissions || {}
+  );
   const isManager = effectiveRole === 'manager';
   const isOwner = config.ownerEmails.includes(email.toLowerCase());
-  const canManageFacultyDepts = isAdmin || isManager || (profile as any).customPermissions?.manageFacultyDepts === true;
+  const hasAdminAccess = hasAdminPanelAccess;
+  const canManageFacultyDepts = isAdmin || isManager || has('manageFacultyDepts');
   const [ghUser, setGhUser] = useState<any>(null);
   const [ghStats, setGhStats] = useState<any>(null);
   const [personalActivity, setPersonalActivity] = useState<any[]>([]);
@@ -409,11 +416,11 @@ export default function DashboardView() {
     switch (item.id) {
       case 'overview': return isAdmin || isManager;
       case 'users': return isAdmin || isManager;
-      case 'faculty': return isAdmin || isManager;
+      case 'faculty': return isAdmin || isManager || isTeacherUser || has('manageFaculty');
       case 'facultyDept': return canManageFacultyDepts;
-      case 'courses': return isAdmin || isManager || isTeacherUser || !!profile.isCR;
-      case 'rooms': return isAdmin || isManager || isTeacherUser;
-      case 'batches': return isAdmin || isManager || isTeacherUser || !!profile.isCR;
+      case 'courses': return isAdmin || isManager || isTeacherUser || !!profile.isCR || hasCoursePerms;
+      case 'rooms': return isAdmin || isManager || isTeacherUser || has('manageRooms');
+      case 'batches': return isAdmin || isManager || isTeacherUser || !!profile.isCR || has('manageBatches');
       case 'permissions': return isAdmin;
       case 'contributors': return isAdmin;
       case 'telegram': return isOwner;

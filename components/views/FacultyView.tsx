@@ -8,6 +8,7 @@ import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
 import CustomSelect from '@/components/CustomSelect';
 import { useConfirm } from '@/components/ConfirmModal';
+import { useUserAccess } from '@/lib/useUserAccess';
 
 interface FacultyMember {
   id: string;
@@ -33,16 +34,14 @@ export default function FacultyView() {
   const rawEmail = session?.user?.email || profile?.email || '';
   const rawRole = profile?.role || '';
   const effectiveRole = config.getEffectiveRole(rawEmail, rawRole);
-  const canEdit = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher';
+  const { has } = useUserAccess(rawEmail, effectiveRole, profile?.isCR || false, profile?.customPermissions || {});
+  const canEdit = effectiveRole === 'admin' || effectiveRole === 'manager' || effectiveRole === 'teacher' || has('manageFaculty');
   const myDept = profile?.department || '';
 
   const [members, setMembers] = useState<FacultyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [deptFilter, setDeptFilter] = useState(() => {
-    if (myDept) return myDept;
-    return 'qsis';
-  });
+  const [deptFilter, setDeptFilter] = useState('');
   const [titleFilter, setTitleFilter] = useState('');
   const [memberTypeFilter, setMemberTypeFilter] = useState<'all' | 'faculty' | 'staff'>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -56,13 +55,12 @@ export default function FacultyView() {
     if (search) params.set('search', search);
     if (titleFilter) params.set('title', titleFilter);
     if (memberTypeFilter !== 'all') params.set('memberType', memberTypeFilter);
-    if (!canEdit) params.set('visibleOnly', 'true');
     if (!isEditing.current) setLoading(true);
     fetch(`/api/faculty?${params}`)
       .then(r => r.json())
       .then(data => { setMembers(data.members || []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [deptFilter, search, titleFilter, memberTypeFilter, canEdit]);
+  }, [deptFilter, search, titleFilter, memberTypeFilter]);
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 

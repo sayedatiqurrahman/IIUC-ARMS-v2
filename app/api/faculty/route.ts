@@ -2,14 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-
-function canManageFaculty(email: string, profileRole?: string, profileDept?: string, targetDept?: string): boolean {
-  const role = config.getEffectiveRole(email, profileRole);
-  if (role === 'admin') return true;
-  if (role === 'manager' && profileDept && profileDept === targetDept) return true;
-  if (role === 'teacher') return true;
-  return false;
-}
+import { canManageFaculty } from '@/lib/can-manage-faculty';
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.faculty);
@@ -20,7 +13,6 @@ export async function GET(req: NextRequest) {
     const search = url.searchParams.get('search') || '';
     const memberType = url.searchParams.get('memberType') || url.searchParams.get('role');
     const title = url.searchParams.get('title') || '';
-    const visibleOnly = url.searchParams.get('visibleOnly') === 'true';
 
     const { prisma } = await import('@/lib/prisma');
 
@@ -28,7 +20,6 @@ export async function GET(req: NextRequest) {
     if (department) where.department = department;
     if (memberType) where.memberType = memberType;
     if (title) where.title = title;
-    if (visibleOnly) where.isVisible = true;
     if (search) {
       const q = search.toLowerCase();
       where.OR = [
@@ -67,7 +58,7 @@ export async function POST(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     const callerProfile = await prisma.profile.findUnique({ where: { userId: callerEmail } });
 
-    if (!canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, department)) {
+    if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, department))) {
       return NextResponse.json({ error: 'You do not have permission to add faculty to this department' }, { status: 403 });
     }
 
@@ -109,7 +100,7 @@ export async function PUT(req: NextRequest) {
     const target = await prisma.facultyMember.findUnique({ where: { id } });
     if (!target) return NextResponse.json({ error: 'Faculty member not found' }, { status: 404 });
 
-    if (!canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, target.department)) {
+    if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, target.department))) {
       return NextResponse.json({ error: 'You do not have permission to edit this faculty member' }, { status: 403 });
     }
 
@@ -153,13 +144,24 @@ export async function PATCH(req: NextRequest) {
 
     const where: any = {};
     if (all) {
-      // admin can toggle all
+      if (config.getEffectiveRole(callerEmail, callerProfile?.role || undefined) !== 'admin') {
+        return NextResponse.json({ error: 'Only admins can toggle all faculty' }, { status: 403 });
+      }
     } else if (department) {
-      if (!canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, department)) {
+      if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, department))) {
         return NextResponse.json({ error: 'No permission for this department' }, { status: 403 });
       }
       where.department = department;
     } else if (ids && ids.length > 0) {
+      const targets = await prisma.facultyMember.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, department: true },
+      });
+      for (const t of targets) {
+        if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, t.department))) {
+          return NextResponse.json({ error: 'No permission for this department' }, { status: 403 });
+        }
+      }
       where.id = { in: ids };
     } else {
       return NextResponse.json({ error: 'Provide ids, department, or all flag' }, { status: 400 });
@@ -188,7 +190,7 @@ export async function DELETE(req: NextRequest) {
     const target = await prisma.facultyMember.findUnique({ where: { id } });
     if (!target) return NextResponse.json({ error: 'Faculty member not found' }, { status: 404 });
 
-    if (!canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, target.department)) {
+    if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, target.department))) {
       return NextResponse.json({ error: 'You do not have permission to delete this faculty member' }, { status: 403 });
     }
 

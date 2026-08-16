@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { hasPermission } from '@/lib/permissions';
 
 const ROUTINE_TTL_MONTHS = 7;
 const ACTIVITY_TTL_MONTHS = 3;
@@ -83,12 +84,13 @@ export async function POST(req: NextRequest) {
     const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const effectiveRole = config.getEffectiveRole(email);
-    if (!config.canPublishRoutine(email, { role: effectiveRole } as any)) {
+    const { prisma } = await import('@/lib/prisma');
+    const callerProfile = await prisma.profile.findUnique({ where: { userId: email } });
+    const effectiveRole = config.getEffectiveRole(email, callerProfile?.role);
+    if (!(await hasPermission('publishRoutine', effectiveRole, callerProfile?.isCR || false, email))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { prisma } = await import('@/lib/prisma');
     const body = await req.json();
     const { routines } = body as { routines: any[] };
 
@@ -230,12 +232,13 @@ export async function DELETE(req: NextRequest) {
     const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const effectiveRole = config.getEffectiveRole(email);
-    if (!config.canPublishRoutine(email, { role: effectiveRole } as any)) {
+    const { prisma } = await import('@/lib/prisma');
+    const callerProfile = await prisma.profile.findUnique({ where: { userId: email } });
+    const effectiveRole = config.getEffectiveRole(email, callerProfile?.role);
+    if (!(await hasPermission('publishRoutine', effectiveRole, callerProfile?.isCR || false, email))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { prisma } = await import('@/lib/prisma');
     const url = new URL(req.url);
     const routineId = url.searchParams.get('id');
 

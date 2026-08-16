@@ -3,6 +3,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ALL_ROLES, PERMISSION_GROUPS, ALL_PERMISSION_ACTIONS } from './constants';
 
+const SETTABLE_ROLES = [
+  { key: 'admin', label: 'Admin', icon: 'fa-crown', color: 'text-red-400' },
+  { key: 'manager', label: 'Manager', icon: 'fa-user-shield', color: 'text-orange-400' },
+  { key: 'teacher', label: 'Teacher', icon: 'fa-chalkboard-teacher', color: 'text-green-400' },
+  { key: 'student', label: 'Student', icon: 'fa-user-graduate', color: 'text-cyan-400' },
+  { key: 'user', label: 'User', icon: 'fa-user', color: 'text-dark-text2' },
+];
+
 export default function PermissionsTab() {
   const [permissions, setPermissions] = useState<Record<string, string[] | boolean>>({});
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -15,6 +23,8 @@ export default function PermissionsTab() {
   const [scopePerms, setScopePerms] = useState<Record<string, boolean>>({});
   const [showScopeDropdown, setShowScopeDropdown] = useState(false);
   const [expandedGroup, setExpandedGroup] = useState<string | null>('courses');
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [searching, setSearching] = useState(false);
   const scopeDropdownRef = useRef<HTMLDivElement>(null);
 
   const loadPermissions = useCallback(async () => {
@@ -32,6 +42,20 @@ export default function PermissionsTab() {
   }, []);
 
   useEffect(() => { loadPermissions(); }, [loadPermissions]);
+
+  useEffect(() => {
+    if (!scopeSearch.trim()) return;
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/admin/users?search=${encodeURIComponent(scopeSearch.trim())}&limit=25`);
+        const data = await res.json();
+        if (data.users) setAllUsers(data.users);
+      } catch {}
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [scopeSearch]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -92,6 +116,7 @@ export default function PermissionsTab() {
   }, [scopeSearch, allUsers]);
 
   const selectScopeUser = (user: any) => {
+    setSelectedUser(user);
     setScopeUser(user.email);
     setScopeSearch(user.name || user.email);
     setShowScopeDropdown(false);
@@ -99,10 +124,70 @@ export default function PermissionsTab() {
   };
 
   const clearScopeUser = () => {
+    setSelectedUser(null);
     setScopeUser('');
     setScopeSearch('');
     setScopePerms({});
     setShowScopeDropdown(false);
+  };
+
+  const changeScopeRole = async (newRole: string) => {
+    if (!selectedUser || selectedUser.role === newRole) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setRole', targetEmail: selectedUser.email, newRole }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedUser({ ...selectedUser, role: newRole });
+        setAllUsers(prev => prev.map(u => u.email === selectedUser.email ? { ...u, role: newRole } : u));
+        flash(`Role set to ${newRole}`, 'ok');
+      } else flash(data.error || 'Failed', 'err');
+    } catch { flash('Network error', 'err'); }
+    setSaving(false);
+  };
+
+  const toggleScopeCR = async () => {
+    if (!selectedUser) return;
+    const next = !selectedUser.isCR;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggleCR', targetEmail: selectedUser.email, isCR: next }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedUser({ ...selectedUser, isCR: next, isACR: next ? false : selectedUser.isACR });
+        setAllUsers(prev => prev.map(u => u.email === selectedUser.email ? { ...u, isCR: next, isACR: next ? false : u.isACR } : u));
+        flash(data.message, 'ok');
+      } else flash(data.error || 'Failed', 'err');
+    } catch { flash('Network error', 'err'); }
+    setSaving(false);
+  };
+
+  const toggleScopeACR = async () => {
+    if (!selectedUser) return;
+    const next = !selectedUser.isACR;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggleACR', targetEmail: selectedUser.email, isACR: next }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedUser({ ...selectedUser, isACR: next });
+        setAllUsers(prev => prev.map(u => u.email === selectedUser.email ? { ...u, isACR: next } : u));
+        flash(data.message, 'ok');
+      } else flash(data.error || 'Failed', 'err');
+    } catch { flash('Network error', 'err'); }
+    setSaving(false);
   };
 
   const toggleScopePerm = async (permKey: string) => {
@@ -140,9 +225,17 @@ export default function PermissionsTab() {
     setSaving(false);
   };
 
-  const usersWithCustomPerms = useMemo(() => {
-    return allUsers.filter(u => u.customPermissions && Object.values(u.customPermissions).some(Boolean));
+  const specialUsers = useMemo(() => {
+    return allUsers.filter(u =>
+      u.role === 'admin' || u.role === 'manager' || u.isCR || u.isACR ||
+      (u.customPermissions && Object.values(u.customPermissions).some(Boolean))
+    );
   }, [allUsers]);
+
+  const roleBadge = (role?: string) => {
+    const r = ALL_ROLES.find(x => x.key === role);
+    return r ? { label: r.label, icon: r.icon, color: r.color } : { label: role || 'user', icon: 'fa-user', color: 'text-dark-text2' };
+  };
 
   if (loading) return <div className="text-center py-10"><i className="fas fa-spinner fa-spin text-2xl text-qsis"></i></div>;
 
@@ -268,6 +361,7 @@ export default function PermissionsTab() {
             <div className="text-xs font-semibold text-dark-text">Restrict CR/ACR to own semester only</div>
             <div className="text-[0.68rem] text-dark-text3">
               {permissions.restrictCRToOwnSemester ? 'CR/ACR can only add courses to their current semester + 1 previous' : 'CR/ACR can add courses to any semester'}
+              {' — grant "Add to Any Semester" (Course Management) to any role/user to bypass semester limits'}
             </div>
           </div>
         </label>
@@ -304,13 +398,13 @@ export default function PermissionsTab() {
         </div>
       </div>
 
-      {/* Per-User Permission Scopes */}
+      {/* User Roles & Permission Scopes */}
       <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
         <div className="flex items-center gap-2 mb-1">
           <i className="fas fa-user-cog text-blue-400"></i>
-          <span className="text-[0.82rem] font-semibold text-dark-text">Per-User Permission Scopes</span>
+          <span className="text-[0.82rem] font-semibold text-dark-text">User Roles & Permission Scopes</span>
         </div>
-        <p className="text-[0.7rem] text-dark-text3 mb-3">Grant or revoke individual permissions for specific users. Overrides role-based defaults.</p>
+        <p className="text-[0.7rem] text-dark-text3 mb-3">Search any user to change their role (admin / manager / teacher / student), make them CR or ACR, or grant individual permissions that override role defaults.</p>
 
         {/* User Search */}
         <div className="relative" ref={scopeDropdownRef}>
@@ -337,6 +431,11 @@ export default function PermissionsTab() {
           {/* Dropdown */}
           {showScopeDropdown && filteredUsers.length > 0 && (
             <div className="absolute z-[200] top-full left-0 right-0 mt-1 bg-dark-bg2 border border-dark-border rounded-xl shadow-2xl max-h-64 overflow-y-auto">
+              {searching && (
+                <div className="px-3 py-2 text-[0.7rem] text-dark-text3 flex items-center gap-2 border-b border-dark-border/30">
+                  <i className="fas fa-spinner fa-spin text-[0.6rem]"></i>Searching...
+                </div>
+              )}
               {filteredUsers.map((u, i) => {
                 const permCount = u.customPermissions ? Object.values(u.customPermissions).filter(Boolean).length : 0;
                 return (
@@ -364,20 +463,30 @@ export default function PermissionsTab() {
           )}
         </div>
 
-        {/* Selected User Permissions */}
-        {scopeUser && (
+        {/* Selected User Roles & Permissions */}
+        {selectedUser && (() => {
+          const badge = roleBadge(selectedUser.role);
+          return (
           <div className="mt-4 p-4 bg-dark-bg border border-dark-border rounded-xl">
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <i className="fas fa-user text-qsis text-xs"></i>
-                <span className="text-[0.78rem] font-semibold text-dark-text">{scopeUser}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                {selectedUser.githubAvatar ? <img src={selectedUser.githubAvatar} className="w-7 h-7 rounded-full" alt="" /> : <div className="w-7 h-7 rounded-full bg-dark-bg3 flex items-center justify-center"><i className="fas fa-user text-dark-text3 text-[0.6rem]"></i></div>}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[0.78rem] font-semibold text-dark-text truncate">{selectedUser.name || selectedUser.email}</span>
+                    <span className={`text-[0.58rem] px-1.5 py-0.5 rounded bg-dark-bg2 border border-dark-border ${badge.color}`}><i className={`fas ${badge.icon} mr-0.5`}></i>{badge.label}</span>
+                    {selectedUser.isCR && <span className="text-[0.58rem] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30"><i className="fas fa-user-check mr-0.5"></i>CR</span>}
+                    {selectedUser.isACR && <span className="text-[0.58rem] px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-400 border border-teal-500/30"><i className="fas fa-user-tag mr-0.5"></i>ACR</span>}
+                  </div>
+                  <div className="text-[0.62rem] text-dark-text3 truncate">{selectedUser.email}</div>
+                </div>
                 {Object.values(scopePerms).some(Boolean) && (
-                  <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-qsis/15 text-qsis border border-qsis/20">
+                  <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-qsis/15 text-qsis border border-qsis/20 shrink-0">
                     {Object.values(scopePerms).filter(Boolean).length} custom
                   </span>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 shrink-0">
                 {Object.values(scopePerms).some(Boolean) && (
                   <button onClick={() => clearAllScopePerms()} className="text-[0.68rem] text-red-400 hover:text-red-300 bg-transparent border-none cursor-pointer">
                     <i className="fas fa-times mr-0.5"></i>Clear all
@@ -387,6 +496,66 @@ export default function PermissionsTab() {
                   <i className="fas fa-times-circle"></i>
                 </button>
               </div>
+            </div>
+
+            {/* Role Assignment */}
+            <div className="mb-3 p-3 rounded-lg bg-dark-bg2 border border-dark-border">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[0.72rem] font-semibold text-dark-text2"><i className="fas fa-user-tag text-orange-400 mr-1.5 text-[0.6rem]"></i>Assign Role</span>
+                {saving && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</span>}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {SETTABLE_ROLES.map(role => {
+                  const active = selectedUser.role === role.key;
+                  return (
+                    <button
+                      key={role.key}
+                      onClick={() => changeScopeRole(role.key)}
+                      disabled={saving || active}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[0.68rem] font-medium border cursor-pointer transition-all disabled:opacity-60 ${
+                        active
+                          ? 'bg-qsis/20 border-qsis/50 text-qsis'
+                          : 'bg-dark-bg border-dark-border text-dark-text2 hover:border-dark-text3'
+                      }`}
+                    >
+                      <i className={`fas ${role.icon} ${role.color} text-[0.6rem]`}></i>
+                      {role.label}
+                      {active && <i className="fas fa-check text-[0.55rem]"></i>}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-dark-border/50">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <div
+                    className={`w-9 h-[18px] rounded-full transition-colors relative cursor-pointer ${selectedUser.isCR ? 'bg-blue-500' : 'bg-dark-bg border border-dark-border'}`}
+                    onClick={() => toggleScopeCR()}
+                  >
+                    <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[1px] transition-transform ${selectedUser.isCR ? 'translate-x-[18px]' : 'translate-x-0.5'}`}></div>
+                  </div>
+                  <span className={`text-[0.72rem] font-medium ${selectedUser.isCR ? 'text-blue-400' : 'text-dark-text3'}`}>
+                    <i className="fas fa-user-check mr-1 text-[0.6rem]"></i>Class Rep (CR)
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <div
+                    className={`w-9 h-[18px] rounded-full transition-colors relative cursor-pointer ${selectedUser.isACR ? 'bg-teal-500' : 'bg-dark-bg border border-dark-border'}`}
+                    onClick={() => toggleScopeACR()}
+                  >
+                    <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[1px] transition-transform ${selectedUser.isACR ? 'translate-x-[18px]' : 'translate-x-0.5'}`}></div>
+                  </div>
+                  <span className={`text-[0.72rem] font-medium ${selectedUser.isACR ? 'text-teal-400' : 'text-dark-text3'}`}>
+                    <i className="fas fa-user-tag mr-1 text-[0.6rem]"></i>Assistant CR (ACR)
+                  </span>
+                </label>
+              </div>
+              {(selectedUser.department || selectedUser.semester || selectedUser.section) && (
+                <div className="text-[0.62rem] text-dark-text3 mt-2">
+                  <i className="fas fa-building mr-1"></i>{selectedUser.department || 'No dept'}
+                  {selectedUser.semester && <> · Sem {selectedUser.semester}</>}
+                  {selectedUser.section && <> · Sec {selectedUser.section}</>}
+                </div>
+              )}
             </div>
 
             {/* Grouped permission toggles */}
@@ -421,31 +590,40 @@ export default function PermissionsTab() {
               ))}
             </div>
           </div>
-        )}
+          );
+        })()}
 
-        {/* Users with custom scopes */}
-        {usersWithCustomPerms.length > 0 && (
+        {/* Users with special roles / scopes */}
+        {specialUsers.length > 0 && (
           <div className="mt-4 border-t border-dark-border pt-3">
-            <div className="text-[0.72rem] text-dark-text3 mb-2"><i className="fas fa-list mr-1"></i>Users with custom scopes ({usersWithCustomPerms.length})</div>
+            <div className="text-[0.72rem] text-dark-text3 mb-2"><i className="fas fa-list mr-1"></i>Users with special roles or scopes ({specialUsers.length})</div>
             <div className="space-y-1.5">
-              {usersWithCustomPerms.map((u, i) => {
+              {specialUsers.map((u, i) => {
+                const badge = roleBadge(u.role);
                 const granted = Object.entries(u.customPermissions || {}).filter(([, v]) => v).map(([k]) => k);
                 return (
                   <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border hover:border-dark-border2 transition-colors">
                     {u.githubAvatar ? <img src={u.githubAvatar} className="w-5 h-5 rounded-full" alt="" /> : <div className="w-5 h-5 rounded-full bg-dark-bg3 flex items-center justify-center"><i className="fas fa-user text-dark-text3 text-[0.5rem]"></i></div>}
                     <div className="flex-1 min-w-0">
-                      <span className="text-[0.72rem] font-semibold text-dark-text">{u.name || u.email}</span>
-                      <span className="text-[0.6rem] text-dark-text3 ml-1.5">{u.email}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[0.72rem] font-semibold text-dark-text truncate">{u.name || u.email}</span>
+                        <span className={`text-[0.55rem] px-1.5 py-0.5 rounded bg-dark-bg2 border border-dark-border ${badge.color} shrink-0`}><i className={`fas ${badge.icon} mr-0.5`}></i>{badge.label}</span>
+                        {u.isCR && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 shrink-0">CR</span>}
+                        {u.isACR && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-400 border border-teal-500/30 shrink-0">ACR</span>}
+                      </div>
+                      <div className="text-[0.6rem] text-dark-text3 truncate">{u.email}</div>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {granted.slice(0, 3).map(pk => {
+                      {granted.slice(0, 2).map(pk => {
                         const pa = ALL_PERMISSION_ACTIONS.find(a => a.key === pk);
                         return pa ? <span key={pk} className="text-[0.58rem] px-1.5 py-0.5 rounded bg-qsis/10 text-qsis border border-qsis/20">{pa.label}</span> : null;
                       })}
-                      {granted.length > 3 && <span className="text-[0.58rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3">+{granted.length - 3}</span>}
+                      {granted.length > 2 && <span className="text-[0.58rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3">+{granted.length - 2}</span>}
                     </div>
-                    <button onClick={() => selectScopeUser(u)} className="text-qsis hover:text-qsis/80 bg-transparent border-none cursor-pointer text-[0.68rem]" title="Edit custom scopes"><i className="fas fa-edit"></i></button>
-                    <button onClick={() => clearAllScopePerms(u.email)} disabled={saving} className="text-red-400/80 hover:text-red-400 bg-transparent border-none cursor-pointer text-[0.68rem] disabled:opacity-50" title="Remove all custom scopes"><i className="fas fa-times"></i></button>
+                    <button onClick={() => selectScopeUser(u)} className="text-qsis hover:text-qsis/80 bg-transparent border-none cursor-pointer text-[0.68rem]" title="Manage role & permissions"><i className="fas fa-edit"></i></button>
+                    {granted.length > 0 && (
+                      <button onClick={() => clearAllScopePerms(u.email)} disabled={saving} className="text-red-400/80 hover:text-red-400 bg-transparent border-none cursor-pointer text-[0.68rem] disabled:opacity-50" title="Remove all custom scopes"><i className="fas fa-times"></i></button>
+                    )}
                   </div>
                 );
               })}

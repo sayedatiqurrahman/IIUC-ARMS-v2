@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { hasPermission } from '@/lib/permissions';
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
@@ -24,9 +25,7 @@ async function checkPermission(req: NextRequest) {
   const { prisma } = await import('@/lib/prisma');
   const profile = await prisma.profile.findUnique({ where: { userId: email } });
   const effective = config.getEffectiveRole(email, profile?.role);
-  const customPerms = (profile?.customPermissions || {}) as Record<string, boolean>;
-  if (customPerms.manageRooms === true) return { ok: true, effective };
-  if (effective !== 'admin' && effective !== 'manager' && effective !== 'teacher') {
+  if (!(await hasPermission('manageRooms', effective, false, email))) {
     return { ok: false, error: 'Forbidden' };
   }
   return { ok: true, effective };
@@ -94,8 +93,8 @@ export async function DELETE(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.admin);
   if (!rl.success) return rl.response!;
   try {
-    const email = await getUserEmail(req);
-    if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const perm = await checkPermission(req);
+    if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.error === 'Unauthorized' ? 401 : 403 });
     const { prisma } = await import('@/lib/prisma');
     const id = req.nextUrl.searchParams.get('id');
     if (id) {
