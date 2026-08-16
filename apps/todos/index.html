@@ -27,6 +27,11 @@
     border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; font-size: 14px; outline: none;
   }
   .add input[type=text]:focus { border-color: var(--green); }
+  .add input[type=number] {
+    background: var(--bg2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 10px; font-size: 13px; outline: none; width: 64px;
+  }
+  .add input[type=number]:focus { border-color: var(--green); }
   select, .btn {
     background: var(--bg2); color: var(--text); border: 1px solid var(--border);
     border-radius: 12px; padding: 10px 12px; font-size: 13px; cursor: pointer; outline: none;
@@ -137,7 +142,6 @@
   <div class="topbar">
     <div>
       <h1><span class="dot" id="hdot"></span>Todos</h1>
-      <p class="sub">Tasks with popup timers — minimize any timer into a draggable floating bubble.</p>
     </div>
     <div style="text-align:right">
       <div class="counter" id="counter"></div>
@@ -153,16 +157,14 @@
       <option value="1500" selected>25 min</option>
       <option value="2700">45 min</option>
       <option value="3600">1 hr</option>
+      <option value="custom">Custom…</option>
     </select>
+    <input id="newDurCustom" type="number" min="1" max="1440" step="1" placeholder="min" title="Minutes" style="display:none" />
     <button class="btn primary" id="addBtn">Add</button>
   </div>
 
   <div class="list" id="list"></div>
   <div class="empty" id="empty">No tasks yet. Add one above.</div>
-
-  <p class="note">Click the ⏱ on a task to open its popup timer. The timer then shows as a compact bubble — <strong>drag it</strong> anywhere, <strong>click it</strong> to expand controls, or use <strong>Float on top</strong> (Chrome/Edge) to keep it over every window like a live score overlay.</p>
-
-  <p class="foot">Part of <a href="https://iiuc-arms.eu.cc/studio" target="_blank" rel="noopener">IIUC-ARMS Studio</a> · community app · data stays in your browser</p>
 
   <div class="overlay" id="overlay">
     <div class="popup">
@@ -215,6 +217,7 @@
   let activeId = null;      // id of the running timer
   let capsuleId = null;     // todo referenced by the capsule
   let pipWindow = null;
+  let popWindow = null;     // fallback always-on-top popup window
   let popupId = null;
   let editingId = null;     // todo whose text is being edited
 
@@ -307,19 +310,27 @@
   function deleteTodo(id) {
     todos = todos.filter((t) => t.id !== id);
     if (activeId === id) activeId = null;
-    if (capsuleId === id) { capsuleId = null; closePip(); }
+    if (capsuleId === id) { capsuleId = null; closeFloat(); }
     if (popupId === id) closePopup();
     save(); render();
   }
   function addTodo() {
     const text = $('newText').value.trim();
     if (!text) return;
+    const durSel = $('newDur');
+    let secs = Number(durSel.value);
+    if (durSel.value === 'custom') {
+      secs = Math.round(Number($('newDurCustom').value) * 60);
+      if (!(secs >= 60 && secs <= 86400)) { $('newDurCustom').focus(); return; }
+    }
     todos.unshift({
       id: Math.random().toString(36).slice(2, 10),
-      text, duration: Number($('newDur').value), remaining: Number($('newDur').value),
+      text, duration: secs, remaining: secs,
       running: false, done: false, lastTick: 0, createdAt: Date.now(),
     });
     $('newText').value = '';
+    $('newDurCustom').value = '';
+    $('newDurCustom').style.display = 'none';
     save(); render();
   }
   function setDuration(id, d) {
@@ -336,9 +347,11 @@
 
   function durationOptions(selected) {
     const mins = [5, 15, 25, 45, 60];
+    const preset = mins.some((m) => m * 60 === selected);
     return mins
       .map((m) => '<option value="' + m * 60 + '"' + (selected === m * 60 ? ' selected' : '') + '>' + m + ' min</option>')
-      .join('');
+      .join('') +
+      '<option value="custom"' + (preset ? '' : ' selected') + '>Custom…</option>';
   }
 
   function editTodo(id) {
@@ -371,7 +384,7 @@
     $('pTime').textContent = fmt(t.remaining);
     $('pTime').classList.toggle('warn', t.remaining <= 60 && t.remaining > 0 && t.running);
     $('pStart').textContent = t.running ? 'Pause' : (t.remaining < t.duration && t.remaining > 0 ? 'Resume' : 'Start');
-    $('pipNote').textContent = pipWindow ? 'Floating — look at the small on-top window.' : '';
+    $('pipNote').textContent = isFloating() ? 'Floating — look at the small on-top window.' : '';
   }
 
   // ── Floating timer bubble (sports-score style) ───────────────────────────
@@ -432,7 +445,7 @@
 
   function updateCapsule() {
     const c = $('capsule');
-    if (!capsuleId || pipWindow) {
+    if (!capsuleId || isFloating()) {
       c.classList.remove('show');
       setCapExpanded(false);
       return;
@@ -453,47 +466,121 @@
   }
   loadCapPos();
 
-  // ── Floating always-on-top window (Document Picture-in-Picture) ──────────
+  // ── Floating always-on-top window (Picture-in-Picture, popup fallback) ──
+  const FLOAT_ID_KEY = 'qsis_todos_float_id';
+  const FLOAT_CMD_KEY = 'qsis_todos_cmd';
+  const isFloating = () => !!(pipWindow || popWindow);
+
   async function floatTop() {
     if (pipWindow) { pipWindow.focus(); return; }
-    if (!('documentPictureInPicture' in window)) {
-      $('pipNote').textContent = 'Floating needs Chrome or Edge. The capsule stays in the corner here instead.';
+    if (popWindow) { try { popWindow.focus(); } catch {} return; }
+    if ('documentPictureInPicture' in window) {
+      try {
+        pipWindow = await window.documentPictureInPicture.requestWindow({ width: 350, height: 132 });
+        pipWindow.document.title = '⏱ ' + (find(capsuleId) ? find(capsuleId).text : 'Timer');
+        pipWindow.document.body.style.cssText =
+          'margin:0;background:#111827;color:#e8edf5;font-family:-apple-system,Segoe UI,Roboto,sans-serif;user-select:none;';
+        pipWindow.document.body.innerHTML =
+          '<style>' +
+          '.caps{display:flex;align-items:center;gap:10px;padding:10px 12px;height:100%;box-sizing:border-box}' +
+          '.dot{width:9px;height:9px;border-radius:50%;background:#22c55e;flex:none}' +
+          '.dot.running{animation:p1 1.2s infinite}@keyframes p1{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}50%{box-shadow:0 0 0 7px rgba(34,197,94,0)}}' +
+          '.mid{flex:1;min-width:0}.lbl{font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+          '.row2{display:flex;align-items:baseline;gap:8px}.tme{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}' +
+          '.st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b}' +
+          'button{background:#1a2236;color:#e8edf5;border:1px solid #2a3a5c;border-radius:10px;width:38px;height:38px;font-size:14px;cursor:pointer;flex:none}' +
+          'button:hover{border-color:#22c55e}.cls{border-color:#f43f5e}' +
+          '</style>' +
+          '<div class="caps">' +
+          '<span class="dot" id="pdot"></span>' +
+          '<div class="mid"><div class="lbl" id="plbl"></div><div class="row2"><div class="tme" id="ptme">25:00</div><span class="st" id="pst">Paused</span></div></div>' +
+          '<button id="pPlay" title="Start / Pause">▶</button>' +
+          '<button id="pReset" title="Reset">⟲</button>' +
+          '<button class="cls" id="pClose" title="Close">✕</button>' +
+          '</div>';
+        pipWindow.document.getElementById('pPlay').addEventListener('click', () => {
+          const t = find(capsuleId); if (t) t.running ? pauseTodo(t.id) : startTodo(t.id);
+        });
+        pipWindow.document.getElementById('pReset').addEventListener('click', () => { if (capsuleId) resetTodo(capsuleId); });
+        pipWindow.document.getElementById('pClose').addEventListener('click', () => { closePip(); });
+        pipWindow.addEventListener('pagehide', () => { pipWindow = null; updateCapsule(); });
+        syncPip();
+        updatePopup();
+        return;
+      } catch {}
+    }
+    floatPop();
+  }
+  function floatPop() {
+    if (popWindow) { try { popWindow.focus(); } catch {} return; }
+    const t = find(capsuleId);
+    if (!t) return;
+    const w = 400, h = 150;
+    const left = Math.max(8, window.screenX + window.outerWidth - w - 24);
+    const top = Math.max(8, window.screenY + 24);
+    let win = null;
+    try { win = window.open('', '_blank', 'popup,width=' + w + ',height=' + h + ',left=' + left + ',top=' + top); } catch {}
+    if (!win) {
+      $('pipNote').textContent = 'Your browser blocked the floating window. Allow pop-ups for this site and try again.';
       return;
     }
-    try {
-      pipWindow = await window.documentPictureInPicture.requestWindow({ width: 350, height: 132 });
-      pipWindow.document.title = '⏱ ' + (find(capsuleId) ? find(capsuleId).text : 'Timer');
-      pipWindow.document.body.style.cssText =
-        'margin:0;background:#111827;color:#e8edf5;font-family:-apple-system,Segoe UI,Roboto,sans-serif;user-select:none;';
-      pipWindow.document.body.innerHTML =
-        '<style>' +
-        '.caps{display:flex;align-items:center;gap:10px;padding:10px 12px;height:100%;box-sizing:border-box}' +
-        '.dot{width:9px;height:9px;border-radius:50%;background:#22c55e;flex:none}' +
-        '.dot.running{animation:p1 1.2s infinite}@keyframes p1{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}50%{box-shadow:0 0 0 7px rgba(34,197,94,0)}}' +
-        '.mid{flex:1;min-width:0}.lbl{font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-        '.row2{display:flex;align-items:baseline;gap:8px}.tme{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}' +
-        '.st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b}' +
-        'button{background:#1a2236;color:#e8edf5;border:1px solid #2a3a5c;border-radius:10px;width:38px;height:38px;font-size:14px;cursor:pointer;flex:none}' +
-        'button:hover{border-color:#22c55e}.cls{border-color:#f43f5e}' +
-        '</style>' +
-        '<div class="caps">' +
-        '<span class="dot" id="pdot"></span>' +
-        '<div class="mid"><div class="lbl" id="plbl"></div><div class="row2"><div class="tme" id="ptme">25:00</div><span class="st" id="pst">Paused</span></div></div>' +
-        '<button id="pPlay" title="Start / Pause">▶</button>' +
-        '<button id="pReset" title="Reset">⟲</button>' +
-        '<button class="cls" id="pClose" title="Close">✕</button>' +
-        '</div>';
-      pipWindow.document.getElementById('pPlay').addEventListener('click', () => {
-        const t = find(capsuleId); if (t) t.running ? pauseTodo(t.id) : startTodo(t.id);
-      });
-      pipWindow.document.getElementById('pReset').addEventListener('click', () => { if (capsuleId) resetTodo(capsuleId); });
-      pipWindow.document.getElementById('pClose').addEventListener('click', () => { closePip(); });
-      pipWindow.addEventListener('pagehide', () => { pipWindow = null; updateCapsule(); });
-      syncPip();
-      updatePopup();
-    } catch {}
+    popWindow = win;
+    try { localStorage.setItem(FLOAT_ID_KEY, capsuleId); } catch {}
+    try { localStorage.removeItem(FLOAT_CMD_KEY); } catch {}
+    win.document.title = '⏱ ' + t.text;
+    win.document.body.style.cssText =
+      'margin:0;background:#111827;color:#e8edf5;font-family:-apple-system,Segoe UI,Roboto,sans-serif;user-select:none;';
+    win.document.body.innerHTML =
+      '<style>' +
+      'html,body{height:100%;overflow:hidden}' +
+      '.cap{display:flex;align-items:center;gap:10px;padding:10px 12px;height:100%;box-sizing:border-box}' +
+      '.dot{width:9px;height:9px;border-radius:50%;background:#22c55e;flex:none}' +
+      '.dot.running{animation:p1 1.2s infinite}@keyframes p1{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}50%{box-shadow:0 0 0 7px rgba(34,197,94,0)}}' +
+      '.mid{flex:1;min-width:0}.lbl{font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '.row2{display:flex;align-items:baseline;gap:8px}.tme{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}' +
+      '.st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b}' +
+      'button{background:#1a2236;color:#e8edf5;border:1px solid #2a3a5c;border-radius:10px;width:38px;height:38px;font-size:14px;cursor:pointer;flex:none}' +
+      'button:hover{border-color:#22c55e}.cls{border-color:#f43f5e}' +
+      '</style>' +
+      '<div class="cap">' +
+      '<span class="dot" id="pdot"></span>' +
+      '<div class="mid"><div class="lbl" id="plbl"></div><div class="row2"><div class="tme" id="ptme">25:00</div><span class="st" id="pst">Paused</span></div></div>' +
+      '<button id="pPlay" title="Start / Pause">▶</button>' +
+      '<button id="pReset" title="Reset">⟲</button>' +
+      '<button class="cls" id="pClose" title="Close">✕</button>' +
+      '</div>';
+    const scr = win.document.createElement('script');
+    scr.textContent =
+      '(function(){' +
+      'var KEY="' + STORE_KEY + '",FID="' + FLOAT_ID_KEY + '",CMD="' + FLOAT_CMD_KEY + '";' +
+      'function fmt(s){s=Math.max(0,Math.ceil(s));var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60,p=function(n){return(n<10?"0":"")+n};return h>0?h+":"+p(m)+":"+p(ss):p(m)+":"+p(ss);}' +
+      'function st(t){if(t.running)return "Focus";if(t.done||t.remaining<=0)return "Done";if(t.remaining<t.duration)return "Paused";return "Ready";}' +
+      'function cmd(c){try{localStorage.setItem(CMD,JSON.stringify({id:localStorage.getItem(FID),cmd:c}));}catch(e){}}' +
+      'function refresh(){var t=null;try{var d=JSON.parse(localStorage.getItem(KEY)||"null"),id=localStorage.getItem(FID);if(d&&d.todos&&id){for(var i=0;i<d.todos.length;i++){if(String(d.todos[i].id)===String(id)){t=d.todos[i];break;}}}}catch(e){}' +
+      'if(!t){try{window.close();}catch(e){}return;}' +
+      'var rem=t.remaining;if(t.running&&t.lastTick){rem=Math.max(0,rem-Math.floor((Date.now()-t.lastTick)/1000));}' +
+      'var g=function(n){return document.getElementById(n);};' +
+      'g("ptme").textContent=fmt(rem);g("plbl").textContent=t.text;g("plbl").title=t.text;' +
+      'g("pst").textContent=st(t);g("pdot").className="dot"+(t.running?" running":"");' +
+      'g("pPlay").textContent=t.running?"❚❚":"▶";' +
+      '}' +
+      'document.getElementById("pPlay").addEventListener("click",function(){cmd("play");});' +
+      'document.getElementById("pReset").addEventListener("click",function(){cmd("reset");});' +
+      'document.getElementById("pClose").addEventListener("click",function(){cmd("close");try{window.close();}catch(e){}});' +
+      'refresh();setInterval(refresh,250);' +
+      '})();';
+    try { win.document.body.appendChild(scr); } catch {}
+    updatePopup();
   }
   function closePip() { if (pipWindow) { try { pipWindow.close(); } catch {} pipWindow = null; } updateCapsule(); }
+  function closeFloat() {
+    if (pipWindow) { try { pipWindow.close(); } catch {} pipWindow = null; }
+    if (popWindow) { try { popWindow.close(); } catch {} popWindow = null; }
+    try { localStorage.removeItem(FLOAT_ID_KEY); } catch {}
+    try { localStorage.removeItem(FLOAT_CMD_KEY); } catch {}
+    updateCapsule();
+    updatePopup();
+  }
   function syncPip() {
     if (!pipWindow) return;
     const t = find(capsuleId); if (!t) return;
@@ -547,7 +634,29 @@
       row.querySelector('.check').addEventListener('click', () => toggleDone(t.id));
       row.querySelector('[data-act="popup"]').addEventListener('click', () => openPopup(t.id));
       row.querySelector('[data-act="play"]').addEventListener('click', () => (t.running ? pauseTodo(t.id) : startTodo(t.id)));
-      row.querySelector('[data-act="dur"]').addEventListener('change', (e) => setDuration(t.id, Number(e.target.value)));
+      row.querySelector('[data-act="dur"]').addEventListener('change', (e) => {
+        const sel = e.target;
+        if (sel.value === 'custom') {
+          const inp = document.createElement('input');
+          inp.type = 'number'; inp.min = '1'; inp.max = '1440'; inp.step = '1';
+          inp.title = 'Minutes';
+          inp.className = 'dur';
+          inp.value = String(Math.max(1, Math.round(t.duration / 60)));
+          inp.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') inp.blur();
+            if (ev.key === 'Escape') render();
+          });
+          inp.addEventListener('blur', () => {
+            const m = Math.round(Number(inp.value));
+            if (m >= 1) setDuration(t.id, Math.min(86400, m * 60));
+            render();
+          });
+          sel.replaceWith(inp);
+          inp.focus(); inp.select();
+          return;
+        }
+        setDuration(t.id, Number(sel.value));
+      });
       row.querySelector('[data-act="edit"]').addEventListener('click', () => editTodo(t.id));
       row.querySelector('[data-act="reset"]').addEventListener('click', () => resetTodo(t.id));
       row.querySelector('[data-act="del"]').addEventListener('click', () => deleteTodo(t.id));
@@ -559,6 +668,10 @@
   }
 
   function tick() {
+    if (popWindow && (popWindow.closed || !localStorage.getItem(FLOAT_ID_KEY))) {
+      popWindow = null;
+      updateCapsule();
+    }
     const t = running();
     if (t) {
       t.remaining = Math.max(0, t.remaining - Math.floor((Date.now() - t.lastTick) / 1000));
@@ -584,6 +697,11 @@
   // ── Events ───────────────────────────────────────────────────────────────
   $('addBtn').addEventListener('click', addTodo);
   $('newText').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+  $('newDur').addEventListener('change', () => {
+    const on = $('newDur').value === 'custom';
+    $('newDurCustom').style.display = on ? '' : 'none';
+    if (on) $('newDurCustom').focus();
+  });
   $('clearDone').addEventListener('click', clearDone);
   $('pStart').addEventListener('click', () => { const t = find(popupId); if (t) t.running ? pauseTodo(t.id) : startTodo(t.id); });
   $('pReset').addEventListener('click', () => { if (popupId) resetTodo(popupId); });
@@ -602,9 +720,30 @@
   $('cClose').addEventListener('click', () => {
     capDismissed = capsuleId;
     capsuleId = null;
-    closePip();
+    closeFloat();
     setCapExpanded(false);
     updateCapsule();
+  });
+
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORE_KEY) {
+      todos = loadTodos();
+      activeId = todos.find((x) => x.running) ? todos.find((x) => x.running).id : null;
+      if (capsuleId && !find(capsuleId)) capsuleId = null;
+      save(); render();
+    } else if (e.key === FLOAT_CMD_KEY && e.newValue) {
+      try {
+        const cmd = JSON.parse(e.newValue);
+        const id = cmd && cmd.id;
+        if (!id) return;
+        if (cmd.cmd === 'play') { const t = find(id); if (t) t.running ? pauseTodo(t.id) : startTodo(t.id); }
+        else if (cmd.cmd === 'reset') resetTodo(id);
+        else if (cmd.cmd === '+5') {
+          const t = find(id);
+          if (t) { t.remaining = Math.max(0, t.remaining + 300); t.done = false; save(); render(); }
+        } else if (cmd.cmd === 'close') { if (capsuleId === id || find(id)) { capsuleId = id || capsuleId; closeFloat(); } }
+      } catch {}
+    }
   });
 
   // bubble drag (move) vs click (expand)

@@ -85,63 +85,91 @@ export default function AppChrome({
 
   return (
     <div className="min-h-[80vh] flex flex-col">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="h-12 w-12 shrink-0 rounded-2xl bg-indigo-500/15 flex items-center justify-center overflow-hidden">
-            {app.iconSvg ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={app.iconSvg} alt="" className="h-6 w-6 object-contain" />
-            ) : (
-              <span className="material-symbols-outlined text-indigo-400 text-2xl">{app.icon}</span>
-            )}
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold text-dark-text truncate">{app.title}</h1>
-            <p className="text-[0.76rem] text-dark-text2 truncate">{app.subtitle}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {author && (
-            <div className="hidden sm:flex items-center gap-2 rounded-full border border-dark-border bg-dark-bg2 pl-1 pr-3 py-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`https://github.com/${author.githubLogin}.png`}
-                alt={author.githubLogin}
-                className="h-6 w-6 rounded-full"
-              />
-              <span className="text-[0.72rem] text-dark-text2">
-                by <span className="text-dark-text font-medium">{author.name}</span>
-              </span>
-            </div>
-          )}
-          {isAuthor && (
-            <button
-              onClick={() => setShowUpdate(true)}
-              className="rounded-xl border border-qsis/40 bg-qsis/10 px-3 py-2 text-[0.72rem] font-medium text-qsis transition hover:bg-qsis/20 cursor-pointer"
-              title="You built this app — update it"
-            >
-              <span className="material-symbols-outlined align-middle mr-1 text-[0.95rem]">update</span>
-              Update
-            </button>
-          )}
-          <button
-            onClick={() => setShowReport(true)}
-            className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[0.72rem] font-medium text-rose-300 transition hover:bg-rose-500/20 cursor-pointer"
-            title="Report a problem with this app"
-          >
-            <span className="material-symbols-outlined align-middle mr-1 text-[0.95rem]">bug_report</span>
-            Report issue
-          </button>
+      {started ? (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <Link
             href="/studio"
             className="rounded-xl border border-dark-border bg-dark-bg2 px-3 py-2 text-[0.72rem] font-medium text-dark-text transition hover:border-qsis hover:text-qsis no-underline"
           >
             <span className="material-symbols-outlined align-middle mr-1 text-[0.95rem]">arrow_back</span>
-            Studio
+            Back to Studio
           </Link>
+          <div className="flex items-center gap-2">
+            <span className="text-[0.7rem] text-dark-text3 truncate">{app.title}</span>
+            {isFullscreen && (
+              <button
+                onClick={async () => {
+                  try {
+                    await document.exitFullscreen();
+                  } catch {}
+                }}
+                className="rounded-lg border border-dark-border bg-dark-bg2 px-3 py-1.5 text-[0.68rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis cursor-pointer"
+              >
+                <span className="material-symbols-outlined align-middle mr-1 text-[0.9rem]">fullscreen_exit</span>
+                Close fullscreen
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-12 w-12 shrink-0 rounded-2xl bg-indigo-500/15 flex items-center justify-center overflow-hidden">
+              {app.iconSvg ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={app.iconSvg} alt="" className="h-6 w-6 object-contain" />
+              ) : (
+                <span className="material-symbols-outlined text-indigo-400 text-2xl">{app.icon}</span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold text-dark-text truncate">{app.title}</h1>
+              <p className="text-[0.76rem] text-dark-text2 truncate">{app.subtitle}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {author && (
+              <div className="hidden sm:flex items-center gap-2 rounded-full border border-dark-border bg-dark-bg2 pl-1 pr-3 py-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://github.com/${author.githubLogin}.png`}
+                  alt={author.githubLogin}
+                  className="h-6 w-6 rounded-full"
+                />
+                <span className="text-[0.72rem] text-dark-text2">
+                  by <span className="text-dark-text font-medium">{author.name}</span>
+                </span>
+              </div>
+            )}
+            {isAuthor && (
+              <button
+                onClick={() => setShowUpdate(true)}
+                className="rounded-xl border border-qsis/40 bg-qsis/10 px-3 py-2 text-[0.72rem] font-medium text-qsis transition hover:bg-qsis/20 cursor-pointer"
+                title="You built this app — update it"
+              >
+                <span className="material-symbols-outlined align-middle mr-1 text-[0.95rem]">update</span>
+                Update
+              </button>
+            )}
+            <button
+              onClick={() => setShowReport(true)}
+              className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[0.72rem] font-medium text-rose-300 transition hover:bg-rose-500/20 cursor-pointer"
+              title="Report a problem with this app"
+            >
+              <span className="material-symbols-outlined align-middle mr-1 text-[0.95rem]">bug_report</span>
+              Report issue
+            </button>
+            <Link
+              href="/studio"
+              className="rounded-xl border border-dark-border bg-dark-bg2 px-3 py-2 text-[0.72rem] font-medium text-dark-text transition hover:border-qsis hover:text-qsis no-underline"
+            >
+              <span className="material-symbols-outlined align-middle mr-1 text-[0.95rem]">arrow_back</span>
+              Studio
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div
         ref={wrapRef}
@@ -152,7 +180,7 @@ export default function AppChrome({
           src={src}
           title={app.title}
           className={`h-[calc(100dvh-220px)] min-h-[480px] w-full ${started ? '' : 'hidden'}`}
-          allow="clipboard-write; fullscreen; document-picture-in-picture"
+          allow="clipboard-write; fullscreen; document-picture-in-picture; popups"
         />
 
         {!started && (
@@ -183,41 +211,43 @@ export default function AppChrome({
         )}
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[0.68rem] text-dark-text3">
-          Community app · runs from GitHub, nothing leaves your browser.
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={async () => {
-              if (document.fullscreenElement) {
-                try {
-                  await document.exitFullscreen();
-                } catch {}
-              } else if (started) {
-                try {
-                  await wrapRef.current?.requestFullscreen();
-                } catch {}
-              } else {
-                setStarted(true);
-              }
-            }}
-            className="rounded-lg border border-dark-border bg-dark-bg2 px-3 py-1.5 text-[0.68rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis cursor-pointer"
-          >
-            <span className="material-symbols-outlined align-middle mr-1 text-[0.9rem]">
-              {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
-            </span>
-            {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-          </button>
-          <button
-            onClick={openNewTab}
-            className="rounded-lg border border-dark-border bg-dark-bg2 px-3 py-1.5 text-[0.68rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis cursor-pointer"
-          >
-            <span className="material-symbols-outlined align-middle mr-1 text-[0.9rem]">open_in_new</span>
-            Open in new tab
-          </button>
+      {!started && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[0.68rem] text-dark-text3">
+            Community app · runs from GitHub, nothing leaves your browser.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                if (document.fullscreenElement) {
+                  try {
+                    await document.exitFullscreen();
+                  } catch {}
+                } else if (started) {
+                  try {
+                    await wrapRef.current?.requestFullscreen();
+                  } catch {}
+                } else {
+                  setStarted(true);
+                }
+              }}
+              className="rounded-lg border border-dark-border bg-dark-bg2 px-3 py-1.5 text-[0.68rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis cursor-pointer"
+            >
+              <span className="material-symbols-outlined align-middle mr-1 text-[0.9rem]">
+                {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+              </span>
+              {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            </button>
+            <button
+              onClick={openNewTab}
+              className="rounded-lg border border-dark-border bg-dark-bg2 px-3 py-1.5 text-[0.68rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis cursor-pointer"
+            >
+              <span className="material-symbols-outlined align-middle mr-1 text-[0.9rem]">open_in_new</span>
+              Open in new tab
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {showReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowReport(false)}>
