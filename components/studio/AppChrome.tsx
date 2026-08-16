@@ -43,6 +43,15 @@ export default function AppChrome({
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
+  // Warm the app file (GitHub → edge cache) as soon as this page mounts, so the
+  // iframe loads instantly when the user hits Start instead of waiting on a
+  // GitHub round-trip. The browser also caches it for repeat opens.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetch(src, { signal: ctrl.signal, cache: 'force-cache' }).catch(() => {});
+    return () => ctrl.abort();
+  }, [src]);
+
   const startApp = () => {
     setStarted(true);
     frameRef.current?.focus();

@@ -674,8 +674,13 @@
     }
     const t = running();
     if (t) {
-      t.remaining = Math.max(0, t.remaining - Math.floor((Date.now() - t.lastTick) / 1000));
-      if (t.remaining <= 0) { complete(t); return; }
+      const now = Date.now();
+      const elapsed = Math.floor((now - t.lastTick) / 1000);
+      if (elapsed > 0) {
+        t.remaining = Math.max(0, t.remaining - elapsed);
+        t.lastTick = now;
+        if (t.remaining <= 0) { complete(t); return; }
+      }
     }
     if (!document.hidden) renderTimesOnly();
     updateCapsule();

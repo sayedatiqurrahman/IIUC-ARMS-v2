@@ -28,6 +28,18 @@ export default function StudioPage() {
       .then((res) => res.json())
       .then((data) => {
         if (mounted && Array.isArray(data.apps)) setApps(data.apps);
+        // Warm each community app's entry file so opening one is instant (edge
+        // cache is populated in the background; nothing blocks this page).
+        if (mounted && Array.isArray(data.apps)) {
+          for (const a of data.apps) {
+            if (a.source === 'community' && a.entry) {
+              fetch(`/api/studio-apps/serve/${a.id}/${a.entry}`, {
+                cache: 'force-cache',
+                keepalive: false,
+              }).catch(() => {});
+            }
+          }
+        }
       })
       .catch(() => {})
       .finally(() => mounted && setLoading(false));

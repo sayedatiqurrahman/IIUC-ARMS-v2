@@ -39,10 +39,12 @@ export async function GET(
   const cacheControl =
     'public, max-age=600, s-maxage=600, stale-while-revalidate=86400';
 
-  // Primary: raw CDN (fast, cached).
+  // Primary: raw CDN (fast, cached). Bounded timeout so a slow GitHub egress
+  // can't stall the iframe — we fall through to the contents API instead.
   const rawUrl = `https://raw.githubusercontent.com/${base}`;
   const rawRes = await fetch(rawUrl, {
     next: { revalidate: 600, tags: [STUDIO_APP_FILES_CACHE_TAG] },
+    signal: AbortSignal.timeout(8000),
   });
   if (rawRes.ok) {
     const buf = Buffer.from(await rawRes.arrayBuffer());
@@ -61,6 +63,7 @@ export async function GET(
     const apiRes = await fetch(apiUrl, {
       headers: { Accept: 'application/vnd.github.v3+json' },
       next: { revalidate: 600, tags: [STUDIO_APP_FILES_CACHE_TAG] },
+      signal: AbortSignal.timeout(8000),
     });
     if (apiRes.ok) {
       const meta = await apiRes.json();
