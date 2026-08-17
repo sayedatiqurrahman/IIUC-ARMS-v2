@@ -685,16 +685,7 @@ export default function BrowsePage() {
       {!loading && !error && view === 'semesters' && (
         <div className="mt-8 bg-gradient-to-br from-qsis/5 to-accent/5 border border-qsis/20 rounded-2xl p-6 text-center">
           <h4 className="text-[1.05rem] font-bold text-dark-text mb-2"><i className="fas fa-heart text-red-400 mr-2"></i>Support Our Work</h4>
-          <p className="text-[0.82rem] text-dark-text2 mb-4 max-w-md mx-auto">If this project helps you, please give us a star on GitHub. It motivates us to keep building and maintaining this resource for the IIUC community.</p>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            <a href={config.sourceRepoUrl()} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-qsis to-accent text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(34,197,94,0.3)] hover:scale-105 transition-all">
-               <i className="fas fa-star"></i> Star IIUC-ARMS v2<span className="text-[0.7rem] opacity-80">(Web App)</span>
-            </a>
-            <a href={config.dataRepoUrl()} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-semibold text-[0.85rem] no-underline hover:shadow-[0_4px_20px_rgba(249,115,22,0.3)] hover:scale-105 transition-all">
-              <i className="fas fa-star"></i> Star Academic Files<span className="text-[0.7rem] opacity-80">(Data Repo)</span>
-            </a>
-          </div>
-          <p className="text-[0.72rem] text-dark-text2 mt-3"><i className="fas fa-code-branch mr-1"></i>Fork either repo to contribute — check out the README for guidelines!</p>
+          <p className="text-[0.82rem] text-dark-text2 max-w-md mx-auto">If this project helps you, please give us a star on GitHub. It motivates us to keep building and maintaining this resource for the IIUC community.</p>
         </div>
       )}
       {!loading && !error && currentDept && currentSem && currentCourseCode && (view === 'categories' || view === 'files') && (
@@ -712,6 +703,33 @@ export default function BrowsePage() {
       )}
       </>
       )}
+
+      {/* ── Star Repos Section ─────────────────────────────────── */}
+      {!loading && !error && view === 'semesters' && (
+        <div className="mt-8 mb-4 text-center">
+          <h4 className="text-[0.88rem] font-semibold text-dark-text2 mb-3"><i className="fab fa-github mr-1.5"></i>Star Our Repos</h4>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">
+            <a href={config.sourceRepoUrl()} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-dark-bg3 border border-dark-border text-[0.75rem] sm:text-[0.8rem] font-semibold text-dark-text hover:border-qsis/50 hover:bg-qsis/10 transition-all no-underline">
+              <i className="fas fa-star text-yellow-400 text-[0.7rem]"></i>
+              IIUC-ARMS v2
+            </a>
+            <a href={config.dataRepoUrl()} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-dark-bg3 border border-dark-border text-[0.75rem] sm:text-[0.8rem] font-semibold text-dark-text hover:border-orange-400/50 hover:bg-orange-500/10 transition-all no-underline">
+              <i className="fas fa-star text-yellow-400 text-[0.7rem]"></i>
+              Academic Files
+            </a>
+            {config.githubStarRepos.slice(2).map(repo => (
+              <a key={repo.repo} href={`https://github.com/${repo.owner}/${repo.repo}`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-dark-bg3 border border-dark-border text-[0.75rem] sm:text-[0.8rem] font-semibold text-dark-text hover:border-purple-400/50 hover:bg-purple-500/10 transition-all no-underline">
+                <i className="fas fa-star text-yellow-400 text-[0.7rem]"></i>
+                {repo.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       <BrowseModals
         moveTarget={moveTarget} setMoveTarget={setMoveTarget}
         renameTarget={renameTarget} setRenameTarget={setRenameTarget}
