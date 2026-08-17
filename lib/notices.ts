@@ -107,10 +107,12 @@ export async function uploadNoticeAttachment(
   const repo = config.repo;
   const branch = config.branch;
 
-  // Sanitize filename: use timestamp + safe name
-  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const uniqueName = `${Date.now()}-${safeName}`;
-  const filePath = `${NOTICES_PATH}/attachments/${uniqueName}`;
+  // Rename to: notice-{name}-{year}.{ext}
+  const ext = fileName.includes('.') ? fileName.split('.').pop() || 'pdf' : 'pdf';
+  const baseName = fileName.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+  const year = new Date().getFullYear();
+  const renamed = `notice-${baseName}-${year}.${ext}`;
+  const filePath = `${NOTICES_PATH}/attachments/${renamed}`;
 
   // Get current ref
   const refRes = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
@@ -123,7 +125,7 @@ export async function uploadNoticeAttachment(
   const files = [{ path: filePath, content: fileBase64 }];
   await commitFilesToBranch({
     token, owner, repo, branch, baseSha, files,
-    message: `notice: add attachment ${uniqueName}`,
+    message: `notice: add attachment ${renamed}`,
     author,
   });
 

@@ -132,7 +132,9 @@ async function broadcastNotice(notice: Notice) {
     let text = `${emoji} <b>${catLabel}: ${notice.title}</b>\n`;
     if (notice.description) text += `\n${notice.description}\n`;
     if (notice.link) text += `\n🔗 <a href="${notice.link}">Open Link</a>`;
-    text += `\n\n<a href="${SITE_URL}/notices">View All Notices</a>`;
+    text += `\n\n📅 ${notice.date || new Date().toISOString().split('T')[0]}`;
+    text += `\n🏛️ Published by <b>IIUC-ARMS</b>`;
+    text += `\n\n<a href="${SITE_URL}/notices">View All Notices →</a>`;
 
     const { sendDepartmentNotifications } = await import('@/lib/telegram/notifications');
     await sendDepartmentNotifications(['ALL'], text, { type: 'notice', title: `${catLabel}: ${notice.title}` }).catch(() => {});
