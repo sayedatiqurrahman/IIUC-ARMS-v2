@@ -553,21 +553,8 @@ export default function BrowsePage() {
         navigateToMidFinal={navigateToMidFinal} navigateToCategory={navigateToCategory}
       />
       {loading && (
-        <div className="loading-container">
-          <div className="book-loader">
-            <div className="book-base"></div>
-            <div className="book-spine-loader"></div>
-            <div className="book-cover"></div>
-            <div className="book-page-stack">
-              <div className="book-page"></div>
-              <div className="book-page"></div>
-              <div className="book-page"></div>
-            </div>
-            <div className="page-shadow"></div>
-            <div className="page-shadow"></div>
-            <div className="page-shadow"></div>
-          </div>
-          <div className="loading-text">Loading academic resources<span className="loading-dots"></span></div>
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-dark-bg">
+          <img src="/page-loader.gif" alt="Loading" className="w-24 h-24 object-contain" />
         </div>
       )}
       {error && (
