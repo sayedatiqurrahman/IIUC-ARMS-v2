@@ -46,7 +46,7 @@ export const FACULTIES: Faculty[] = [
     shortName: 'FBS',
     icon: 'fa-chart-line',
     departments: [
-      { id: 'ba', name: 'Business Administration', shortName: 'BBA', icon: 'fa-briefcase' },
+      { id: 'bba', name: 'Business Administration', shortName: 'BBA', icon: 'fa-briefcase', folder: 'BBA' },
       { id: 'finance', name: 'Department of Finance', shortName: 'FIN', icon: 'fa-coins', folder: 'FIN' },
     ],
   },
