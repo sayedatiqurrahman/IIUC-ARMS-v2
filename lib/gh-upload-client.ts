@@ -17,7 +17,9 @@ const GITHUB_MAX_BYTES = 100 * 1024 * 1024;
 // Files above this threshold are uploaded via Git LFS (raw binary, no base64
 // overhead, no 100 MB blob-API ceiling). LFS uploads raw bytes to GitHub's
 // object storage, then commits a tiny pointer file to git.
-const LFS_THRESHOLD_BYTES = 10 * 1024 * 1024;
+// 2 MB: almost all real files (PDFs, images, docs) benefit from raw binary
+// upload — faster, no 33% base64 bloat, real upload-progress events.
+const LFS_THRESHOLD_BYTES = 2 * 1024 * 1024;
 // LFS hard ceiling: GitHub LFS allows up to 500 MB per object.
 const LFS_MAX_BYTES = 500 * 1024 * 1024;
 // Files are read and base64-encoded in 0.6MB slices to keep memory flat and to
@@ -515,20 +517,35 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
             onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(pct * 0.15), `Hashing ${label} (${mb} MB)… ${pct}%`);
           });
           onProgress?.(20 + Math.round((doneBytes / totalBytes) * 55), `Uploading ${label} (${mb} MB) via LFS…`);
-          await uploadViaLFS({ token, owner, repo, file: f.file, oid, size: f.file.size, onProgress: pct => {
-            onProgress?.(20 + Math.round((doneBytes / totalBytes) * 55) + Math.round(pct * 0.45), `Uploading ${label} ${pct}% of ${mb} MB`);
-          }});
-          onProgress?.(70 + Math.round((doneBytes / totalBytes) * 15), `Committing LFS pointer for ${label}…`);
-          const pointerContent = createLFSPointerFile(oid, f.file.size);
-          const pointerBlobRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, token, {
-            method: 'POST',
-            body: JSON.stringify({ content: textToBase64(pointerContent), encoding: 'base64' }),
-          });
-          if (!pointerBlobRes.ok) {
-            const msg = await extractError(pointerBlobRes);
-            throw new ClientUploadError(`Failed to commit LFS pointer for ${label}: ${msg}`, pointerBlobRes.status);
+          try {
+            await uploadViaLFS({ token, owner, repo, file: f.file, oid, size: f.file.size, onProgress: pct => {
+              onProgress?.(20 + Math.round((doneBytes / totalBytes) * 55) + Math.round(pct * 0.45), `Uploading ${label} ${pct}% of ${mb} MB`);
+            }});
+          } catch (lfsErr: any) {
+            // If LFS is not enabled (404) and file fits in the blob API, fall
+            // back to base64 instead of dying.
+            if (/not enabled/i.test(lfsErr?.message || '') && fileBytes <= GITHUB_MAX_BYTES) {
+              onProgress?.(10, `LFS unavailable — uploading ${label} via blob API…`);
+              content = await fileToBase64(f.file, pct => {
+                onProgress?.(10 + Math.round(((f.file!.size / totalBytes) * 70 * pct) / 100), `Preparing ${label}… ${pct}%`);
+              });
+            } else {
+              throw lfsErr;
+            }
           }
-          blobs.push({ path: f.path, sha: (await pointerBlobRes.json()).sha });
+          if (!content) {
+            onProgress?.(70 + Math.round((doneBytes / totalBytes) * 15), `Committing LFS pointer for ${label}…`);
+            const pointerContent = createLFSPointerFile(oid, f.file.size);
+            const pointerBlobRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, token, {
+              method: 'POST',
+              body: JSON.stringify({ content: textToBase64(pointerContent), encoding: 'base64' }),
+            });
+            if (!pointerBlobRes.ok) {
+              const msg = await extractError(pointerBlobRes);
+              throw new ClientUploadError(`Failed to commit LFS pointer for ${label}: ${msg}`, pointerBlobRes.status);
+            }
+            blobs.push({ path: f.path, sha: (await pointerBlobRes.json()).sha });
+          }
         } else if (fileBytes > LFS_MAX_BYTES) {
           throw new ClientUploadError(
             `${label} is ${(fileBytes / 1024 / 1024).toFixed(1)} MB — maximum upload size is 500 MB.`,
