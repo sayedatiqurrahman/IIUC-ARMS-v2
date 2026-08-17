@@ -44,9 +44,6 @@ export interface ClientUploadFile {
 
 export interface ClientUploadOptions {
   token: string;
-  // When the primary token (e.g. a stored OAuth token) turns out not to have
-  // access to the repo, fall back to a freshly-minted App bot token so uploads
-  // never die with "blob:404" — mirroring the old server-side candidates loop.
   fallbackToken?: string;
   owner: string;
   repo: string;
@@ -54,6 +51,10 @@ export interface ClientUploadOptions {
   message: string;
   author?: { name: string; email: string };
   onProgress?: (percent: number, label: string) => void;
+  // Called once per upload step (e.g. "Hashing…", "Uploading via LFS…", "Committing…").
+  // The log array is built by the caller and entries are pushed here so the
+  // user always sees exactly what happened, even if the upload is slow.
+  onStep?: (message: string) => void;
 }
 
 export interface ClientUploadResult {
@@ -146,35 +147,84 @@ export function textToBase64(text: string): string {
 // (no base64 overhead, no 100 MB blob-API ceiling, up to 500 MB per file).
 
 async function computeFileSHA256(file: File, onProgress?: (pct: number) => void): Promise<string> {
-  // Streaming SHA-256: hash in 4 MB chunks to avoid loading entire file into memory.
-  // Uses SubtleCrypto's one-shot digest per chunk, manually chaining the state.
-  // For true streaming we'd need a JS SHA-256 impl, but this at least avoids the
-  // single huge arrayBuffer() call that hangs on mobile.
+  // True streaming SHA-256: processes 4 MB chunks without concatenating into
+  // one huge buffer. Uses a minimal pure-JS SHA-256 implementation so the
+  // browser never needs more than one chunk in memory at a time.
   const CHUNK = 4 * 1024 * 1024;
   const total = file.size || 1;
-  const numChunks = Math.ceil(total / CHUNK);
+
+  // ── Minimal SHA-256 ────────────────────────────────────────────────────
+  const K = [
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2,
+  ];
+  const ROTR = (n: number, x: number) => (x >>> n) | (x << (32 - n));
+  const CH = (x: number, y: number, z: number) => (x & y) ^ (~x & z);
+  const MAJ = (x: number, y: number, z: number) => (x & y) ^ (x & z) ^ (y & z);
+  const EP0 = (x: number) => ROTR(2, x) ^ ROTR(13, x) ^ ROTR(22, x);
+  const EP1 = (x: number) => ROTR(6, x) ^ ROTR(11, x) ^ ROTR(25, x);
+  const SIG0 = (x: number) => ROTR(7, x) ^ ROTR(18, x) ^ (x >>> 3);
+  const SIG1 = (x: number) => ROTR(17, x) ^ ROTR(19, x) ^ (x >>> 10);
+
+  let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
+  let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+  let totalBits = 0;
+
+  function processBlock(block: Uint8Array) {
+    const w = new Uint32Array(64);
+    for (let i = 0; i < 16; i++) w[i] = (block[i * 4] << 24) | (block[i * 4 + 1] << 16) | (block[i * 4 + 2] << 8) | block[i * 4 + 3];
+    for (let i = 16; i < 64; i++) w[i] = (SIG1(w[i - 2]) + w[i - 7] + SIG0(w[i - 15]) + w[i - 16]) | 0;
+    let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (h + EP1(e) + CH(e, f, g) + K[i] + w[i]) | 0;
+      const t2 = (EP0(a) + MAJ(a, b, c)) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0;
+    h4 = (h4 + e) | 0; h5 = (h5 + f) | 0; h6 = (h6 + g) | 0; h7 = (h7 + h) | 0;
+  }
+
+  // ── Read file in chunks and feed to SHA-256 ───────────────────────────
+  const reader = file.stream().getReader();
+  let buf = new Uint8Array(0);
   let loaded = 0;
 
-  // Read entire file into memory-chunked ArrayBuffers (browser streams API)
-  const bufs: ArrayBuffer[] = [];
-  for (let i = 0; i < numChunks; i++) {
-    const start = i * CHUNK;
-    const end = Math.min(total, start + CHUNK);
-    const slice = file.slice(start, end);
-    bufs.push(await slice.arrayBuffer());
-    loaded += end - start;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    // Append new data to leftover buffer
+    const merged = new Uint8Array(buf.length + value.length);
+    merged.set(buf); merged.set(value, buf.length);
+    buf = merged;
+    loaded += value.length;
+    // Process complete 64-byte blocks
+    while (buf.length >= 64) {
+      processBlock(buf.subarray(0, 64));
+      totalBits += 512;
+      buf = buf.subarray(64);
+    }
     onProgress?.(Math.round((loaded / total) * 100));
   }
 
-  // Concatenate into a single buffer and hash
-  const combined = new Uint8Array(loaded);
-  let off = 0;
-  for (const b of bufs) {
-    combined.set(new Uint8Array(b), off);
-    off += b.byteLength;
-  }
-  const hash = await crypto.subtle.digest('SHA-256', combined);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  // Pad: append 1-bit, zeros, then 64-bit big-endian length
+  totalBits += buf.length * 8;
+  const padLen = ((buf.length + 9) % 64 === 0) ? 0 : 64 - ((buf.length + 9) % 64);
+  const padded = new Uint8Array(buf.length + 1 + padLen + 8);
+  padded.set(buf); padded[buf.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 8, Math.floor(totalBits / 0x100000000), false);
+  view.setUint32(padded.length - 4, totalBits >>> 0, false);
+  for (let i = 0; i < padded.length; i += 64) processBlock(padded.subarray(i, i + 64));
+
+  // Produce hex digest
+  const hex = (v: number) => (v >>> 0).toString(16).padStart(8, '0');
+  return hex(h0) + hex(h1) + hex(h2) + hex(h3) + hex(h4) + hex(h5) + hex(h6) + hex(h7);
 }
 
 async function uploadViaLFS(opts: {
@@ -231,26 +281,39 @@ async function uploadViaLFS(opts: {
 
   // Upload raw binary to the pre-signed URL using XMLHttpRequest for real
   // upload progress (fetch() does not support upload progress events).
+  // A heartbeat timer updates the progress label every 3 seconds so the UI
+  // never looks frozen on slow connections where XHR events are sparse.
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', action.href, true);
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.setRequestHeader('Content-Length', String(size));
     if (action.header) {
       for (const [k, v] of Object.entries(action.header)) {
         xhr.setRequestHeader(k, String(v));
       }
     }
+    let lastLoaded = 0;
+    let heartbeatCount = 0;
+    const heartbeat = setInterval(() => {
+      heartbeatCount++;
+      // Nudge progress by 0.5% every 3s so the bar never looks stuck
+      if (onProgress) onProgress(Math.min(99, (lastLoaded / (size || 1)) * 100 + heartbeatCount * 0.5));
+    }, 3000);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) {
+        lastLoaded = e.loaded;
+        heartbeatCount = 0;
         onProgress(Math.round((e.loaded / e.total) * 100));
       }
     };
     xhr.onload = () => {
+      clearInterval(heartbeat);
       if (xhr.status >= 200 && xhr.status < 300) resolve();
       else reject(new Error(`LFS upload failed with status ${xhr.status}`));
     };
-    xhr.onerror = () => reject(new Error('LFS upload network error'));
-    xhr.ontimeout = () => reject(new Error('LFS upload timed out (10 minutes)'));
+    xhr.onerror = () => { clearInterval(heartbeat); reject(new Error('LFS upload network error')); };
+    xhr.ontimeout = () => { clearInterval(heartbeat); reject(new Error('LFS upload timed out (10 minutes)')); };
     xhr.timeout = 10 * 60 * 1000;
     xhr.send(file);
   });
@@ -468,15 +531,40 @@ async function directCommitToBranch(opts: {
 }
 
 // Main entry: uploads files from the browser directly to GitHub (always
-// commits to main — no fork/PR). Tries the primary token, then the App bot
-// fallback if the primary can't access the repo.
+// commits to main — no fork/PR). Pre-validates tokens BEFORE starting the
+// upload by testing WRITE access (not just read), so the upload never wastes
+// time with a token that can read but not write and then restart.
 // Progress scale: 0..85 during blob creation, 85..100 during commit/finalize.
 export async function uploadFilesToGitHub(opts: ClientUploadOptions): Promise<ClientUploadResult> {
-  const { token, fallbackToken, ...rest } = opts;
+  const { token, fallbackToken, owner, repo, ...rest } = opts;
   if (rest.files.length === 0) return { success: false, error: 'No files to upload' };
-  return withTokenFallback(fallbackToken ? [token, fallbackToken] : [token], t =>
-    runFileUpload({ ...rest, token: t }),
-  );
+
+  // Pre-validate: test WRITE access (create a tiny blob). A PAT can read
+  // a repo but still lack write permission — testing only read gives false
+  // confidence and the upload fails mid-way, wasting minutes.
+  const tokens = fallbackToken ? [token, fallbackToken] : [token];
+  let validToken = '';
+  for (const t of tokens) {
+    try {
+      const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, {
+        method: 'POST',
+        headers: { Authorization: `token ${t}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'dGVzdA==', encoding: 'base64' }),
+      });
+      if (res.ok) { validToken = t; break; }
+      // 401/403/404 = token can't write → try next
+      if (res.status === 401 || res.status === 403 || res.status === 404) continue;
+      // 500+ server error = assume token is OK
+      validToken = t; break;
+    } catch {
+      validToken = t; break;
+    }
+  }
+  if (!validToken) {
+    return { success: false, error: 'GitHub token expired or invalid. Please reconnect your GitHub account.', status: 401, code: 'TOKEN_EXPIRED' };
+  }
+
+  return runFileUpload({ ...rest, token: validToken, owner, repo });
 }
 
 // PDFs must start with %PDF- and end with %%EOF, or they are broken/truncated.
@@ -494,16 +582,25 @@ async function assertPdfIntact(file: File): Promise<void> {
 }
 
 async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadResult> {
-  const { token, owner, repo, files, message, author, onProgress } = opts;
+  const { token, owner, repo, files, message, author, onProgress, onStep } = opts;
 
   const totalBytes = files.reduce((s, f) => s + (f.file ? f.file.size : (f.text?.length || 0)), 0) || 1;
   const blobs: { path: string; sha: string }[] = [];
   let doneBytes = 0;
+  // Monotonic progress: progress never goes backwards. This prevents the
+  // jarring 75%→20% glitch when an LFS attempt fails and falls back to
+  // base64 — the bar only moves forward.
+  let maxPct = 0;
+  const emit = (pct: number, label: string) => {
+    if (pct > maxPct) maxPct = pct;
+    onProgress?.(maxPct, label);
+  };
+  const step = (msg: string) => { onStep?.(msg); };
 
   try {
     for (const f of files) {
       const label = f.path.split('/').pop() || f.path;
-      onProgress?.(5, `Preparing ${label}…`);
+      emit(5, `Preparing ${label}…`);
       const fileBytes = f.file ? f.file.size : (f.text?.length || 0);
       let content = '';
 
@@ -512,29 +609,35 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
           // ── Large file: upload via Git LFS ────────────────────────────────
           await assertPdfIntact(f.file);
           const mb = (fileBytes / 1024 / 1024).toFixed(0);
-          onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70), `Hashing ${label} (${mb} MB)…`);
+          step(`Hashing ${label} (${mb} MB)…`);
+          emit(5 + Math.round((doneBytes / totalBytes) * 70), `Hashing ${label} (${mb} MB)…`);
           const oid = await computeFileSHA256(f.file, pct => {
-            onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(pct * 0.15), `Hashing ${label} (${mb} MB)… ${pct}%`);
+            emit(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(pct * 0.15), `Hashing ${label} (${mb} MB)… ${pct}%`);
           });
-          onProgress?.(20 + Math.round((doneBytes / totalBytes) * 55), `Uploading ${label} (${mb} MB) via LFS…`);
+          step(`Uploading ${label} (${mb} MB) via LFS…`);
+          emit(20 + Math.round((doneBytes / totalBytes) * 55), `Uploading ${label} (${mb} MB) via LFS…`);
           try {
             await uploadViaLFS({ token, owner, repo, file: f.file, oid, size: f.file.size, onProgress: pct => {
-              onProgress?.(20 + Math.round((doneBytes / totalBytes) * 55) + Math.round(pct * 0.45), `Uploading ${label} ${pct}% of ${mb} MB`);
+              emit(20 + Math.round((doneBytes / totalBytes) * 55) + Math.round(pct * 0.45), `Uploading ${label} ${pct}% of ${mb} MB`);
             }});
+            step(`Uploaded ${label} via LFS`);
           } catch (lfsErr: any) {
             // If LFS is not enabled (404) and file fits in the blob API, fall
-            // back to base64 instead of dying.
+            // back to base64 instead of dying. Progress continues from where
+            // it was — no reset, no glitch.
             if (/not enabled/i.test(lfsErr?.message || '') && fileBytes <= GITHUB_MAX_BYTES) {
-              onProgress?.(10, `LFS unavailable — uploading ${label} via blob API…`);
+              step(`LFS unavailable — using blob API for ${label}`);
+              emit(maxPct, `LFS unavailable — uploading ${label} via blob API…`);
               content = await fileToBase64(f.file, pct => {
-                onProgress?.(10 + Math.round(((f.file!.size / totalBytes) * 70 * pct) / 100), `Preparing ${label}… ${pct}%`);
+                emit(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(((f.file!.size / totalBytes) * 70 * pct) / 100), `Preparing ${label}…`);
               });
             } else {
               throw lfsErr;
             }
           }
           if (!content) {
-            onProgress?.(70 + Math.round((doneBytes / totalBytes) * 15), `Committing LFS pointer for ${label}…`);
+            step(`Committing LFS pointer for ${label}`);
+            emit(70 + Math.round((doneBytes / totalBytes) * 15), `Committing LFS pointer for ${label}…`);
             const pointerContent = createLFSPointerFile(oid, f.file.size);
             const pointerBlobRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, token, {
               method: 'POST',
@@ -555,8 +658,9 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
           // ── Small file: direct blob (base64-encoded) ──────────────────────
           assertWithinGithubLimit(label, fileBytes);
           await assertPdfIntact(f.file);
+          step(`Encoding ${label} (${(fileBytes / 1024 / 1024).toFixed(1)} MB)…`);
           content = await fileToBase64(f.file, pct => {
-            onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(((f.file!.size / totalBytes) * 70 * pct) / 100), `Preparing ${label}…`);
+            emit(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(((f.file!.size / totalBytes) * 70 * pct) / 100), `Preparing ${label}…`);
           });
         }
       } else {
@@ -567,7 +671,8 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
       // Text-based files (READMEs) and small binary files: commit as base64 blob.
       // Large binary files were already committed as LFS pointer blobs above.
       if (content) {
-        onProgress?.(Math.min(78, 5 + Math.round((doneBytes / totalBytes) * 70) + Math.round((fileBytes / totalBytes) * 15)), `Uploading ${label}…`);
+        step(`Uploading ${label}…`);
+        emit(Math.min(78, 5 + Math.round((doneBytes / totalBytes) * 70) + Math.round((fileBytes / totalBytes) * 15)), `Uploading ${label}…`);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
         let blobRes: Response;
@@ -597,17 +702,17 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
           throw new ClientUploadError(msg || `Failed to upload ${label}`, blobRes.status);
         }
         blobs.push({ path: f.path, sha: (await blobRes.json()).sha });
-        content = '';
+        step(`Uploaded ${label}`);
       }
 
-      doneBytes += f.file ? f.file.size : (f.text?.length || 0);
-      onProgress?.(Math.min(82, 5 + Math.round((doneBytes / totalBytes) * 77)), `Uploaded ${label}`);
+      doneBytes += fileBytes;
     }
 
-    onProgress?.(83, 'Reading branch…');
+    step('Committing to main…');
+    emit(83, 'Committing to main…');
     const result = await directCommitToBranch({ token, owner, repo, blobs, message, author,
       onStep: (label) => {
-        // Map Git steps to 83..97% range
+        step(label);
         const stepMap: Record<string, number> = {
           'Verifying repo access…': 83,
           'Reading branch…': 85,
@@ -616,11 +721,12 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
           'Updating branch…': 94,
           'Retrying (concurrent commit)…': 92,
         };
-        onProgress?.(stepMap[label] ?? 88, label);
+        emit(stepMap[label] ?? 88, label);
       },
     });
 
-    onProgress?.(98, 'Done');
+    emit(100, 'Done');
+    step('Upload complete');
     return result;
   } catch (e) {
     if (e instanceof ClientUploadError) {

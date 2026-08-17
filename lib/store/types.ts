@@ -116,6 +116,7 @@ export interface AppState {
     progress: { percent: number; label: string } | null;
     result: { success: boolean; error?: string; tokenExpired?: boolean; needsPAT?: boolean; merged?: boolean; direct?: boolean; prUrl?: string } | null;
     compressing: string | null;
+    steps: string[];
   } | null;
   setUploadBg: (partial: Partial<NonNullable<AppState['uploadBg']>> | null) => void;
   recentReads: any[];

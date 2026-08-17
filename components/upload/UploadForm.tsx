@@ -42,6 +42,7 @@ interface UploadFormProps {
   totalSizeMB: number;
   uploading: boolean;
   uploadProgress?: { percent: number; label: string } | null;
+  uploadSteps?: string[];
   compressing?: string | null;
   result: { success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean; merged?: boolean; direct?: boolean } | null;
   handleSubmit: () => void;
@@ -75,7 +76,7 @@ export default function UploadForm({
   createCourseFor, setCreateCourseFor,
   handleFilesForCourse, fileInputRefs, onOpenScanner,
   totalFiles, totalSizeMB,
-  uploading, uploadProgress, result, compressing,
+  uploading, uploadProgress, uploadSteps, result, compressing,
   handleSubmit,
   patInputToken, setPatInputToken, patSaving, handleSavePat,
   mergeDialogCourseId, mergeImages, mergeSession, mergeYear,
@@ -758,6 +759,20 @@ export default function UploadForm({
           <><i className="fas fa-paper-plane mr-2"></i>Submit {totalFiles} File{totalFiles !== 1 ? 's' : ''} for Review</>
         )}
       </button>
+      {uploading && uploadSteps && uploadSteps.length > 0 && (
+        <div className="mt-2 bg-dark-bg2/50 rounded-lg p-2 max-h-24 overflow-y-auto border border-dark-border/50">
+          {uploadSteps.slice(-6).map((s, i) => (
+            <div key={i} className="flex items-center gap-1.5 text-[0.65rem] text-dark-text3 leading-tight py-0.5">
+              <i className="fas fa-check-circle text-qsis/70 shrink-0"></i>
+              <span className="truncate">{s}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5 text-[0.65rem] text-qsis leading-tight py-0.5 font-medium">
+            <i className="fas fa-spinner fa-spin shrink-0"></i>
+            <span className="truncate">{uploadProgress?.label || 'Working…'}</span>
+          </div>
+        </div>
+      )}
       {uploading && (
         <p className="text-[0.68rem] text-dark-text3 text-center mt-2">
           <i className="fas fa-lock mr-1 text-qsis"></i> Upload in progress — close this dialog and your upload will continue in the background. Only one upload can run at a time.

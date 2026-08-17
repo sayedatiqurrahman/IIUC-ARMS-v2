@@ -122,6 +122,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const uploading = uploadBg?.active ?? false;
   const result = uploadBg?.result ?? null;
   const uploadProgress = uploadBg?.progress ?? null;
+  const uploadSteps = uploadBg?.steps ?? [];
   const compressing = uploadBg?.compressing ?? null;
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
@@ -568,9 +569,15 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const token = tokenOverride || githubToken || profile.githubToken || (session as any)?.accessToken || '';
     const validCourses = courses.filter(c => c.selectedCourseCode && (c.files.length > 0 || c.links.length > 0));
 
-    setUploadBg({ active: true, result: null, progress: null, compressing: null });
+    setUploadBg({ active: true, result: null, progress: null, compressing: null, steps: [] });
+    const addStep = (msg: string) => {
+      const bg = useAppStore.getState().uploadBg;
+      if (bg) setUploadBg({ steps: [...bg.steps, msg] });
+    };
     try {
       const message = `Add ${validCourses.map(c => `${c.selectedCourseCode} - ${c.selectedCourseTitle || c.selectedCourseCode}`).join(', ')} (${category}) — ${semester}`;
+      addStep(`Preparing ${validCourses.length} course${validCourses.length > 1 ? 's' : ''}…`);
+
 
       const uploads = validCourses.map(course => {
         const built = buildUploadPaths({ course, category, semester, department, profile, email });
@@ -589,6 +596,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       // App bot token). Only the TOKEN crosses our server — the files are
       // committed straight to GitHub from this browser, so our free DB and
       // server are never used for file bytes and nothing is chunked.
+      addStep('Getting upload token…');
       const tokenRes = await fetch('/api/github/upload-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -596,6 +604,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       });
       const tokenData = await tokenRes.json().catch(() => ({}));
       if (!tokenRes.ok || tokenData.error) {
+        addStep('Token failed — try reconnecting GitHub');
         if (tokenData.code === 'AUTH_REQUIRED') {
           setUploadBg({ result: { success: false, error: tokenData.error, tokenExpired: true } });
           return;
@@ -605,6 +614,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
       let data: any;
       const totalUploadBytes = uploads.reduce((s, u) => s + u.files.reduce((ss, f) => ss + f.meta.file.size, 0), 0);
+      addStep(`Token ready — ${tokenData.token ? 'direct' : 'server'} upload`);
 
       const runServerUpload = async () => {
         // ── Server fallback: no browser-safe token OR the direct commit failed.
@@ -624,6 +634,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         if (token) formData.append('githubToken', token);
 
         setUploadBg({ progress: { percent: 40, label: 'Uploading to GitHub...' } });
+        addStep('Server-side upload fallback…');
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 85000);
         try {
@@ -635,9 +646,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       };
 
       if (tokenData.token) {
+        addStep('Uploading files directly to GitHub…');
         // ── Direct commit from the browser ─────────────────────────────
-        // Every file goes as ONE blob straight to the GitHub git-data API. No
-        // chunking, no DB staging — a file can never be corrupted in transit.
         const files: ClientUploadFile[] = [];
         for (const u of uploads) {
           for (const f of u.files) {
@@ -659,6 +669,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           message,
           author: identity,
           onProgress: (percent, label) => setUploadBg({ progress: { percent, label } }),
+          onStep: addStep,
         });
         // Safety net: if the direct commit still failed (stale PAT, revoked
         // access, no bot fallback), retry ONCE through the server — its token
@@ -682,9 +693,10 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         setUploadBg({ result: { success: false, error: data.error, tokenExpired: true } });
       } else if (data.code === 'NEEDS_PAT' || data.code === 'TOKEN_NO_ACCESS') {
         setUploadBg({ result: { success: false, error: data.error, needsPAT: true } });
-      } else { setUploadBg({ result: { success: false, error: data.error || 'Upload failed' } }); }
+      } else { addStep('Upload failed'); setUploadBg({ result: { success: false, error: data.error || 'Upload failed' } }); }
     } catch (err: any) {
       const msg = err?.name === 'AbortError' ? 'Upload timed out. Try fewer files.' : err.message || 'Network error';
+      addStep(`Error: ${msg}`);
       setUploadBg({ result: { success: false, error: msg, tokenExpired: err?.code === 'TOKEN_EXPIRED' } });
     } finally { setUploadBg({ active: false }); }
   }
@@ -733,6 +745,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             totalFiles={totalFiles} totalSizeMB={totalSizeMB} uploading={uploading} result={result}
             compressing={compressing}
             uploadProgress={uploadProgress}
+            uploadSteps={uploadSteps}
             handleSubmit={handleSubmit}
             patInputToken={patInputToken} setPatInputToken={setPatInputToken} patSaving={patSaving} handleSavePat={handleSavePat}
             mergeDialogCourseId={mergeDialogCourseId} mergeImages={mergeImages} mergeSession={mergeSession} mergeYear={mergeYear}
