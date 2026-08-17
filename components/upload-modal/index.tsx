@@ -685,7 +685,11 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       } else { setUploadBg({ result: { success: false, error: data.error || 'Upload failed' } }); }
     } catch (err: any) {
       const msg = err?.name === 'AbortError' ? 'Upload timed out. Try fewer files.' : err.message || 'Network error';
-      setUploadBg({ result: { success: false, error: msg, tokenExpired: /token expired|reconnect|401|403/i.test(msg) } });
+      // Use the actual error code/status, not a regex on the message text —
+      // matching "403" in the message would falsely flag rate-limit errors as
+      // token expiry and show the wrong recovery UI.
+      const isTokenErr = err?.code === 'TOKEN_EXPIRED' || err?.status === 401 || err?.status === 403;
+      setUploadBg({ result: { success: false, error: msg, tokenExpired: isTokenErr } });
     } finally { setUploadBg({ active: false }); }
   }
 

@@ -350,14 +350,30 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
         content = textToBase64(f.text);
       }
 
-      const blobRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, token, {
-        method: 'POST',
-        body: JSON.stringify({ content, encoding: 'base64' }),
-      });
+      // Large files can take minutes to upload; set a generous timeout so the
+      // request doesn't hang forever if the connection drops.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+      let blobRes: Response;
+      try {
+        blobRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, token, {
+          method: 'POST',
+          body: JSON.stringify({ content, encoding: 'base64' }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
       if (!blobRes.ok) {
         const msg = await extractError(blobRes);
         if (blobRes.status === 401 || blobRes.status === 403) {
           throw new ClientUploadError('GitHub token expired or invalid. Please reconnect your GitHub account.', 401, 'TOKEN_EXPIRED');
+        }
+        if (blobRes.status === 429) {
+          throw new ClientUploadError('GitHub is busy — rate-limited. Wait a minute and try again.', 429);
+        }
+        if (blobRes.status >= 500) {
+          throw new ClientUploadError(`GitHub server error — this usually means the file is too large for the API. Try a smaller file. (${msg})`, blobRes.status);
         }
         throw new ClientUploadError(msg || `Failed to upload ${label}`, blobRes.status);
       }
