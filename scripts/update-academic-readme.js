@@ -65,7 +65,7 @@ upload_academic_files/qsis/6th-semister/QSM-3601 - Ulumul Quran/
 | Electronic & Telecommunication Engineering | \`ete\` | Science & Engineering |
 | Civil Engineering | \`civil\` | Science & Engineering |
 | Pharmacy | \`pharmacy\` | Science & Engineering |
-| Business Administration | \`ba\` | Business Studies |
+| Business Administration | \`bba\` | Business Studies |
 | Department of Finance | \`finance\` | Business Studies |
 | English Language & Literature | \`ell\` | Arts & Humanities |
 | Arabic Language & Literature | \`all\` | Arts & Humanities |

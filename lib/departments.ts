@@ -134,6 +134,8 @@ export function getDepartmentFolder(deptId: string): string {
 // Resolve a GitHub folder name (or canonical id) back to the canonical department id.
 export function getDepartmentIdByFolder(folder: string): string {
   if (!folder) return folder;
+  // Backward-compat: old 'BA'/'ba' folder → new 'bba'
+  if (folder === 'BA' || folder === 'ba') return 'bba';
   const found = findDepartment(folder);
   if (found) return found.department.id;
   return folder;
@@ -149,6 +151,8 @@ export function resolveDepartmentId(idOrFolder: string): string {
 // canonical department id. Falls back to the input if nothing matches.
 export function resolveDepartment(input: string): string {
   if (!input) return input;
+  // Backward-compat: old 'ba' id → new 'bba'
+  if (input === 'ba') return 'bba';
   const found = findDepartment(input);
   if (found) return found.department.id;
   const all = getAllDepartments();
