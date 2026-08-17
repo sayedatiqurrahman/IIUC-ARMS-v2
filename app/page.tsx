@@ -554,7 +554,9 @@ export default function BrowsePage() {
       />
       {loading && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-dark-bg">
-          <img src="/page-loader.gif" alt="Loading" className="w-24 h-24 object-contain" />
+          <div className="bg-white rounded-3xl p-6 shadow-2xl">
+            <img src="/page-loader.gif" alt="Loading" className="w-20 h-20 object-contain" />
+          </div>
         </div>
       )}
       {error && (
