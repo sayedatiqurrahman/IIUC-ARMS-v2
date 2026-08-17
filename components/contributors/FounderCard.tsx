@@ -20,7 +20,7 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
           <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2 cursor-help" title="Founder & Lead">
             <i className="fas fa-crown text-white text-[0.6rem]"></i>
           </div>
-          <span className="pointer-events-none absolute bottom-8 right-0 z-50 w-60 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left opacity-0 translate-y-1 transition-all duration-150 group-hover/avatar:opacity-100 group-hover/avatar:translate-y-0 shadow-xl">
+          <span className="pointer-events-none absolute bottom-8 right-0 z-50 w-48 sm:w-60 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left opacity-0 translate-y-1 transition-all duration-150 group-hover/avatar:opacity-100 group-hover/avatar:translate-y-0 shadow-xl">
             <span className="block text-[0.7rem] font-bold text-qsis mb-0.5">
               <i className="fas fa-crown mr-1"></i>Founder
             </span>
@@ -71,7 +71,7 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
           <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2 cursor-help" title="Founder & Lead">
             <i className="fas fa-crown text-white text-[0.6rem]"></i>
           </div>
-          <span className="pointer-events-none absolute bottom-8 right-0 z-50 w-60 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left opacity-0 translate-y-1 transition-all duration-150 group-hover/avatar:opacity-100 group-hover/avatar:translate-y-0 shadow-xl">
+          <span className="pointer-events-none absolute bottom-8 right-0 z-50 w-48 sm:w-60 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left opacity-0 translate-y-1 transition-all duration-150 group-hover/avatar:opacity-100 group-hover/avatar:translate-y-0 shadow-xl">
             <span className="block text-[0.7rem] font-bold text-qsis mb-0.5">
               <i className="fas fa-crown mr-1"></i>Founder
             </span>

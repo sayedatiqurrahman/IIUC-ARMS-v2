@@ -117,7 +117,7 @@ export default function ContributorsView() {
   }, [activeTab, developers, resources, designers, deptFilter, searchQuery]);
 
   return (
-    <section className="mb-5">
+    <section className="mb-5 overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold flex items-center gap-2"><i className="fas fa-users"></i> Contributors</h3>
@@ -154,38 +154,38 @@ export default function ContributorsView() {
           {founder && <FounderCard c={founder} onShowHistory={setHistoryFor} />}
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-5">
-            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
-              <div className="text-[1.3rem] font-bold text-purple-400">{bothRepos.length}</div>
-              <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-code-branch mr-1"></i>Both</div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-5">
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-[1.1rem] sm:text-[1.3rem] font-bold text-purple-400">{bothRepos.length}</div>
+              <div className="text-[0.65rem] sm:text-[0.72rem] text-dark-text2"><i className="fas fa-code-branch mr-1"></i>Both</div>
             </div>
-            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
-              <div className="text-[1.3rem] font-bold text-blue-400">{developers.length}</div>
-              <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-laptop-code mr-1"></i>Developers</div>
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-[1.1rem] sm:text-[1.3rem] font-bold text-blue-400">{developers.length}</div>
+              <div className="text-[0.65rem] sm:text-[0.72rem] text-dark-text2"><i className="fas fa-laptop-code mr-1"></i>Devs</div>
             </div>
-            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
-              <div className="text-[1.3rem] font-bold text-orange-400">{resources.length}</div>
-              <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-book-open mr-1"></i>Resources</div>
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-[1.1rem] sm:text-[1.3rem] font-bold text-orange-400">{resources.length}</div>
+              <div className="text-[0.65rem] sm:text-[0.72rem] text-dark-text2"><i className="fas fa-book-open mr-1"></i>Res</div>
             </div>
-            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sm:p-3 text-center hidden sm:block">
               <div className="text-[1.3rem] font-bold text-emerald-400">{designers.length}</div>
               <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-palette mr-1"></i>Designers</div>
             </div>
-            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 text-center">
-              <div className="text-[1.3rem] font-bold text-qsis">{contributors.length}</div>
-              <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-users mr-1"></i>Total</div>
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sm:p-3 text-center">
+              <div className="text-[1.1rem] sm:text-[1.3rem] font-bold text-qsis">{contributors.length}</div>
+              <div className="text-[0.65rem] sm:text-[0.72rem] text-dark-text2"><i className="fas fa-users mr-1"></i>Total</div>
             </div>
           </div>
 
           {/* Controls Row */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+          <div className="mb-4 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
               {/* View Toggle (user) */}
               {settings.allowUserToggle && (
-                <div className="flex gap-1 p-1 bg-dark-bg2 border border-dark-border rounded-xl">
+                <div className="flex gap-1 p-1 bg-dark-bg2 border border-dark-border rounded-xl shrink-0">
                   <button
                     onClick={() => setUserView('sectioned')}
-                    className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
                       userView === 'sectioned' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text'
                     }`}
                   >
@@ -193,7 +193,7 @@ export default function ContributorsView() {
                   </button>
                   <button
                     onClick={() => setUserView('grid')}
-                    className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
                       userView === 'grid' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text'
                     }`}
                   >
@@ -202,12 +202,12 @@ export default function ContributorsView() {
                 </div>
               )}
 
-              {/* Sectioned Tabs */}
+              {/* Sectioned Tabs — scrollable on mobile */}
               {effectiveView === 'sectioned' && (
-                <div className="flex gap-1 p-1 bg-dark-bg2 border border-dark-border rounded-xl">
+                <div className="flex gap-1 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto no-scrollbar">
                   <button
                     onClick={() => { setActiveTab('all'); setDeptFilter('all'); setSearchQuery(''); }}
-                    className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all whitespace-nowrap shrink-0 ${
                       activeTab === 'all' ? 'bg-purple-500/20 text-purple-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
                     }`}
                   >
@@ -217,7 +217,7 @@ export default function ContributorsView() {
                   {settings.sectionCount === 3 && (
                     <button
                       onClick={() => { setActiveTab('developers'); setDeptFilter('all'); setSearchQuery(''); }}
-                      className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all whitespace-nowrap shrink-0 ${
                         activeTab === 'developers' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
                       }`}
                     >
@@ -228,7 +228,7 @@ export default function ContributorsView() {
                   {settings.sectionCount === 3 && (
                     <button
                       onClick={() => { setActiveTab('resources'); setDeptFilter('all'); setSearchQuery(''); }}
-                      className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all whitespace-nowrap shrink-0 ${
                         activeTab === 'resources' ? 'bg-orange-500/20 text-orange-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
                       }`}
                     >
@@ -238,7 +238,7 @@ export default function ContributorsView() {
                   )}
                   <button
                     onClick={() => { setActiveTab('designers'); setDeptFilter('all'); setSearchQuery(''); }}
-                    className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all whitespace-nowrap shrink-0 ${
                       activeTab === 'designers' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-transparent text-dark-text2 hover:text-dark-text'
                     }`}
                   >
@@ -250,30 +250,32 @@ export default function ContributorsView() {
             </div>
 
             {/* Search + Dept Filter */}
-            <div className="flex gap-2 items-center w-full sm:w-auto">
+            <div className="flex gap-2 items-center">
               {settings.showSearch && (
-                <div className="relative flex-1 sm:flex-none">
+                <div className="relative flex-1">
                   <i className="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-dark-text3 text-[0.7rem]"></i>
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search..."
-                    className="w-full sm:w-44 pl-8 pr-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis transition-colors"
+                    className="w-full pl-8 pr-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis transition-colors"
                   />
                 </div>
               )}
               {settings.showDeptFilter && (
-                <CustomSelect
-                  value={deptFilter}
-                  onChange={setDeptFilter}
-                  placeholder="All Departments"
-                  options={[
-                    { value: 'all', label: 'All Departments', icon: 'fa-building' },
-                    ...departments.map(([id, label]) => ({ value: id, label, icon: 'fa-building' })),
-                  ]}
-                  searchable
-                />
+                <div className="w-44 shrink-0">
+                  <CustomSelect
+                    value={deptFilter}
+                    onChange={setDeptFilter}
+                    placeholder="All Departments"
+                    options={[
+                      { value: 'all', label: 'All Departments', icon: 'fa-building' },
+                      ...departments.map(([id, label]) => ({ value: id, label, icon: 'fa-building' })),
+                    ]}
+                    searchable
+                  />
+                </div>
               )}
             </div>
           </div>
