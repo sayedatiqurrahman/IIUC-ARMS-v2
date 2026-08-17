@@ -308,13 +308,16 @@ async function commitBlobs(opts: {
   blobs: { path: string; sha: string }[];
   message: string;
   author?: { name: string; email: string };
+  onStep?: (label: string) => void;
 }): Promise<string> {
-  const { token, owner, repo, branch, baseSha, blobs, message, author } = opts;
+  const { token, owner, repo, branch, baseSha, blobs, message, author, onStep } = opts;
 
+  onStep?.('Reading branch…');
   const commitRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/commits/${baseSha}`, token, {});
   if (!commitRes.ok) throw new ClientUploadError(`Cannot read parent commit: ${commitRes.status}`, commitRes.status);
   const baseTreeSha = (await commitRes.json()).tree.sha;
 
+  onStep?.('Creating tree…');
   const treeRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/trees`, token, {
     method: 'POST',
     body: JSON.stringify({
@@ -325,6 +328,7 @@ async function commitBlobs(opts: {
   if (!treeRes.ok) throw new ClientUploadError(`Cannot create tree: ${treeRes.status}`, treeRes.status);
   const newTreeSha = (await treeRes.json()).sha;
 
+  onStep?.('Creating commit…');
   const newCommitRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/commits`, token, {
     method: 'POST',
     body: JSON.stringify({
@@ -337,6 +341,7 @@ async function commitBlobs(opts: {
   if (!newCommitRes.ok) throw new ClientUploadError(`Cannot create commit: ${newCommitRes.status}`, newCommitRes.status);
   const newCommitSha = (await newCommitRes.json()).sha;
 
+  onStep?.('Updating branch…');
   for (let attempt = 0; attempt < 2; attempt++) {
     const refRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/refs/heads/${branch}`, token, {
       method: 'PATCH',
@@ -345,6 +350,7 @@ async function commitBlobs(opts: {
     if (refRes.ok) return newCommitSha;
 
     if (attempt === 0) {
+      onStep?.('Retrying (concurrent commit)…');
       const freshRef = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/refs/heads/${branch}`, token, {});
       if (freshRef.ok) {
         const freshSha = (await freshRef.json()).object.sha;
@@ -388,21 +394,33 @@ async function directCommitToBranch(opts: {
   blobs: { path: string; sha: string }[];
   message: string;
   author?: { name: string; email: string };
+  onStep?: (label: string) => void;
 }): Promise<ClientUploadResult> {
-  const { token, owner, repo, blobs, message, author } = opts;
+  const { token, owner, repo, blobs, message, author, onStep } = opts;
 
+  onStep?.('Verifying repo access…');
   const repoRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}`, token, {});
-  if (repoRes.status === 401 || repoRes.status === 403) {
+  if (repoRes.status === 401) {
     throw new ClientUploadError('GitHub token expired or invalid. Please reconnect your GitHub account.', 401, 'TOKEN_EXPIRED');
+  }
+  if (repoRes.status === 403) {
+    const body = await repoRes.json().catch(() => ({}));
+    const msg = body?.message || '';
+    if (/saml sso/i.test(msg)) {
+      throw new ClientUploadError('Your GitHub account needs SSO authorization for this organization. Go to github.com → Settings → Authorized OAuth Apps → authorize this app, then try again.', 403, 'TOKEN_EXPIRED');
+    }
+    throw new ClientUploadError(`GitHub token lacks permission (403). Make sure your token has "repo" scope. Error: ${msg || 'forbidden'}`, 403, 'TOKEN_EXPIRED');
   }
   if (!repoRes.ok) throw new ClientUploadError(`Cannot access repo: ${repoRes.status}`, repoRes.status);
   const defaultBranch = (await repoRes.json()).default_branch;
 
+  onStep?.('Reading branch…');
   const refRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/refs/heads/${defaultBranch}`, token, {});
   if (!refRes.ok) throw new ClientUploadError(`Cannot read branch: ${refRes.status}`, refRes.status);
   const baseSha = (await refRes.json()).object.sha;
 
-  await commitBlobs({ token, owner, repo, branch: defaultBranch, baseSha, blobs, message, author });
+  onStep?.('Creating tree…');
+  await commitBlobs({ token, owner, repo, branch: defaultBranch, baseSha, blobs, message, author, onStep });
 
   return {
     success: true,
@@ -491,6 +509,7 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
       // Text-based files (READMEs) and small binary files: commit as base64 blob.
       // Large binary files were already committed as LFS pointer blobs above.
       if (content) {
+        onProgress?.(Math.min(78, 5 + Math.round((doneBytes / totalBytes) * 70) + Math.round((fileBytes / totalBytes) * 15)), `Uploading ${label}…`);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
         let blobRes: Response;
@@ -505,8 +524,11 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
         }
         if (!blobRes.ok) {
           const msg = await extractError(blobRes);
-          if (blobRes.status === 401 || blobRes.status === 403) {
+          if (blobRes.status === 401) {
             throw new ClientUploadError('GitHub token expired or invalid. Please reconnect your GitHub account.', 401, 'TOKEN_EXPIRED');
+          }
+          if (blobRes.status === 403) {
+            throw new ClientUploadError(`GitHub token lacks permission (403). Make sure your token has "repo" scope.`, 403, 'TOKEN_EXPIRED');
           }
           if (blobRes.status === 429) {
             throw new ClientUploadError('GitHub is busy — rate-limited. Wait a minute and try again.', 429);
@@ -521,11 +543,24 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
       }
 
       doneBytes += f.file ? f.file.size : (f.text?.length || 0);
-      onProgress?.(Math.min(85, 5 + Math.round((doneBytes / totalBytes) * 80)), `Uploaded ${label}…`);
+      onProgress?.(Math.min(82, 5 + Math.round((doneBytes / totalBytes) * 77)), `Uploaded ${label}`);
     }
 
-    onProgress?.(88, 'Committing to GitHub…');
-    const result = await directCommitToBranch({ token, owner, repo, blobs, message, author });
+    onProgress?.(83, 'Reading branch…');
+    const result = await directCommitToBranch({ token, owner, repo, blobs, message, author,
+      onStep: (label) => {
+        // Map Git steps to 83..97% range
+        const stepMap: Record<string, number> = {
+          'Verifying repo access…': 83,
+          'Reading branch…': 85,
+          'Creating tree…': 88,
+          'Creating commit…': 91,
+          'Updating branch…': 94,
+          'Retrying (concurrent commit)…': 92,
+        };
+        onProgress?.(stepMap[label] ?? 88, label);
+      },
+    });
 
     onProgress?.(98, 'Done');
     return result;
@@ -585,8 +620,11 @@ async function runBase64Commit(opts: {
       });
       if (!blobRes.ok) {
         const msg = await extractError(blobRes);
-        if (blobRes.status === 401 || blobRes.status === 403) {
+        if (blobRes.status === 401) {
           throw new ClientUploadError('GitHub token expired or invalid. Please reconnect your GitHub account.', 401, 'TOKEN_EXPIRED');
+        }
+        if (blobRes.status === 403) {
+          throw new ClientUploadError(`GitHub token lacks permission (403). Make sure your token has "repo" scope.`, 403, 'TOKEN_EXPIRED');
         }
         throw new ClientUploadError(msg || `Failed to upload ${label}`, blobRes.status);
       }
@@ -594,8 +632,20 @@ async function runBase64Commit(opts: {
       onProgress?.(Math.min(85, 10 + Math.round((blobs.length / files.length) * 75)), `Uploaded ${label}…`);
     }
 
-    onProgress?.(90, 'Committing to GitHub…');
-    const result = await directCommitToBranch({ token, owner, repo, blobs, message, author });
+    onProgress?.(83, 'Reading branch…');
+    const result = await directCommitToBranch({ token, owner, repo, blobs, message, author,
+      onStep: (label) => {
+        const stepMap: Record<string, number> = {
+          'Verifying repo access…': 83,
+          'Reading branch…': 85,
+          'Creating tree…': 88,
+          'Creating commit…': 91,
+          'Updating branch…': 94,
+          'Retrying (concurrent commit)…': 92,
+        };
+        onProgress?.(stepMap[label] ?? 88, label);
+      },
+    });
     onProgress?.(99, 'Done');
     return result;
   } catch (e) {
