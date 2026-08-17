@@ -694,24 +694,35 @@ export default function BrowsePage() {
 
       {/* ── Star Repos Section ─────────────────────────────────── */}
       {!loading && !error && view === 'semesters' && (
-        <div className="mt-8 mb-4 text-center">
-          <h4 className="text-[0.88rem] font-semibold text-dark-text2 mb-3"><i className="fab fa-github mr-1.5"></i>Star Our Repos</h4>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">
+        <div className="mt-8 mb-6 border border-dark-border rounded-2xl p-5 bg-gradient-to-br from-dark-bg2 to-dark-bg3 text-center">
+          <i className="fab fa-github text-2xl text-dark-text2 mb-2 block"></i>
+          <h4 className="text-[0.95rem] font-bold text-dark-text mb-1">Star Our Repos</h4>
+          <p className="text-[0.75rem] text-dark-text2 mb-4 max-w-sm mx-auto">If this project helps you, give us a star — it motivates us to keep building for the IIUC community.</p>
+          <div className="flex flex-col sm:flex-row items-stretch justify-center gap-3 max-w-lg mx-auto">
             <a href={config.sourceRepoUrl()} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-dark-bg3 border border-dark-border text-[0.75rem] sm:text-[0.8rem] font-semibold text-dark-text hover:border-qsis/50 hover:bg-qsis/10 transition-all no-underline">
-              <i className="fas fa-star text-yellow-400 text-[0.7rem]"></i>
-              IIUC-ARMS v2
+              className="flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl bg-dark-bg border border-dark-border hover:border-qsis/50 hover:bg-qsis/5 transition-all no-underline">
+              <div className="flex items-center gap-1.5">
+                <i className="fas fa-star text-yellow-400 text-[0.7rem]"></i>
+                <span className="text-[0.82rem] font-semibold text-dark-text">IIUC-ARMS v2</span>
+              </div>
+              <span className="text-[0.65rem] text-dark-text3 leading-tight">Web app source code<br/>Browse, Upload, Studio, Routine</span>
             </a>
             <a href={config.dataRepoUrl()} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-dark-bg3 border border-dark-border text-[0.75rem] sm:text-[0.8rem] font-semibold text-dark-text hover:border-orange-400/50 hover:bg-orange-500/10 transition-all no-underline">
-              <i className="fas fa-star text-yellow-400 text-[0.7rem]"></i>
-              Academic Files
+              className="flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl bg-dark-bg border border-dark-border hover:border-orange-400/50 hover:bg-orange-500/5 transition-all no-underline">
+              <div className="flex items-center gap-1.5">
+                <i className="fas fa-star text-yellow-400 text-[0.7rem]"></i>
+                <span className="text-[0.82rem] font-semibold text-dark-text">Academic Files</span>
+              </div>
+              <span className="text-[0.65rem] text-dark-text3 leading-tight">All course materials live here<br/>PDFs, notes, routines, schedules</span>
             </a>
             {config.githubStarRepos.slice(2).map(repo => (
               <a key={repo.repo} href={`https://github.com/${repo.owner}/${repo.repo}`} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-dark-bg3 border border-dark-border text-[0.75rem] sm:text-[0.8rem] font-semibold text-dark-text hover:border-purple-400/50 hover:bg-purple-500/10 transition-all no-underline">
-                <i className="fas fa-star text-yellow-400 text-[0.7rem]"></i>
-                {repo.label}
+                className="flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl bg-dark-bg border border-dark-border hover:border-purple-400/50 hover:bg-purple-500/5 transition-all no-underline">
+                <div className="flex items-center gap-1.5">
+                  <i className="fas fa-star text-yellow-400 text-[0.7rem]"></i>
+                  <span className="text-[0.82rem] font-semibold text-dark-text">{repo.label}</span>
+                </div>
+                <span className="text-[0.65rem] text-dark-text3 leading-tight">Studio themes &amp; community<br/>designs for IIUC-ARMS</span>
               </a>
             ))}
           </div>

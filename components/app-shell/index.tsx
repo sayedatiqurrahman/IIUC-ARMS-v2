@@ -475,9 +475,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">App</div>
                     <button onClick={async () => { setMoreOpen(false); if (await confirm({ message: 'Reset App? This will clear all cached data and reload.', danger: true, title: 'Force Reset' })) forceResetApp(); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] text-red-400 hover:bg-red-500/10 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-trash-alt w-4 text-center"></i><span>Reset App</span></button>
                     <button onClick={() => { setMoreOpen(false); handleCheckUpdate(); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-cloud-arrow-down w-4 text-center"></i><span>Check Update</span></button>
-                    <a href={config.dataRepoUrl()} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-star w-4 text-center text-yellow-500"></i><span>Star Repo</span></a>
-                    <a href={config.dataRepoUrl('/fork')} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-code-fork w-4 text-center text-qsis"></i><span>Fork to Contribute</span></a>
-                    <a href={config.sourceRepoUrl()} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fab fa-github w-4 text-center"></i><span>Source Code</span></a>
                     <div className="my-1 h-px bg-dark-border" />
                     <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">Go To</div>
                     <Link href="/" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-home w-4 text-center"></i><span>Dashboard</span></Link>
@@ -488,7 +485,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <Link href="/contributors" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-users w-4 text-center"></i><span>Contributors</span></Link>
                     <Link href="/faculty" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-chalkboard-teacher w-4 text-center"></i><span>Faculty</span></Link>
                     <Link href="/studio" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-tools w-4 text-center"></i><span>Studio</span></Link>
-                    <a href={config.dataRepoUrl()} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fab fa-github w-4 text-center"></i><span>GitHub Repo</span></a>
                     <div className="my-1 h-px bg-dark-border" />
                     <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">Organizations</div>
                     <a href="https://www.iiuc.ac.bd/" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><Image src="/iiuc-logo.png" alt="" width={20} height={20} className="w-5 h-5 rounded object-contain bg-white" /><span className="text-[0.78rem]">IIUC</span></a>
@@ -501,6 +497,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <a href="https://t.me/iiuc_arms" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><i className="fab fa-telegram w-4 text-center text-blue-400"></i><span className="text-[0.78rem]">Telegram Channel</span></a>
                     <a href="https://t.me/iiuc_arms_chat" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><i className="fab fa-telegram w-4 text-center text-blue-400"></i><span className="text-[0.78rem]">Telegram Group</span></a>
                     <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><i className="fas fa-robot w-4 text-center text-blue-400"></i><span className="text-[0.78rem]">Telegram Bot</span></a>
+                    <div className="my-1 h-px bg-dark-border" />
+                    <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold"><i className="fab fa-github mr-1"></i>GitHub</div>
+                    <a href={config.sourceRepoUrl()} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-star w-4 text-center text-yellow-500"></i><span>Star IIUC-ARMS v2</span></a>
+                    <a href={config.dataRepoUrl()} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-star w-4 text-center text-yellow-500"></i><span>Star Academic Files</span></a>
+                    <a href={`https://github.com/${config.githubStarRepos[2]?.owner}/${config.githubStarRepos[2]?.repo}`} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-star w-4 text-center text-yellow-500"></i><span>Star Creative Hub</span></a>
                   </div>
                 )}
               </div>
@@ -808,7 +809,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link href="/contributors" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2"></i>Contributors</Link>
                 <Link href="/faculty" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-chalkboard-teacher mr-2"></i>Faculty</Link>
                <Link href="/studio" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-tools mr-2"></i>Studio</Link>
-                <a href={config.dataRepoUrl()} target="_blank" className="text-[0.8rem] text-dark-text2 hover:text-qsis transition-colors"><i className="fab fa-github mr-2"></i>GitHub Repo</a>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-[0.85rem] font-semibold text-dark-text mb-3"><i className="fab fa-github mr-1.5"></i>GitHub</h4>
+              <div className="flex flex-col gap-2.5">
+                <a href={config.sourceRepoUrl()} target="_blank" rel="noopener noreferrer" className="text-[0.8rem] text-dark-text2 hover:text-qsis transition-colors"><i className="fas fa-star mr-2 text-yellow-500"></i>Star IIUC-ARMS v2</a>
+                <a href={config.dataRepoUrl()} target="_blank" rel="noopener noreferrer" className="text-[0.8rem] text-dark-text2 hover:text-qsis transition-colors"><i className="fas fa-star mr-2 text-yellow-500"></i>Star Academic Files</a>
+                <a href={`https://github.com/${config.githubStarRepos[2]?.owner}/${config.githubStarRepos[2]?.repo}`} target="_blank" rel="noopener noreferrer" className="text-[0.8rem] text-dark-text2 hover:text-qsis transition-colors"><i className="fas fa-star mr-2 text-yellow-500"></i>Star Creative Hub</a>
               </div>
             </div>
             <div>
