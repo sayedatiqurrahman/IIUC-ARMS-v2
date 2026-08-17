@@ -35,8 +35,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [onboardingDone, setOnboardingDone] = useState(false);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [exploreOpen, setExploreOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
+  const exploreRef = useRef<HTMLDivElement>(null);
   const { confirm, confirmDialog } = useConfirm();
   const confirmRef = useRef(confirm);
   confirmRef.current = confirm;
@@ -313,6 +315,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
         setMoreOpen(false);
       }
+      if (exploreRef.current && !exploreRef.current.contains(e.target as Node)) {
+        setExploreOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -336,11 +341,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isActive = (path: string) => pathname === path;
   const navItems = [
     { href: '/', match: isBrowse, icon: 'fa-book-open', label: 'Browse' },
-    { href: '/history', match: isActive('/history'), icon: 'fa-history', label: 'History' },
     { href: '/routine', match: isActive('/routine'), icon: 'fa-calendar-alt', label: 'Routine' },
-    { href: '/contributors', match: isActive('/contributors'), icon: 'fa-users', label: 'Contributors' },
-    { href: '/faculty', match: isActive('/faculty'), icon: 'fa-chalkboard-teacher', label: 'Faculty' },
-    { href: '/studio', match: isActive('/studio'), icon: 'fa-tools', label: 'Studio' },
+    { href: '/notices', match: isActive('/notices'), icon: 'fa-bullhorn', label: 'Notices' },
   ];
 
   return (
@@ -399,6 +401,34 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <i className={`fas ${item.icon}`}></i> {item.label}
               </Link>
             ))}
+            {/* Explore dropdown */}
+            <div className="relative" ref={exploreRef}>
+              <button
+                onClick={() => setExploreOpen(!exploreOpen)}
+                className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all ${isActive('/faculty') || isActive('/contributors') || isActive('/studio') || isActive('/history') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}
+                aria-haspopup="true"
+                aria-expanded={exploreOpen}
+              >
+                <i className="fas fa-compass"></i> <span>Explore</span>
+                <i className={`fas fa-chevron-down text-[0.6rem] transition-transform ${exploreOpen ? 'rotate-180' : ''}`}></i>
+              </button>
+              {exploreOpen && (
+                <div className="absolute left-0 top-full mt-1 w-52 bg-dark-bg2 border border-dark-border rounded-xl shadow-2xl p-1.5 z-[110]">
+                  <Link href="/faculty" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
+                    <i className="fas fa-chalkboard-teacher w-4 text-center text-green-400"></i><span>Faculty</span>
+                  </Link>
+                  <Link href="/contributors" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
+                    <i className="fas fa-users w-4 text-center text-purple-400"></i><span>Contributors</span>
+                  </Link>
+                  <Link href="/studio" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
+                    <i className="fas fa-tools w-4 text-center text-cyan-400"></i><span>Studio</span>
+                  </Link>
+                  <Link href="/history" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
+                    <i className="fas fa-history w-4 text-center text-orange-400"></i><span>History</span>
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 wco-no-drag tb-actions">
             <button className="hidden md:inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border border-qsis/30 bg-qsis/10 text-qsis cursor-pointer hover:bg-qsis/20 transition-all" onClick={handleOpenUpload}>
