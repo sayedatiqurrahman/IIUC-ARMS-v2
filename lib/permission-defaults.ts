@@ -11,6 +11,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   manageBatches: ['admin', 'manager', 'teacher', 'cr', 'acr'],
   manageUsers: ['admin', 'manager'],
   manageSettings: ['admin'],
+  publishNotice: ['admin', 'manager', 'teacher'],
   moveFile: ['admin'],
   copyFile: ['admin'],
   renameFile: ['admin'],

@@ -456,6 +456,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <button onClick={() => { setMoreOpen(false); handleOpenUpload(); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors text-left bg-transparent border-none cursor-pointer"><i className="fas fa-upload w-4 text-center"></i><span>Upload Files</span></button>
                     <Link href="/history" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-history w-4 text-center"></i><span>History</span></Link>
                     <Link href="/routine" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-calendar-alt w-4 text-center"></i><span>Routine</span></Link>
+                    <Link href="/notices" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-bullhorn w-4 text-center text-amber-400"></i><span>Notice Board</span></Link>
                     <Link href="/contributors" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-users w-4 text-center"></i><span>Contributors</span></Link>
                     <Link href="/faculty" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-chalkboard-teacher w-4 text-center"></i><span>Faculty</span></Link>
                     <Link href="/studio" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-tools w-4 text-center"></i><span>Studio</span></Link>
@@ -634,6 +635,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     ['upload', '', 'fas fa-upload', 'bg-green-500/15', 'text-green-400', 'Upload', false, 'upload'],
                     ['history', '/history', 'fas fa-clock-rotate-left', 'bg-yellow-500/15', 'text-yellow-400', 'History', true, 'link'],
                     ['routine', '/routine', 'fas fa-calendar-days', 'bg-purple-500/15', 'text-purple-400', 'Routine', true, 'link'],
+                    ['notices', '/notices', 'fas fa-bullhorn', 'bg-amber-500/15', 'text-amber-400', 'Notices', true, 'link'],
                     ['studio', '/studio', 'fas fa-tools', 'bg-orange-500/15', 'text-orange-400', 'Studio', true, 'link'],
                     ['team', '/contributors', 'fas fa-users', 'bg-pink-500/15', 'text-pink-400', 'Team', true, 'link'],
                     ['faculty', '/faculty', 'fas fa-chalkboard-user', 'bg-teal-500/15', 'text-teal-400', 'Faculty', true, 'link'],
@@ -774,6 +776,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <button className="text-[0.8rem] text-dark-text2 hover:text-qsis text-left bg-transparent border-none cursor-pointer transition-colors" onClick={handleOpenUpload}><i className="fas fa-upload mr-2"></i>Upload Files</button>
                 <Link href="/history" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-history mr-2"></i>History</Link>
                 <Link href="/routine" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-calendar-alt mr-2"></i>Routine</Link>
+                <Link href="/notices" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-bullhorn mr-2 text-amber-400"></i>Notice Board</Link>
                 <Link href="/contributors" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2"></i>Contributors</Link>
                 <Link href="/faculty" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-chalkboard-teacher mr-2"></i>Faculty</Link>
                <Link href="/studio" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-tools mr-2"></i>Studio</Link>

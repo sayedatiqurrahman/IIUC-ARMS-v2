@@ -62,6 +62,15 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    key: 'notices',
+    label: 'Notice Board',
+    icon: 'fa-bullhorn',
+    color: 'text-amber-400',
+    actions: [
+      { key: 'publishNotice', label: 'Publish Notices', desc: 'Post notices, calendars, bus schedules', icon: 'fa-bullhorn', color: 'text-amber-400' },
+    ],
+  },
+  {
     key: 'admin',
     label: 'Administration',
     icon: 'fa-cog',

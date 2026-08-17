@@ -9,6 +9,7 @@ import { useAppStore } from '@/lib/store';
 import { getMimeFromExt, extractYear, showToast } from '@/lib/utils';
 import { CreateCourseResult } from '@/components/upload';
 import PageHeader from '@/components/browse/PageHeader';
+import LatestNotices from '@/components/notices/LatestNotices';
 import BrowseHeader from '@/components/browse/BrowseHeader';
 import { refreshTreeUntilVisible } from '@/lib/tree-refresh';
 import dynamic from 'next/dynamic';
@@ -536,6 +537,7 @@ export default function BrowsePage() {
         userName={userName} userRole={userRole} isSearching={isSearching}
         departments={departments} recentReads={recentReads} openRecentFile={openRecentFile}
       />
+      {view === 'departments' && <LatestNotices />}
       <BrowseHeader
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchSemester={searchSemester} setSearchSemester={setSearchSemester}
