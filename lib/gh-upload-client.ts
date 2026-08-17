@@ -171,15 +171,11 @@ async function fileToBase64(file: File, onSlice?: (percent: number) => void): Pr
   for (let offset = 0; offset < file.size; offset += SLICE_BYTES) {
     const slice = file.slice(offset, Math.min(file.size, offset + SLICE_BYTES));
     const b64 = await sliceToBase64(slice);
-    // Exact accounting: decode the slice and require the real byte count to
-    // match the blob's — a truncated file must NEVER reach GitHub.
-    let decodedLength = -1;
-    try { decodedLength = atob(b64).length; } catch {}
-    if (decodedLength !== slice.size) {
-      throw new Error(`Failed to read entire file (${readBytes + decodedLength}/${file.size} bytes). Please re-select the file.`);
-    }
+    // bytes.length === slice.size was already verified inside sliceToBase64,
+    // so btoa produced the correct base64 — no need to atob-decode it back
+    // just to re-check the length (that doubled encoding time for large files).
     result += b64;
-    readBytes += decodedLength;
+    readBytes += slice.size;
     onSlice?.(Math.min(100, Math.round((offset + slice.size) / total * 100)));
   }
   // Integrity guard: if the browser read back fewer bytes than the blob claims
