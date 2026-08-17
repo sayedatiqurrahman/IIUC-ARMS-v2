@@ -678,7 +678,7 @@ export default function UploadForm({
           {(result.tokenExpired || result?.needsPAT) && (
             <div className="mt-3 space-y-2.5">
               <a
-                href="https://github.com/settings/tokens/new?description=IIUC-ARMS&scopes=repo"
+                href="https://github.com/settings/tokens"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer text-center hover:opacity-90 transition-opacity"
@@ -686,7 +686,7 @@ export default function UploadForm({
                 <i className="fas fa-sync-alt mr-2"></i>Regenerate Token
               </a>
               <p className="text-[0.6rem] text-dark-text3 text-center">
-                Opens GitHub → create token named <strong>IIUC-ARMS</strong> with <strong>repo</strong> scope → copy & paste below
+                Opens GitHub tokens → click <strong>IIUC-ARMS</strong> → Regenerate → set <strong>No expiration</strong> → copy & paste below
               </p>
               <p className="text-[0.7rem] text-dark-text2">Paste your new token:</p>
               <div className="flex gap-2">
