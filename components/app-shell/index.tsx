@@ -556,9 +556,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <i className="fas fa-book-open text-[1rem]"></i>
             <span className="text-[0.62rem] font-medium">Browse</span>
           </Link>
-          <Link href="/history" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/history') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
-            <i className="fas fa-history text-[1rem]"></i>
-            <span className="text-[0.62rem] font-medium">History</span>
+          <Link href="/routine" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/routine') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+            <i className="fas fa-calendar-alt text-[1rem]"></i>
+            <span className="text-[0.62rem] font-medium">Routine</span>
           </Link>
           <button className="flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all bg-transparent text-qsis" onClick={handleOpenUpload}>
             <div className="w-9 h-9 -mt-4 rounded-full bg-qsis flex items-center justify-center shadow-lg shadow-qsis/30">
@@ -566,9 +566,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <span className="text-[0.62rem] font-medium">Upload</span>
           </button>
-          <Link href="/routine" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/routine') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
-            <i className="fas fa-calendar-alt text-[1rem]"></i>
-            <span className="text-[0.62rem] font-medium">Routine</span>
+          <Link href="/studio" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/studio') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+            <i className="fas fa-tools text-[1rem]"></i>
+            <span className="text-[0.62rem] font-medium">Studio</span>
           </Link>
           <button className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all bg-transparent ${showMoreSheet ? 'text-qsis' : 'text-dark-text2'}`} onClick={() => setShowMoreSheet(!showMoreSheet)}>
             <i className="fas fa-ellipsis-h text-[1rem]"></i>
