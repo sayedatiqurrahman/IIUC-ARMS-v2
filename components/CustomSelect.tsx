@@ -19,11 +19,14 @@ interface CustomSelectProps {
   className?: string;
   size?: 'sm' | 'md';
   error?: boolean;
+  /** When true and a value is selected, prepends a "-- Select --" option with
+   *  empty value so the user can deselect (go back to placeholder state). */
+  showEmpty?: boolean;
 }
 
 const MOBILE_BREAKPOINT = 640;
 
-export default function CustomSelect({ options, value, onChange, placeholder = 'Select...', searchable = false, className = '', size = 'sm', error = false }: CustomSelectProps) {
+export default function CustomSelect({ options, value, onChange, placeholder = 'Select...', searchable = false, className = '', size = 'sm', error = false, showEmpty = false }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [highlighted, setHighlighted] = useState(-1);
@@ -36,11 +39,17 @@ export default function CustomSelect({ options, value, onChange, placeholder = '
 
   const selected = options.find(o => o.value === value);
 
+  // When showEmpty is set and a value is selected, prepend a "-- Select --"
+  // option so the user can go back to the placeholder (Off Day) state.
+  const effectiveOptions = (showEmpty && value)
+    ? [{ value: '', label: '-- Select --', icon: 'fa-eraser' }, ...options]
+    : options;
+
   const filtered = useMemo(() => {
-    if (!search) return options;
+    if (!search) return effectiveOptions;
     const q = search.toLowerCase();
-    return options.filter(o => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q));
-  }, [options, search]);
+    return effectiveOptions.filter(o => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q));
+  }, [effectiveOptions, search]);
 
   const flatOptions = useMemo(() => {
     return filtered.filter(o => !o.disabled);
@@ -56,7 +65,7 @@ export default function CustomSelect({ options, value, onChange, placeholder = '
     return g;
   }, [filtered]);
 
-  const hasGroups = options.some(o => o.group);
+  const hasGroups = effectiveOptions.some(o => o.group);
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);

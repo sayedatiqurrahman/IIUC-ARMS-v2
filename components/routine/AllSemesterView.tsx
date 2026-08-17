@@ -663,8 +663,9 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
                                                     return next;
                                                   });
                                                 }}
-                                                placeholder="-- Off Day --"
+                                                placeholder="-- Select --"
                                                 options={sem.courses.map(c => ({ value: c.code, label: `${c.code} - ${c.title}${c.teacher ? ` (${c.teacher})` : ''}` }))}
+                                                showEmpty
                                               />
                                             </td>
                                           );
@@ -736,8 +737,9 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
                                                 <CustomSelect
                                                   value={currentSlot?.course || ''}
                                                   onChange={(val) => setSlotInSection(semIdx, secIdx, d, cpIdx, val)}
-                                                  placeholder="-- Off Day --"
+                                                  placeholder="-- Select --"
                                                   options={sem.courses.map(c => ({ value: c.code, label: `${c.code} - ${c.title}${c.teacher ? ` (${c.teacher})` : ''}` }))}
+                                                  showEmpty
                                                   size="sm"
                                                 />
                                               </td>

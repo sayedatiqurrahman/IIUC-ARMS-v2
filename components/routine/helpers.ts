@@ -75,6 +75,24 @@ export function loadMyRoutines(): RoutineItem[] {
 
 export function saveMyRoutines(routines: RoutineItem[]) {
   localStorage.setItem(LS_MY_ROUTINES, JSON.stringify(routines));
+  // Also sync to DB so all users/devices see the same list
+  fetch('/api/my-routines', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ routines }),
+  }).catch(() => {});
+}
+
+export async function fetchMyRoutinesFromDB(): Promise<RoutineItem[]> {
+  try {
+    const res = await fetch('/api/my-routines');
+    const data = await res.json();
+    if (data.success && Array.isArray(data.routines)) {
+      localStorage.setItem(LS_MY_ROUTINES, JSON.stringify(data.routines));
+      return data.routines;
+    }
+  } catch {}
+  return loadMyRoutines();
 }
 
 export function loadPublishedRoutines(): RoutineItem[] {

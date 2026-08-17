@@ -15,6 +15,7 @@ import {
   loadPublishedRoutines,
   savePublishedRoutines,
   fetchPublishedRoutinesFromDB,
+  fetchMyRoutinesFromDB,
   loadAllSemDraft,
   clearAllSemDraft,
 } from '@/components/routine/helpers';
@@ -113,6 +114,10 @@ export default function RoutineView({ dept }: { dept: string }) {
     // Load published routines from DB (with auto-cleanup)
     fetchPublishedRoutinesFromDB().then(r => {
       setPublishedRoutines(r);
+    });
+    // Load my routines from DB so they persist across devices
+    fetchMyRoutinesFromDB().then(r => {
+      setMyRoutines(r);
     });
   }, []);
 

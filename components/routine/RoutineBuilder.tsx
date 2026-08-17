@@ -466,7 +466,7 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
               </button>
             </div>
           )}
-          <p className="routine-builder-hint">Select a course for each day/period. Leave empty for Off Day.</p>
+          <p className="routine-builder-hint">Select a course for each day/period. Leave empty for Off Day. A day is Off Day when no period has a course.</p>
           {courses.length === 0 ? (
             <div className="routine-empty-courses">
               <i className="fas fa-exclamation-triangle"></i>
@@ -506,8 +506,9 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
                                 <CustomSelect
                                   value={currentSlot?.course || ''}
                                   onChange={(val) => setSlotForActive(d, cpIdx, val)}
-                                  placeholder="-- Off Day --"
+                                  placeholder="-- Select --"
                                   options={courses.map(c => ({ value: c.code, label: `${c.code} - ${c.title}` }))}
+                                  showEmpty
                                   size="sm"
                                 />
                               </td>
