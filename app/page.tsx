@@ -118,7 +118,12 @@ export default function BrowsePage() {
         }
         const perms = data.permissions || {};
         const customPerms = (profile as any).customPermissions || {};
+        // Layer 2: resolve custom role permissions from settings
+        const customRoles = data.customRoles || [];
+        const myCustomRole = customRoles.find((r: any) => r.key === (profile as any).role);
+        const rolePerms = myCustomRole?.permissions || [];
         const check = (action: string) => {
+          if (rolePerms.includes(action)) return true;
           if (customPerms[action] === true) return true;
           const perUserKey = `${action}_users`;
           const allowedUsers = perms[perUserKey] || [];
@@ -178,6 +183,20 @@ export default function BrowsePage() {
         showToast(data.message || 'Delete request sent to owner for approval', 'info');
       } else {
         showToast(`${action.charAt(0).toUpperCase() + action.slice(1)} successful!`, 'success');
+        if (action === 'delete') {
+          if (data.isFolder) {
+            // Remove all history entries under the deleted folder
+            const prefix = from + '/';
+            try {
+              let items = JSON.parse(localStorage.getItem('qsis_history') || '[]');
+              items = items.filter((i: any) => i.path !== from && !i.path.startsWith(prefix));
+              localStorage.setItem('qsis_history', JSON.stringify(items));
+              useAppStore.getState().loadRecentReads();
+            } catch {}
+          } else {
+            useAppStore.getState().removeHistory(from);
+          }
+        }
         useAppStore.getState().invalidateTreeCache();
         loadTree(session?.accessToken || '');
       }

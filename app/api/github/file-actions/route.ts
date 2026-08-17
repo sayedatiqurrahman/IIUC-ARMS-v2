@@ -161,19 +161,22 @@ export async function POST(req: NextRequest) {
       // OWNER / ADMIN: direct atomic delete (single tree commit via the bot)
       if (isAdmin) {
         const { deleteRepoEntries } = await import('@/lib/file-delete');
-        const deleted = await deleteRepoEntries([fromFull], token);
-        if (deleted === 0) return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
         try {
-          await prisma.activityLog.create({
-            data: {
-              action: 'file_delete',
-              userId: email,
-              userName: profile?.name || email.split('@')[0],
-              details: JSON.stringify({ path: from, filesDeleted: deleted, isFolder }),
-            },
-          });
-        } catch {}
-        return NextResponse.json({ success: true, deleted, isFolder });
+          const deleted = await deleteRepoEntries([fromFull], token);
+          try {
+            await prisma.activityLog.create({
+              data: {
+                action: 'file_delete',
+                userId: email,
+                userName: profile?.name || email.split('@')[0],
+                details: JSON.stringify({ path: from, filesDeleted: deleted, isFolder }),
+              },
+            });
+          } catch {}
+          return NextResponse.json({ success: true, deleted, isFolder });
+        } catch (e: any) {
+          return NextResponse.json({ error: e?.message || 'Failed to delete from GitHub' }, { status: 500 });
+        }
       }
 
       // NON-ADMIN: send Telegram approval request to all connected admins

@@ -1035,7 +1035,10 @@ async function handleCallbackQuery(cq: any) {
         return;
       }
 
-      const githubDeleted = await deleteCourseFolder(folderPath).catch(() => 0);
+      const githubDeleted = await deleteCourseFolder(folderPath).catch((e) => {
+        console.error('Telegram course delete failed:', e);
+        return 0;
+      });
 
       let course: any = null;
       try {
@@ -1057,6 +1060,23 @@ async function handleCallbackQuery(cq: any) {
           where: { id: activityId },
           data: { action: 'course_delete_approved', details: JSON.stringify(parsedDetails) },
         });
+        // Clean up duplicate pending requests for the same course
+        try {
+          const dupes = await prisma.activityLog.findMany({ where: { action: 'course_delete_request' }, take: 50 });
+          const dupeIds = dupes
+            .filter((d: any) => {
+              if (d.id === activityId) return false;
+              const dd = JSON.parse(d.details || '{}');
+              return dd.status === 'pending_approval' && dd.code === details.code && dd.semester === details.semester && dd.department === details.department;
+            })
+            .map((d: any) => d.id);
+          if (dupeIds.length > 0) {
+            await prisma.activityLog.updateMany({
+              where: { id: { in: dupeIds } },
+              data: { action: 'course_delete_approved', details: JSON.stringify({ ...parsedDetails, duplicateOf: activityId }) },
+            });
+          }
+        } catch {}
       } catch {}
 
       // Notify the requester if connected
@@ -1118,6 +1138,23 @@ async function handleCallbackQuery(cq: any) {
           where: { id: activityId },
           data: { action: 'course_delete_rejected', details: JSON.stringify(parsedDetails) },
         });
+        // Clean up duplicate pending requests for the same course
+        try {
+          const dupes = await prisma.activityLog.findMany({ where: { action: 'course_delete_request' }, take: 50 });
+          const dupeIds = dupes
+            .filter((d: any) => {
+              if (d.id === activityId) return false;
+              const dd = JSON.parse(d.details || '{}');
+              return dd.status === 'pending_approval' && dd.code === details.code && dd.semester === details.semester && dd.department === details.department;
+            })
+            .map((d: any) => d.id);
+          if (dupeIds.length > 0) {
+            await prisma.activityLog.updateMany({
+              where: { id: { in: dupeIds } },
+              data: { action: 'course_delete_rejected', details: JSON.stringify({ ...parsedDetails, duplicateOf: activityId }) },
+            });
+          }
+        } catch {}
       } catch {}
 
       const requesterChatId = await resolveRequesterChat(logEntry.userId);
@@ -1172,7 +1209,9 @@ async function handleCallbackQuery(cq: any) {
           const allFiles = await getAllFilesInFolder(botToken, folderPath);
           githubDeleted = await batchDeleteFiles(botToken, allFiles);
         }
-      } catch {}
+      } catch (e: any) {
+        console.error('Telegram del_confirm course delete failed:', e);
+      }
 
       if (course) {
         try { await prisma.course.delete({ where: { id: course.id } }); } catch {}
@@ -1240,7 +1279,15 @@ async function handleCallbackQuery(cq: any) {
       try {
         const { deleteRepoEntries } = await import('@/lib/file-delete');
         githubDeleted = await deleteRepoEntries([fromFull]);
-      } catch {}
+      } catch (e: any) {
+        console.error('Telegram file delete failed:', e);
+        const parts = filePath.split('/');
+        const link = parts.length >= 2 ? buildBrowseLink({ dept: parts[0], sem: parts[1] }) : '';
+        await editMessageText(chatId, messageId, `❌ <b>Delete Failed</b>\n\n<b>Path:</b> <code>${filePath}</code>\n<b>Error:</b> ${e?.message || 'Unknown error'}\n\nThe file was NOT removed from GitHub. Try from the admin panel.`, {
+          reply_markup: { inline_keyboard: link ? [[{ text: '📂 Visit Directory', url: link }]] : [] },
+        });
+        return;
+      }
 
       // Update activity log
       try {
@@ -1251,6 +1298,23 @@ async function handleCallbackQuery(cq: any) {
           where: { id: activityId },
           data: { details: JSON.stringify(parsedDetails), action: 'file_delete_approved' },
         });
+        // Clean up duplicate pending requests for the same path
+        try {
+          const dupes = await prisma.activityLog.findMany({ where: { action: 'file_delete_request' }, take: 50 });
+          const dupeIds = dupes
+            .filter((d: any) => {
+              if (d.id === activityId) return false;
+              const dd = JSON.parse(d.details || '{}');
+              return dd.status === 'pending_approval' && dd.path === filePath;
+            })
+            .map((d: any) => d.id);
+          if (dupeIds.length > 0) {
+            await prisma.activityLog.updateMany({
+              where: { id: { in: dupeIds } },
+              data: { action: 'file_delete_approved', details: JSON.stringify({ ...parsedDetails, duplicateOf: activityId }) },
+            });
+          }
+        } catch {}
       } catch {}
 
       const parentParts = filePath.split('/');
@@ -1289,6 +1353,23 @@ async function handleCallbackQuery(cq: any) {
             where: { id: activityId },
             data: { details: JSON.stringify(parsedDetails), action: 'file_delete_rejected' },
           });
+          // Clean up duplicate pending requests for the same path
+          try {
+            const dupes = await prisma.activityLog.findMany({ where: { action: 'file_delete_request' }, take: 50 });
+            const dupeIds = dupes
+              .filter((d: any) => {
+                if (d.id === activityId) return false;
+                const dd = JSON.parse(d.details || '{}');
+                return dd.status === 'pending_approval' && dd.path === filePath;
+              })
+              .map((d: any) => d.id);
+            if (dupeIds.length > 0) {
+              await prisma.activityLog.updateMany({
+                where: { id: { in: dupeIds } },
+                data: { action: 'file_delete_rejected', details: JSON.stringify({ ...parsedDetails, duplicateOf: activityId }) },
+              });
+            }
+          } catch {}
         } catch {}
       }
 

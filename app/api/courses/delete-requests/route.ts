@@ -4,16 +4,16 @@ import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { deleteCourseFolder } from '@/lib/course-delete';
 import { editMessageText, sendMessage, buildCourseLink } from '@/lib/telegram';
+import { hasPermission } from '@/lib/permissions';
 
 // Admin panel: list pending course delete requests and approve/reject them.
 // The same requests are also resolved from the Telegram bot buttons.
 
 async function canAct(prisma: any, email: string): Promise<boolean> {
+  if (config.ownerEmails.includes(email.toLowerCase())) return true;
   const profile = await prisma.profile.findUnique({ where: { userId: email } });
   const role = config.getEffectiveRole(email, profile?.role);
-  return config.ownerEmails.includes(email.toLowerCase())
-    || role === 'admin' || role === 'manager' || role === 'teacher'
-    || !!profile?.isCR;
+  return hasPermission('deleteCourse', role, profile?.isCR || false, email);
 }
 
 function parseDetails(d: any): any {
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     let githubDeleted = 0;
     if (action === 'approve') {
       if (details.folderPath) {
-        githubDeleted = await deleteCourseFolder(details.folderPath).catch(() => 0);
+        githubDeleted = await deleteCourseFolder(details.folderPath);
       }
       // Remove the DB row if it exists
       try {
@@ -133,6 +133,37 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
+    // Clean up duplicate pending requests for the same course (user may have
+    // tapped "Delete" multiple times, creating duplicate ActivityLog rows).
+    let duplicatesCleared = 0;
+    try {
+      const dupes = await prisma.activityLog.findMany({
+        where: { action: 'course_delete_request' },
+        take: 50,
+      });
+      const dupeIds = dupes
+        .filter((d: any) => {
+          if (d.id === id) return false;
+          const dd = parseDetails(d);
+          return dd.status === 'pending_approval'
+            && dd.code === details.code
+            && dd.semester === details.semester
+            && dd.department === details.department;
+        })
+        .map((d: any) => d.id);
+      if (dupeIds.length > 0) {
+        const dupeResolved = JSON.stringify({ ...details, status: resolved.status, resolvedBy: email, resolvedAt: resolved.resolvedAt, githubDeleted, duplicateOf: id });
+        await prisma.activityLog.updateMany({
+          where: { id: { in: dupeIds } },
+          data: {
+            action: action === 'approve' ? 'course_delete_approved' : 'course_delete_rejected',
+            details: dupeResolved,
+          },
+        });
+        duplicatesCleared = dupeIds.length;
+      }
+    } catch {}
+
     // Notify the requester via Telegram if connected
     try {
       const requesterProfile = await prisma.profile.findUnique({ where: { userId: log.userId } });
@@ -144,7 +175,7 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
-    return NextResponse.json({ success: true, action, githubDeleted });
+    return NextResponse.json({ success: true, action, githubDeleted, duplicatesCleared });
   } catch {
     return NextResponse.json({ error: 'Failed to process delete request' }, { status: 500 });
   }

@@ -73,12 +73,13 @@ export const config = {
     return false;
   },
   maxFilesPerUpload: 10,
-  // GitHub refuses files larger than 100 MB — match that ceiling exactly.
-  maxUploadSizeMB: 100,
-  // Per-file cap. Files upload DIRECTLY from the browser to the GitHub git-data
-  // API (one blob per file), so Vercel's ~4.5MB request-body limit no longer
-  // applies; 100MB is GitHub's hard ceiling.
-  maxSingleFileUploadMB: 100,
+  // GitHub LFS supports up to 500 MB per file; files >10 MB are automatically
+  // uploaded via LFS (raw binary, no base64 overhead). Files ≤10 MB use the
+  // standard git-data blob API (100 MB ceiling).
+  maxUploadSizeMB: 500,
+  // Per-file cap. Files ≤10 MB go directly to the GitHub blob API (100 MB max).
+  // Files >10 MB are routed through Git LFS (up to 500 MB).
+  maxSingleFileUploadMB: 500,
   academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','webp','csv'],
   githubStarRepos: [
     { owner: 'sayedatiqurrahman', repo: 'IIUC-ACADEMIC-FILES-MANAFGER', label: 'IIUC Academic Files' },

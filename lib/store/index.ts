@@ -564,6 +564,27 @@ export const useAppStore = create<AppState>((set, get) => {
       } catch {}
     },
 
+    removeHistory: (path) => {
+      try {
+        let items = JSON.parse(localStorage.getItem('qsis_history') || '[]');
+        items = items.filter((i: any) => i.path !== path);
+        localStorage.setItem('qsis_history', JSON.stringify(items));
+        get().loadRecentReads();
+      } catch {}
+    },
+
+    pruneHistory: (validPaths) => {
+      try {
+        let items = JSON.parse(localStorage.getItem('qsis_history') || '[]');
+        const before = items.length;
+        items = items.filter((i: any) => validPaths.has(i.path));
+        if (items.length !== before) {
+          localStorage.setItem('qsis_history', JSON.stringify(items));
+          get().loadRecentReads();
+        }
+      } catch {}
+    },
+
     setImgZoom: (z) => set({ imgZoom: z }),
     setImgRotation: (r) => set({ imgRotation: r }),
     resetImageViewer: () => set({ imgZoom: 100, imgRotation: 0 }),

@@ -4,16 +4,16 @@ import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { deleteRepoEntries } from '@/lib/file-delete';
 import { editMessageText, sendMessage, buildBrowseLink } from '@/lib/telegram';
+import { hasPermission } from '@/lib/permissions';
 
 // Admin panel: list pending file delete requests and approve/reject them.
 // The same requests are also resolved from the Telegram bot buttons.
 
 async function canAct(prisma: any, email: string): Promise<boolean> {
+  if (config.ownerEmails.includes(email.toLowerCase())) return true;
   const profile = await prisma.profile.findUnique({ where: { userId: email } });
   const role = config.getEffectiveRole(email, profile?.role);
-  return config.ownerEmails.includes(email.toLowerCase())
-    || role === 'admin' || role === 'manager' || role === 'teacher'
-    || !!profile?.isCR;
+  return hasPermission('deleteFile', role, profile?.isCR || false, email);
 }
 
 function parseDetails(d: any): any {
@@ -83,7 +83,8 @@ export async function POST(req: NextRequest) {
     let githubDeleted = 0;
     if (action === 'approve') {
       if (details.path) {
-        githubDeleted = await deleteRepoEntries([details.path]).catch(() => 0);
+        const fullPath = `${config.uploadPath}/${details.path}`;
+        githubDeleted = await deleteRepoEntries([fullPath]);
       }
     }
 
@@ -132,6 +133,30 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
+    // Clean up duplicate pending requests for the same path (user may have
+    // tapped "Delete" multiple times, creating duplicate ActivityLog rows).
+    let duplicatesCleared = 0;
+    try {
+      const dupes = await prisma.activityLog.findMany({
+        where: { action: 'file_delete_request' },
+        take: 50,
+      });
+      const dupeIds = dupes
+        .filter((d: any) => d.id !== id && parseDetails(d).path === details.path && parseDetails(d).status === 'pending_approval')
+        .map((d: any) => d.id);
+      if (dupeIds.length > 0) {
+        const dupeResolved = JSON.stringify({ ...details, status: resolved.status, resolvedBy: email, resolvedAt: resolved.resolvedAt, githubDeleted, duplicateOf: id });
+        await prisma.activityLog.updateMany({
+          where: { id: { in: dupeIds } },
+          data: {
+            action: action === 'approve' ? 'file_delete_approved' : 'file_delete_rejected',
+            details: dupeResolved,
+          },
+        });
+        duplicatesCleared = dupeIds.length;
+      }
+    } catch {}
+
     // Notify the requester via Telegram if connected
     try {
       const requesterProfile = await prisma.profile.findUnique({ where: { userId: log.userId } });
@@ -143,7 +168,7 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
-    return NextResponse.json({ success: true, action, githubDeleted });
+    return NextResponse.json({ success: true, action, githubDeleted, duplicatesCleared });
   } catch {
     return NextResponse.json({ error: 'Failed to process file delete request' }, { status: 500 });
   }

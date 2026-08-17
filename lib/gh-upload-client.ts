@@ -11,9 +11,15 @@
 // memory flat and to drive progress.
 
 const GITHUB_API = 'https://api.github.com';
-// GitHub refuses blobs/files larger than 100 MB. Keep the browser honest about
-// that BEFORE we spend minutes base64-encoding and uploading a doomed file.
+// GitHub refuses blobs/files larger than 100 MB via the git-data API.
+// Files above this size are uploaded via Git LFS (up to 500 MB).
 const GITHUB_MAX_BYTES = 100 * 1024 * 1024;
+// Files above this threshold are uploaded via Git LFS (raw binary, no base64
+// overhead, no 100 MB blob-API ceiling). LFS uploads raw bytes to GitHub's
+// object storage, then commits a tiny pointer file to git.
+const LFS_THRESHOLD_BYTES = 10 * 1024 * 1024;
+// LFS hard ceiling: GitHub LFS allows up to 500 MB per object.
+const LFS_MAX_BYTES = 500 * 1024 * 1024;
 // Files are read and base64-encoded in 0.6MB slices to keep memory flat and to
 // drive live progress. The slice size is a multiple of 3 BYTES (base64 encodes
 // 3 bytes as 4 chars), so every intermediate slice encodes to base64 WITHOUT
@@ -132,6 +138,111 @@ export function textToBase64(text: string): string {
   }
   return btoa(bin);
 }
+
+// ─── Git LFS helpers ─────────────────────────────────────────────────────────
+// For files > 10 MB, upload raw binary directly to GitHub's LFS storage
+// (no base64 overhead, no 100 MB blob-API ceiling, up to 500 MB per file).
+
+async function computeFileSHA256(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function uploadViaLFS(opts: {
+  token: string;
+  owner: string;
+  repo: string;
+  file: File;
+  oid: string;
+  size: number;
+}): Promise<void> {
+  const { token, owner, repo, file, oid, size } = opts;
+
+  const batchRes = await fetch(`${GITHUB_API}/repos/${owner}/${repo}.git/info/lfs/objects/batch`, {
+    method: 'POST',
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github.git-lfs+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      operation: 'upload',
+      transfers: ['basic'],
+      ref: { name: 'refs/heads/main' },
+      objects: [{ oid, size }],
+    }),
+  });
+
+  if (batchRes.status === 404) {
+    throw new Error('Git LFS is not enabled for this repository. Enable it at https://github.com/' + owner + '/' + repo + '/settings → Large File Storage.');
+  }
+  if (batchRes.status === 422) {
+    throw new Error(`File is ${Math.round(size / 1024 / 1024)} MB — GitHub LFS allows up to 500 MB per file.`);
+  }
+  if (!batchRes.ok) {
+    const msg = await extractError(batchRes);
+    throw new Error(`LFS batch request failed: ${msg}`);
+  }
+
+  const batchData = await batchRes.json();
+  const obj = batchData.objects?.[0];
+  if (!obj) throw new Error('LFS batch response missing object info');
+
+  if (obj.error) throw new Error(`LFS error: ${obj.error.message || obj.error.code}`);
+
+  // object already exists — nothing to upload
+  if (obj.status?.verified) return;
+
+  const action = obj.actions?.upload;
+  if (!action?.href) throw new Error('LFS server did not provide an upload URL');
+
+  // Upload raw binary to the pre-signed URL
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 min
+  try {
+    const uploadRes = await fetch(action.href, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        ...(action.header ? Object.fromEntries(Object.entries(action.header).map(([k, v]) => [k, String(v)])) : {}),
+      },
+      body: file,
+      signal: controller.signal,
+    });
+    if (!uploadRes.ok) {
+      throw new Error(`LFS upload failed with status ${uploadRes.status}`);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  // Verify upload
+  if (action.verify) {
+    const verifyRes = await fetch(action.verify, {
+      method: 'POST',
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github.git-lfs+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ oid, size }),
+    });
+    if (!verifyRes.ok) {
+      throw new Error(`LFS verification failed — the upload may be incomplete. Please try again.`);
+    }
+  }
+}
+
+function createLFSPointerFile(oid: string, size: number): string {
+  // Standard Git LFS pointer format — git-lfs recognizes this exact layout.
+  return `version https://git-lfs.github.com/spec/v1
+oid sha256:${oid}
+size ${size}
+`;
+}
+
+// ─── end LFS helpers ────────────────────────────────────────────────────────
 
 // Reads a File into base64 incrementally (0.6MB slices), calling onSlice after
 // each slice so the UI can show live progress without holding the whole
@@ -338,47 +449,76 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
       const label = f.path.split('/').pop() || f.path;
       onProgress?.(5, `Preparing ${label}…`);
       const fileBytes = f.file ? f.file.size : (f.text?.length || 0);
-      assertWithinGithubLimit(label, fileBytes);
-      if (f.file) await assertPdfIntact(f.file);
-
       let content = '';
+
       if (f.file) {
-        content = await fileToBase64(f.file, pct => {
-          onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(((f.file!.size / totalBytes) * 70 * pct) / 100), `Preparing ${label}…`);
-        });
-      } else if (f.text != null) {
-        content = textToBase64(f.text);
+        if (fileBytes > GITHUB_MAX_BYTES && fileBytes <= LFS_MAX_BYTES) {
+          // ── Large file: upload via Git LFS ────────────────────────────────
+          await assertPdfIntact(f.file);
+          onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70), `Computing SHA-256 for ${label}…`);
+          const oid = await computeFileSHA256(f.file);
+          onProgress?.(10 + Math.round((doneBytes / totalBytes) * 65), `Uploading ${label} via LFS…`);
+          await uploadViaLFS({ token, owner, repo, file: f.file, oid, size: f.file.size });
+          onProgress?.(15 + Math.round((doneBytes / totalBytes) * 60), `Committing LFS pointer for ${label}…`);
+          const pointerContent = createLFSPointerFile(oid, f.file.size);
+          const pointerBlobRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, token, {
+            method: 'POST',
+            body: JSON.stringify({ content: textToBase64(pointerContent), encoding: 'base64' }),
+          });
+          if (!pointerBlobRes.ok) {
+            const msg = await extractError(pointerBlobRes);
+            throw new ClientUploadError(`Failed to commit LFS pointer for ${label}: ${msg}`, pointerBlobRes.status);
+          }
+          blobs.push({ path: f.path, sha: (await pointerBlobRes.json()).sha });
+        } else if (fileBytes > LFS_MAX_BYTES) {
+          throw new ClientUploadError(
+            `${label} is ${(fileBytes / 1024 / 1024).toFixed(1)} MB — maximum upload size is 500 MB.`,
+            413,
+          );
+        } else {
+          // ── Small file: direct blob (base64-encoded) ──────────────────────
+          assertWithinGithubLimit(label, fileBytes);
+          await assertPdfIntact(f.file);
+          content = await fileToBase64(f.file, pct => {
+            onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(((f.file!.size / totalBytes) * 70 * pct) / 100), `Preparing ${label}…`);
+          });
+        }
+      } else {
+        assertWithinGithubLimit(label, fileBytes);
+        if (f.text != null) content = textToBase64(f.text);
       }
 
-      // Large files can take minutes to upload; set a generous timeout so the
-      // request doesn't hang forever if the connection drops.
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
-      let blobRes: Response;
-      try {
-        blobRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, token, {
-          method: 'POST',
-          body: JSON.stringify({ content, encoding: 'base64' }),
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeout);
+      // Text-based files (READMEs) and small binary files: commit as base64 blob.
+      // Large binary files were already committed as LFS pointer blobs above.
+      if (content) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+        let blobRes: Response;
+        try {
+          blobRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, token, {
+            method: 'POST',
+            body: JSON.stringify({ content, encoding: 'base64' }),
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+        if (!blobRes.ok) {
+          const msg = await extractError(blobRes);
+          if (blobRes.status === 401 || blobRes.status === 403) {
+            throw new ClientUploadError('GitHub token expired or invalid. Please reconnect your GitHub account.', 401, 'TOKEN_EXPIRED');
+          }
+          if (blobRes.status === 429) {
+            throw new ClientUploadError('GitHub is busy — rate-limited. Wait a minute and try again.', 429);
+          }
+          if (blobRes.status >= 500) {
+            throw new ClientUploadError(`GitHub server error — this usually means the file is too large for the API. Try a smaller file. (${msg})`, blobRes.status);
+          }
+          throw new ClientUploadError(msg || `Failed to upload ${label}`, blobRes.status);
+        }
+        blobs.push({ path: f.path, sha: (await blobRes.json()).sha });
+        content = '';
       }
-      if (!blobRes.ok) {
-        const msg = await extractError(blobRes);
-        if (blobRes.status === 401 || blobRes.status === 403) {
-          throw new ClientUploadError('GitHub token expired or invalid. Please reconnect your GitHub account.', 401, 'TOKEN_EXPIRED');
-        }
-        if (blobRes.status === 429) {
-          throw new ClientUploadError('GitHub is busy — rate-limited. Wait a minute and try again.', 429);
-        }
-        if (blobRes.status >= 500) {
-          throw new ClientUploadError(`GitHub server error — this usually means the file is too large for the API. Try a smaller file. (${msg})`, blobRes.status);
-        }
-        throw new ClientUploadError(msg || `Failed to upload ${label}`, blobRes.status);
-      }
-      const sha = (await blobRes.json()).sha;
-      blobs.push({ path: f.path, sha });
 
       doneBytes += f.file ? f.file.size : (f.text?.length || 0);
       onProgress?.(Math.min(85, 5 + Math.round((doneBytes / totalBytes) * 80)), `Uploaded ${label}…`);

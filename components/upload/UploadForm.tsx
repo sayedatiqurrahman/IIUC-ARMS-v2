@@ -758,6 +758,11 @@ export default function UploadForm({
           <><i className="fas fa-paper-plane mr-2"></i>Submit {totalFiles} File{totalFiles !== 1 ? 's' : ''} for Review</>
         )}
       </button>
+      {uploading && (
+        <p className="text-[0.68rem] text-dark-text3 text-center mt-2">
+          <i className="fas fa-lock mr-1 text-qsis"></i> Upload in progress — close this dialog and your upload will continue in the background. Only one upload can run at a time.
+        </p>
+      )}
     </>
   );
 }

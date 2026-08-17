@@ -25,22 +25,22 @@ async function getBotToken(): Promise<string | null> {
 }
 
 // Deletes `paths` (repo-root-relative, e.g. `upload_academic_files/qsis/...`)
-// in one commit. Returns the number of tree entries removed, or 0 on failure /
-// nothing matched. A path is matched exactly or as a folder prefix (path + '/').
+// in one commit. Returns the number of tree entries removed.
+// Throws on failure so the caller can surface the error to the admin.
 export async function deleteRepoEntries(paths: string[], fallbackToken?: string): Promise<number> {
   const token = (await getBotToken()) || fallbackToken;
-  if (!token || paths.length === 0) return 0;
+  if (!token || paths.length === 0) throw new Error('No GitHub token available for deletion');
 
   const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
-  if (!refRes.ok) return 0;
+  if (!refRes.ok) throw new Error(`Cannot read branch: ${refRes.status}`);
   const baseCommitSha = (await refRes.json()).object.sha;
 
   const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
-  if (!commitRes.ok) return 0;
+  if (!commitRes.ok) throw new Error(`Cannot read commit: ${commitRes.status}`);
   const baseTreeSha = (await commitRes.json()).tree.sha;
 
   const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
-  if (!treeRes.ok) return 0;
+  if (!treeRes.ok) throw new Error(`Cannot read tree: ${treeRes.status}`);
   const fullTree = (await treeRes.json()).tree || [];
 
   // Collect every entry under any requested path (exact file or folder prefix).
@@ -54,7 +54,7 @@ export async function deleteRepoEntries(paths: string[], fallbackToken?: string)
       }
     }
   }
-  if (deletePaths.size === 0) return 0;
+  if (deletePaths.size === 0) throw new Error(`No matching files found in repo for: ${paths.join(', ')}`);
 
   // Only blob (and submodule) entries go into the new tree — tree entries are
   // rebuilt by GitHub from the blob paths. Passing the old subtree entries with
@@ -72,12 +72,9 @@ export async function deleteRepoEntries(paths: string[], fallbackToken?: string)
   const newTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
     method: 'POST',
     headers: ghHeaders(token),
-    // NOTE: no base_tree here! With base_tree GitHub *retains* any path not listed
-    // in `tree`, so the deleted files would come straight back. The new tree must
-    // explicitly enumerate every kept entry (blobs + subtrees with their shas).
     body: JSON.stringify({ tree: treeItems }),
   });
-  if (!newTreeRes.ok) return 0;
+  if (!newTreeRes.ok) throw new Error(`Cannot create tree: ${newTreeRes.status}`);
   const newTreeSha = (await newTreeRes.json()).sha;
 
   const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
@@ -89,7 +86,7 @@ export async function deleteRepoEntries(paths: string[], fallbackToken?: string)
       parents: [baseCommitSha],
     }),
   });
-  if (!newCommitRes.ok) return 0;
+  if (!newCommitRes.ok) throw new Error(`Cannot create commit: ${newCommitRes.status}`);
   const newCommitSha = (await newCommitRes.json()).sha;
 
   const refUpdateRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
@@ -97,5 +94,6 @@ export async function deleteRepoEntries(paths: string[], fallbackToken?: string)
     headers: ghHeaders(token),
     body: JSON.stringify({ sha: newCommitSha, force: true }),
   });
-  return refUpdateRes.ok ? deletePaths.size : 0;
+  if (!refUpdateRes.ok) throw new Error(`Cannot update branch: ${refUpdateRes.status}`);
+  return deletePaths.size;
 }

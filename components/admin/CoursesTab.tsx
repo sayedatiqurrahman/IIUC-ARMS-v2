@@ -24,12 +24,14 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
   const [canAdd, setCanAdd] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
+  const [canDeleteFiles, setCanDeleteFiles] = useState(false);
   const [dbCourses, setDbCourses] = useState<any[]>([]);
   const [showMyCourses, setShowMyCourses] = useState(false);
   const [deleteRequests, setDeleteRequests] = useState<any[]>([]);
   const [handlingRequest, setHandlingRequest] = useState<string | null>(null);
   const [fileDeleteRequests, setFileDeleteRequests] = useState<any[]>([]);
   const [handlingFileRequest, setHandlingFileRequest] = useState<string | null>(null);
+  const [handlingBulkAction, setHandlingBulkAction] = useState<'approve' | 'reject' | null>(null);
 
   const courses = getSemesterCourses(selectedSem, selectedDept);
   const myEmail = (profile?.email || '').toLowerCase();
@@ -62,8 +64,13 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
         const isCR = profile?.isCR || false;
         const roleKey = isCR ? 'cr' : effectiveRole;
         const customPerms = (profile as any).customPermissions || {};
+        // Layer 2: resolve custom role permissions from settings
+        const customRoles = data.customRoles || [];
+        const myCustomRole = customRoles.find((r: any) => r.key === (profile as any)?.role);
+        const rolePerms = myCustomRole?.permissions || [];
         const perUserKey = (action: string) => `${action}_users`;
         const check = (action: string) => {
+          if (rolePerms.includes(action)) return true;
           if (customPerms[action] === true) return true;
           const allowedUsers = perms[perUserKey(action)] || [];
           if (allowedUsers.includes((profile?.email || '').toLowerCase())) return true;
@@ -73,6 +80,7 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
         setCanAdd(check('addCourse'));
         setCanEdit(check('editCourse'));
         setCanDelete(check('deleteCourse'));
+        setCanDeleteFiles(check('deleteFile'));
       } catch {}
     })();
   }, [effectiveRole, profile]);
@@ -129,6 +137,30 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       setHandlingFileRequest(null);
       useAppStore.getState().setOperationLabel('');
     }
+  }
+
+  async function handleBulkFileDeleteRequest(action: 'approve' | 'reject') {
+    const pending = fileDeleteRequests.filter(r => !handlingFileRequest);
+    if (pending.length === 0) return;
+    setHandlingBulkAction(action);
+    useAppStore.getState().setOperationLabel(action === 'approve' ? `Deleting ${pending.length} file(s) from GitHub…` : `Rejecting ${pending.length} request(s)…`);
+    let errors = 0;
+    for (const r of pending) {
+      try {
+        const res = await fetch('/api/github/file-delete-requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: r.id, action }),
+        });
+        if (!res.ok) errors++;
+      } catch { errors++; }
+    }
+    setFileDeleteRequests([]);
+    useAppStore.getState().invalidateTreeCache();
+    await loadTree();
+    if (errors > 0) alert(`${errors} request(s) failed. The rest were processed.`);
+    setHandlingBulkAction(null);
+    useAppStore.getState().setOperationLabel('');
   }
 
   async function handleDeleteRequest(id: string, action: 'approve' | 'reject') {
@@ -276,11 +308,23 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       )}
 
       {/* Pending file-delete requests (files/folders awaiting admin approval) */}
-      {canDelete && fileDeleteRequests.length > 0 && (
+      {canDeleteFiles && fileDeleteRequests.length > 0 && (
         <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/5 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 border-b border-red-500/20">
-            <i className="fas fa-trash text-red-400"></i>
-            <h4 className="text-[0.78rem] font-semibold text-red-300">Pending File Delete Requests ({fileDeleteRequests.length})</h4>
+          <div className="flex items-center justify-between px-4 py-2.5 bg-red-500/10 border-b border-red-500/20">
+            <div className="flex items-center gap-2">
+              <i className="fas fa-trash text-red-400"></i>
+              <h4 className="text-[0.78rem] font-semibold text-red-300">Pending File Delete Requests ({fileDeleteRequests.length})</h4>
+            </div>
+            <div className="flex gap-1.5">
+              <button onClick={() => handleBulkFileDeleteRequest('approve')} disabled={!!handlingBulkAction || !!handlingFileRequest}
+                className="px-3 py-1 rounded-lg bg-red-500 text-white text-[0.65rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
+                {handlingBulkAction === 'approve' ? <><i className="fas fa-spinner fa-spin mr-1"></i>Approving…</> : <><i className="fas fa-trash-alt mr-1"></i>Approve All</>}
+              </button>
+              <button onClick={() => handleBulkFileDeleteRequest('reject')} disabled={!!handlingBulkAction || !!handlingFileRequest}
+                className="px-3 py-1 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.65rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2 disabled:opacity-50">
+                {handlingBulkAction === 'reject' ? <><i className="fas fa-spinner fa-spin mr-1"></i>Rejecting…</> : 'Reject All'}
+              </button>
+            </div>
           </div>
           <div className="divide-y divide-dark-border/60">
             {fileDeleteRequests.map(r => (

@@ -137,15 +137,16 @@ async function batchDeleteEntries(token: string, entries: { path: string; mode: 
 }
 
 // Removes the course's GitHub folder and returns the number of entries deleted.
+// Throws on failure so the caller can surface the error to the admin.
 export async function deleteCourseFolder(folderPath: string): Promise<number> {
   const token = await getAppBotToken();
-  if (!token) return 0;
+  if (!token) throw new Error('No GitHub App token available for course deletion');
 
   const prefix = withPrefix(folderPath);
   const base = await getBranchBase(token);
-  if (!base) return 0;
+  if (!base) throw new Error('Cannot read branch from GitHub');
   const fullTree = await getFullTree(token, base.baseTreeSha);
-  if (fullTree.length === 0) return 0;
+  if (fullTree.length === 0) throw new Error('Cannot read repo tree from GitHub');
 
   // Collect the folder's tree entry plus everything nested under it. Deleting
   // the folder's own tree entry alone would normally be enough, but collecting
@@ -155,7 +156,7 @@ export async function deleteCourseFolder(folderPath: string): Promise<number> {
     const p = String(item.path || '');
     return p === folderPath || p.startsWith(prefix);
   });
-  if (entries.length === 0) return 0;
+  if (entries.length === 0) throw new Error(`No matching files found in repo for folder: ${folderPath}`);
 
   return batchDeleteEntries(token, entries.map((item: any) => ({ path: item.path, mode: item.mode, type: item.type })));
 }

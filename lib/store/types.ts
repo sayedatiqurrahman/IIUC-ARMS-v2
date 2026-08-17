@@ -175,6 +175,8 @@ export interface AppState {
   setUploadOpen: (open: boolean) => void;
   loadRecentReads: () => void;
   addHistory: (item: any) => void;
+  removeHistory: (path: string) => void;
+  pruneHistory: (validPaths: Set<string>) => void;
 
   setImgZoom: (z: number) => void;
   setImgRotation: (r: number) => void;
