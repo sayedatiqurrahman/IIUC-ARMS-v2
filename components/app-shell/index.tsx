@@ -343,6 +343,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { href: '/', match: isBrowse, icon: 'fa-book-open', label: 'Browse' },
     { href: '/routine', match: isActive('/routine'), icon: 'fa-calendar-alt', label: 'Routine' },
     { href: '/studio', match: isActive('/studio'), icon: 'fa-tools', label: 'Studio' },
+    { href: '/contributors', match: isActive('/contributors'), icon: 'fa-users', label: 'Team' },
   ];
 
   return (
@@ -405,7 +406,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="relative" ref={exploreRef}>
               <button
                 onClick={() => setExploreOpen(!exploreOpen)}
-                className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all ${isActive('/faculty') || isActive('/contributors') || isActive('/history') || isActive('/notices') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}
+                className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all ${isActive('/faculty') || isActive('/history') || isActive('/notices') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}
                 aria-haspopup="true"
                 aria-expanded={exploreOpen}
               >
@@ -419,9 +420,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   </Link>
                   <Link href="/faculty" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
                     <i className="fas fa-chalkboard-teacher w-4 text-center text-green-400"></i><span>Faculty</span>
-                  </Link>
-                  <Link href="/contributors" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
-                    <i className="fas fa-users w-4 text-center text-purple-400"></i><span>Contributors</span>
                   </Link>
                   <Link href="/history" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
                     <i className="fas fa-history w-4 text-center text-orange-400"></i><span>History</span>

@@ -186,7 +186,7 @@ export default function AppChrome({
       </div>
 
       {showReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowReport(false)}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={() => setShowReport(false)}>
           <div
             className="w-full max-w-md rounded-2xl border border-dark-border bg-dark-bg2 p-6"
             onClick={(e) => e.stopPropagation()}

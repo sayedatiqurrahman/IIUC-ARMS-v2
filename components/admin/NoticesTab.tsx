@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Notice, NoticeCategory } from '@/lib/notices';
 import { CATEGORY_META } from '@/lib/notices';
 
@@ -12,6 +12,8 @@ export default function NoticesTab() {
   const [form, setForm] = useState({ title: '', description: '', category: 'notice' as NoticeCategory, date: '', pinned: false, link: '', attachmentUrl: '', attachmentName: '' });
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const dropRef = useRef<HTMLDivElement>(null);
 
   const fetchNotices = useCallback(async () => {
     try {
@@ -36,9 +38,7 @@ export default function NoticesTab() {
     setShowForm(true);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const uploadFile = async (file: File) => {
     setUploading(true);
     try {
       const reader = new FileReader();
@@ -58,6 +58,29 @@ export default function NoticesTab() {
     } catch {}
     setUploading(false);
   };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+  };
+
+  const handlePaste = useCallback((e: ClipboardEvent) => {
+    if (!showForm) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) { e.preventDefault(); uploadFile(file); break; }
+      }
+    }
+  }, [showForm]);
+
+  useEffect(() => {
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [handlePaste]);
 
   const handleSave = async () => {
     if (!form.title.trim()) return;
@@ -154,7 +177,7 @@ export default function NoticesTab() {
 
       {/* Create/Edit Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4" onClick={() => setShowForm(false)}>
           <div className="w-full max-w-lg rounded-2xl border border-dark-border bg-dark-bg2 p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-dark-text">{editing ? 'Edit Notice' : 'New Notice'}</h2>
@@ -206,8 +229,23 @@ export default function NoticesTab() {
               </div>
               <div>
                 <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Attachment (optional)</label>
-                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" onChange={handleFileUpload}
-                  className="w-full text-[0.78rem] text-dark-text2 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-qsis/15 file:text-qsis file:font-medium file:cursor-pointer" />
+                <div
+                  ref={dropRef}
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+                  onDragLeave={e => { e.preventDefault(); setDragOver(false); }}
+                  onDrop={e => {
+                    e.preventDefault(); e.stopPropagation(); setDragOver(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) uploadFile(file);
+                  }}
+                  className={`rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-all ${dragOver ? 'border-qsis bg-qsis/10' : 'border-dark-border hover:border-qsis/40 bg-dark-bg3'}`}
+                  onClick={() => dropRef.current?.querySelector('input')?.click()}
+                >
+                  <input type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" onChange={handleFileUpload} className="hidden" />
+                  <i className={`fas ${dragOver ? 'fa-cloud-upload-alt text-qsis' : 'fa-paperclip text-dark-text3'} text-lg mb-1 block`}></i>
+                  <p className="text-[0.75rem] text-dark-text2 font-medium">{dragOver ? 'Drop file here' : 'Click, drag & drop, or paste (Ctrl+V)'}</p>
+                  <p className="text-[0.65rem] text-dark-text3 mt-0.5">PDF, Image, or Document</p>
+                </div>
                 {uploading && <p className="text-[0.72rem] text-dark-text3 mt-1"><i className="fas fa-spinner fa-spin mr-1"></i>Uploading to GitHub...</p>}
                 {form.attachmentUrl && (
                   <p className="text-[0.72rem] text-green-400 mt-1"><i className="fas fa-check mr-1"></i>Attached: {form.attachmentName}</p>
