@@ -116,8 +116,13 @@ export const STAFF_DESIGNATIONS = [
 ];
 
 export function findDepartment(deptId: string): { faculty: Faculty; department: Department } | null {
+  if (!deptId) return null;
   for (const faculty of FACULTIES) {
     const dept = faculty.departments.find(d => d.id === deptId || (d.folder && d.folder === deptId));
+    if (dept) return { faculty, department: dept };
+  }
+  for (const faculty of FACULTIES) {
+    const dept = faculty.departments.find(d => d.name === deptId || d.shortName === deptId);
     if (dept) return { faculty, department: dept };
   }
   return null;

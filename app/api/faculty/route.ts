@@ -3,6 +3,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { canManageFaculty } from '@/lib/can-manage-faculty';
+import { findDepartment } from '@/lib/departments';
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.faculty);
@@ -17,7 +18,19 @@ export async function GET(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
 
     const where: any = {};
-    if (department) where.department = department;
+    if (department) {
+      const found = findDepartment(department);
+      if (found) {
+        where.OR = [
+          { department: found.department.id },
+          { department: found.department.name },
+          ...(found.department.folder ? [{ department: found.department.folder }] : []),
+          ...(found.department.shortName ? [{ department: found.department.shortName }] : []),
+        ];
+      } else {
+        where.department = department;
+      }
+    }
     if (memberType) where.memberType = memberType;
     if (title) where.title = title;
     if (search) {
