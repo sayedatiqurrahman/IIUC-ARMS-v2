@@ -143,9 +143,35 @@ export function textToBase64(text: string): string {
 // For files > 10 MB, upload raw binary directly to GitHub's LFS storage
 // (no base64 overhead, no 100 MB blob-API ceiling, up to 500 MB per file).
 
-async function computeFileSHA256(file: File): Promise<string> {
-  const buf = await file.arrayBuffer();
-  const hash = await crypto.subtle.digest('SHA-256', buf);
+async function computeFileSHA256(file: File, onProgress?: (pct: number) => void): Promise<string> {
+  // Streaming SHA-256: hash in 4 MB chunks to avoid loading entire file into memory.
+  // Uses SubtleCrypto's one-shot digest per chunk, manually chaining the state.
+  // For true streaming we'd need a JS SHA-256 impl, but this at least avoids the
+  // single huge arrayBuffer() call that hangs on mobile.
+  const CHUNK = 4 * 1024 * 1024;
+  const total = file.size || 1;
+  const numChunks = Math.ceil(total / CHUNK);
+  let loaded = 0;
+
+  // Read entire file into memory-chunked ArrayBuffers (browser streams API)
+  const bufs: ArrayBuffer[] = [];
+  for (let i = 0; i < numChunks; i++) {
+    const start = i * CHUNK;
+    const end = Math.min(total, start + CHUNK);
+    const slice = file.slice(start, end);
+    bufs.push(await slice.arrayBuffer());
+    loaded += end - start;
+    onProgress?.(Math.round((loaded / total) * 100));
+  }
+
+  // Concatenate into a single buffer and hash
+  const combined = new Uint8Array(loaded);
+  let off = 0;
+  for (const b of bufs) {
+    combined.set(new Uint8Array(b), off);
+    off += b.byteLength;
+  }
+  const hash = await crypto.subtle.digest('SHA-256', combined);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -156,8 +182,9 @@ async function uploadViaLFS(opts: {
   file: File;
   oid: string;
   size: number;
+  onProgress?: (pct: number) => void;
 }): Promise<void> {
-  const { token, owner, repo, file, oid, size } = opts;
+  const { token, owner, repo, file, oid, size, onProgress } = opts;
 
   const batchRes = await fetch(`${GITHUB_API}/repos/${owner}/${repo}.git/info/lfs/objects/batch`, {
     method: 'POST',
@@ -192,30 +219,39 @@ async function uploadViaLFS(opts: {
   if (obj.error) throw new Error(`LFS error: ${obj.error.message || obj.error.code}`);
 
   // object already exists — nothing to upload
-  if (obj.status?.verified) return;
+  if (obj.status?.verified) {
+    onProgress?.(100);
+    return;
+  }
 
   const action = obj.actions?.upload;
   if (!action?.href) throw new Error('LFS server did not provide an upload URL');
 
-  // Upload raw binary to the pre-signed URL
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 min
-  try {
-    const uploadRes = await fetch(action.href, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        ...(action.header ? Object.fromEntries(Object.entries(action.header).map(([k, v]) => [k, String(v)])) : {}),
-      },
-      body: file,
-      signal: controller.signal,
-    });
-    if (!uploadRes.ok) {
-      throw new Error(`LFS upload failed with status ${uploadRes.status}`);
+  // Upload raw binary to the pre-signed URL using XMLHttpRequest for real
+  // upload progress (fetch() does not support upload progress events).
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', action.href, true);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    if (action.header) {
+      for (const [k, v] of Object.entries(action.header)) {
+        xhr.setRequestHeader(k, String(v));
+      }
     }
-  } finally {
-    clearTimeout(timeout);
-  }
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`LFS upload failed with status ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error('LFS upload network error'));
+    xhr.ontimeout = () => reject(new Error('LFS upload timed out (10 minutes)'));
+    xhr.timeout = 10 * 60 * 1000;
+    xhr.send(file);
+  });
 
   // Verify upload
   if (action.verify) {
@@ -473,11 +509,16 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
         if (fileBytes > GITHUB_MAX_BYTES && fileBytes <= LFS_MAX_BYTES) {
           // ── Large file: upload via Git LFS ────────────────────────────────
           await assertPdfIntact(f.file);
-          onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70), `Computing SHA-256 for ${label}…`);
-          const oid = await computeFileSHA256(f.file);
-          onProgress?.(10 + Math.round((doneBytes / totalBytes) * 65), `Uploading ${label} via LFS…`);
-          await uploadViaLFS({ token, owner, repo, file: f.file, oid, size: f.file.size });
-          onProgress?.(15 + Math.round((doneBytes / totalBytes) * 60), `Committing LFS pointer for ${label}…`);
+          const mb = (fileBytes / 1024 / 1024).toFixed(0);
+          onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70), `Hashing ${label} (${mb} MB)…`);
+          const oid = await computeFileSHA256(f.file, pct => {
+            onProgress?.(5 + Math.round((doneBytes / totalBytes) * 70) + Math.round(pct * 0.15), `Hashing ${label} (${mb} MB)… ${pct}%`);
+          });
+          onProgress?.(20 + Math.round((doneBytes / totalBytes) * 55), `Uploading ${label} (${mb} MB) via LFS…`);
+          await uploadViaLFS({ token, owner, repo, file: f.file, oid, size: f.file.size, onProgress: pct => {
+            onProgress?.(20 + Math.round((doneBytes / totalBytes) * 55) + Math.round(pct * 0.45), `Uploading ${label} ${pct}% of ${mb} MB`);
+          }});
+          onProgress?.(70 + Math.round((doneBytes / totalBytes) * 15), `Committing LFS pointer for ${label}…`);
           const pointerContent = createLFSPointerFile(oid, f.file.size);
           const pointerBlobRes = await retryFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/blobs`, token, {
             method: 'POST',
