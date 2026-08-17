@@ -154,26 +154,46 @@ export default function ContributorsView() {
           {founder && <FounderCard c={founder} onShowHistory={setHistoryFor} />}
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-5">
-            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sm:p-3 text-center">
-              <div className="text-[1.1rem] sm:text-[1.3rem] font-bold text-purple-400">{bothRepos.length}</div>
-              <div className="text-[0.65rem] sm:text-[0.72rem] text-dark-text2"><i className="fas fa-code-branch mr-1"></i>Both</div>
+          <div className="mb-5">
+            {/* Total — hero stat */}
+            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-3 sm:p-4 mb-2 sm:mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-qsis/10 flex items-center justify-center">
+                  <i className="fas fa-users text-qsis text-lg"></i>
+                </div>
+                <div>
+                  <div className="text-[1.4rem] sm:text-[1.6rem] font-bold text-dark-text leading-none">{contributors.length}</div>
+                  <div className="text-[0.72rem] text-dark-text2">Total Contributors</div>
+                </div>
+              </div>
+              <div className="text-[0.65rem] text-dark-text3 hidden sm:flex items-center gap-3">
+                <span><i className="fas fa-code-branch mr-1"></i>{bothRepos.length} both</span>
+                <span className="w-px h-3 bg-dark-border"></span>
+                <span><i className="fas fa-laptop-code mr-1"></i>{developers.length} devs</span>
+                <span className="w-px h-3 bg-dark-border"></span>
+                <span><i className="fas fa-book-open mr-1"></i>{resources.length} resources</span>
+                <span className="w-px h-3 bg-dark-border"></span>
+                <span><i className="fas fa-palette mr-1"></i>{designers.length} designers</span>
+              </div>
             </div>
-            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sm:p-3 text-center">
-              <div className="text-[1.1rem] sm:text-[1.3rem] font-bold text-blue-400">{developers.length}</div>
-              <div className="text-[0.65rem] sm:text-[0.72rem] text-dark-text2"><i className="fas fa-laptop-code mr-1"></i>Devs</div>
-            </div>
-            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sm:p-3 text-center">
-              <div className="text-[1.1rem] sm:text-[1.3rem] font-bold text-orange-400">{resources.length}</div>
-              <div className="text-[0.65rem] sm:text-[0.72rem] text-dark-text2"><i className="fas fa-book-open mr-1"></i>Res</div>
-            </div>
-            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sm:p-3 text-center hidden sm:block">
-              <div className="text-[1.3rem] font-bold text-emerald-400">{designers.length}</div>
-              <div className="text-[0.72rem] text-dark-text2"><i className="fas fa-palette mr-1"></i>Designers</div>
-            </div>
-            <div className="bg-dark-bg2 border border-dark-border rounded-xl p-2 sm:p-3 text-center">
-              <div className="text-[1.1rem] sm:text-[1.3rem] font-bold text-qsis">{contributors.length}</div>
-              <div className="text-[0.65rem] sm:text-[0.72rem] text-dark-text2"><i className="fas fa-users mr-1"></i>Total</div>
+            {/* Category breakdown — equal-width chips */}
+            <div className="grid grid-cols-4 gap-2">
+              <div className="bg-dark-bg2 border border-purple-500/20 rounded-xl p-2 sm:p-3 text-center">
+                <div className="text-[1rem] sm:text-[1.2rem] font-bold text-purple-400">{bothRepos.length}</div>
+                <div className="text-[0.6rem] sm:text-[0.68rem] text-dark-text2 font-medium"><i className="fas fa-code-branch mr-0.5"></i>Both</div>
+              </div>
+              <div className="bg-dark-bg2 border border-blue-500/20 rounded-xl p-2 sm:p-3 text-center">
+                <div className="text-[1rem] sm:text-[1.2rem] font-bold text-blue-400">{developers.length}</div>
+                <div className="text-[0.6rem] sm:text-[0.68rem] text-dark-text2 font-medium"><i className="fas fa-laptop-code mr-0.5"></i>Devs</div>
+              </div>
+              <div className="bg-dark-bg2 border border-orange-500/20 rounded-xl p-2 sm:p-3 text-center">
+                <div className="text-[1rem] sm:text-[1.2rem] font-bold text-orange-400">{resources.length}</div>
+                <div className="text-[0.6rem] sm:text-[0.68rem] text-dark-text2 font-medium truncate"><i className="fas fa-book-open mr-0.5"></i>Resources</div>
+              </div>
+              <div className="bg-dark-bg2 border border-emerald-500/20 rounded-xl p-2 sm:p-3 text-center">
+                <div className="text-[1rem] sm:text-[1.2rem] font-bold text-emerald-400">{designers.length}</div>
+                <div className="text-[0.6rem] sm:text-[0.68rem] text-dark-text2 font-medium truncate"><i className="fas fa-palette mr-0.5"></i>Designers</div>
+              </div>
             </div>
           </div>
 
