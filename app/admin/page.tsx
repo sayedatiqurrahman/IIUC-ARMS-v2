@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import PageLoader from '@/components/PageLoader';
 const AdminPanelView = dynamic(() => import('@/components/views/AdminPanelView'), { ssr: false });
 import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
@@ -32,44 +33,10 @@ export default function AdminPage() {
     }
   }, [status, effectiveRole, router, accessLoading, hasAdminPanelAccess]);
 
-  if (status === 'loading') {
+  if (status === 'loading' || accessLoading) {
     return (
-      <div className="loading-container">
-        <div className="book-loader">
-          <div className="book-base"></div>
-          <div className="book-spine-loader"></div>
-          <div className="book-cover"></div>
-          <div className="book-page-stack">
-            <div className="book-page"></div>
-            <div className="book-page"></div>
-            <div className="book-page"></div>
-          </div>
-          <div className="page-shadow"></div>
-          <div className="page-shadow"></div>
-          <div className="page-shadow"></div>
-        </div>
-        <div className="loading-text">Loading admin panel<span className="loading-dots"></span></div>
-      </div>
-    );
-  }
-
-  if (accessLoading) {
-    return (
-      <div className="loading-container">
-        <div className="book-loader">
-          <div className="book-base"></div>
-          <div className="book-spine-loader"></div>
-          <div className="book-cover"></div>
-          <div className="book-page-stack">
-            <div className="book-page"></div>
-            <div className="book-page"></div>
-            <div className="book-page"></div>
-          </div>
-          <div className="page-shadow"></div>
-          <div className="page-shadow"></div>
-          <div className="page-shadow"></div>
-        </div>
-        <div className="loading-text">Checking access<span className="loading-dots"></span></div>
+      <div className="min-h-screen bg-dark-bg">
+        <PageLoader className="h-full" />
       </div>
     );
   }

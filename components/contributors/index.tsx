@@ -8,6 +8,7 @@ import { FACULTIES } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
 import { Settings, DEFAULT_SETTINGS } from './types';
 import FounderCard from './FounderCard';
+import PageLoader from '@/components/PageLoader';
 import RankedCard from './RankedCard';
 import GridCard from './GridCard';
 import HistoryModal from './HistoryModal';
@@ -128,20 +129,7 @@ export default function ContributorsView() {
 
       {contributorsLoading ? (
         <div className="loading-container">
-          <div className="book-loader">
-            <div className="book-base"></div>
-            <div className="book-spine-loader"></div>
-            <div className="book-cover"></div>
-            <div className="book-page-stack">
-              <div className="book-page"></div>
-              <div className="book-page"></div>
-              <div className="book-page"></div>
-            </div>
-            <div className="page-shadow"></div>
-            <div className="page-shadow"></div>
-            <div className="page-shadow"></div>
-          </div>
-          <div className="loading-text">Loading contributors<span className="loading-dots"></span></div>
+          <PageLoader />
         </div>
       ) : contributors.length === 0 ? (
         <div className="text-center py-12 text-dark-text2">

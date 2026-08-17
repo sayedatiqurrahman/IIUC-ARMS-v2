@@ -25,6 +25,7 @@ import RoutinePlainTable from '@/components/routine/RoutinePlainTable';
 import TeacherContacts from '@/components/routine/TeacherContacts';
 import AllSemesterView from '@/components/routine/AllSemesterView';
 import RoutineBuilder from '@/components/routine/RoutineBuilder';
+import PageLoader from '@/components/PageLoader';
 
 export default function RoutineView({ dept }: { dept: string }) {
   const router = useRouter();
@@ -344,8 +345,7 @@ export default function RoutineView({ dept }: { dept: string }) {
           <div><h3 className="routine-page-title"><i className="fas fa-calendar-alt"></i> Class Routine</h3><p className="routine-page-sub">Manage and view your class schedules</p></div>
         </div>
         <div className="loading-container">
-          <div className="book-loader"><div className="book-base"></div><div className="book-spine-loader"></div><div className="book-cover"></div><div className="book-page-stack"><div className="book-page"></div><div className="book-page"></div><div className="book-page"></div></div><div className="page-shadow"></div><div className="page-shadow"></div><div className="page-shadow"></div></div>
-          <div className="loading-text">Loading routine<span className="loading-dots"></span></div>
+          <PageLoader />
         </div>
       </section>
     );

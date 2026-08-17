@@ -11,6 +11,7 @@ import { CreateCourseResult } from '@/components/upload';
 import PageHeader from '@/components/browse/PageHeader';
 import LatestNotices from '@/components/notices/LatestNotices';
 import BrowseHeader from '@/components/browse/BrowseHeader';
+import PageLoader from '@/components/PageLoader';
 import { refreshTreeUntilVisible } from '@/lib/tree-refresh';
 import dynamic from 'next/dynamic';
 // Each browse view is loaded on demand — only the view you're actually in is
@@ -553,10 +554,8 @@ export default function BrowsePage() {
         navigateToMidFinal={navigateToMidFinal} navigateToCategory={navigateToCategory}
       />
       {loading && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-dark-bg">
-          <div className="bg-white rounded-3xl p-6 shadow-2xl">
-            <img src="/page-loader.gif" alt="Loading" className="w-20 h-20 object-contain" />
-          </div>
+        <div className="fixed inset-0 z-[90] bg-dark-bg">
+          <PageLoader className="h-full" />
         </div>
       )}
       {error && (

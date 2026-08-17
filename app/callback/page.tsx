@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import PageLoader from '@/components/PageLoader';
 
 export default function CallbackPage() {
   const { data: session, status } = useSession();
@@ -17,23 +18,8 @@ export default function CallbackPage() {
   }, [status, router]);
 
   return (
-    <div className="min-h-screen bg-dark-bg flex items-center justify-center">
-      <div className="loading-container">
-        <div className="book-loader">
-          <div className="book-base"></div>
-          <div className="book-spine-loader"></div>
-          <div className="book-cover"></div>
-          <div className="book-page-stack">
-            <div className="book-page"></div>
-            <div className="book-page"></div>
-            <div className="book-page"></div>
-          </div>
-          <div className="page-shadow"></div>
-          <div className="page-shadow"></div>
-          <div className="page-shadow"></div>
-        </div>
-        <div className="loading-text">Authenticating<span className="loading-dots"></span></div>
-      </div>
+    <div className="min-h-screen bg-dark-bg">
+      <PageLoader className="h-full" />
     </div>
   );
 }

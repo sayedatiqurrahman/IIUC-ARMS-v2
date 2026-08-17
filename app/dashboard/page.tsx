@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import PageLoader from '@/components/PageLoader';
 const DashboardView = dynamic(() => import('@/components/dashboard/DashboardView'), { ssr: false });
 
 export default function DashboardPage() {
@@ -18,21 +19,8 @@ export default function DashboardPage() {
 
   if (status === 'loading') {
     return (
-      <div className="loading-container">
-        <div className="book-loader">
-          <div className="book-base"></div>
-          <div className="book-spine-loader"></div>
-          <div className="book-cover"></div>
-          <div className="book-page-stack">
-            <div className="book-page"></div>
-            <div className="book-page"></div>
-            <div className="book-page"></div>
-          </div>
-          <div className="page-shadow"></div>
-          <div className="page-shadow"></div>
-          <div className="page-shadow"></div>
-        </div>
-        <div className="loading-text">Loading dashboard<span className="loading-dots"></span></div>
+      <div className="min-h-screen bg-dark-bg">
+        <PageLoader className="h-full" />
       </div>
     );
   }
