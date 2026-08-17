@@ -32,15 +32,27 @@ export async function deleteRepoEntries(paths: string[], fallbackToken?: string)
   if (!token || paths.length === 0) throw new Error('No GitHub token available for deletion');
 
   const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
-  if (!refRes.ok) throw new Error(`Cannot read branch: ${refRes.status}`);
+  if (!refRes.ok) {
+    const body = await refRes.text().catch(() => '');
+    console.error('[delete] Cannot read branch:', refRes.status, body.slice(0, 200));
+    throw new Error(`Cannot read branch (${refRes.status}): your token may lack "Contents" read permission.`);
+  }
   const baseCommitSha = (await refRes.json()).object.sha;
 
   const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
-  if (!commitRes.ok) throw new Error(`Cannot read commit: ${commitRes.status}`);
+  if (!commitRes.ok) {
+    const body = await commitRes.text().catch(() => '');
+    console.error('[delete] Cannot read commit:', commitRes.status, body.slice(0, 200));
+    throw new Error(`Cannot read commit (${commitRes.status}): token lacks permission.`);
+  }
   const baseTreeSha = (await commitRes.json()).tree.sha;
 
   const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
-  if (!treeRes.ok) throw new Error(`Cannot read tree: ${treeRes.status}`);
+  if (!treeRes.ok) {
+    const body = await treeRes.text().catch(() => '');
+    console.error('[delete] Cannot read tree:', treeRes.status, body.slice(0, 200));
+    throw new Error(`Cannot read tree (${treeRes.status}): repo may be too large for recursive listing.`);
+  }
   const fullTree = (await treeRes.json()).tree || [];
 
   // Collect every entry under any requested path (exact file or folder prefix).
@@ -69,12 +81,21 @@ export async function deleteRepoEntries(paths: string[], fallbackToken?: string)
       sha: item.sha,
     }));
 
+  // GitHub limits tree items per request; if the repo is very large, warn.
+  if (treeItems.length > 10000) {
+    console.warn(`[delete] Tree has ${treeItems.length} items — may hit GitHub API limits`);
+  }
+
   const newTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
     method: 'POST',
     headers: ghHeaders(token),
     body: JSON.stringify({ tree: treeItems }),
   });
-  if (!newTreeRes.ok) throw new Error(`Cannot create tree: ${newTreeRes.status}`);
+  if (!newTreeRes.ok) {
+    const body = await newTreeRes.text().catch(() => '');
+    console.error('[delete] Cannot create tree:', newTreeRes.status, body.slice(0, 300));
+    throw new Error(`Cannot create new tree (${newTreeRes.status}): ${body.slice(0, 200) || 'token may lack write permission'}`);
+  }
   const newTreeSha = (await newTreeRes.json()).sha;
 
   const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
@@ -86,7 +107,11 @@ export async function deleteRepoEntries(paths: string[], fallbackToken?: string)
       parents: [baseCommitSha],
     }),
   });
-  if (!newCommitRes.ok) throw new Error(`Cannot create commit: ${newCommitRes.status}`);
+  if (!newCommitRes.ok) {
+    const body = await newCommitRes.text().catch(() => '');
+    console.error('[delete] Cannot create commit:', newCommitRes.status, body.slice(0, 300));
+    throw new Error(`Cannot create commit (${newCommitRes.status}): ${body.slice(0, 200) || 'token may lack write permission'}`);
+  }
   const newCommitSha = (await newCommitRes.json()).sha;
 
   const refUpdateRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
@@ -94,6 +119,10 @@ export async function deleteRepoEntries(paths: string[], fallbackToken?: string)
     headers: ghHeaders(token),
     body: JSON.stringify({ sha: newCommitSha, force: true }),
   });
-  if (!refUpdateRes.ok) throw new Error(`Cannot update branch: ${refUpdateRes.status}`);
+  if (!refUpdateRes.ok) {
+    const body = await refUpdateRes.text().catch(() => '');
+    console.error('[delete] Cannot update branch:', refUpdateRes.status, body.slice(0, 300));
+    throw new Error(`Cannot update branch (${refUpdateRes.status}): concurrent commit may have happened — try again`);
+  }
   return deletePaths.size;
 }

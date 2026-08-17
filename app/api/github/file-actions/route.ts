@@ -139,8 +139,6 @@ export async function POST(req: NextRequest) {
 
     // ─── DELETE ───
     if (action === 'delete') {
-      // The Contents API returns an ARRAY for a directory and an OBJECT for a
-      // file. getFileSha() returned null for folders → the old 404 bug.
       const contentsRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${fromFull}?ref=${branch}`, { headers: ghHeaders(checkTok) });
       if (!contentsRes.ok) {
         return NextResponse.json({ error: 'File not found' }, { status: 404 });
@@ -162,7 +160,7 @@ export async function POST(req: NextRequest) {
       if (isAdmin) {
         const { deleteRepoEntries } = await import('@/lib/file-delete');
         try {
-          const deleted = await deleteRepoEntries([fromFull], token);
+          const deleted = await deleteRepoEntries([fromFull], botTok || token);
           try {
             await prisma.activityLog.create({
               data: {
@@ -175,7 +173,37 @@ export async function POST(req: NextRequest) {
           } catch {}
           return NextResponse.json({ success: true, deleted, isFolder });
         } catch (e: any) {
-          return NextResponse.json({ error: e?.message || 'Failed to delete from GitHub' }, { status: 500 });
+          // Tree-based delete failed — for single files, fall back to Contents API
+          if (!isFolder) {
+            try {
+              const fileSha = contents.sha;
+              if (fileSha) {
+                const delRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${fromFull}`, {
+                  method: 'DELETE',
+                  headers: ghHeaders(botTok || token),
+                  body: JSON.stringify({ message: `Delete ${from} (via admin)`, sha: fileSha, branch }),
+                });
+                if (delRes.ok) {
+                  try {
+                    await prisma.activityLog.create({
+                      data: {
+                        action: 'file_delete',
+                        userId: email,
+                        userName: profile?.name || email.split('@')[0],
+                        details: JSON.stringify({ path: from, filesDeleted: 1, isFolder: false }),
+                      },
+                    });
+                  } catch {}
+                  return NextResponse.json({ success: true, deleted: 1, isFolder: false });
+                }
+                const delBody = await delRes.text().catch(() => '');
+                console.error('[file-actions] Contents API delete failed:', delRes.status, delBody.slice(0, 300));
+              }
+            } catch {}
+          }
+          const errMsg = e?.message || 'Failed to delete from GitHub';
+          console.error('[file-actions] delete error:', errMsg, { from, email, isOwner, effectiveRole });
+          return NextResponse.json({ error: errMsg }, { status: 500 });
         }
       }
 
