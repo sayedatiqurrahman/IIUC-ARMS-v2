@@ -126,6 +126,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const goHome = useAppStore(s => s.goHome);
   const setUploadOpen = useAppStore(s => s.setUploadOpen);
   const uploadOpen = useAppStore(s => s.uploadOpen);
+  const uploadBg = useAppStore(s => s.uploadBg);
   const operationLabel = useAppStore(s => s.operationLabel);
   const viewerOpen = useAppStore(s => s.viewerOpen);
   const viewerItem = useAppStore(s => s.viewerItem);
@@ -859,6 +860,45 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </footer>
+      )}
+
+      {/* FLOATING UPLOAD INDICATOR — shown when upload runs in background */}
+      {uploadBg?.active && !uploadOpen && (
+        <button
+          onClick={() => setUploadOpen(true)}
+          className="fixed bottom-5 right-5 z-[190] bg-qsis text-white rounded-xl px-4 py-3 shadow-lg shadow-qsis/20 border border-qsis/50 flex items-center gap-3 cursor-pointer hover:scale-105 transition-transform"
+        >
+          <i className="fas fa-spinner fa-spin text-sm"></i>
+          <div className="flex flex-col items-start text-left">
+            <span className="text-[0.72rem] font-semibold truncate max-w-[180px]">{uploadBg.progress?.label || 'Uploading...'}</span>
+            {uploadBg.progress && uploadBg.progress.percent > 0 && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="w-20 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                  <span className="block h-full bg-white rounded-full transition-all" style={{ width: `${Math.max(3, uploadBg.progress.percent)}%` }}></span>
+                </span>
+                <span className="text-[0.65rem] font-bold tabular-nums">{Math.round(uploadBg.progress.percent)}%</span>
+              </div>
+            )}
+          </div>
+        </button>
+      )}
+      {uploadBg?.result && !uploadBg?.active && !uploadOpen && (
+        <button
+          onClick={() => {
+            if (uploadBg.result?.success) useAppStore.getState().setUploadBg(null);
+            else setUploadOpen(true);
+          }}
+          className={`fixed bottom-5 right-5 z-[190] rounded-xl px-4 py-3 shadow-lg border flex items-center gap-3 cursor-pointer hover:scale-105 transition-transform ${
+            uploadBg.result.success
+              ? 'bg-emerald-600 text-white border-emerald-500/50 shadow-emerald-600/20'
+              : 'bg-red-600 text-white border-red-500/50 shadow-red-600/20'
+          }`}
+        >
+          <i className={`fas ${uploadBg.result.success ? 'fa-check-circle' : 'fa-exclamation-circle'} text-sm`}></i>
+          <span className="text-[0.75rem] font-semibold">
+            {uploadBg.result.success ? 'Upload complete — tap to dismiss' : (uploadBg.result.error?.slice(0, 60) || 'Upload failed — tap to retry')}
+          </span>
+        </button>
       )}
 
       {/* UPLOAD MODAL */}

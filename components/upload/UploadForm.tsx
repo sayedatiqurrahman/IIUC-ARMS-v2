@@ -675,34 +675,20 @@ export default function UploadForm({
       {result?.error && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.8rem]">
           <i className="fas fa-exclamation-circle mr-2"></i>{result.error}
-          {result.tokenExpired && (
-            <button className="mt-3 w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer" onClick={async () => {
-              showToast('Opening GitHub...', 'info');
-              const installResult = await installGitHubApp();
-              if (installResult.error || !installResult.token) {
-                showToast(installResult.error || 'Connection cancelled', 'error');
-                return;
-              }
-              setGithubToken(installResult.token);
-              fetch('/api/profile', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  githubLogin: installResult.login,
-                  githubToken: installResult.token,
-                  githubInstallationId: installResult.installationId,
-                  githubAvatar: installResult.avatarUrl,
-                }),
-              }).catch(() => {});
-              showToast(`Connected as @${installResult.login}!`, 'success');
-              window.location.reload();
-            }}>
-              <i className="fab fa-github mr-2"></i>Connect with GitHub
-            </button>
-          )}
-          {result?.needsPAT && (
-            <div className="mt-3">
-              <p className="text-[0.7rem] text-dark-text2 mb-2">Paste your PAT to retry:</p>
+          {(result.tokenExpired || result?.needsPAT) && (
+            <div className="mt-3 space-y-2.5">
+              <a
+                href="https://github.com/settings/tokens/new?description=IIUC-ARMS&scopes=repo"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer text-center hover:opacity-90 transition-opacity"
+              >
+                <i className="fas fa-sync-alt mr-2"></i>Regenerate Token
+              </a>
+              <p className="text-[0.6rem] text-dark-text3 text-center">
+                Opens GitHub → create token named <strong>IIUC-ARMS</strong> with <strong>repo</strong> scope → copy & paste below
+              </p>
+              <p className="text-[0.7rem] text-dark-text2">Paste your new token:</p>
               <div className="flex gap-2">
                 <input
                   type="password"
@@ -720,22 +706,34 @@ export default function UploadForm({
                   {patSaving ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check"></i>}
                 </button>
               </div>
-              <p className="text-[0.6rem] text-dark-text3 mt-1.5">
-                <a href="https://github.com/settings/tokens/new?description=IIUC-ARMS&scopes=repo" target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline">Create classic PAT</a> (Note: IIUC-ARMS + <strong>repo</strong> scope pre-filled) → paste above
-              </p>
+              <button className="w-full py-2 rounded-lg bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.78rem] cursor-pointer hover:text-qsis hover:border-qsis transition-all" onClick={async () => {
+                showToast('Opening GitHub...', 'info');
+                const installResult = await installGitHubApp();
+                if (installResult.error || !installResult.token) {
+                  showToast(installResult.error || 'Connection cancelled', 'error');
+                  return;
+                }
+                setGithubToken(installResult.token);
+                fetch('/api/profile', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    githubLogin: installResult.login,
+                    githubToken: installResult.token,
+                    githubInstallationId: installResult.installationId,
+                    githubAvatar: installResult.avatarUrl,
+                  }),
+                }).catch(() => {});
+                showToast(`Connected as @${installResult.login}!`, 'success');
+                window.location.reload();
+              }}>
+                <i className="fab fa-github mr-2"></i>Or continue with GitHub
+              </button>
             </div>
           )}
         </div>
       )}
 
-      {compressing ? (
-        <div className="w-full flex items-center justify-center">
-          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-qsis/15 text-qsis text-[0.75rem] font-semibold border border-qsis/20">
-            <i className="fas fa-spinner fa-spin text-xs"></i>
-            {compressing}
-          </span>
-        </div>
-      ) : (
       <button
         className="w-full py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={handleSubmitClick}
@@ -760,7 +758,6 @@ export default function UploadForm({
           <><i className="fas fa-paper-plane mr-2"></i>Submit {totalFiles} File{totalFiles !== 1 ? 's' : ''} for Review</>
         )}
       </button>
-      )}
     </>
   );
 }

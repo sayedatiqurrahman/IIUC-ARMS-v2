@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { config } from '@/lib/config';
 import { FACULTIES, getFacultyIdForDepartment, getDepartmentFolder, resolveDepartmentId } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
@@ -96,6 +96,8 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const onboardData = useAppStore(s => s.onboardingData);
   const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
   const dbCourses = useAppStore(s => s.dbCourses);
+  const uploadBg = useAppStore(s => s.uploadBg);
+  const setUploadBg = useAppStore(s => s.setUploadBg);
 
   const email = (session as any)?.user?.email || profile.email || '';
 
@@ -114,12 +116,13 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [semester, setSemester] = useState(profile.semester || '');
   const [category, setCategory] = useState('');
   const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
-  const [uploading, setUploading] = useState(false);
   const [createCourseFor, setCreateCourseFor] = useState<number | null>(null);
   const [recentlyCreated, setRecentlyCreated] = useState<{ code: string; title: string }[]>([]);
-  const [result, setResult] = useState<{ success: boolean; prUrl?: string; error?: string; tokenExpired?: boolean; needsPAT?: boolean; merged?: boolean; direct?: boolean } | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const [compressing, setCompressing] = useState<string | null>(null);
+
+  const uploading = uploadBg?.active ?? false;
+  const result = uploadBg?.result ?? null;
+  const uploadProgress = uploadBg?.progress ?? null;
+  const compressing = uploadBg?.compressing ?? null;
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const [mergeDialogCourseId, setMergeDialogCourseId] = useState<number | null>(null);
@@ -138,6 +141,17 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   const isLoggedIn = status === 'authenticated' || (!!(session as any)?.user && status !== 'loading');
   const treeLength = useAppStore(s => s.tree.length);
+
+  // Close handler: if upload is running, just close the modal (bg state persists).
+  // If a result is showing (success/error), clear the bg state on close.
+  const handleClose = useCallback(() => {
+    if (uploadBg?.active) {
+      // Upload still running — close modal, floating indicator will show
+    } else if (uploadBg?.result) {
+      setUploadBg(null);
+    }
+    onClose();
+  }, [uploadBg, setUploadBg, onClose]);
 
   const existingCourses = useMemo(() => {
     if (!department || !semester || semester === config.relatedKitabsFolder || semester === config.relatedSourcesFolder) return [];
@@ -298,10 +312,10 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     // block the rest — it just keeps the original and still gets added below.
     const valid2: File[] = [];
     let totalSaved = 0;
-    setCompressing(`Compressing 0/${valid.length}...`);
+    setUploadBg({ compressing: `Compressing 0/${valid.length}...` });
     try {
       for (let i = 0; i < valid.length; i++) {
-        setCompressing(`Compressing ${i + 1}/${valid.length} — ${valid[i].name}...`);
+        setUploadBg({ compressing: `Compressing ${i + 1}/${valid.length} — ${valid[i].name}...` });
         try {
           const r = await compressUploadFile(valid[i]);
           valid2.push(r.file);
@@ -311,7 +325,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         }
       }
     } finally {
-      setCompressing(null);
+      setUploadBg({ compressing: null });
     }
     if (totalSaved > 1024 * 1024) {
       showToast(`Compressed files — saved ${(totalSaved / (1024 * 1024)).toFixed(1)}MB`, 'info');
@@ -554,7 +568,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const token = tokenOverride || githubToken || profile.githubToken || (session as any)?.accessToken || '';
     const validCourses = courses.filter(c => c.selectedCourseCode && (c.files.length > 0 || c.links.length > 0));
 
-    setUploading(true); setResult(null); setUploadProgress(null);
+    setUploadBg({ active: true, result: null, progress: null, compressing: null });
     try {
       const message = `Add ${validCourses.map(c => `${c.selectedCourseCode} - ${c.selectedCourseTitle || c.selectedCourseCode}`).join(', ')} (${category}) — ${semester}`;
 
@@ -583,7 +597,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       const tokenData = await tokenRes.json().catch(() => ({}));
       if (!tokenRes.ok || tokenData.error) {
         if (tokenData.code === 'AUTH_REQUIRED') {
-          setResult({ success: false, error: tokenData.error, tokenExpired: true });
+          setUploadBg({ result: { success: false, error: tokenData.error, tokenExpired: true } });
           return;
         }
         throw new Error(tokenData.error || 'Failed to prepare upload');
@@ -609,7 +623,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
         formData.append('sizes', JSON.stringify(sizes));
         if (token) formData.append('githubToken', token);
 
-        setUploadProgress({ percent: 40, label: 'Uploading to GitHub...' });
+        setUploadBg({ progress: { percent: 40, label: 'Uploading to GitHub...' } });
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 85000);
         try {
@@ -644,7 +658,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
           files,
           message,
           author: identity,
-          onProgress: (percent, label) => setUploadProgress({ percent, label }),
+          onProgress: (percent, label) => setUploadBg({ progress: { percent, label } }),
         });
         // Safety net: if the direct commit still failed (stale PAT, revoked
         // access, no bot fallback), retry ONCE through the server — its token
@@ -660,20 +674,19 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
       }
 
       if (data.success) {
-        setResult({ success: true, prUrl: data.pr?.url, direct: data.direct, merged: data.pr?.merged });
-        setUploadProgress({ percent: 100, label: 'Done' });
+        setUploadBg({ result: { success: true, prUrl: data.pr?.url, direct: data.direct, merged: data.pr?.merged }, progress: { percent: 100, label: 'Done' } });
         setCourses([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
         useAppStore.getState().invalidateTreeCache();
         useAppStore.getState().loadTree(session?.accessToken || '');
       } else if (data.code === 'TOKEN_EXPIRED' || data.code === 'AUTH_REQUIRED') {
-        setResult({ success: false, error: data.error, tokenExpired: true });
+        setUploadBg({ result: { success: false, error: data.error, tokenExpired: true } });
       } else if (data.code === 'NEEDS_PAT' || data.code === 'TOKEN_NO_ACCESS') {
-        setResult({ success: false, error: data.error, needsPAT: true });
-      } else { setResult({ success: false, error: data.error || 'Upload failed' }); }
+        setUploadBg({ result: { success: false, error: data.error, needsPAT: true } });
+      } else { setUploadBg({ result: { success: false, error: data.error || 'Upload failed' } }); }
     } catch (err: any) {
       const msg = err?.name === 'AbortError' ? 'Upload timed out. Try fewer files.' : err.message || 'Network error';
-      setResult({ success: false, error: msg, tokenExpired: /token expired|reconnect|401|403/i.test(msg) });
-    } finally { setUploading(false); }
+      setUploadBg({ result: { success: false, error: msg, tokenExpired: /token expired|reconnect|401|403/i.test(msg) } });
+    } finally { setUploadBg({ active: false }); }
   }
 
   const courseOptions = useMemo(() => {
@@ -693,7 +706,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
   return (
     <>
-    <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4" onClick={handleClose}>
       <div className="bg-dark-bg2 w-full max-w-[540px] max-h-[90vh] rounded-2xl border border-dark-border overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
           <div>
@@ -702,7 +715,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             </h2>
             <p className="text-[0.72rem] text-dark-text3 mt-0.5">Select a course and upload files</p>
           </div>
-          <button className="w-8 h-8 rounded-lg bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 cursor-pointer hover:text-dark-text" onClick={onClose}>
+          <button className="w-8 h-8 rounded-lg bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 cursor-pointer hover:text-dark-text" onClick={handleClose}>
             <i className="fas fa-times text-sm"></i>
           </button>
         </div>
@@ -725,7 +738,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             mergeDialogCourseId={mergeDialogCourseId} mergeImages={mergeImages} mergeSession={mergeSession} mergeYear={mergeYear}
             mergeMerging={mergeMerging} mergeOcr={mergeOcr} setMergeOcr={setMergeOcr} handleMergeImages={handleMergeImages} dismissMerge={() => { setMergeDialogCourseId(null); setMergeImages([]); setMergeOcr(false); }}
             onAddMarkdown={handleAddMarkdown}
-            isLoggedIn={isLoggedIn} sessionLoading={status === 'loading' && !isLoggedIn} onLogin={onLogin} onClose={onClose}
+            isLoggedIn={isLoggedIn} sessionLoading={status === 'loading' && !isLoggedIn} onLogin={onLogin} onClose={handleClose}
           />
         </div>
       </div>

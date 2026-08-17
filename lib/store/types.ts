@@ -111,6 +111,13 @@ export interface AppState {
   viewerItem: ViewerItem | null;
 
   uploadOpen: boolean;
+  uploadBg: {
+    active: boolean;
+    progress: { percent: number; label: string } | null;
+    result: { success: boolean; error?: string; tokenExpired?: boolean; needsPAT?: boolean; merged?: boolean; direct?: boolean; prUrl?: string } | null;
+    compressing: string | null;
+  } | null;
+  setUploadBg: (partial: Partial<NonNullable<AppState['uploadBg']>> | null) => void;
   recentReads: any[];
 
   imgZoom: number;

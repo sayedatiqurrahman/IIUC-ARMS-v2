@@ -78,6 +78,8 @@ export const useAppStore = create<AppState>((set, get) => {
     viewerItem: null,
 
     uploadOpen: false,
+    uploadBg: null,
+    setUploadBg: (partial) => set(s => ({ uploadBg: partial === null ? null : { ...(s.uploadBg ?? { active: false, progress: null, result: null, compressing: null }), ...partial } })),
     recentReads: [],
 
     onboardingData: typeof window !== 'undefined' ? getOnboardingData() : null,
