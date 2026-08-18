@@ -10,6 +10,7 @@ import { installGitHubApp } from '@/lib/github-install';
 import CustomSelect from '@/components/CustomSelect';
 import LinksEditor from './LinksEditor';
 import FilePreview from './FilePreview';
+import SubfolderPicker from './SubfolderPicker';
 import { CURRENT_YEAR, CURRENT_SEASON } from './types';
 import type { CourseGroup, FileWithMeta } from './types';
 import { renderMarkdown } from '@/lib/markdown';
@@ -116,6 +117,7 @@ export default function UploadForm({
   const isExamCategory = category === config.categories.notes.folder || category === config.categories.questions.folder;
 
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
+  const [sharedMidFinal, setSharedMidFinal] = useState('');
   const deptRef = useRef<HTMLDivElement>(null);
   const semRef = useRef<HTMLDivElement>(null);
   const catRef = useRef<HTMLDivElement>(null);
@@ -125,9 +127,18 @@ export default function UploadForm({
     setInvalid(prev => (prev[key] ? { ...prev, [key]: false } : prev));
   }
 
+  function handleSharedMidFinal(v: string) {
+    setSharedMidFinal(v);
+    // Sync to all courses
+    for (const c of courses) {
+      updateCourse(c.id, { midFinal: v });
+      clearInvalid(`midFinal-${c.id}`);
+    }
+  }
+
   function focusInvalidField(errs: Record<string, boolean>): boolean {
-    const order = ['department', 'semester', 'category'];
-    for (const c of courses) order.push(`course-${c.id}`, `midFinal-${c.id}`, `examSession-${c.id}`);
+    const order = ['department', 'semester', 'category', 'midFinal'];
+    for (const c of courses) order.push(`course-${c.id}`, `examSession-${c.id}`);
     const first = order.find(k => errs[k]);
     if (!first) return false;
 
@@ -159,11 +170,11 @@ export default function UploadForm({
     if (!department) errs.department = true;
     if (!semester) errs.semester = true;
     if (!category) errs.category = true;
+    if (isExamCategory && !sharedMidFinal) errs.midFinal = true;
     for (const c of courses) {
       if (c.files.length === 0 && c.links.length === 0) continue;
       if (!c.selectedCourseCode) errs[`course-${c.id}`] = true;
-      if (isExamCategory && !c.midFinal) errs[`midFinal-${c.id}`] = true;
-      if (category === config.categories.notes.folder && !c.examSession) errs[`examSession-${c.id}`] = true;
+      if (category === config.categories.questions.folder && !c.examSession) errs[`examSession-${c.id}`] = true;
     }
     setInvalid(errs);
     if (Object.keys(errs).length > 0) {
@@ -299,8 +310,8 @@ export default function UploadForm({
                   ? [{ value: config.relatedSourcesFolder, label: 'Related Sources', icon: 'fa-folder-open' }]
                   : [
                       { value: '', label: 'Select...' },
-                      { value: config.categories.notes.folder, label: config.categories.notes.label, icon: 'fa-sticky-note', group: 'Exam Sections (inside Mid/Final)' },
-                      { value: config.categories.questions.folder, label: config.categories.questions.label, icon: 'fa-question-circle', group: 'Exam Sections (inside Mid/Final)' },
+                      { value: config.categories.notes.folder, label: config.categories.notes.label, icon: 'fa-sticky-note', group: 'Exam Categories (Mid/Final shared above)' },
+                      { value: config.categories.questions.folder, label: config.categories.questions.label, icon: 'fa-question-circle', group: 'Exam Categories (Mid/Final shared above)' },
                       { value: config.categories.sheet.folder, label: config.categories.sheet.label, icon: 'fa-scroll', group: 'Root Categories' },
                       { value: config.categories.syllabus.folder, label: config.categories.syllabus.label, icon: 'fa-graduation-cap', group: 'Root Categories' },
                       { value: config.categories.other.folder, label: config.categories.other.label, icon: 'fa-folder', group: 'Root Categories' },
@@ -309,6 +320,40 @@ export default function UploadForm({
           </div>
         </div>
       </div>
+
+      {/* Mid/Final selector — shared across all courses (notes/previous only) */}
+      {isExamCategory && (
+        <div className="mb-3 px-4 py-3 rounded-xl bg-dark-bg2 border border-dark-border">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">
+                <i className="fas fa-layer-group mr-1 text-amber-400"></i>Exam Section * <span className="text-dark-text3">(for all courses)</span>
+              </label>
+              <CustomSelect
+                value={sharedMidFinal}
+                onChange={handleSharedMidFinal}
+                placeholder="Select..."
+                options={[
+                  { value: '', label: 'Select...' },
+                  { value: 'Mid', label: 'Mid Term', icon: 'fa-hourglass-half' },
+                  { value: 'Final', label: 'Final Term', icon: 'fa-check-double' },
+                ]}
+              />
+            </div>
+            {category === config.categories.questions.folder && (
+              <div>
+                <label className="text-[0.72rem] text-dark-text2 block mb-1">
+                  <i className="fas fa-calendar mr-1 text-blue-400"></i>Exam Session * <span className="text-dark-text3">(per course)</span>
+                </label>
+                <p className="text-[0.65rem] text-dark-text3">Set per course below</p>
+              </div>
+            )}
+          </div>
+          {!sharedMidFinal && (
+            <p className="mt-2 text-[0.68rem] text-amber-400"><i className="fas fa-exclamation-triangle mr-1"></i>Select exam section (Mid or Final) to continue</p>
+          )}
+        </div>
+      )}
 
       {/* Course Groups */}
       {courses.map((course, idx) => {
@@ -392,39 +437,15 @@ export default function UploadForm({
             </div>
           )}
 
-          {/* Exam Section & Session */}
-          {isExamCategory && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-              <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Section *</label>
-                <CustomSelect value={course.midFinal} onChange={v => { updateCourse(course.id, { midFinal: v }); clearInvalid(`midFinal-${course.id}`); }} error={!!invalid[`midFinal-${course.id}`]} placeholder="Select..." options={[
-                  { value: '', label: 'Select...' },
-                  { value: 'Mid', label: 'Mid', icon: 'fa-hourglass-half' },
-                  { value: 'Final', label: 'Final', icon: 'fa-check-double' },
-                ]} />
-              </div>
-              <div>
-                <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
-                {category === config.categories.questions.folder ? (
-                  <CustomSelect value={course.examSession} onChange={v => { updateCourse(course.id, { examSession: v }); clearInvalid(`examSession-${course.id}`); }} error={!!invalid[`examSession-${course.id}`]} options={[
-                    { value: 'Both', label: 'Both (Autumn + Spring)', icon: 'fa-layer-group' },
-                    { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
-                    { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
-                  ]} />
-                ) : (
-                  <CustomSelect value={course.examSession} onChange={v => { updateCourse(course.id, { examSession: v }); clearInvalid(`examSession-${course.id}`); }} error={!!invalid[`examSession-${course.id}`]} placeholder="Select..." options={[
-                    { value: '', label: 'Select...' },
-                    { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
-                    { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
-                  ]} />
-                )}
-              </div>
-            </div>
-          )}
-
-          {isExamCategory && !course.midFinal && (
-            <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
-              <p className="text-[0.68rem] text-orange-400"><i className="fas fa-exclamation-triangle mr-1"></i>Select exam section (Mid or Final).</p>
+          {/* Exam Session (per course, for questions only) */}
+          {isExamCategory && category === config.categories.questions.folder && (
+            <div className="mb-2">
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">Exam Session *</label>
+              <CustomSelect value={course.examSession} onChange={v => { updateCourse(course.id, { examSession: v }); clearInvalid(`examSession-${course.id}`); }} error={!!invalid[`examSession-${course.id}`]} options={[
+                { value: 'Both', label: 'Both (Autumn + Spring)', icon: 'fa-layer-group' },
+                { value: 'Autumn', label: 'Autumn', icon: 'fa-leaf' },
+                { value: 'Spring', label: 'Spring', icon: 'fa-seedling' },
+              ]} />
             </div>
           )}
 
@@ -438,22 +459,26 @@ export default function UploadForm({
                   : semester === config.relatedSourcesFolder
                     ? `${getFacultyIdForDepartment(department) || department}/${config.relatedSourcesFolder}/${courseFolder}/`
                     : isExamCategory && course.examSession
-                      ? `${department}/${semester}/${courseFolder}/${course.midFinal ? course.midFinal + '/' : ''}${category}/${course.customFolder ? course.customFolder + '/' : ''}${course.examSession}/...`
-                      : `${department}/${semester}/${courseFolder}/${course.midFinal ? course.midFinal + '/' : ''}${category}/${course.customFolder ? course.customFolder + '/' : ''}`
+                      ? `${department}/${semester}/${courseFolder}/${sharedMidFinal ? sharedMidFinal + '/' : ''}${category}/${course.customFolder ? course.customFolder + '/' : ''}${course.examSession}/...`
+                      : `${department}/${semester}/${courseFolder}/${sharedMidFinal ? sharedMidFinal + '/' : ''}${category}/${course.customFolder ? course.customFolder + '/' : ''}`
                 }
               </span>
             </div>
           )}
 
-          {/* Custom Subfolder */}
+          {/* Subfolder Picker */}
           {course.selectedCourseCode && category && (
             <div className="mb-3">
-              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-folder-plus mr-1 text-dark-text3"></i>Subfolder (optional)</label>
-              <input
+              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-folder-tree mr-1 text-dark-text3"></i>Subfolder (optional)</label>
+              <SubfolderPicker
+                department={department}
+                semester={semester}
+                category={category}
+                courseCode={course.selectedCourseCode}
+                courseTitle={course.selectedCourseTitle}
+                midFinal={course.midFinal}
                 value={course.customFolder}
-                onChange={e => updateCourse(course.id, { customFolder: e.target.value.replace(/[\/\\]/g, '') })}
-                placeholder="e.g. 2024, Batch-1, Spring (leave empty for root)"
-                className="w-full px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-[0.78rem] text-dark-text focus:border-qsis outline-none placeholder:text-dark-text3"
+                onChange={v => updateCourse(course.id, { customFolder: v })}
               />
             </div>
           )}
