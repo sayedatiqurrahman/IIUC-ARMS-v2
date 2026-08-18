@@ -63,9 +63,6 @@ export async function GET(request: Request) {
 
     const token = await getGithubToken();
 
-    // Fetch the contributor's email from DB profile so we can also match
-    // commits made by the app bot (where author.login won't match).
-    // NOTE: Profile.userId is a cuid — GitHub login is in Profile.githubLogin.
     let profileEmail = '';
     try {
       const { prisma } = await import('@/lib/prisma');
@@ -76,7 +73,6 @@ export async function GET(request: Request) {
       else if (profile?.email) profileEmail = profile.email.toLowerCase();
     } catch {}
 
-    // Also fetch the user's public email from GitHub profile
     let ghPublicEmail = '';
     try {
       const userRes = await fetch(`${GITHUB_API}/users/${encodeURIComponent(login)}`, { headers: ghHeaders(token) });
@@ -102,7 +98,6 @@ export async function GET(request: Request) {
       const commits = loginCommitResult.data;
       const prs = prResult.data;
 
-      // Fetch commits by all known emails to catch bot-authored commits
       const emailSet = new Set<string>();
       if (profileEmail) emailSet.add(profileEmail);
       if (ghPublicEmail && ghPublicEmail !== profileEmail) emailSet.add(ghPublicEmail);
@@ -119,7 +114,6 @@ export async function GET(request: Request) {
         } catch {}
       }
 
-      // Merge and dedupe by SHA
       const seenShas = new Set<string>();
       const allCommits = [...commits, ...emailCommits];
 
@@ -132,7 +126,6 @@ export async function GET(request: Request) {
         const authorEmail = (c.commit?.author?.email || '').toLowerCase();
         const committerEmail = (c.commit?.committer?.email || '').toLowerCase();
 
-        // Match if: login matches OR email matches any known email
         const loginMatch = authorLogin === login || committerLogin === login;
         const emailMatch = authorEmail === noreplyEmail || committerEmail === noreplyEmail
           || (profileEmail && (authorEmail === profileEmail || committerEmail === profileEmail))

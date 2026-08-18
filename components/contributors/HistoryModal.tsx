@@ -17,7 +17,7 @@ interface HistoryEvent {
   url: string;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 
 const REPO_META: Record<string, { icon: string; color: string; label: string }> = {
   code: { icon: 'fa-laptop-code', color: 'text-blue-400', label: 'Code' },
