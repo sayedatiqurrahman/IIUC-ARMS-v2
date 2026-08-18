@@ -10,8 +10,8 @@ const DEFAULT_NOTICE_TTL_DAYS = 183;
 
 export async function GET() {
   let notices = await readNoticesIndex();
-  // Filter out expired notices
-  notices = notices.filter(n => !isNoticeExpired(n));
+  // Filter out expired and scheduled (not yet published) notices
+  notices = notices.filter(n => !isNoticeExpired(n) && n.status !== 'scheduled');
   return NextResponse.json({ success: true, notices });
 }
 
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       const { action } = body;
 
     if (action === 'create' || action === 'update') {
-      const { notice } = body as { notice: Omit<Notice, 'id' | 'publishedAt'> & { id?: string; ttlDays?: number | null } };
+      const { notice, scheduledAt, telegramTargets } = body as { notice: Omit<Notice, 'id' | 'publishedAt'> & { id?: string; ttlDays?: number | null }; scheduledAt?: string; telegramTargets?: ('channel' | 'group' | 'personal')[] };
       if (!notice?.title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 });
 
       const notices = await readNoticesIndex();
@@ -55,6 +55,8 @@ export async function POST(req: NextRequest) {
       }
 
       if (action === 'create') {
+        // Determine if this is a scheduled or immediate publish
+        const isScheduled = scheduledAt && new Date(scheduledAt) > new Date();
         const newNotice: Notice = {
           id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           title: notice.title.trim(),
@@ -69,13 +71,18 @@ export async function POST(req: NextRequest) {
           publishedByName: profile?.name || email.split('@')[0],
           publishedAt: now,
           expiresAt,
+          scheduledAt: isScheduled ? scheduledAt : undefined,
+          status: isScheduled ? 'scheduled' : 'published',
+          telegramTargets: telegramTargets && telegramTargets.length > 0 ? telegramTargets : undefined,
         };
         notices.unshift(newNotice);
 
-        await writeNoticesIndex(notices, (await getToken(email))!, `notice: publish "${newNotice.title}"`, author);
+        await writeNoticesIndex(notices, (await getToken(email))!, `notice: ${isScheduled ? 'schedule' : 'publish'} "${newNotice.title}"`, author);
 
-        // Auto-post to Telegram/WhatsApp
-        broadcastNotice(newNotice).catch(() => {});
+        // Only broadcast immediately if not scheduled
+        if (!isScheduled) {
+          broadcastNotice(newNotice, telegramTargets).catch(() => {});
+        }
 
         return NextResponse.json({ success: true, notice: newNotice });
       }
@@ -141,9 +148,14 @@ async function getToken(email: string): Promise<string> {
   return process.env.GITHUB_TOKEN || '';
 }
 
-async function broadcastNotice(notice: Notice) {
+async function broadcastNotice(notice: Notice, targets?: ('channel' | 'group' | 'personal')[]) {
   try {
     const { sendMessage, sendDocument, CHANNEL_ID, GROUP_ID, SITE_URL } = await import('@/lib/telegram/api');
+
+    // Determine which targets to send to (default: all if not specified)
+    const sendToChannel = !targets || targets.includes('channel');
+    const sendToGroup = !targets || targets.includes('group');
+    const sendToPersonal = !targets || targets.includes('personal');
 
     const catLabel = notice.category === 'academic-calendar' ? 'Academic Calendar'
       : notice.category === 'bus-schedule' ? 'Bus Schedule' : 'Notice';
@@ -162,14 +174,14 @@ async function broadcastNotice(notice: Notice) {
       `📅 ${notice.date || new Date().toISOString().split('T')[0]}`,
       '',
       '🔗 <b>Follow us:</b>',
-      `• 📢 Telegram Channel: <a href="https://t.me/iiuc_arms">t.me/iiuc_arms</a>`,
-      `• 💬 Telegram Group: <a href="https://t.me/iiuc_arms_chat">t.me/iiuc_arms_chat</a>`,
+      sendToChannel ? `• 📢 Telegram Channel: <a href="https://t.me/iiuc_arms">t.me/iiuc_arms</a>` : '',
+      sendToGroup ? `• 💬 Telegram Group: <a href="https://t.me/iiuc_arms_chat">t.me/iiuc_arms_chat</a>` : '',
       `• 🤖 Talk to Bot: <a href="https://t.me/${process.env.TELEGRAM_BOT_USERNAME || 'iiuc_arms_bot'}">@${process.env.TELEGRAM_BOT_USERNAME || 'iiuc_arms_bot'}</a>`,
       `• 🌐 Open App: <a href="${SITE_URL}">IIUC-ARMS</a>`,
       '',
-      `📋 <a href="${SITE_URL}/notices?id=${notice.id}">View this Notice →</a>`,
+      `📋 <a href="${SITE_URL}/notices/${notice.id}">View this Notice →</a>`,
       `📋 <a href="${SITE_URL}/notices">View All Notices →</a>`,
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 
     // --- Main message body ---
     let body = `${emoji} <b>${catLabel}</b>\n`;
@@ -183,7 +195,7 @@ async function broadcastNotice(notice: Notice) {
     const fullText = body + footer;
 
     // --- Send to Channel ---
-    if (CHANNEL_ID) {
+    if (sendToChannel && CHANNEL_ID) {
       try {
         if (hasAttachment && (isImage || isPdf)) {
           await sendDocument(CHANNEL_ID, notice.attachmentUrl!, fullText);
@@ -194,7 +206,7 @@ async function broadcastNotice(notice: Notice) {
     }
 
     // --- Send to Group ---
-    if (GROUP_ID) {
+    if (sendToGroup && GROUP_ID) {
       try {
         if (hasAttachment && (isImage || isPdf)) {
           await sendDocument(GROUP_ID, notice.attachmentUrl!, fullText);
@@ -205,9 +217,11 @@ async function broadcastNotice(notice: Notice) {
     }
 
     // --- Send to individual users (bot DM) ---
-    const { sendDepartmentNotifications } = await import('@/lib/telegram/notifications');
-    await sendDepartmentNotifications(['ALL'], fullText, {
-      type: 'notice', title: `${catLabel}: ${notice.title}`,
-    }).catch(() => {});
+    if (sendToPersonal) {
+      const { sendDepartmentNotifications } = await import('@/lib/telegram/notifications');
+      await sendDepartmentNotifications(['ALL'], fullText, {
+        type: 'notice', title: `${catLabel}: ${notice.title}`,
+      }).catch(() => {});
+    }
   } catch (e) { console.error('[TG] broadcastNotice failed:', e); }
 }

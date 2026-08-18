@@ -21,6 +21,9 @@ export interface Notice {
   publishedByName?: string;
   publishedAt: string;     // ISO datetime
   expiresAt?: string;      // ISO datetime — auto-delete after this date
+  scheduledAt?: string;    // ISO datetime — auto-publish at this time
+  status?: 'published' | 'scheduled'; // publish status
+  telegramTargets?: ('channel' | 'group' | 'personal')[]; // where to forward
 }
 
 export const CATEGORY_META: Record<NoticeCategory, { label: string; icon: string; color: string; bg: string }> = {

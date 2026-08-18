@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { config } from '@/lib/config';
 import type { Notice, NoticeCategory } from '@/lib/notices';
 import { CATEGORY_META } from '@/lib/notices';
+import NoticePublishModal, { type NoticePublishOptions } from './NoticePublishModal';
 
 const CATEGORIES: { key: NoticeCategory | 'all'; label: string; icon: string }[] = [
   { key: 'all', label: 'All', icon: 'fas fa-layer-group' },
@@ -34,6 +36,10 @@ export default function NoticeBoardView() {
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+
+  // Publish modal state
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [pendingNotice, setPendingNotice] = useState<{ notice: any; action: string } | null>(null);
 
   const fetchNotices = useCallback(async () => {
     try {
@@ -124,24 +130,58 @@ export default function NoticeBoardView() {
 
   const handleSave = async () => {
     if (!form.title.trim()) return;
+    // For edits, save directly (no publish modal)
+    if (editing) {
+      setSaving(true);
+      try {
+        const res = await fetch('/api/notices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update',
+            notice: { ...form, id: editing.id, attachmentUrl: (form as any).attachmentUrl, attachmentName: (form as any).attachmentName },
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setShowForm(false);
+          fetchNotices();
+        }
+      } catch {}
+      setSaving(false);
+    } else {
+      // For new notices, open publish modal
+      setPendingNotice({
+        notice: { ...form, attachmentUrl: (form as any).attachmentUrl, attachmentName: (form as any).attachmentName },
+        action: 'create',
+      });
+      setShowForm(false);
+      setShowPublishModal(true);
+    }
+  };
+
+  const handlePublishConfirm = async (options: NoticePublishOptions) => {
+    if (!pendingNotice) return;
     setSaving(true);
+    setShowPublishModal(false);
     try {
-      const action = editing ? 'update' : 'create';
       const res = await fetch('/api/notices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action,
-          notice: { ...form, id: editing?.id, attachmentUrl: (form as any).attachmentUrl, attachmentName: (form as any).attachmentName },
+          action: pendingNotice.action,
+          notice: pendingNotice.notice,
+          scheduledAt: options.scheduledAt,
+          telegramTargets: options.telegramTargets,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setShowForm(false);
         fetchNotices();
       }
     } catch {}
     setSaving(false);
+    setPendingNotice(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -234,7 +274,9 @@ export default function NoticeBoardView() {
                     </div>
                   )}
                 </div>
-                <h3 className="text-[0.9rem] font-bold text-dark-text mb-1.5 leading-snug cursor-pointer hover:text-qsis transition" onClick={() => setSelectedNotice(n)}>{n.title}</h3>
+                <Link href={`/notices/${n.id}`} className="block">
+                  <h3 className="text-[0.9rem] font-bold text-dark-text mb-1.5 leading-snug hover:text-qsis transition">{n.title}</h3>
+                </Link>
                 {n.description && <p className="text-[0.78rem] text-dark-text2 leading-relaxed mb-3 whitespace-pre-line">{n.description}</p>}
                 {n.link && (
                   <a href={n.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[0.75rem] text-qsis hover:underline mb-3">
@@ -300,7 +342,9 @@ export default function NoticeBoardView() {
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-[0.82rem] font-semibold text-dark-text truncate cursor-pointer hover:text-qsis transition" onClick={() => setSelectedNotice(n)}>{n.title}</h3>
+                    <Link href={`/notices/${n.id}`} className="block">
+                      <h3 className="text-[0.82rem] font-semibold text-dark-text truncate hover:text-qsis transition">{n.title}</h3>
+                    </Link>
                     {n.pinned && <i className="fas fa-thumbtack text-qsis text-[0.6rem]"></i>}
                   </div>
                   <div className="flex items-center gap-3 text-[0.65rem] text-dark-text3 mt-0.5">
@@ -437,7 +481,7 @@ export default function NoticeBoardView() {
               <div className="flex gap-2 pt-2">
                 <button onClick={handleSave} disabled={saving || !form.title.trim()}
                   className="flex-1 py-2.5 rounded-xl bg-qsis text-white text-[0.85rem] font-semibold hover:brightness-110 transition cursor-pointer disabled:opacity-50">
-                  {saving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : editing ? 'Update Notice' : 'Publish Notice'}
+                  {saving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : editing ? 'Update Notice' : 'Continue to Publish'}
                 </button>
                 <button onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.85rem] hover:text-dark-text cursor-pointer">Cancel</button>
               </div>
@@ -446,77 +490,12 @@ export default function NoticeBoardView() {
         </div>
       )}
 
-      {/* Notice Detail Viewer */}
-      {selectedNotice && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={() => setSelectedNotice(null)}>
-          <div className="w-full max-w-2xl rounded-2xl border border-dark-border bg-dark-bg2 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-dark-border bg-dark-bg2/95 backdrop-blur-sm rounded-t-2xl">
-              <div className="flex items-center gap-2 min-w-0">
-                {(() => {
-                  const meta = CATEGORY_META[selectedNotice.category];
-                  return <span className={`px-2 py-0.5 rounded-md text-[0.65rem] font-medium ${meta.bg} ${meta.color} shrink-0`}><i className={`${meta.icon} mr-1`}></i>{meta.label}</span>;
-                })()}
-                {selectedNotice.pinned && <i className="fas fa-thumbtack text-qsis text-[0.65rem] shrink-0"></i>}
-              </div>
-              <button onClick={() => setSelectedNotice(null)} className="w-8 h-8 rounded-full bg-dark-bg3 flex items-center justify-center text-dark-text2 border-none cursor-pointer shrink-0"><i className="fas fa-times text-sm"></i></button>
-            </div>
-            <div className="p-5">
-              <h2 className="text-lg font-bold text-dark-text mb-2">{selectedNotice.title}</h2>
-              <div className="flex items-center gap-3 text-[0.72rem] text-dark-text3 mb-4 flex-wrap">
-                <span><i className="fas fa-calendar mr-1"></i>{formatDate(selectedNotice.date)}</span>
-                <span><i className="fas fa-user mr-1"></i>{selectedNotice.publishedByName || selectedNotice.publishedBy}</span>
-                <span><i className="fas fa-clock mr-1"></i>{new Date(selectedNotice.publishedAt).toLocaleTimeString()}</span>
-                {selectedNotice.expiresAt && (
-                  <span className="text-amber-400/70"><i className="fas fa-hourglass-half mr-1"></i>Auto-deletes {formatDate(selectedNotice.expiresAt)}</span>
-                )}
-              </div>
-              {selectedNotice.description && (
-                <div className="text-[0.85rem] text-dark-text2 leading-relaxed whitespace-pre-line mb-4 p-3 rounded-xl bg-dark-bg3/50">{selectedNotice.description}</div>
-              )}
-              {selectedNotice.link && (
-                <a href={selectedNotice.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-qsis/10 border border-qsis/20 text-qsis text-[0.8rem] hover:bg-qsis/15 transition mb-4">
-                  <i className="fas fa-external-link-alt"></i>
-                  <span className="truncate">{selectedNotice.link}</span>
-                </a>
-              )}
-              {selectedNotice.attachmentUrl && (() => {
-                const ext = (selectedNotice.attachmentName || selectedNotice.attachmentUrl).split('.').pop()?.toLowerCase() || '';
-                const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
-                const isPdf = ext === 'pdf';
-                return (
-                  <div className="mb-2">
-                    <p className="text-[0.72rem] font-medium text-dark-text2 mb-2"><i className="fas fa-paperclip mr-1"></i>Attachment</p>
-                    {isImage ? (
-                      <a href={selectedNotice.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block rounded-xl overflow-hidden border border-dark-border hover:border-qsis/40 transition">
-                        <img src={selectedNotice.attachmentUrl} alt={selectedNotice.attachmentName || 'Attachment'} className="w-full max-h-[60vh] object-contain bg-black/20" />
-                      </a>
-                    ) : isPdf ? (
-                      <div className="rounded-xl border border-dark-border overflow-hidden">
-                        <div className="flex items-center justify-between px-3 py-2 bg-red-500/10 border-b border-dark-border">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <i className="fas fa-file-pdf text-red-400 text-lg"></i>
-                            <span className="text-[0.78rem] font-medium text-dark-text truncate">{selectedNotice.attachmentName || 'PDF Document'}</span>
-                          </div>
-                          <a href={selectedNotice.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-qsis text-[0.72rem] hover:underline shrink-0"><i className="fas fa-external-link-alt mr-1"></i>Open</a>
-                        </div>
-                        <iframe src={selectedNotice.attachmentUrl} className="w-full h-[50vh] bg-dark-bg3" title={selectedNotice.attachmentName || 'PDF'} />
-                      </div>
-                    ) : (
-                      <a href={selectedNotice.attachmentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition">
-                        <i className="fas fa-file text-dark-text3 text-xl"></i>
-                        <div className="min-w-0">
-                          <p className="text-[0.82rem] font-medium text-dark-text truncate">{selectedNotice.attachmentName || 'File'}</p>
-                          <p className="text-[0.68rem] text-dark-text3">Click to download</p>
-                        </div>
-                        <i className="fas fa-download text-dark-text3 ml-auto"></i>
-                      </a>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
+      {/* Publish Modal */}
+      {showPublishModal && (
+        <NoticePublishModal
+          onPublish={handlePublishConfirm}
+          onClose={() => { setShowPublishModal(false); setPendingNotice(null); }}
+        />
       )}
     </div>
   );

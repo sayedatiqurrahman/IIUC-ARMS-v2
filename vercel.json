@@ -51,6 +51,10 @@
     {
       "path": "/api/cron?job=publish-seat-plans",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron?job=publish-notices",
+      "schedule": "*/5 * * * *"
     }
   ],
   "framework": "nextjs",

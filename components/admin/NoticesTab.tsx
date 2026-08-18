@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Notice, NoticeCategory } from '@/lib/notices';
 import { CATEGORY_META } from '@/lib/notices';
+import NoticePublishModal, { type NoticePublishOptions } from '@/components/notices/NoticePublishModal';
 
 export default function NoticesTab() {
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -14,6 +15,10 @@ export default function NoticesTab() {
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+
+  // Publish modal state
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [pendingNotice, setPendingNotice] = useState<{ notice: any; action: string } | null>(null);
 
   const fetchNotices = useCallback(async () => {
     try {
@@ -91,21 +96,52 @@ export default function NoticesTab() {
 
   const handleSave = async () => {
     if (!form.title.trim()) return;
+    if (editing) {
+      // Edits save directly
+      setSaving(true);
+      try {
+        const res = await fetch('/api/notices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update', notice: { ...form, id: editing.id } }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setShowForm(false);
+          fetchNotices();
+        }
+      } catch {}
+      setSaving(false);
+    } else {
+      // New notices go through publish modal
+      setPendingNotice({ notice: { ...form }, action: 'create' });
+      setShowForm(false);
+      setShowPublishModal(true);
+    }
+  };
+
+  const handlePublishConfirm = async (options: NoticePublishOptions) => {
+    if (!pendingNotice) return;
     setSaving(true);
+    setShowPublishModal(false);
     try {
-      const action = editing ? 'update' : 'create';
       const res = await fetch('/api/notices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, notice: { ...form, id: editing?.id } }),
+        body: JSON.stringify({
+          action: pendingNotice.action,
+          notice: pendingNotice.notice,
+          scheduledAt: options.scheduledAt,
+          telegramTargets: options.telegramTargets,
+        }),
       });
       const data = await res.json();
       if (data.success) {
-        setShowForm(false);
         fetchNotices();
       }
     } catch {}
     setSaving(false);
+    setPendingNotice(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -274,13 +310,21 @@ export default function NoticesTab() {
               <div className="flex gap-2 pt-2">
                 <button onClick={handleSave} disabled={saving || !form.title.trim()}
                   className="flex-1 py-2.5 rounded-xl bg-qsis text-white text-[0.85rem] font-semibold hover:brightness-110 transition cursor-pointer disabled:opacity-50">
-                  {saving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : editing ? 'Update' : 'Publish'}
+                  {saving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : editing ? 'Update' : 'Continue to Publish'}
                 </button>
                 <button onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.85rem] cursor-pointer">Cancel</button>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Publish Modal */}
+      {showPublishModal && (
+        <NoticePublishModal
+          onPublish={handlePublishConfirm}
+          onClose={() => { setShowPublishModal(false); setPendingNotice(null); }}
+        />
       )}
     </div>
   );

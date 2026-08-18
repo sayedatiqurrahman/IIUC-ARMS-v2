@@ -107,6 +107,90 @@ async function runScheduledSeatPlans() {
   return { success: true, message: `Auto-published ${result.count} seat plan(s)`, details: scheduled.map(r => `${r.department || 'all'} - ${r.examType || 'exam'}`).join(', ') };
 }
 
+async function runScheduledNotices() {
+  const { readNoticesIndex, writeNoticesIndex, isNoticeExpired } = await import('@/lib/notices');
+  const now = new Date();
+  const notices = await readNoticesIndex();
+  const scheduled = notices.filter(n => n.status === 'scheduled' && n.scheduledAt && new Date(n.scheduledAt) <= now && !isNoticeExpired(n));
+  if (scheduled.length === 0) return { success: true, message: 'No scheduled notices to publish', details: 'All clear' };
+
+  // Update scheduled notices to published
+  for (const n of scheduled) {
+    n.status = 'published';
+    n.publishedAt = now.toISOString();
+    delete n.scheduledAt;
+  }
+
+  // Get token for commit + broadcast
+  let token = '';
+  try {
+    const { getRepoBotToken } = await import('@/lib/github-app');
+    const { config } = await import('@/lib/config');
+    const bot = await getRepoBotToken(config.owner, config.repo);
+    if (bot) token = bot;
+  } catch {}
+  if (!token) token = process.env.GITHUB_TOKEN || '';
+
+  if (token) {
+    await writeNoticesIndex(notices, token, `notice: auto-publish ${scheduled.length} scheduled notice(s)`);
+
+    // Broadcast each published notice to Telegram
+    const { sendMessage, sendDocument, CHANNEL_ID, GROUP_ID, SITE_URL } = await import('@/lib/telegram/api');
+    for (const notice of scheduled) {
+      try {
+        const targets = notice.telegramTargets;
+        const sendToChannel = !targets || targets.includes('channel');
+        const sendToGroup = !targets || targets.includes('group');
+        const sendToPersonal = !targets || targets.includes('personal');
+
+        const catLabel = notice.category === 'academic-calendar' ? 'Academic Calendar'
+          : notice.category === 'bus-schedule' ? 'Bus Schedule' : 'Notice';
+        const emoji = notice.category === 'academic-calendar' ? '📅'
+          : notice.category === 'bus-schedule' ? '🚌' : '📢';
+
+        const hasAttachment = !!notice.attachmentUrl;
+        const isImage = hasAttachment && /\.(jpg|jpeg|png|gif|webp)$/i.test(notice.attachmentUrl!);
+        const isPdf = hasAttachment && /\.pdf$/i.test(notice.attachmentUrl!);
+
+        let body = `${emoji} <b>${catLabel}</b>\n`;
+        body += `<b>${notice.title}</b>\n`;
+        if (notice.description) body += `\n${notice.description}\n`;
+        if (notice.link) body += `\n🔗 <a href="${notice.link}">Open Link</a>`;
+
+        const footer = [
+          '', '━━━━━━━━━━━━━━━━━━',
+          `🏛️ <b>Published by IIUC-ARMS</b>`,
+          `📅 ${notice.date || now.toISOString().split('T')[0]}`,
+          '', '🔗 <b>Follow us:</b>',
+          sendToChannel ? `• 📢 Telegram Channel: <a href="https://t.me/iiuc_arms">t.me/iiuc_arms</a>` : '',
+          sendToGroup ? `• 💬 Telegram Group: <a href="https://t.me/iiuc_arms_chat">t.me/iiuc_arms_chat</a>` : '',
+          `• 🤖 Talk to Bot: <a href="https://t.me/${process.env.TELEGRAM_BOT_USERNAME || 'iiuc_arms_bot'}">@${process.env.TELEGRAM_BOT_USERNAME || 'iiuc_arms_bot'}</a>`,
+          `• 🌐 Open App: <a href="${SITE_URL}">IIUC-ARMS</a>`,
+          '', `📋 <a href="${SITE_URL}/notices/${notice.id}">View this Notice →</a>`,
+          `📋 <a href="${SITE_URL}/notices">View All Notices →</a>`,
+        ].filter(Boolean).join('\n');
+
+        const fullText = body + footer;
+
+        if (sendToChannel && CHANNEL_ID) {
+          if (hasAttachment && (isImage || isPdf)) await sendDocument(CHANNEL_ID, notice.attachmentUrl!, fullText);
+          else await sendMessage(CHANNEL_ID, fullText, { disable_web_page_preview: !hasAttachment });
+        }
+        if (sendToGroup && GROUP_ID) {
+          if (hasAttachment && (isImage || isPdf)) await sendDocument(GROUP_ID, notice.attachmentUrl!, fullText);
+          else await sendMessage(GROUP_ID, fullText, { disable_web_page_preview: !hasAttachment });
+        }
+        if (sendToPersonal) {
+          const { sendDepartmentNotifications } = await import('@/lib/telegram/notifications');
+          await sendDepartmentNotifications(['ALL'], fullText, { type: 'notice', title: `${catLabel}: ${notice.title}` }).catch(() => {});
+        }
+      } catch (e) { console.error(`[TG] broadcast scheduled notice failed: ${notice.title}`, e); }
+    }
+  }
+
+  return { success: true, message: `Auto-published ${scheduled.length} notice(s)`, details: scheduled.map(n => n.title).join(', ') };
+}
+
 // ─── Job registry ────────────────────────────────────────────────
 
 export const CRON_JOBS: CronJob[] = [
@@ -200,6 +284,16 @@ export const CRON_JOBS: CronJob[] = [
     schedule: 'Every 5 minutes',
     group: 'scheduled-publish',
     run: runScheduledSeatPlans,
+  },
+  {
+    id: 'publish-notices',
+    label: 'Publish Notices',
+    description: 'Auto-publish scheduled notices from GitHub index when their scheduled time arrives.',
+    icon: 'fas fa-bell',
+    color: 'text-amber-400',
+    schedule: 'Every 5 minutes',
+    group: 'scheduled-publish',
+    run: runScheduledNotices,
   },
 ];
 
