@@ -181,9 +181,9 @@ export default function NoticeDetail({ params }: { params: Promise<{ id: string 
                         className="px-2.5 py-1 rounded-lg bg-qsis/15 text-qsis text-[0.7rem] font-semibold hover:bg-qsis/25 transition cursor-pointer border-none">
                         <i className="fas fa-expand mr-1"></i>Open Viewer
                       </button>
-                      <a href={notice.attachmentUrl} target="_blank" rel="noopener noreferrer"
+                      <a href={notice.attachmentUrl} download={attName}
                         className="px-2.5 py-1 rounded-lg bg-dark-bg2 border border-dark-border text-dark-text2 text-[0.7rem] font-semibold hover:text-dark-text transition">
-                        <i className="fas fa-external-link-alt mr-1"></i>Raw
+                        <i className="fas fa-download mr-1"></i>Download
                       </a>
                     </div>
                   </div>
@@ -202,9 +202,9 @@ export default function NoticeDetail({ params }: { params: Promise<{ id: string 
                       <i className="fas fa-image text-green-400 text-lg"></i>
                       <span className="text-[0.78rem] font-medium text-dark-text truncate">{attName}</span>
                     </div>
-                    <a href={notice.attachmentUrl} target="_blank" rel="noopener noreferrer"
+                    <a href={notice.attachmentUrl} download={attName}
                       className="px-2.5 py-1 rounded-lg bg-dark-bg2 border border-dark-border text-dark-text2 text-[0.7rem] font-semibold hover:text-dark-text transition">
-                      <i className="fas fa-expand mr-1"></i>Full Size
+                      <i className="fas fa-download mr-1"></i>Download
                     </a>
                   </div>
                   <img src={notice.attachmentUrl} alt={attName}
@@ -215,7 +215,7 @@ export default function NoticeDetail({ params }: { params: Promise<{ id: string 
 
               {/* Fallback download for other types */}
               {!canPreviewWithDocViewer && !canPreviewImage && (
-                <a href={notice.attachmentUrl} target="_blank" rel="noopener noreferrer"
+                <a href={notice.attachmentUrl} download={attName}
                   className="flex items-center gap-3 px-4 py-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition">
                   <i className="fas fa-file text-dark-text3 text-xl"></i>
                   <div className="min-w-0">

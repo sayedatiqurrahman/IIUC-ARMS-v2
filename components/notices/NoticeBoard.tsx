@@ -26,6 +26,8 @@ export default function NoticeBoardView() {
   const [filter, setFilter] = useState<NoticeCategory | 'all'>('all');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
 
   // Create/Edit state
@@ -58,6 +60,13 @@ export default function NoticeBoardView() {
       if (!search) return true;
       const q = search.toLowerCase();
       return n.title.toLowerCase().includes(q) || n.description.toLowerCase().includes(q);
+    })
+    .filter(n => {
+      if (!dateFrom && !dateTo) return true;
+      const nd = new Date(n.date).getTime();
+      if (dateFrom && nd < new Date(dateFrom).getTime()) return false;
+      if (dateTo && nd > new Date(dateTo + 'T23:59:59').getTime()) return false;
+      return true;
     })
     .sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
@@ -228,7 +237,21 @@ export default function NoticeBoardView() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 sm:ml-auto">
+        <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <i className="fas fa-calendar-day text-dark-text3 text-[0.65rem]"></i>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} placeholder="From"
+              className="px-2 py-1.5 rounded-lg bg-dark-bg2 border border-dark-border text-[0.72rem] text-dark-text w-[130px] focus:border-qsis outline-none" />
+            <span className="text-dark-text3 text-[0.65rem]">to</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} placeholder="To"
+              className="px-2 py-1.5 rounded-lg bg-dark-bg2 border border-dark-border text-[0.72rem] text-dark-text w-[130px] focus:border-qsis outline-none" />
+            {(dateFrom || dateTo) && (
+              <button onClick={() => { setDateFrom(''); setDateTo(''); }}
+                className="w-6 h-6 rounded-md bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-red-400 cursor-pointer border-none" title="Clear dates">
+                <i className="fas fa-times text-[0.6rem]"></i>
+              </button>
+            )}
+          </div>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..."
             className="px-3 py-1.5 rounded-lg bg-dark-bg2 border border-dark-border text-[0.78rem] text-dark-text w-40 focus:border-qsis outline-none" />
           <button onClick={() => setViewMode(v => v === 'card' ? 'list' : 'card')}
@@ -289,29 +312,31 @@ export default function NoticeBoardView() {
                   const isPdf = ext === 'pdf';
                   return (
                     <div className="mb-3">
-                      {isImage ? (
-                        <a href={n.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block rounded-xl overflow-hidden border border-dark-border hover:border-qsis/40 transition">
-                          <img src={n.attachmentUrl} alt={n.attachmentName || 'Attachment'} className="w-full max-h-48 object-cover" loading="lazy" />
-                        </a>
-                      ) : isPdf ? (
-                        <a href={n.attachmentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 transition">
-                          <i className="fas fa-file-pdf text-red-400 text-lg"></i>
-                          <div className="min-w-0">
-                            <p className="text-[0.75rem] font-medium text-dark-text truncate">{n.attachmentName || 'PDF Attachment'}</p>
-                            <p className="text-[0.65rem] text-dark-text3">Click to open PDF</p>
+                      <Link href={`/notices/${n.id}`} className="block">
+                        {isImage ? (
+                          <div className="rounded-xl overflow-hidden border border-dark-border hover:border-qsis/40 transition">
+                            <img src={n.attachmentUrl} alt={n.attachmentName || 'Attachment'} className="w-full max-h-48 object-cover" loading="lazy" />
                           </div>
-                          <i className="fas fa-external-link-alt text-dark-text3 text-[0.65rem] ml-auto"></i>
-                        </a>
-                      ) : (
-                        <a href={n.attachmentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition">
-                          <i className="fas fa-file text-dark-text3 text-lg"></i>
-                          <div className="min-w-0">
-                            <p className="text-[0.75rem] font-medium text-dark-text truncate">{n.attachmentName || 'Attachment'}</p>
-                            <p className="text-[0.65rem] text-dark-text3">Click to download</p>
+                        ) : isPdf ? (
+                          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 transition">
+                            <i className="fas fa-file-pdf text-red-400 text-lg"></i>
+                            <div className="min-w-0">
+                              <p className="text-[0.75rem] font-medium text-dark-text truncate">{n.attachmentName || 'PDF Attachment'}</p>
+                              <p className="text-[0.65rem] text-dark-text3">Click to preview</p>
+                            </div>
+                            <i className="fas fa-eye text-dark-text3 text-[0.65rem] ml-auto"></i>
                           </div>
-                          <i className="fas fa-download text-dark-text3 text-[0.65rem] ml-auto"></i>
-                        </a>
-                      )}
+                        ) : (
+                          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-dark-bg3 border border-dark-border hover:border-qsis/40 transition">
+                            <i className="fas fa-file text-dark-text3 text-lg"></i>
+                            <div className="min-w-0">
+                              <p className="text-[0.75rem] font-medium text-dark-text truncate">{n.attachmentName || 'Attachment'}</p>
+                              <p className="text-[0.65rem] text-dark-text3">Click to view</p>
+                            </div>
+                            <i className="fas fa-eye text-dark-text3 text-[0.65rem] ml-auto"></i>
+                          </div>
+                        )}
+                      </Link>
                     </div>
                   );
                 })()}
@@ -354,12 +379,16 @@ export default function NoticeBoardView() {
                     {n.attachmentUrl && (() => {
                       const ext = (n.attachmentName || n.attachmentUrl).split('.').pop()?.toLowerCase() || '';
                       const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
-                      return isImage ? (
-                        <a href={n.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline"><i className="fas fa-image mr-0.5"></i>Image</a>
-                      ) : ext === 'pdf' ? (
-                        <a href={n.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-red-400 hover:underline"><i className="fas fa-file-pdf mr-0.5"></i>PDF</a>
-                      ) : (
-                        <a href={n.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline"><i className="fas fa-paperclip mr-0.5"></i>Attachment</a>
+                      return (
+                        <Link href={`/notices/${n.id}`} className="hover:underline">
+                          {isImage ? (
+                            <span className="text-qsis"><i className="fas fa-image mr-0.5"></i>Image</span>
+                          ) : ext === 'pdf' ? (
+                            <span className="text-red-400"><i className="fas fa-file-pdf mr-0.5"></i>PDF</span>
+                          ) : (
+                            <span className="text-qsis"><i className="fas fa-paperclip mr-0.5"></i>Attachment</span>
+                          )}
+                        </Link>
                       );
                     })()}
                   </div>
@@ -376,15 +405,15 @@ export default function NoticeBoardView() {
                 const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
                 const isPdf = ext === 'pdf';
                 return isImage ? (
-                  <a href={n.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block border-t border-dark-border">
+                  <Link href={`/notices/${n.id}`} className="block border-t border-dark-border">
                     <img src={n.attachmentUrl} alt={n.attachmentName || 'Attachment'} className="w-full max-h-32 object-cover" loading="lazy" />
-                  </a>
+                  </Link>
                 ) : isPdf ? (
-                  <a href={n.attachmentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 border-t border-dark-border bg-red-500/5 hover:bg-red-500/10 transition">
+                  <Link href={`/notices/${n.id}`} className="flex items-center gap-2 px-4 py-2 border-t border-dark-border bg-red-500/5 hover:bg-red-500/10 transition">
                     <i className="fas fa-file-pdf text-red-400"></i>
                     <span className="text-[0.72rem] text-dark-text truncate">{n.attachmentName || 'PDF'}</span>
-                    <i className="fas fa-external-link-alt text-dark-text3 text-[0.6rem] ml-auto"></i>
-                  </a>
+                    <i className="fas fa-eye text-dark-text3 text-[0.6rem] ml-auto"></i>
+                  </Link>
                 ) : null;
               })()}
               </div>
