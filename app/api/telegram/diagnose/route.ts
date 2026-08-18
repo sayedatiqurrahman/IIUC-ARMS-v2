@@ -5,8 +5,10 @@ import { NextRequest, NextResponse } from 'next/server';
 // (falls back to TELEGRAM_BOT_TOKEN if the dedicated secret isn't set).
 export async function GET(req: NextRequest) {
   const key = req.nextUrl.searchParams.get('key') || '';
-  const secret = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || process.env.TELEGRAM_BOT_TOKEN || '';
-  if (!secret || key !== secret) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+  const webhookSecret = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || '';
+  const validKeys = [webhookSecret, botToken].filter(Boolean);
+  if (!key || !validKeys.includes(key)) {
     return NextResponse.json({ error: 'Forbidden — pass ?key=<TELEGRAM_BOT_WEBHOOK_SECRET or TELEGRAM_BOT_TOKEN>' }, { status: 403 });
   }
 

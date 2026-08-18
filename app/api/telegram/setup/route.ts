@@ -11,8 +11,9 @@ export async function GET(req: NextRequest) {
   // Re-registering the webhook redirects the bot's updates, so only the owner
   // (holder of the webhook secret / bot token) may call this endpoint.
   const key = req.nextUrl.searchParams.get('key') || '';
-  const secret = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || TOKEN;
-  if (!key || key !== secret) {
+  const webhookSecret = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || '';
+  const validKeys = [webhookSecret, TOKEN].filter(Boolean);
+  if (!key || !validKeys.includes(key)) {
     return NextResponse.json(
       { error: 'Forbidden — pass ?key=<TELEGRAM_BOT_WEBHOOK_SECRET or TELEGRAM_BOT_TOKEN>' },
       { status: 403 }
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: webhookUrl,
-        secret_token: secret,
+        secret_token: webhookSecret || TOKEN,
         allowed_updates: ['message', 'callback_query'],
         drop_pending_updates: true,
       }),

@@ -4,8 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 // Owner-only: GET /api/telegram/chat-ids?key=<TELEGRAM_BOT_WEBHOOK_SECRET or TELEGRAM_BOT_TOKEN>
 export async function GET(req: NextRequest) {
   const key = req.nextUrl.searchParams.get('key') || '';
-  const secret = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || process.env.TELEGRAM_BOT_TOKEN || '';
-  if (!secret || key !== secret) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+  const webhookSecret = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || '';
+  // Accept either the webhook secret OR the bot token as the key
+  const validKeys = [webhookSecret, botToken].filter(Boolean);
+  if (!key || !validKeys.includes(key)) {
     return NextResponse.json(
       { error: 'Forbidden — pass ?key=<TELEGRAM_BOT_WEBHOOK_SECRET or TELEGRAM_BOT_TOKEN>' },
       { status: 403 },
@@ -49,7 +52,7 @@ export async function GET(req: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: webhookUrl,
-        secret_token: secret,
+        secret_token: webhookSecret || botToken,
         allowed_updates: ['message', 'callback_query'],
         drop_pending_updates: false,
       }),
