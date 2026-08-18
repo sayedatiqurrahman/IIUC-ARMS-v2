@@ -149,7 +149,7 @@ export default function UsersTab({
   return (
     <div>
       {/* Sub-tab Navigation */}
-      <div className="flex gap-1 mb-4 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto">
+      <div className="flex flex-wrap gap-1 mb-4 p-1 bg-dark-bg2 border border-dark-border rounded-xl">
         {([
           { key: 'all' as UserSubTab, label: 'All Users', icon: 'fa-users', color: 'text-dark-text2' },
           { key: 'admin' as UserSubTab, label: 'Admins', icon: 'fa-crown', color: 'text-red-400' },
@@ -189,7 +189,7 @@ export default function UsersTab({
       )}
 
       {/* Search + Create User */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
         <h3 className="text-sm font-semibold text-dark-text">
           {userSubTab === 'all' && <><i className="fas fa-users text-dark-text2 mr-1"></i>All Users</>}
           {userSubTab === 'admin' && <><i className="fas fa-crown text-red-400 mr-1"></i>Admins</>}
@@ -200,7 +200,7 @@ export default function UsersTab({
             {userSubTab === 'pending' && <><i className="fas fa-clock text-yellow-400 mr-1"></i>Pending Approval</>}
           <span className="text-dark-text3 ml-1">({displayedUsers.length})</span>
         </h3>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
           {userSubTab === 'pending' && isAdmin && (
             <button
               onClick={handleApproveAll}
@@ -220,7 +220,7 @@ export default function UsersTab({
             value={searchQuery}
             onChange={e => { setSearchQuery(e.target.value); goToPage(1); }}
             placeholder="Search by name or email..."
-            className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-[0.78rem] w-60"
+            className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-[0.78rem] w-full sm:w-60"
           />
         </div>
       </div>

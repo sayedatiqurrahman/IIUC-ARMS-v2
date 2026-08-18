@@ -159,7 +159,7 @@ export default function UserRow({
                 ...(isSuperAdmin ? [{ value: 'admin', label: 'Admin', icon: 'fa-crown' }] : []),
                 ...(isAdmin ? customRoles.map(r => ({ value: r.key, label: r.label, icon: r.icon })) : []),
               ]}
-              className="min-w-[120px]"
+              className="min-w-[100px] sm:min-w-[120px]"
             />
           )}
           {canPromoteManager && (
