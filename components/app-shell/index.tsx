@@ -15,6 +15,7 @@ import OperationProgress from '@/components/OperationProgress';
 import { isStandalone, isInBrowser, isIOSBrowser, type BeforeInstallPromptEvent } from '@/lib/standalone';
 import { useTurnstile } from '@/lib/useTurnstile';
 import { useUserAccess } from '@/lib/useUserAccess';
+import { useScheduledPublishPoller } from '@/hooks/useScheduledPublishPoller';
 import { handleGoogleRedirectResult } from '@/lib/firebase';
 import dynamic from 'next/dynamic';
 const DocumentViewer = dynamic(() => import('./DocumentViewer'), { ssr: false });
@@ -29,6 +30,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
   const router = useRouter();
+
+  // Poll scheduled-publish jobs every 5 min (replaces Vercel cron on Hobby plan)
+  useScheduledPublishPoller();
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);

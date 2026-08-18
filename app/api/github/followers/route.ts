@@ -42,7 +42,6 @@ export async function POST(req: NextRequest) {
           headers: {
             Authorization: `token ${token}`,
             Accept: 'application/vnd.github.v3+json',
-            'Content-Length': '0',
           },
         });
         if (res.ok) followed++;

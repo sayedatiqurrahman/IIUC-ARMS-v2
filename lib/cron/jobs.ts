@@ -261,7 +261,7 @@ export const CRON_JOBS: CronJob[] = [
     description: 'Auto-publish class routines that have been scheduled for a future date/time. Publishes when the scheduled time arrives.',
     icon: 'fas fa-calendar-check',
     color: 'text-blue-400',
-    schedule: 'Every 5 minutes',
+    schedule: 'Every 5 min (client poll)',
     group: 'scheduled-publish',
     run: runScheduledClassRoutines,
   },
@@ -271,7 +271,7 @@ export const CRON_JOBS: CronJob[] = [
     description: 'Auto-publish exam routines that have been scheduled for a future date/time.',
     icon: 'fas fa-file-circle-check',
     color: 'text-purple-400',
-    schedule: 'Every 5 minutes',
+    schedule: 'Every 5 min (client poll)',
     group: 'scheduled-publish',
     run: runScheduledExamRoutines,
   },
@@ -281,7 +281,7 @@ export const CRON_JOBS: CronJob[] = [
     description: 'Auto-publish seat plans that have been scheduled for a future date/time.',
     icon: 'fas fa-chair',
     color: 'text-pink-400',
-    schedule: 'Every 5 minutes',
+    schedule: 'Every 5 min (client poll)',
     group: 'scheduled-publish',
     run: runScheduledSeatPlans,
   },
@@ -291,7 +291,7 @@ export const CRON_JOBS: CronJob[] = [
     description: 'Auto-publish scheduled notices from GitHub index when their scheduled time arrives.',
     icon: 'fas fa-bell',
     color: 'text-amber-400',
-    schedule: 'Every 5 minutes',
+    schedule: 'Every 5 min (client poll)',
     group: 'scheduled-publish',
     run: runScheduledNotices,
   },
@@ -300,3 +300,6 @@ export const CRON_JOBS: CronJob[] = [
 export function getJobById(id: string): CronJob | undefined {
   return CRON_JOBS.find(j => j.id === id);
 }
+
+// Exported for client-polling endpoint (/api/publish-scheduled)
+export { runScheduledClassRoutines, runScheduledExamRoutines, runScheduledSeatPlans, runScheduledNotices };

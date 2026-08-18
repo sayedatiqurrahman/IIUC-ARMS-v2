@@ -298,7 +298,7 @@ export default function DashboardView() {
       }
       fetch(`https://api.github.com/user/following/${config.owner}`, {
         method: 'PUT',
-        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Length': '0' },
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
       }).catch(() => {})
     } catch {
       showToast('Failed to connect. Please try again.', 'error');

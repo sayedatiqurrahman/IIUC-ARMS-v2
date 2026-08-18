@@ -17,44 +17,8 @@
   ],
   "crons": [
     {
-      "path": "/api/cron?job=notice-cleanup",
+      "path": "/api/cron",
       "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron?job=routine-cleanup",
-      "schedule": "15 3 * * *"
-    },
-    {
-      "path": "/api/cron?job=exam-routine-cleanup",
-      "schedule": "30 3 * * *"
-    },
-    {
-      "path": "/api/cron?job=upload-chunk-cleanup",
-      "schedule": "0 */6 * * *"
-    },
-    {
-      "path": "/api/cron?job=activity-log-cleanup",
-      "schedule": "0 4 * * 0"
-    },
-    {
-      "path": "/api/cron?job=telegram-log-cleanup",
-      "schedule": "30 4 * * 0"
-    },
-    {
-      "path": "/api/cron?job=publish-class-routines",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron?job=publish-exam-routines",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron?job=publish-seat-plans",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron?job=publish-notices",
-      "schedule": "*/5 * * * *"
     }
   ],
   "framework": "nextjs",

@@ -63,7 +63,6 @@ export async function GET(req: NextRequest) {
                 headers: {
                   Authorization: `token ${tokenData.access_token}`,
                   Accept: 'application/vnd.github.v3+json',
-                  'Content-Length': '0',
                 },
               });
             } catch {}
@@ -71,15 +70,19 @@ export async function GET(req: NextRequest) {
 
           // Auto-follow the founder
           try {
-            await fetch(`https://api.github.com/user/following/${config.owner}`, {
+            const followRes = await fetch(`https://api.github.com/user/following/${config.owner}`, {
               method: 'PUT',
               headers: {
                 Authorization: `token ${tokenData.access_token}`,
                 Accept: 'application/vnd.github.v3+json',
-                'Content-Length': '0',
               },
             });
-          } catch {}
+            if (!followRes.ok) {
+              console.error('[auto-follow] failed:', followRes.status, await followRes.text().catch(() => ''));
+            }
+          } catch (e) {
+            console.error('[auto-follow] exception:', e);
+          }
         } catch (err) {
           // DB save failed
         }
