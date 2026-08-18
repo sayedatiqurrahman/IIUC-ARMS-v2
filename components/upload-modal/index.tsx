@@ -39,6 +39,7 @@ function buildUploadPaths(opts: {
 
   const files = course.files.map(fileMeta => {
     const ext = fileMeta.file.name.split('.').pop() || 'pdf';
+    const customPart = course.customFolder ? `/${course.customFolder}` : '';
     let filePath: string;
     if (semester === config.relatedKitabsFolder) {
       const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
@@ -52,10 +53,10 @@ function buildUploadPaths(opts: {
       const renamedFile = `${courseCode} ${course.examSession} ${CURRENT_YEAR} - ${authorName}.${ext}`;
       const deptFolder = getDepartmentFolder(department);
       filePath = yearPart
-        ? `${deptFolder}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${yearPart}/${renamedFile}`
-        : `${deptFolder}/${semester}/${courseFolder}${midFinalPart}/${category}/${course.examSession}/${renamedFile}`;
+        ? `${deptFolder}/${semester}/${courseFolder}${midFinalPart}/${category}${customPart}/${course.examSession}/${yearPart}/${renamedFile}`
+        : `${deptFolder}/${semester}/${courseFolder}${midFinalPart}/${category}${customPart}/${course.examSession}/${renamedFile}`;
     } else {
-      filePath = `${getDepartmentFolder(department)}/${semester}/${courseFolder}${midFinalPart}/${category}/${fileMeta.file.name}`;
+      filePath = `${getDepartmentFolder(department)}/${semester}/${courseFolder}${midFinalPart}/${category}${customPart}/${fileMeta.file.name}`;
     }
     return { path: filePath, meta: fileMeta };
   });
@@ -115,7 +116,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const [department, setDepartment] = useState(userDeptId);
   const [semester, setSemester] = useState(profile.semester || '');
   const [category, setCategory] = useState('');
-  const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
+  const [courses, setCourses] = useState<CourseGroup[]>([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [], customFolder: '' }]);
   const [createCourseFor, setCreateCourseFor] = useState<number | null>(null);
   const [recentlyCreated, setRecentlyCreated] = useState<{ code: string; title: string }[]>([]);
 
@@ -686,7 +687,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
       if (data.success) {
         setUploadBg({ result: { success: true, prUrl: data.pr?.url, direct: data.direct, merged: data.pr?.merged }, progress: { percent: 100, label: 'Done' } });
-        setCourses([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [] }]);
+        setCourses([{ id: 1, selectedCourseCode: '', selectedCourseTitle: '', files: [], examSession: '', midFinal: '', links: [], customFolder: '' }]);
         useAppStore.getState().invalidateTreeCache();
         useAppStore.getState().loadTree(session?.accessToken || '');
       } else if (data.code === 'TOKEN_EXPIRED' || data.code === 'AUTH_REQUIRED') {

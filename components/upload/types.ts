@@ -28,6 +28,7 @@ export interface CourseGroup {
   examSession: string;
   midFinal: string;
   links: Link[];
+  customFolder: string;
 }
 
 export interface UploadModalProps {

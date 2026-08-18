@@ -24,6 +24,7 @@ const CategoriesView = dynamic(() => import('@/components/browse/CategoriesView'
 const FileGrid = dynamic(() => import('@/components/browse/FileGrid'), { ssr: false });
 const FolderCard = dynamic(() => import('@/components/browse/FolderCard'), { ssr: false });
 const BrowseModals = dynamic(() => import('@/components/browse/BrowseModals'), { ssr: false });
+const CreateFolderModal = dynamic(() => import('@/components/browse/CreateFolderModal'), { ssr: false });
 const ReadmeEditor = dynamic(() => import('@/components/ReadmeEditor'), { ssr: false });
 export default function BrowsePage() {
   const { data: session } = useSession();
@@ -42,12 +43,14 @@ export default function BrowsePage() {
   const [coursePerms, setCoursePerms] = useState<{ canAdd: boolean; canEdit: boolean; canDelete: boolean; canEditLinks: boolean }>({
     canAdd: false, canEdit: false, canDelete: false, canEditLinks: false,
   });
+  const [canCreateFolder, setCanCreateFolder] = useState(false);
   const [moveTarget, setMoveTarget] = useState<{ path: string; name: string; mode: 'move' | 'copy' } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ path: string; name: string } | null>(null);
   const [actionLoading, setActionLoading] = useState('');
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState<{ show: boolean; message: string; contact: string }>({ show: false, message: '', contact: '' });
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
   const loading = useAppStore(s => s.loading);
   const error = useAppStore(s => s.error);
   const onboardData = useAppStore(s => s.onboardingData);
@@ -116,6 +119,7 @@ export default function BrowsePage() {
             canDelete: perms.deleteCourse.includes(isCR ? 'cr' : role),
             canEditLinks: perms.editLinks.includes(isCR ? 'cr' : role),
           });
+          setCanCreateFolder(perms.createFolder?.includes(isCR ? 'cr' : role) ?? true);
           return;
         }
         const perms = data.permissions || {};
@@ -145,6 +149,7 @@ export default function BrowsePage() {
           canDelete: check('deleteCourse'),
           canEditLinks: check('editLinks'),
         });
+        setCanCreateFolder(check('createFolder'));
       } catch {
         // Fall back to default permissions
         const perms = await import('@/lib/permission-defaults').then(m => m.DEFAULT_PERMISSIONS);
@@ -160,6 +165,7 @@ export default function BrowsePage() {
           canDelete: perms.deleteCourse.includes(isCR ? 'cr' : role),
           canEditLinks: perms.editLinks.includes(isCR ? 'cr' : role),
         });
+        setCanCreateFolder(perms.createFolder?.includes(isCR ? 'cr' : role) ?? true);
       }
     };
     loadPerms();
@@ -238,6 +244,28 @@ export default function BrowsePage() {
       useAppStore.getState().setOperationLabel('');
     }
   }, [currentDept, currentSem, session?.accessToken, loadTree]);
+
+  const handleCreateFolder = useCallback(async (folderName: string) => {
+    const s = useAppStore.getState();
+    const deptFolder = getDepartmentFolder(s.currentDept);
+    const courseFolder = s.currentCourseCode && s.currentCourseTitle
+      ? `${s.currentCourseCode} - ${s.currentCourseTitle}`
+      : '';
+    const parts = [deptFolder, s.currentSem, courseFolder, s.currentMidFinal, s.currentCat].filter(Boolean);
+    const parentPath = parts.join('/');
+    const folderPath = `${parentPath}/${folderName}`;
+    const res = await fetch('/api/github/create-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderPath }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to create folder');
+    showToast(`Folder "${folderName}" created`, 'success');
+    useAppStore.getState().invalidateTreeCache();
+    loadTree(session?.accessToken || '');
+  }, [session?.accessToken, loadTree]);
+
   useEffect(() => {
     if (!mounted) return;
     const p = new URLSearchParams(window.location.search);
@@ -604,9 +632,16 @@ export default function BrowsePage() {
         <section className="mb-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[1.05rem] font-semibold flex items-center gap-2"><i className="fas fa-folder-open"></i> Files</h3>
-            <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={goBack}>
-              <i className="fas fa-arrow-left"></i> Back
-            </button>
+            <div className="flex items-center gap-2">
+              {canCreateFolder && (
+                <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-qsis/40 bg-qsis/10 text-qsis cursor-pointer text-[0.75rem] font-semibold hover:bg-qsis/20 transition" onClick={() => setShowCreateFolder(true)}>
+                  <i className="fas fa-folder-plus"></i> New Folder
+                </button>
+              )}
+              <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={goBack}>
+                <i className="fas fa-arrow-left"></i> Back
+              </button>
+            </div>
           </div>
           {filteredFiles.length === 0 && (
             <div className="text-center py-8 text-dark-text2">
@@ -739,6 +774,19 @@ export default function BrowsePage() {
         permissionDenied={permissionDenied} setPermissionDenied={setPermissionDenied}
         handleFileAction={handleFileAction}
       />
+      {(() => {
+        const deptFolder = getDepartmentFolder(currentDept);
+        const courseFolder = currentCourseCode && currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : '';
+        const parentPath = [deptFolder, currentSem, courseFolder, currentMidFinal, currentCat].filter(Boolean).join('/');
+        return (
+          <CreateFolderModal
+            isOpen={showCreateFolder}
+            onClose={() => setShowCreateFolder(false)}
+            parentPath={parentPath}
+            onCreate={handleCreateFolder}
+          />
+        );
+      })()}
     </>
   );
 }

@@ -1,6 +1,7 @@
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   addCourse: ['admin', 'manager', 'teacher', 'cr', 'student', 'user'],
   addToAnySemester: [],
+  createFolder: ['admin', 'manager', 'teacher', 'cr', 'student', 'user'],
   editCourse: ['admin', 'manager', 'teacher', 'cr'],
   deleteCourse: ['admin', 'manager', 'teacher'],
   uploadFile: ['admin', 'manager', 'teacher', 'cr', 'student'],

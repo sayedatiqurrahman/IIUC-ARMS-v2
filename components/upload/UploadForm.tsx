@@ -438,10 +438,23 @@ export default function UploadForm({
                   : semester === config.relatedSourcesFolder
                     ? `${getFacultyIdForDepartment(department) || department}/${config.relatedSourcesFolder}/${courseFolder}/`
                     : isExamCategory && course.examSession
-                      ? `${department}/${semester}/${courseFolder}/${course.midFinal ? course.midFinal + '/' : ''}${category}/${course.examSession}/...`
-                      : `${department}/${semester}/${courseFolder}/${course.midFinal ? course.midFinal + '/' : ''}${category}/`
+                      ? `${department}/${semester}/${courseFolder}/${course.midFinal ? course.midFinal + '/' : ''}${category}/${course.customFolder ? course.customFolder + '/' : ''}${course.examSession}/...`
+                      : `${department}/${semester}/${courseFolder}/${course.midFinal ? course.midFinal + '/' : ''}${category}/${course.customFolder ? course.customFolder + '/' : ''}`
                 }
               </span>
+            </div>
+          )}
+
+          {/* Custom Subfolder */}
+          {course.selectedCourseCode && category && (
+            <div className="mb-3">
+              <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-folder-plus mr-1 text-dark-text3"></i>Subfolder (optional)</label>
+              <input
+                value={course.customFolder}
+                onChange={e => updateCourse(course.id, { customFolder: e.target.value.replace(/[\/\\]/g, '') })}
+                placeholder="e.g. 2024, Batch-1, Spring (leave empty for root)"
+                className="w-full px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-[0.78rem] text-dark-text focus:border-qsis outline-none placeholder:text-dark-text3"
+              />
             </div>
           )}
 
