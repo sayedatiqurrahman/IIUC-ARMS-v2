@@ -26,11 +26,11 @@ export async function GET(req: NextRequest) {
   const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
 
   try {
-    // 1. Drop the webhook (keep_alive=false so Telegram stops sending updates)
+    // 1. Drop the webhook WITHOUT discarding pending updates
     const dropRes = await fetch(`${API}/deleteWebhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ drop_pending_updates: true }),
+      body: JSON.stringify({ drop_pending_updates: false }),
     });
     const dropData = await dropRes.json();
 
