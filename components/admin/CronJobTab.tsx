@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { CRON_JOBS, type CronJob } from '@/lib/cron/jobs';
+import { CRON_JOBS_META, type CronJobMeta } from '@/lib/cron/jobs-config';
 
 interface JobRunResult {
   jobId: string;
@@ -30,7 +30,7 @@ export default function CronJobTab() {
     setJobStates(prev => ({ ...prev, [jobId]: { ...prev[jobId], ...patch } }));
   }, []);
 
-  const runJob = useCallback(async (job: CronJob) => {
+  const runJob = useCallback(async (job: CronJobMeta) => {
     updateState(job.id, { running: true });
     try {
       const res = await fetch('/api/cron/run', {
@@ -58,7 +58,7 @@ export default function CronJobTab() {
   const runAll = useCallback(async () => {
     setRunAllResult({ running: true, done: false, results: [] });
     const results: JobRunResult[] = [];
-    for (const job of CRON_JOBS) {
+    for (const job of CRON_JOBS_META) {
       updateState(job.id, { running: true });
       try {
         const res = await fetch('/api/cron/run', {
@@ -90,8 +90,8 @@ export default function CronJobTab() {
 
   // Group jobs
   const groupedJobs = useMemo(() => {
-    const groups: Record<string, CronJob[]> = {};
-    for (const job of CRON_JOBS) {
+    const groups: Record<string, CronJobMeta[]> = {};
+    for (const job of CRON_JOBS_META) {
       const g = job.group || 'cleanup';
       if (!groups[g]) groups[g] = [];
       groups[g].push(job);
@@ -124,7 +124,7 @@ export default function CronJobTab() {
       {runAllResult.done && (
         <div className={`p-3 rounded-xl border text-[0.78rem] ${failCount > 0 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-green-500/10 border-green-500/30 text-green-400'}`}>
           <i className={`fas ${failCount > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle'} mr-2`}></i>
-          Completed: {successCount} succeeded, {failCount} failed out of {CRON_JOBS.length} jobs
+          Completed: {successCount} succeeded, {failCount} failed out of {CRON_JOBS_META.length} jobs
         </div>
       )}
 

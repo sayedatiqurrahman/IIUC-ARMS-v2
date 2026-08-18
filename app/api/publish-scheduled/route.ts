@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { runScheduledClassRoutines, runScheduledExamRoutines, runScheduledSeatPlans, runScheduledNotices } from '@/lib/cron/jobs';
+import { getJobById } from '@/lib/cron/jobs';
 
 /**
  * GET /api/publish-scheduled
@@ -9,19 +9,23 @@ import { runScheduledClassRoutines, runScheduledExamRoutines, runScheduledSeatPl
  */
 export const dynamic = 'force-dynamic';
 
+const PUBLISH_JOB_IDS = [
+  'publish-class-routines',
+  'publish-exam-routines',
+  'publish-seat-plans',
+  'publish-notices',
+];
+
 export async function GET() {
   try {
-    const results = await Promise.allSettled([
-      runScheduledClassRoutines(),
-      runScheduledExamRoutines(),
-      runScheduledSeatPlans(),
-      runScheduledNotices(),
-    ]);
+    const results = await Promise.allSettled(
+      PUBLISH_JOB_IDS.map(id => getJobById(id)?.run() ?? Promise.resolve({ success: false, message: 'Job not found' }))
+    );
     const summary = results
       .map((r, i) => {
-        const labels = ['class-routines', 'exam-routines', 'seat-plans', 'notices'];
-        if (r.status === 'fulfilled' && r.value.success) return `${labels[i]}: ${r.value.message}`;
-        return `${labels[i]}: ${r.status === 'rejected' ? 'error' : r.value.message}`;
+        const label = PUBLISH_JOB_IDS[i].replace('publish-', '');
+        if (r.status === 'fulfilled' && r.value.success) return `${label}: ${r.value.message}`;
+        return `${label}: ${r.status === 'rejected' ? 'error' : r.value.message}`;
       })
       .join(' | ');
     return NextResponse.json({ success: true, summary });
