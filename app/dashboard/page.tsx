@@ -18,11 +18,7 @@ export default function DashboardPage() {
   }, [status, router]);
 
   if (status === 'loading') {
-    return (
-      <div className="min-h-screen bg-dark-bg">
-        <PageLoader className="h-full" />
-      </div>
-    );
+    return <PageLoader fullScreen />;
   }
 
   if (!session) {

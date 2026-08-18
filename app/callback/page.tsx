@@ -18,8 +18,6 @@ export default function CallbackPage() {
   }, [status, router]);
 
   return (
-    <div className="min-h-screen bg-dark-bg">
-      <PageLoader className="h-full" />
-    </div>
+    <PageLoader fullScreen />
   );
 }

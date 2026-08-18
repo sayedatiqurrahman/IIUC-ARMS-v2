@@ -582,9 +582,7 @@ export default function BrowsePage() {
         navigateToMidFinal={navigateToMidFinal} navigateToCategory={navigateToCategory}
       />
       {loading && (
-        <div className="fixed inset-0 z-[90] bg-dark-bg">
-          <PageLoader className="h-full" />
-        </div>
+        <PageLoader fullScreen />
       )}
       {error && (
         <div className="text-center py-10 text-dark-text2">

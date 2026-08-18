@@ -34,11 +34,7 @@ export default function AdminPage() {
   }, [status, effectiveRole, router, accessLoading, hasAdminPanelAccess]);
 
   if (status === 'loading' || accessLoading) {
-    return (
-      <div className="min-h-screen bg-dark-bg">
-        <PageLoader className="h-full" />
-      </div>
-    );
+    return <PageLoader fullScreen />;
   }
 
   if (!session || !hasAdminPanelAccess) return null;
