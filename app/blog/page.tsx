@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { BlogPostListItem } from '@/lib/blog';
 
@@ -11,8 +11,7 @@ const TABS = [
   { key: 'post', label: 'Blog Posts', icon: 'fa-pen-nib' },
 ] as const;
 
-export default function BlogPage() {
-  const router = useRouter();
+function BlogContent() {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get('tab') as 'all' | 'tutorial' | 'post') || 'all';
 
@@ -164,5 +163,20 @@ export default function BlogPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BlogPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen max-w-6xl mx-auto px-4 py-6">
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="w-8 h-8 border-2 border-qsis border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-3 text-[0.78rem] text-dark-text2">Loading blog...</p>
+        </div>
+      </div>
+    }>
+      <BlogContent />
+    </Suspense>
   );
 }
