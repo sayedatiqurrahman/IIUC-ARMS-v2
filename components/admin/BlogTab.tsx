@@ -225,6 +225,36 @@ export default function BlogTab({ email, effectiveRole, isCR, customPermissions 
     setTimeout(() => { ta.focus(); }, 0);
   };
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (!mod) return;
+
+    const ta = textareaRef.current;
+    if (!ta) return;
+
+    const key = e.key.toLowerCase();
+
+    if (key === 'b') {
+      e.preventDefault();
+      insertMarkdown('**', '**', 'bold text');
+    } else if (key === 'i') {
+      e.preventDefault();
+      insertMarkdown('*', '*', 'italic text');
+    } else if (key === 'k') {
+      e.preventDefault();
+      insertMarkdown('[', '](url)', 'link text');
+    } else if (key === 'h' && e.shiftKey) {
+      e.preventDefault();
+      insertLineStart('## ');
+    } else if (key === 'q') {
+      e.preventDefault();
+      insertLineStart('> ');
+    } else if (key === 'e') {
+      e.preventDefault();
+      insertMarkdown('`', '`', 'code');
+    }
+  }, [editorContent]);
+
   const formatDate = (d: string) => {
     try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
     catch { return d; }
@@ -459,17 +489,9 @@ export default function BlogTab({ email, effectiveRole, isCR, customPermissions 
                       Preview
                     </button>
                   </div>
-                  <div className={`flex ${showPreview ? 'flex-col sm:flex-row' : ''}`}>
-                    <textarea
-                      ref={textareaRef}
-                      value={editorContent}
-                      onChange={e => setEditorContent(e.target.value)}
-                      placeholder="Write your post in Markdown..."
-                      rows={16}
-                      className={`w-full px-4 py-3 bg-dark-bg2 text-[0.82rem] text-dark-text font-mono focus:outline-none resize-none placeholder:text-dark-text3 ${showPreview ? 'sm:w-1/2 border-b sm:border-b-0 sm:border-r border-dark-border' : ''}`}
-                    />
-                    {showPreview && (
-                      <div className="sm:w-1/2 px-4 py-3 bg-dark-bg2 max-h-[400px] overflow-y-auto">
+                  <div>
+                    {showPreview ? (
+                      <div className="px-4 py-3 bg-dark-bg2 min-h-[400px] max-h-[600px] overflow-y-auto">
                         {editorContent.trim() ? (
                           <div className="prose prose-invert prose-sm max-w-none text-[0.82rem] text-dark-text2 [&_h1]:text-dark-text [&_h2]:text-dark-text [&_h3]:text-dark-text [&_strong]:text-dark-text [&_a]:text-qsis [&_code]:bg-dark-bg3 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_pre]:bg-dark-bg3 [&_pre]:p-3 [&_pre]:rounded-lg [&_blockquote]:border-l-2 [&_blockquote]:border-qsis [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-dark-text3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_p]:my-2 [&_hr]:border-dark-border"
                             dangerouslySetInnerHTML={{ __html: renderedPreview }}
@@ -478,6 +500,16 @@ export default function BlogTab({ email, effectiveRole, isCR, customPermissions 
                           <p className="text-dark-text3 text-[0.8rem] italic">Nothing to preview</p>
                         )}
                       </div>
+                    ) : (
+                      <textarea
+                        ref={textareaRef}
+                        value={editorContent}
+                        onChange={e => setEditorContent(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Write your post in Markdown..."
+                        rows={16}
+                        className="w-full px-4 py-3 bg-dark-bg2 text-[0.82rem] text-dark-text font-mono focus:outline-none resize-none placeholder:text-dark-text3"
+                      />
                     )}
                   </div>
                 </div>

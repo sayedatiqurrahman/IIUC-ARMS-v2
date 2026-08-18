@@ -347,7 +347,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: '/', match: isBrowse, icon: 'fa-book-open', label: 'Browse' },
     { href: '/routine', match: isActive('/routine'), icon: 'fa-calendar-alt', label: 'Routine' },
-    { href: '/focus', match: isActive('/focus'), icon: 'fa-list-check', label: 'Focus' },
+    { href: '/studio', match: isActive('/studio'), icon: 'fa-tools', label: 'Studio' },
     { href: '/contributors', match: isActive('/contributors'), icon: 'fa-users', label: 'Team' },
   ];
 
@@ -411,7 +411,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="relative" ref={exploreRef}>
               <button
                 onClick={() => setExploreOpen(!exploreOpen)}
-                className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all ${isActive('/faculty') || isActive('/history') || isActive('/notices') || isActive('/studio') || isActive('/blog') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}
+                className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all ${isActive('/faculty') || isActive('/history') || isActive('/notices') || isActive('/blog') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}
                 aria-haspopup="true"
                 aria-expanded={exploreOpen}
               >
@@ -431,9 +431,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   </Link>
                   <Link href="/history" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
                     <i className="fas fa-history w-4 text-center text-orange-400"></i><span>History</span>
-                  </Link>
-                  <Link href="/studio" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
-                    <i className="fas fa-tools w-4 text-center text-orange-400"></i><span>Studio</span>
                   </Link>
                 </div>
               )}
@@ -608,9 +605,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <span className="text-[0.62rem] font-medium">Upload</span>
           </button>
-          <Link href="/focus" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/focus') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
-            <i className="fas fa-list-check text-[1rem]"></i>
-            <span className="text-[0.62rem] font-medium">Focus</span>
+          <Link href="/studio" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/studio') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+            <i className="fas fa-tools text-[1rem]"></i>
+            <span className="text-[0.62rem] font-medium">Studio</span>
           </Link>
           <button className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all bg-transparent ${showMoreSheet ? 'text-qsis' : 'text-dark-text2'}`} onClick={() => setShowMoreSheet(!showMoreSheet)}>
             <i className="fas fa-ellipsis-h text-[1rem]"></i>
@@ -674,7 +671,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   {([
                     ['home', '/', 'fas fa-house', 'bg-blue-500/15', 'text-blue-400', 'Browse', true, 'link'],
                     ['upload', '', 'fas fa-upload', 'bg-green-500/15', 'text-green-400', 'Upload', false, 'upload'],
-                    ['focus', '/focus', 'fas fa-list-check', 'bg-cyan-500/15', 'text-cyan-400', 'Focus', true, 'link'],
                     ['routine', '/routine', 'fas fa-calendar-days', 'bg-purple-500/15', 'text-purple-400', 'Routine', true, 'link'],
                     ['notices', '/notices', 'fas fa-bullhorn', 'bg-amber-500/15', 'text-amber-400', 'Notices', true, 'link'],
                     ['blog', '/blog', 'fas fa-pen-nib', 'bg-emerald-500/15', 'text-emerald-400', 'Blog', true, 'link'],
@@ -833,7 +829,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <button className="text-[0.8rem] text-dark-text2 hover:text-qsis text-left bg-transparent border-none cursor-pointer transition-colors" onClick={handleOpenUpload}><i className="fas fa-upload mr-2"></i>Upload Files</button>
                 <Link href="/history" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-history mr-2"></i>History</Link>
                 <Link href="/routine" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-calendar-alt mr-2"></i>Routine</Link>
-                <Link href="/focus" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-list-check mr-2"></i>Focus</Link>
                 <Link href="/notices" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-bullhorn mr-2 text-amber-400"></i>Notice Board</Link>
                 <Link href="/blog" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-pen-nib mr-2 text-emerald-400"></i>Blog</Link>
                 <Link href="/contributors" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2"></i>Contributors</Link>
