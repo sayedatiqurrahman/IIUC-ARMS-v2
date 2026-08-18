@@ -20,6 +20,7 @@ import {
   EXAM_TYPES,
 } from '@/components/exam/types';
 import { ExamRoutineCard, ExamRoutinePrintView, ExamAllSemesterView } from '@/components/exam';
+import SchedulePublishModal from '@/components/SchedulePublishModal';
 
 export default function ExamRoutineView() {
   const { data: session } = useSession();
@@ -30,6 +31,7 @@ export default function ExamRoutineView() {
   const [examRoutines, setExamRoutines] = useState<ExamRoutineItem[]>([]);
   const [publishedRoutines, setPublishedRoutines] = useState<ExamRoutineItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [scheduleTarget, setScheduleTarget] = useState<ExamRoutineItem | null>(null);
 
   const [semester, setSemester] = useState('');
   const [sessionVal, setSessionVal] = useState('');
@@ -181,7 +183,7 @@ export default function ExamRoutineView() {
     setViewMode('manager');
   }
 
-  async function publishRoutine(r: ExamRoutineItem) {
+  async function doPublishRoutine(r: ExamRoutineItem, scheduledAt?: string) {
     const publisherName = profile.name || email.split('@')[0];
     const published: ExamRoutineItem = {
       ...r, published: true, isDraft: false,
@@ -192,19 +194,27 @@ export default function ExamRoutineView() {
       const res = await fetch('/api/published-exam-routines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routines: [published] }),
+        body: JSON.stringify({ routines: [published], scheduledAt }),
       });
       const data = await res.json();
       if (data.success) {
         persistDrafts(examRoutines.filter(d => d.id !== r.id));
         await loadPublishedFromDB();
-        showToast('Exam routine published!', 'success');
+        if (scheduledAt) {
+          showToast(`Exam routine scheduled! Will auto-publish on ${new Date(scheduledAt).toLocaleString()}.`, 'success');
+        } else {
+          showToast('Exam routine published!', 'success');
+        }
       } else {
         showToast(data.error || 'Failed to publish', 'error');
       }
     } catch {
       showToast('Failed to publish', 'error');
     }
+  }
+
+  function publishRoutine(r: ExamRoutineItem) {
+    setScheduleTarget(r);
   }
 
   async function unpublishRoutine(id: string) {
@@ -627,6 +637,15 @@ export default function ExamRoutineView() {
           editDraftData={allSemDraftData}
           onClearEditDraft={() => { setAllSemEditId(null); setAllSemDraftData(null); }}
           onBack={() => { setViewMode('manager'); setAllSemEditId(null); setAllSemDraftData(null); }}
+        />
+      )}
+      {scheduleTarget && (
+        <SchedulePublishModal
+          title={`Publish "${scheduleTarget.semester} — ${scheduleTarget.examType || 'Exam'}"`}
+          description="Choose to publish immediately or schedule for later."
+          onPublishNow={() => { const t = scheduleTarget; setScheduleTarget(null); doPublishRoutine(t); }}
+          onSchedule={(scheduledAt) => { const t = scheduleTarget; setScheduleTarget(null); doPublishRoutine(t, scheduledAt); }}
+          onClose={() => setScheduleTarget(null)}
         />
       )}
     </section>

@@ -6,6 +6,8 @@ export interface CronJob {
   color: string;
   /** Schedule hint for display (not enforced here) */
   schedule: string;
+  /** Group for categorization in the UI */
+  group: 'cleanup' | 'scheduled-publish' | 'maintenance';
   /** Execute the job. Returns a result summary string. */
   run: () => Promise<{ success: boolean; message: string; details?: string }>;
 }
@@ -58,6 +60,53 @@ async function runTelegramNotificationCleanup() {
   return { success: true, message: `Removed ${result.count} old Telegram notification log(s)`, details: result.count > 0 ? undefined : 'No old logs found' };
 }
 
+// ─── Scheduled Publish Jobs ──────────────────────────────────────
+
+async function runScheduledClassRoutines() {
+  const { prisma } = await import('@/lib/prisma');
+  const now = new Date();
+  const scheduled = await prisma.publishedRoutine.findMany({
+    where: { status: 'scheduled', scheduledAt: { lte: now } },
+  });
+  if (scheduled.length === 0) return { success: true, message: 'No scheduled class routines to publish', details: 'All clear' };
+
+  const result = await prisma.publishedRoutine.updateMany({
+    where: { status: 'scheduled', scheduledAt: { lte: now } },
+    data: { status: 'published', publishedAt: now },
+  });
+  return { success: true, message: `Auto-published ${result.count} class routine(s)`, details: scheduled.map(r => `${r.semester} (${r.department || 'all'})`).join(', ') };
+}
+
+async function runScheduledExamRoutines() {
+  const { prisma } = await import('@/lib/prisma');
+  const now = new Date();
+  const scheduled = await prisma.publishedExamRoutine.findMany({
+    where: { status: 'scheduled', scheduledAt: { lte: now }, type: null },
+  });
+  if (scheduled.length === 0) return { success: true, message: 'No scheduled exam routines to publish', details: 'All clear' };
+
+  const result = await prisma.publishedExamRoutine.updateMany({
+    where: { status: 'scheduled', scheduledAt: { lte: now }, type: null },
+    data: { status: 'published', publishedAt: now },
+  });
+  return { success: true, message: `Auto-published ${result.count} exam routine(s)`, details: scheduled.map(r => `${r.semester} - ${r.examType || 'exam'} (${r.department || 'all'})`).join(', ') };
+}
+
+async function runScheduledSeatPlans() {
+  const { prisma } = await import('@/lib/prisma');
+  const now = new Date();
+  const scheduled = await prisma.publishedExamRoutine.findMany({
+    where: { status: 'scheduled', scheduledAt: { lte: now }, type: 'seatplan' },
+  });
+  if (scheduled.length === 0) return { success: true, message: 'No scheduled seat plans to publish', details: 'All clear' };
+
+  const result = await prisma.publishedExamRoutine.updateMany({
+    where: { status: 'scheduled', scheduledAt: { lte: now }, type: 'seatplan' },
+    data: { status: 'published', publishedAt: now },
+  });
+  return { success: true, message: `Auto-published ${result.count} seat plan(s)`, details: scheduled.map(r => `${r.department || 'all'} - ${r.examType || 'exam'}`).join(', ') };
+}
+
 // ─── Job registry ────────────────────────────────────────────────
 
 export const CRON_JOBS: CronJob[] = [
@@ -68,6 +117,7 @@ export const CRON_JOBS: CronJob[] = [
     icon: 'fas fa-bell-slash',
     color: 'text-amber-400',
     schedule: 'Daily at 3:00 AM',
+    group: 'cleanup',
     run: runNoticeCleanup,
   },
   {
@@ -77,6 +127,7 @@ export const CRON_JOBS: CronJob[] = [
     icon: 'fas fa-calendar-xmark',
     color: 'text-blue-400',
     schedule: 'Daily at 3:15 AM',
+    group: 'cleanup',
     run: runRoutineCleanup,
   },
   {
@@ -86,6 +137,7 @@ export const CRON_JOBS: CronJob[] = [
     icon: 'fas fa-file-lines',
     color: 'text-purple-400',
     schedule: 'Daily at 3:30 AM',
+    group: 'cleanup',
     run: runExamRoutineCleanup,
   },
   {
@@ -95,6 +147,7 @@ export const CRON_JOBS: CronJob[] = [
     icon: 'fas fa-clock-rotate-left',
     color: 'text-cyan-400',
     schedule: 'Weekly (Sundays at 4:00 AM)',
+    group: 'cleanup',
     run: runActivityLogCleanup,
   },
   {
@@ -104,6 +157,7 @@ export const CRON_JOBS: CronJob[] = [
     icon: 'fas fa-database',
     color: 'text-green-400',
     schedule: 'Every 6 hours',
+    group: 'cleanup',
     run: runUploadChunkCleanup,
   },
   {
@@ -113,7 +167,39 @@ export const CRON_JOBS: CronJob[] = [
     icon: 'fab fa-telegram',
     color: 'text-sky-400',
     schedule: 'Weekly (Sundays at 4:30 AM)',
+    group: 'cleanup',
     run: runTelegramNotificationCleanup,
+  },
+  // ─── Scheduled Publish Jobs ───────────────────────────────────
+  {
+    id: 'publish-class-routines',
+    label: 'Publish Class Routines',
+    description: 'Auto-publish class routines that have been scheduled for a future date/time. Publishes when the scheduled time arrives.',
+    icon: 'fas fa-calendar-check',
+    color: 'text-blue-400',
+    schedule: 'Every 5 minutes',
+    group: 'scheduled-publish',
+    run: runScheduledClassRoutines,
+  },
+  {
+    id: 'publish-exam-routines',
+    label: 'Publish Exam Routines',
+    description: 'Auto-publish exam routines that have been scheduled for a future date/time.',
+    icon: 'fas fa-file-circle-check',
+    color: 'text-purple-400',
+    schedule: 'Every 5 minutes',
+    group: 'scheduled-publish',
+    run: runScheduledExamRoutines,
+  },
+  {
+    id: 'publish-seat-plans',
+    label: 'Publish Seat Plans',
+    description: 'Auto-publish seat plans that have been scheduled for a future date/time.',
+    icon: 'fas fa-chair',
+    color: 'text-pink-400',
+    schedule: 'Every 5 minutes',
+    group: 'scheduled-publish',
+    run: runScheduledSeatPlans,
   },
 ];
 

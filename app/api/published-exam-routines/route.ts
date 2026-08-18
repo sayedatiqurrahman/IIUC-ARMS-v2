@@ -205,6 +205,8 @@ export async function GET(req: NextRequest) {
     const where: any = {};
     if (dept) where.department = dept;
     if (sem) where.semester = sem;
+    // Filter out scheduled (not yet published) routines
+    where.status = { not: 'scheduled' };
 
     const routines = await prisma.publishedExamRoutine.findMany({
       where,
@@ -258,13 +260,15 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { routines, status } = body as { routines: any[]; status?: string };
+    const { routines, status, scheduledAt } = body as { routines: any[]; status?: string; scheduledAt?: string };
 
     if (!Array.isArray(routines) || routines.length === 0) {
       return NextResponse.json({ error: 'No routines provided' }, { status: 400 });
     }
 
-    const saveStatus = status === 'saved' ? 'saved' : 'published';
+    const scheduleDate = scheduledAt ? new Date(scheduledAt) : null;
+    const isScheduled = scheduleDate && scheduleDate > new Date();
+    const saveStatus = isScheduled ? 'scheduled' : (status === 'saved' ? 'saved' : 'published');
 
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
     const publisherName = profile?.name || email.split('@')[0];
@@ -311,8 +315,9 @@ export async function POST(req: NextRequest) {
           status: saveStatus,
           publishedBy: publisherName,
           publishedByEmail: email,
-          publishedAt: new Date(),
+          publishedAt: isScheduled ? scheduleDate! : new Date(),
           expiresAt,
+          scheduledAt: isScheduled ? scheduleDate : null,
         },
       });
     }
@@ -328,7 +333,7 @@ export async function POST(req: NextRequest) {
       });
     } catch {}
 
-    // ─── Telegram notifications (only on actual publish, not draft/save) ───
+    // ─── Telegram notifications (only on actual publish, not draft/save/scheduled) ───
     if (saveStatus === 'published') {
       try {
         await sendPublishedNotifications(routines, email);

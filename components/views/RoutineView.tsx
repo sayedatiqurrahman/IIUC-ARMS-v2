@@ -26,6 +26,7 @@ import TeacherContacts from '@/components/routine/TeacherContacts';
 import AllSemesterView from '@/components/routine/AllSemesterView';
 import RoutineBuilder from '@/components/routine/RoutineBuilder';
 import PageLoader from '@/components/PageLoader';
+import SchedulePublishModal from '@/components/SchedulePublishModal';
 
 export default function RoutineView({ dept }: { dept: string }) {
   const router = useRouter();
@@ -48,6 +49,7 @@ export default function RoutineView({ dept }: { dept: string }) {
   const [selectedId, setSelectedId] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [exportMode, setExportMode] = useState<'themed' | 'plain'>('themed');
+  const [scheduleTarget, setScheduleTarget] = useState<RoutineItem | null>(null);
 
   const email = session?.user?.email || profile.email || '';
   const isOwner = config.ownerEmails.includes(email);
@@ -160,12 +162,11 @@ export default function RoutineView({ dept }: { dept: string }) {
     showToast('Routine duplicated', 'success');
   }, [myRoutines, persistMyRoutines]);
 
-  const handlePublish = useCallback(async (routine: RoutineItem) => {
+  const doPublish = useCallback(async (routine: RoutineItem, scheduledAt?: string) => {
     if (!canPublish) {
       showToast('Permission denied: Only Admin, Manager, or Teacher can publish routines.', 'error');
       return;
     }
-    if (!await confirm({ message: `Publish "${routine.semester}" for all users?`, title: 'Publish Routine' })) return;
     const publisherName = session?.user?.name || profile.name || 'Unknown';
     const published = {
       ...routine,
@@ -182,15 +183,27 @@ export default function RoutineView({ dept }: { dept: string }) {
     const myUpdated = myRoutines.map(r => r.id === routine.id ? { ...r, isDraft: false } : r);
     persistMyRoutines(myUpdated);
 
-    // Save to DB
+    // Save to DB (with optional scheduledAt)
     fetch('/api/published-routines', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ routines: [published] }),
+      body: JSON.stringify({ routines: [published], scheduledAt }),
     }).catch(() => {});
 
-    showToast('Routine published! All users can now see it.', 'success');
+    if (scheduledAt) {
+      showToast(`Routine scheduled! Will auto-publish on ${new Date(scheduledAt).toLocaleString()}.`, 'success');
+    } else {
+      showToast('Routine published! All users can now see it.', 'success');
+    }
   }, [publishedRoutines, myRoutines, persistMyRoutines, session, profile, canPublish]);
+
+  const handlePublish = useCallback(async (routine: RoutineItem) => {
+    if (!canPublish) {
+      showToast('Permission denied: Only Admin, Manager, or Teacher can publish routines.', 'error');
+      return;
+    }
+    setScheduleTarget(routine);
+  }, [canPublish]);
 
   const handleUnpublish = useCallback((id: string) => {
     const updated = publishedRoutines.filter(r => r.id !== id);
@@ -550,6 +563,15 @@ export default function RoutineView({ dept }: { dept: string }) {
         />
       )}
       {confirmDialog}
+      {scheduleTarget && (
+        <SchedulePublishModal
+          title={`Publish "${scheduleTarget.semester}"`}
+          description="Choose to publish immediately or schedule for later."
+          onPublishNow={() => { const t = scheduleTarget; setScheduleTarget(null); doPublish(t); }}
+          onSchedule={(scheduledAt) => { const t = scheduleTarget; setScheduleTarget(null); doPublish(t, scheduledAt); }}
+          onClose={() => setScheduleTarget(null)}
+        />
+      )}
     </section>
   );
 }

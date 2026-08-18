@@ -39,6 +39,18 @@
     {
       "path": "/api/cron?job=telegram-log-cleanup",
       "schedule": "30 4 * * 0"
+    },
+    {
+      "path": "/api/cron?job=publish-class-routines",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron?job=publish-exam-routines",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron?job=publish-seat-plans",
+      "schedule": "*/5 * * * *"
     }
   ],
   "framework": "nextjs",

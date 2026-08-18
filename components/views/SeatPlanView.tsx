@@ -8,6 +8,7 @@ import { showToast } from '@/lib/utils';
 import { ExamSlot, loadExamSlots, getEnabledSlots } from '@/lib/exam-routine-config';
 import { findDepartment } from '@/lib/departments';
 import { useConfirm } from '@/components/ConfirmModal';
+import SchedulePublishModal from '@/components/SchedulePublishModal';
 import {
   SeatPlanEntry, SeatPlanDraft, BatchConfig, StudentResultGroup,
   LS_SEAT_PLAN_DRAFTS, LS_BATCH_CONFIGS, SEM_GENDER_MAP,
@@ -37,6 +38,7 @@ export default function SeatPlanView() {
   const [publishedPlans, setPublishedPlans] = useState<SeatPlanDraft[]>([]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [scheduleTarget, setScheduleTarget] = useState<'publish' | null>(null);
   const [sessionVal, setSessionVal] = useState('');
   const [department, setDepartment] = useState(profile.department || 'qsis');
   const [examType, setExamType] = useState('Midterm');
@@ -353,7 +355,7 @@ export default function SeatPlanView() {
     } catch { showToast('Failed', 'error'); }
   }
 
-  async function handlePublish() {
+  async function doPublish(scheduledAt?: string) {
     const missing = getMissingSemesters();
     if (missing.length > 0) {
       if (!await confirm({ message: `Warning: ${missing.length} semester(s) have no room assignments:\n${missing.join(', ')}\n\nPublish anyway? Students in these semesters won't see seat info.`, title: 'Missing Rooms' })) return;
@@ -363,11 +365,24 @@ export default function SeatPlanView() {
     draft.publishedBy = { name: profile.name || email.split('@')[0], title: profile.title, email };
     draft.publishedAt = Date.now();
     try {
-      const res = await fetch('/api/published-exam-routines', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ routines: [{ ...draft, type: 'seatplan' }] }) });
+      const res = await fetch('/api/published-exam-routines', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ routines: [{ ...draft, type: 'seatplan' }], scheduledAt }) });
       const data = await res.json();
-      if (data.success) { if (editingId) persistLocalDrafts(localDrafts.filter(d => d.id !== editingId)); await loadCloudPlans(); await loadPublishedPlans(); showToast('Published!', 'success'); setViewMode('manager'); }
-      else showToast(data.error || 'Failed', 'error');
+      if (data.success) {
+        if (editingId) persistLocalDrafts(localDrafts.filter(d => d.id !== editingId));
+        await loadCloudPlans();
+        await loadPublishedPlans();
+        if (scheduledAt) {
+          showToast(`Seat plan scheduled! Will auto-publish on ${new Date(scheduledAt).toLocaleString()}.`, 'success');
+        } else {
+          showToast('Published!', 'success');
+        }
+        setViewMode('manager');
+      } else showToast(data.error || 'Failed', 'error');
     } catch { showToast('Failed', 'error'); }
+  }
+
+  function handlePublish() {
+    setScheduleTarget('publish');
   }
 
   return (
@@ -530,6 +545,15 @@ export default function SeatPlanView() {
         </div>
       )}
       {confirmDialog}
+      {scheduleTarget && (
+        <SchedulePublishModal
+          title="Publish Seat Plan"
+          description="Choose to publish immediately or schedule for later."
+          onPublishNow={() => { setScheduleTarget(null); doPublish(); }}
+          onSchedule={(scheduledAt) => { setScheduleTarget(null); doPublish(scheduledAt); }}
+          onClose={() => setScheduleTarget(null)}
+        />
+      )}
     </section>
   );
 }

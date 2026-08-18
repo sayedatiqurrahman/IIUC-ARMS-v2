@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { CRON_JOBS, type CronJob } from '@/lib/cron/jobs';
 
 interface JobRunResult {
@@ -15,6 +15,12 @@ interface JobState {
   lastRun?: JobRunResult;
   running: boolean;
 }
+
+const GROUP_META: Record<string, { label: string; icon: string; color: string; order: number }> = {
+  'scheduled-publish': { label: 'Scheduled Publish', icon: 'fas fa-clock', color: 'text-qsis', order: 1 },
+  'cleanup': { label: 'Cleanup & Maintenance', icon: 'fas fa-broom', color: 'text-amber-400', order: 2 },
+  'maintenance': { label: 'System Maintenance', icon: 'fas fa-gear', color: 'text-blue-400', order: 3 },
+};
 
 export default function CronJobTab() {
   const [jobStates, setJobStates] = useState<Record<string, JobState>>({});
@@ -82,6 +88,18 @@ export default function CronJobTab() {
   const successCount = runAllResult.results.filter(r => r.success).length;
   const failCount = runAllResult.results.filter(r => !r.success).length;
 
+  // Group jobs
+  const groupedJobs = useMemo(() => {
+    const groups: Record<string, CronJob[]> = {};
+    for (const job of CRON_JOBS) {
+      const g = job.group || 'cleanup';
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(job);
+    }
+    return Object.entries(groups)
+      .sort((a, b) => (GROUP_META[a[0]]?.order || 99) - (GROUP_META[b[0]]?.order || 99));
+  }, []);
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -90,7 +108,7 @@ export default function CronJobTab() {
           <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
             <i className="fas fa-clock text-orange-400"></i> Cron Jobs
           </h3>
-          <p className="text-[0.72rem] text-dark-text3 mt-0.5">Manage automated maintenance tasks. Run manually or let Vercel Cron handle scheduling.</p>
+          <p className="text-[0.72rem] text-dark-text3 mt-0.5">Manage automated tasks. Run manually or let Vercel Cron handle scheduling.</p>
         </div>
         <button onClick={runAll} disabled={runAllResult.running}
           className="px-4 py-2 rounded-xl bg-qsis text-white text-[0.78rem] font-semibold hover:brightness-110 transition cursor-pointer disabled:opacity-50 flex items-center gap-2">
@@ -110,50 +128,62 @@ export default function CronJobTab() {
         </div>
       )}
 
-      {/* Job Cards */}
-      <div className="space-y-3">
-        {CRON_JOBS.map(job => {
-          const state = jobStates[job.id];
-          const lastResult = state?.lastRun;
-          const isRunning = state?.running;
-
+      {/* Grouped Job Cards */}
+      <div className="space-y-5">
+        {groupedJobs.map(([groupKey, jobs]) => {
+          const gm = GROUP_META[groupKey] || { label: groupKey, icon: 'fas fa-folder', color: 'text-dark-text2', order: 99 };
           return (
-            <div key={job.id} className="rounded-xl border border-dark-border bg-dark-bg2 p-4 transition-all hover:border-qsis/20">
-              <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-xl bg-dark-bg3 flex items-center justify-center shrink-0`}>
-                  <i className={`${job.icon} ${job.color} text-lg`}></i>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <h4 className="text-[0.88rem] font-semibold text-dark-text">{job.label}</h4>
-                    {lastResult && (
-                      <span className={`text-[0.6rem] px-1.5 py-0.5 rounded-full font-semibold ${lastResult.success ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
-                        {lastResult.success ? 'OK' : 'FAIL'}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[0.72rem] text-dark-text3 mb-2">{job.description}</p>
-                  <div className="flex items-center gap-3 text-[0.65rem] text-dark-text3">
-                    <span><i className="fas fa-calendar mr-1"></i>{job.schedule}</span>
-                    {lastResult && (
-                      <span><i className="fas fa-clock mr-1"></i>Last: {lastResult.ranAt}</span>
-                    )}
-                  </div>
-                  {lastResult && (
-                    <p className={`text-[0.7rem] mt-1.5 ${lastResult.success ? 'text-dark-text3' : 'text-red-400'}`}>
-                      {lastResult.message}
-                      {lastResult.details && <span className="text-dark-text3 ml-1">({lastResult.details})</span>}
-                    </p>
-                  )}
-                </div>
-                <button onClick={() => runJob(job)} disabled={isRunning}
-                  className="px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.75rem] font-semibold hover:text-qsis hover:border-qsis/40 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shrink-0">
-                  {isRunning ? (
-                    <><i className="fas fa-spinner fa-spin text-qsis"></i><span className="hidden sm:inline">Running</span></>
-                  ) : (
-                    <><i className="fas fa-play text-[0.6rem]"></i><span className="hidden sm:inline">Run</span></>
-                  )}
-                </button>
+            <div key={groupKey}>
+              <h4 className="text-[0.78rem] font-semibold text-dark-text2 mb-2.5 flex items-center gap-2 uppercase tracking-wider">
+                <i className={`${gm.icon} ${gm.color}`}></i> {gm.label}
+              </h4>
+              <div className="space-y-2">
+                {jobs.map(job => {
+                  const state = jobStates[job.id];
+                  const lastResult = state?.lastRun;
+                  const isRunning = state?.running;
+
+                  return (
+                    <div key={job.id} className="rounded-xl border border-dark-border bg-dark-bg2 p-4 transition-all hover:border-qsis/20">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-dark-bg3 flex items-center justify-center shrink-0">
+                          <i className={`${job.icon} ${job.color} text-lg`}></i>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <h4 className="text-[0.88rem] font-semibold text-dark-text">{job.label}</h4>
+                            {lastResult && (
+                              <span className={`text-[0.6rem] px-1.5 py-0.5 rounded-full font-semibold ${lastResult.success ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
+                                {lastResult.success ? 'OK' : 'FAIL'}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[0.72rem] text-dark-text3 mb-2">{job.description}</p>
+                          <div className="flex items-center gap-3 text-[0.65rem] text-dark-text3">
+                            <span><i className="fas fa-calendar mr-1"></i>{job.schedule}</span>
+                            {lastResult && (
+                              <span><i className="fas fa-clock mr-1"></i>Last: {lastResult.ranAt}</span>
+                            )}
+                          </div>
+                          {lastResult && (
+                            <p className={`text-[0.7rem] mt-1.5 ${lastResult.success ? 'text-dark-text3' : 'text-red-400'}`}>
+                              {lastResult.message}
+                              {lastResult.details && <span className="text-dark-text3 ml-1">({lastResult.details})</span>}
+                            </p>
+                          )}
+                        </div>
+                        <button onClick={() => runJob(job)} disabled={isRunning}
+                          className="px-3 py-1.5 rounded-lg bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.75rem] font-semibold hover:text-qsis hover:border-qsis/40 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shrink-0">
+                          {isRunning ? (
+                            <><i className="fas fa-spinner fa-spin text-qsis"></i><span className="hidden sm:inline">Running</span></>
+                          ) : (
+                            <><i className="fas fa-play text-[0.6rem]"></i><span className="hidden sm:inline">Run</span></>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );

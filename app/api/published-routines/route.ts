@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     const routines = await prisma.publishedRoutine.findMany({
+      where: { status: 'published' },
       orderBy: { publishedAt: 'desc' },
     });
 
@@ -92,11 +93,16 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { routines } = body as { routines: any[] };
+    const { routines, scheduledAt } = body as { routines: any[]; scheduledAt?: string };
 
     if (!Array.isArray(routines) || routines.length === 0) {
       return NextResponse.json({ error: 'No routines provided' }, { status: 400 });
     }
+
+    // Determine if this is a scheduled publish
+    const scheduleDate = scheduledAt ? new Date(scheduledAt) : null;
+    const isScheduled = scheduleDate && scheduleDate > new Date();
+    const routineStatus = isScheduled ? 'scheduled' : 'published';
 
     // Teacher can only publish routines for their own department
     if (effectiveRole === 'teacher') {
@@ -149,8 +155,10 @@ export async function POST(req: NextRequest) {
           maleSlots: r.maleSlots || null,
           femaleSlots: r.femaleSlots || null,
           publishedBy: publisherName,
-          publishedAt: new Date(),
+          publishedAt: isScheduled ? scheduleDate! : new Date(),
           expiresAt,
+          status: routineStatus,
+          scheduledAt: isScheduled ? scheduleDate : null,
         },
       });
     }

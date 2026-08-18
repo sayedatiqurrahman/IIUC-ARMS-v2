@@ -175,10 +175,13 @@ model PublishedRoutine {
   publishedBy   String?
   publishedAt   DateTime @default(now())
   expiresAt     DateTime
+  status        String   @default("published")
+  scheduledAt   DateTime?
 
   @@index([routineId])
   @@index([semester])
   @@index([expiresAt])
+  @@index([status])
 }
 
 model FacultyRequest {
@@ -217,11 +220,13 @@ model PublishedExamRoutine {
   publishedAt      DateTime @default(now()) @db.Timestamptz(6)
   expiresAt        DateTime @db.Timestamptz(6)
   status           String   @default("published")
+  scheduledAt      DateTime?
 
   @@index([examId])
   @@index([semester])
   @@index([department])
   @@index([expiresAt])
+  @@index([status])
 }
 
 model Room {
