@@ -3,7 +3,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission } from '@/lib/permissions';
-import { readNoticesIndex, writeNoticesIndex, uploadNoticeAttachment, isNoticeExpired, type Notice, type NoticeCategory } from '@/lib/notices';
+import { readNoticesIndex, writeNoticesIndex, uploadNoticeAttachment, isNoticeExpired, renameNoticeAttachment, type Notice, type NoticeCategory } from '@/lib/notices';
 
 /** Default auto-delete TTL in days (≈6 months). */
 const DEFAULT_NOTICE_TTL_DAYS = 183;
@@ -79,6 +79,22 @@ export async function POST(req: NextRequest) {
 
         await writeNoticesIndex(notices, (await getToken(email))!, `notice: ${isScheduled ? 'schedule' : 'publish'} "${newNotice.title}"`, author);
 
+        // Rename attachment to canonical name (title + category + date)
+        if (newNotice.attachmentUrl) {
+          const renameToken = (await getToken(email))!;
+          renameNoticeAttachment(newNotice.attachmentUrl, newNotice.title, newNotice.category, newNotice.date, renameToken, author)
+            .then(result => {
+              if (result) {
+                const idx2 = notices.findIndex(n => n.id === newNotice.id);
+                if (idx2 !== -1) {
+                  notices[idx2].attachmentUrl = result.url;
+                  notices[idx2].attachmentName = result.name;
+                  writeNoticesIndex(notices, renameToken, `notice: rename attachment → ${result.name}`, author).catch(() => {});
+                }
+              }
+            }).catch(() => {});
+        }
+
         // Only broadcast immediately if not scheduled
         if (!isScheduled) {
           broadcastNotice(newNotice, telegramTargets).catch(() => {});
@@ -105,6 +121,23 @@ export async function POST(req: NextRequest) {
       };
 
       await writeNoticesIndex(notices, (await getToken(email))!, `notice: update "${notices[idx].title}"`, author);
+
+      // Rename attachment to canonical name if it exists and title/category/date changed
+      if (notices[idx].attachmentUrl) {
+        const renameToken = (await getToken(email))!;
+        renameNoticeAttachment(notices[idx].attachmentUrl!, notices[idx].title, notices[idx].category, notices[idx].date, renameToken, author)
+          .then(result => {
+            if (result) {
+              const idx2 = notices.findIndex(n => n.id === notices[idx].id);
+              if (idx2 !== -1) {
+                notices[idx2].attachmentUrl = result.url;
+                notices[idx2].attachmentName = result.name;
+                writeNoticesIndex(notices, renameToken, `notice: rename attachment → ${result.name}`, author).catch(() => {});
+              }
+            }
+          }).catch(() => {});
+      }
+
       return NextResponse.json({ success: true, notice: notices[idx] });
     }
 

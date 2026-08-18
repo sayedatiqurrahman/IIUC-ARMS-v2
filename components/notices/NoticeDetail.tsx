@@ -202,14 +202,20 @@ export default function NoticeDetail({ params }: { params: Promise<{ id: string 
                       <i className="fas fa-image text-green-400 text-lg"></i>
                       <span className="text-[0.78rem] font-medium text-dark-text truncate">{attName}</span>
                     </div>
-                    <a href={notice.attachmentUrl} download={attName}
-                      className="px-2.5 py-1 rounded-lg bg-dark-bg2 border border-dark-border text-dark-text2 text-[0.7rem] font-semibold hover:text-dark-text transition">
-                      <i className="fas fa-download mr-1"></i>Download
-                    </a>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => setViewerItem(buildViewerItem(notice.attachmentUrl!, attName))}
+                        className="px-2.5 py-1 rounded-lg bg-qsis/15 text-qsis text-[0.7rem] font-semibold hover:bg-qsis/25 transition cursor-pointer border-none">
+                        <i className="fas fa-expand mr-1"></i>Full Screen
+                      </button>
+                      <a href={notice.attachmentUrl} download={attName}
+                        className="px-2.5 py-1 rounded-lg bg-dark-bg2 border border-dark-border text-dark-text2 text-[0.7rem] font-semibold hover:text-dark-text transition">
+                        <i className="fas fa-download mr-1"></i>Download
+                      </a>
+                    </div>
                   </div>
                   <img src={notice.attachmentUrl} alt={attName}
-                    className="w-full max-h-[70vh] object-contain bg-black/20 cursor-pointer"
-                    onClick={() => window.open(notice.attachmentUrl, '_blank')} />
+                    className="w-full max-h-[70vh] object-contain bg-black/20 cursor-pointer hover:opacity-90 transition"
+                    onClick={() => setViewerItem(buildViewerItem(notice.attachmentUrl!, attName))} />
                 </div>
               )}
 

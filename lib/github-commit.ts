@@ -31,6 +31,8 @@ export interface CommitFilesOptions {
   // Optional committer — when set, the commit shows the uploader's own GitHub
   // account as both author and committer (instead of the bot).
   committer?: { name: string; email: string };
+  // Optional list of file paths to delete in the same commit.
+  deletePaths?: string[];
 }
 
 export async function ghFetch(url: string, token: string, opts?: RequestInit) {
@@ -62,12 +64,16 @@ export async function commitFilesToBranch(opts: CommitFilesOptions): Promise<str
   if (!commitRes.ok) throw new Error(`commit:${commitRes.status}`);
   const baseTreeSha = (await commitRes.json()).tree.sha;
 
-  // 3. New tree referencing the new blobs
+  // 3. New tree referencing the new blobs + deletions
+  const treeEntries = [
+    ...blobs.map(b => ({ path: b.path, mode: '100644' as const, type: 'blob' as const, sha: b.sha })),
+    ...(opts.deletePaths || []).map(p => ({ path: p, mode: '100644' as const, type: 'blob' as const, sha: null as null })),
+  ];
   const treeRes = await ghFetch(`${GITHUB_API}/repos/${owner}/${repo}/git/trees`, token, {
     method: 'POST',
     body: JSON.stringify({
       base_tree: baseTreeSha,
-      tree: blobs.map(b => ({ path: b.path, mode: '100644', type: 'blob', sha: b.sha })),
+      tree: treeEntries,
     }),
   });
   if (!treeRes.ok) throw new Error(`createtree:${treeRes.status}`);
@@ -101,7 +107,7 @@ export async function commitFilesToBranch(opts: CommitFilesOptions): Promise<str
               method: 'POST',
               body: JSON.stringify({
                 base_tree: retryTree,
-                tree: blobs.map(b => ({ path: b.path, mode: '100644', type: 'blob', sha: b.sha })),
+                tree: treeEntries,
               }),
             });
             if (retryTreeRes.ok) {

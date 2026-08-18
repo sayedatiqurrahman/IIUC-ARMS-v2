@@ -151,6 +151,75 @@ export function isNoticeExpired(notice: Notice): boolean {
   return new Date(notice.expiresAt) < new Date();
 }
 
+/**
+ * Generate a proper filename for a notice attachment:
+ * {category}_{sanitized-title}_{date}.{ext}
+ */
+export function buildNoticeFilename(title: string, category: string, date: string): string {
+  const ext = title.includes('.') ? title.split('.').pop() || 'pdf' : 'pdf';
+  const titlePart = title
+    .replace(/\.[^.]+$/, '') // strip extension if present
+    .replace(/[^a-zA-Z0-9\s_-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60);
+  const datePart = date.replace(/-/g, '').slice(0, 8);
+  return `${category}_${titlePart || 'untitled'}_${datePart}.${ext}`;
+}
+
+/**
+ * Rename a notice attachment file on GitHub to the canonical name.
+ * Returns the new raw URL and filename.
+ */
+export async function renameNoticeAttachment(
+  oldUrl: string,
+  title: string,
+  category: string,
+  date: string,
+  token: string,
+  author?: { name: string; email: string },
+): Promise<{ url: string; name: string } | null> {
+  const owner = config.owner;
+  const repo = config.repo;
+  const branch = config.branch;
+
+  // Extract old file path from raw URL
+  const rawPrefix = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/`;
+  if (!oldUrl.startsWith(rawPrefix)) return null;
+  const oldPath = oldUrl.slice(rawPrefix.length);
+
+  // Skip if the file is already named correctly
+  const newName = buildNoticeFilename(title, category, date);
+  const newPath = `${NOTICES_PATH}/attachments/${newName}`;
+  if (oldPath === newPath) return null;
+
+  // Download old file
+  const dlRes = await fetch(oldUrl);
+  if (!dlRes.ok) return null;
+  const arrayBuf = await dlRes.arrayBuffer();
+  const base64 = Buffer.from(arrayBuf).toString('base64');
+
+  // Get current ref
+  const refRes = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+    headers: ghHeaders(token),
+  });
+  if (!refRes.ok) return null;
+  const refData = await refRes.json();
+  const baseSha = refData.object.sha;
+
+  // Commit new file and delete old file
+  await commitFilesToBranch({
+    token, owner, repo, branch, baseSha,
+    files: [{ path: newPath, content: base64 }],
+    deletePaths: oldPath !== newPath ? [oldPath] : [],
+    message: `notice: rename attachment → ${newName}`,
+    author,
+  });
+
+  return { url: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${newPath}`, name: newName };
+}
+
 /** Remove expired notices from the index. Returns the number removed. */
 export async function removeExpiredNotices(
   token: string,
