@@ -20,6 +20,7 @@ export interface Notice {
   publishedBy: string;
   publishedByName?: string;
   publishedAt: string;     // ISO datetime
+  expiresAt?: string;      // ISO datetime — auto-delete after this date
 }
 
 export const CATEGORY_META: Record<NoticeCategory, { label: string; icon: string; color: string; bg: string }> = {
@@ -139,4 +140,25 @@ async function getNoticesToken(): Promise<string | null> {
     if (token) return token;
   } catch {}
   return process.env.GITHUB_TOKEN || null;
+}
+
+/** Check if a notice has expired based on its expiresAt field. */
+export function isNoticeExpired(notice: Notice): boolean {
+  if (!notice.expiresAt) return false;
+  return new Date(notice.expiresAt) < new Date();
+}
+
+/** Remove expired notices from the index. Returns the number removed. */
+export async function removeExpiredNotices(
+  token: string,
+  author?: { name: string; email: string },
+): Promise<number> {
+  const notices = await readNoticesIndex();
+  const before = notices.length;
+  const alive = notices.filter(n => !isNoticeExpired(n));
+  const removed = before - alive.length;
+  if (removed > 0) {
+    await writeNoticesIndex(alive, token, `notice: auto-delete ${removed} expired notice(s)`, author);
+  }
+  return removed;
 }

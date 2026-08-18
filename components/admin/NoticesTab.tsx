@@ -9,7 +9,7 @@ export default function NoticesTab() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Notice | null>(null);
-  const [form, setForm] = useState({ title: '', description: '', category: 'notice' as NoticeCategory, date: '', pinned: false, link: '', attachmentUrl: '', attachmentName: '' });
+  const [form, setForm] = useState({ title: '', description: '', category: 'notice' as NoticeCategory, date: '', pinned: false, link: '', attachmentUrl: '', attachmentName: '', ttlDays: 183 as number | null });
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -28,13 +28,20 @@ export default function NoticesTab() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ title: '', description: '', category: 'notice', date: new Date().toISOString().split('T')[0], pinned: false, link: '', attachmentUrl: '', attachmentName: '' });
+    setForm({ title: '', description: '', category: 'notice', date: new Date().toISOString().split('T')[0], pinned: false, link: '', attachmentUrl: '', attachmentName: '', ttlDays: 183 });
     setShowForm(true);
   };
 
   const openEdit = (n: Notice) => {
     setEditing(n);
-    setForm({ title: n.title, description: n.description, category: n.category, date: n.date, pinned: n.pinned, link: n.link || '', attachmentUrl: n.attachmentUrl || '', attachmentName: n.attachmentName || '' });
+    let ttlDays: number | null = 183;
+    if (n.expiresAt) {
+      const remaining = Math.ceil((new Date(n.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      ttlDays = remaining > 0 ? remaining : 0;
+    } else {
+      ttlDays = null;
+    }
+    setForm({ title: n.title, description: n.description, category: n.category, date: n.date, pinned: n.pinned, link: n.link || '', attachmentUrl: n.attachmentUrl || '', attachmentName: n.attachmentName || '', ttlDays });
     setShowForm(true);
   };
 
@@ -163,6 +170,7 @@ export default function NoticesTab() {
                     <span className={`${meta.color}`}>{meta.label}</span>
                     {n.link && <span className="text-qsis"><i className="fas fa-link mr-0.5"></i>Has link</span>}
                     {n.attachmentUrl && <span className="text-qsis"><i className="fas fa-paperclip mr-0.5"></i>Attachment</span>}
+                    {n.expiresAt && <span className="text-amber-400/60"><i className="fas fa-clock mr-0.5"></i>Expires {new Date(n.expiresAt).toLocaleDateString()}</span>}
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
@@ -221,6 +229,18 @@ export default function NoticesTab() {
                     <span className="text-[0.78rem] text-dark-text2">Pin to top</span>
                   </label>
                 </div>
+              </div>
+              <div>
+                <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Auto-delete after</label>
+                <select value={form.ttlDays === null ? 'never' : String(form.ttlDays)}
+                  onChange={e => setForm(f => ({ ...f, ttlDays: e.target.value === 'never' ? null : Number(e.target.value) }))}
+                  className="w-full px-3 py-2 rounded-xl bg-dark-bg3 border border-dark-border text-[0.85rem] text-dark-text focus:border-qsis outline-none">
+                  <option value="30">30 days</option>
+                  <option value="90">3 months</option>
+                  <option value="183">6 months (default)</option>
+                  <option value="365">1 year</option>
+                  <option value="never">Never delete</option>
+                </select>
               </div>
               <div>
                 <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Link (optional)</label>

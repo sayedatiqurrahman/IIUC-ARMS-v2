@@ -4,6 +4,9 @@ import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
+import ShareModal, { type ShareItem } from './ShareModal';
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.vercel.app';
 
 interface CoursesViewProps {
   semesterCourses: any[];
@@ -55,6 +58,15 @@ export default function CoursesView({
   const [deleteError, setDeleteError] = useState('');
 
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [shareItem, setShareItem] = useState<ShareItem | null>(null);
+  const tree = useAppStore(s => s.tree);
+
+  function openCourseShare(course: any) {
+    const coursePath = `${currentDept || ''}/${currentSem || ''}/${course.code}`;
+    const items = tree.filter((t: any) => t.path.startsWith(coursePath + '/') || t.path === coursePath);
+    const url = `${SITE_URL}/?view=course&code=${course.code}`;
+    setShareItem({ title: `${course.code} \u2014 ${course.title}`, url, type: 'course', githubPath: coursePath, treeItems: items });
+  }
 
   async function handleEdit() {
     if (!editTarget || !editTitle.trim()) return;
@@ -224,6 +236,10 @@ export default function CoursesView({
                   </div>
                 )}
               </div>
+              <button onClick={(e) => { e.stopPropagation(); openCourseShare(course); }}
+                className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 hover:text-qsis hover:border-qsis/40 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0" title="Share course">
+                <i className="fas fa-share-nodes text-sm"></i>
+              </button>
               {menuButton}
             </div>
 
@@ -249,7 +265,13 @@ export default function CoursesView({
                     ))}
                   </div>
                 </div>
-                {menuButton}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={(e) => { e.stopPropagation(); openCourseShare(course); }}
+                    className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 hover:text-qsis hover:border-qsis/40 flex items-center justify-center cursor-pointer transition-colors" title="Share course">
+                    <i className="fas fa-share-nodes text-sm"></i>
+                  </button>
+                  {menuButton}
+                </div>
               </div>
               {/* 3rd line: links/md, mid/final badges + total files count */}
               <div className="mt-2 flex items-center justify-between gap-2 cursor-pointer" onClick={() => navigateToCourse(course.code, course.title)}>

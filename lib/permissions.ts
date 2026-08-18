@@ -193,6 +193,11 @@ export function extractUploadSemester(relPath: string): string {
   return parts[1] || '';
 }
 
+export function extractUploadDepartment(relPath: string): string {
+  const parts = relPath.split('/');
+  return parts[0] || '';
+}
+
 // Whether a caller may upload files to the given semester. Admins/managers/
 // teachers and holders of the "Add to Any Semester" permission may upload
 // anywhere; everyone else stays scoped to their own semester or one previous.
@@ -201,7 +206,9 @@ export async function canUploadToSemester(
   role: string,
   isCR: boolean,
   userSemester: string | null,
-  targetSemester: string
+  targetSemester: string,
+  targetDepartment?: string | null,
+  userDepartment?: string | null,
 ): Promise<{ allowed: boolean; reason?: string }> {
   if (role === 'admin' || role === 'manager' || role === 'teacher') {
     return { allowed: true };
@@ -211,11 +218,29 @@ export async function canUploadToSemester(
     return { allowed: false, reason: 'You do not have permission to upload files.' };
   }
 
-  if (await hasPermission('addToAnySemester', role, isCR, email)) {
+  // uploadAnyDepartment = can upload to any department, any semester
+  if (await hasPermission('uploadAnyDepartment', role, isCR, email)) {
     return { allowed: true };
   }
 
+  // uploadAnySemester = can upload to any semester within own department
   if (targetSemester === config.relatedSourcesFolder || targetSemester === config.relatedKitabsFolder) {
+    return { allowed: true };
+  }
+
+  if (await hasPermission('uploadAnySemester', role, isCR, email)) {
+    // Check department matches
+    if (!targetDepartment || !userDepartment || targetDepartment === userDepartment) {
+      return { allowed: true };
+    }
+    return {
+      allowed: false,
+      reason: `You can upload to any semester in your department, but not to other departments.`,
+    };
+  }
+
+  // Legacy: addToAnySemester (kept for backward compat)
+  if (await hasPermission('addToAnySemester', role, isCR, email)) {
     return { allowed: true };
   }
 

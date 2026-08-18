@@ -4,6 +4,8 @@ import { getRepoBotToken } from '@/lib/github-app';
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 export const API = `https://api.telegram.org/bot${TOKEN}`;
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+export const CHANNEL_ID = process.env.TELEGRAM_CHANNEL_ID || '';
+export const GROUP_ID = process.env.TELEGRAM_GROUP_ID || '';
 
 // ─── GitHub token resolver (App token > env token > empty) ─────────
 
@@ -36,7 +38,7 @@ export async function resolveGithubToken(): Promise<string> {
 
 // ─── Telegram API helpers ─────────────────────────────────────────
 
-export async function sendMessage(chatId: number, text: string, extra?: any) {
+export async function sendMessage(chatId: number | string, text: string, extra?: any) {
   const res = await fetch(`${API}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -110,5 +112,20 @@ export async function deleteMessage(chatId: number, messageId: number) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+  });
+}
+
+export async function sendDocument(chatId: number | string, fileUrl: string, caption: string, extra?: any) {
+  return fetch(`${API}/sendDocument`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      document: fileUrl,
+      caption,
+      parse_mode: 'HTML',
+      disable_web_page_preview: false,
+      ...extra,
+    }),
   });
 }

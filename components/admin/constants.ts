@@ -30,6 +30,9 @@ export const PERMISSION_GROUPS = [
     color: 'text-green-400',
     actions: [
       { key: 'uploadFile', label: 'Upload Files', desc: 'Upload notes, sheets, questions', icon: 'fa-cloud-upload-alt', color: 'text-green-400' },
+      { key: 'uploadAnySemester', label: 'Upload Any Semester', desc: 'Upload to any semester in own department', icon: 'fa-calendar-arrow-up', color: 'text-emerald-400' },
+      { key: 'uploadAnyDepartment', label: 'Upload Any Dept', desc: 'Upload to any department, any semester', icon: 'fa-globe', color: 'text-teal-400' },
+      { key: 'createFolder', label: 'Create Folders', desc: 'Create new folders in browse view', icon: 'fa-folder-plus', color: 'text-green-400' },
       { key: 'requireGithubForUpload', label: 'Require GitHub for Upload', desc: 'Uploads require a connected GitHub account', icon: 'fab fa-github', color: 'text-purple-400' },
       { key: 'moveFile', label: 'Move Files', desc: 'Move files & folders', icon: 'fa-arrows-alt', color: 'text-cyan-400' },
       { key: 'copyFile', label: 'Copy Files', desc: 'Copy to other locations', icon: 'fa-copy', color: 'text-teal-400' },
@@ -77,6 +80,7 @@ export const PERMISSION_GROUPS = [
     color: 'text-yellow-400',
     actions: [
       { key: 'manageSettings', label: 'Manage Settings', desc: 'Change site settings', icon: 'fa-cog', color: 'text-yellow-400' },
+      { key: 'manageCronJobs', label: 'Manage Cron Jobs', desc: 'View, run & schedule automated tasks', icon: 'fa-clock', color: 'text-orange-400' },
     ],
   },
 ];

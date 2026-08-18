@@ -3,10 +3,15 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission } from '@/lib/permissions';
-import { readNoticesIndex, writeNoticesIndex, uploadNoticeAttachment, type Notice, type NoticeCategory } from '@/lib/notices';
+import { readNoticesIndex, writeNoticesIndex, uploadNoticeAttachment, isNoticeExpired, type Notice, type NoticeCategory } from '@/lib/notices';
+
+/** Default auto-delete TTL in days (≈6 months). */
+const DEFAULT_NOTICE_TTL_DAYS = 183;
 
 export async function GET() {
-  const notices = await readNoticesIndex();
+  let notices = await readNoticesIndex();
+  // Filter out expired notices
+  notices = notices.filter(n => !isNoticeExpired(n));
   return NextResponse.json({ success: true, notices });
 }
 
@@ -25,15 +30,29 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { action } = body;
+      const { action } = body;
 
     if (action === 'create' || action === 'update') {
-      const { notice } = body as { notice: Omit<Notice, 'id' | 'publishedAt'> & { id?: string } };
+      const { notice } = body as { notice: Omit<Notice, 'id' | 'publishedAt'> & { id?: string; ttlDays?: number | null } };
       if (!notice?.title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 });
 
       const notices = await readNoticesIndex();
       const now = new Date().toISOString();
       const author = { name: profile?.name || email.split('@')[0], email };
+
+      // Compute expiresAt: null = never expire, number = days from now, default = 6 months
+      let expiresAt: string | undefined;
+      if (notice.ttlDays === null) {
+        expiresAt = undefined; // never expires
+      } else if (typeof notice.ttlDays === 'number' && notice.ttlDays > 0) {
+        const d = new Date();
+        d.setDate(d.getDate() + notice.ttlDays);
+        expiresAt = d.toISOString();
+      } else {
+        const d = new Date();
+        d.setDate(d.getDate() + DEFAULT_NOTICE_TTL_DAYS);
+        expiresAt = d.toISOString();
+      }
 
       if (action === 'create') {
         const newNotice: Notice = {
@@ -49,6 +68,7 @@ export async function POST(req: NextRequest) {
           publishedBy: email,
           publishedByName: profile?.name || email.split('@')[0],
           publishedAt: now,
+          expiresAt,
         };
         notices.unshift(newNotice);
 
@@ -74,6 +94,7 @@ export async function POST(req: NextRequest) {
         attachmentUrl: notice.attachmentUrl ?? notices[idx].attachmentUrl,
         attachmentName: notice.attachmentName ?? notices[idx].attachmentName,
         link: notice.link?.trim() || undefined,
+        expiresAt,
       };
 
       await writeNoticesIndex(notices, (await getToken(email))!, `notice: update "${notices[idx].title}"`, author);
@@ -122,21 +143,71 @@ async function getToken(email: string): Promise<string> {
 
 async function broadcastNotice(notice: Notice) {
   try {
-    const { sendMessage } = await import('@/lib/telegram/api');
-    const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.vercel.app';
+    const { sendMessage, sendDocument, CHANNEL_ID, GROUP_ID, SITE_URL } = await import('@/lib/telegram/api');
+
     const catLabel = notice.category === 'academic-calendar' ? 'Academic Calendar'
       : notice.category === 'bus-schedule' ? 'Bus Schedule' : 'Notice';
     const emoji = notice.category === 'academic-calendar' ? '📅'
       : notice.category === 'bus-schedule' ? '🚌' : '📢';
 
-    let text = `${emoji} <b>${catLabel}: ${notice.title}</b>\n`;
-    if (notice.description) text += `\n${notice.description}\n`;
-    if (notice.link) text += `\n🔗 <a href="${notice.link}">Open Link</a>`;
-    text += `\n\n📅 ${notice.date || new Date().toISOString().split('T')[0]}`;
-    text += `\n🏛️ Published by <b>IIUC-ARMS</b>`;
-    text += `\n\n<a href="${SITE_URL}/notices">View All Notices →</a>`;
+    const hasAttachment = !!notice.attachmentUrl;
+    const isImage = hasAttachment && /\.(jpg|jpeg|png|gif|webp)$/i.test(notice.attachmentUrl!);
+    const isPdf = hasAttachment && /\.pdf$/i.test(notice.attachmentUrl!);
 
+    // --- Promotional footer ---
+    const footer = [
+      '',
+      '━━━━━━━━━━━━━━━━━━',
+      `🏛️ <b>Published by IIUC-ARMS</b>`,
+      `📅 ${notice.date || new Date().toISOString().split('T')[0]}`,
+      '',
+      '🔗 <b>Follow us:</b>',
+      `• 📢 Telegram Channel: <a href="https://t.me/iiuc_arms">t.me/iiuc_arms</a>`,
+      `• 💬 Telegram Group: <a href="https://t.me/iiuc_arms_chat">t.me/iiuc_arms_chat</a>`,
+      `• 🤖 Talk to Bot: <a href="https://t.me/${process.env.TELEGRAM_BOT_USERNAME || 'iiuc_arms_bot'}">@${process.env.TELEGRAM_BOT_USERNAME || 'iiuc_arms_bot'}</a>`,
+      `• 🌐 Open App: <a href="${SITE_URL}">IIUC-ARMS</a>`,
+      '',
+      `📋 <a href="${SITE_URL}/notices?id=${notice.id}">View this Notice →</a>`,
+      `📋 <a href="${SITE_URL}/notices">View All Notices →</a>`,
+    ].join('\n');
+
+    // --- Main message body ---
+    let body = `${emoji} <b>${catLabel}</b>\n`;
+    body += `<b>${notice.title}</b>\n`;
+    if (notice.description) body += `\n${notice.description}\n`;
+    if (notice.link) body += `\n🔗 <a href="${notice.link}">Open Link</a>`;
+    if (hasAttachment && !isImage && !isPdf) {
+      body += `\n📎 <a href="${notice.attachmentUrl}">Download: ${notice.attachmentName || 'Attachment'}</a>`;
+    }
+
+    const fullText = body + footer;
+
+    // --- Send to Channel ---
+    if (CHANNEL_ID) {
+      try {
+        if (hasAttachment && (isImage || isPdf)) {
+          await sendDocument(CHANNEL_ID, notice.attachmentUrl!, fullText);
+        } else {
+          await sendMessage(CHANNEL_ID, fullText, { disable_web_page_preview: !hasAttachment });
+        }
+      } catch (e) { console.error('[TG] Channel send failed:', e); }
+    }
+
+    // --- Send to Group ---
+    if (GROUP_ID) {
+      try {
+        if (hasAttachment && (isImage || isPdf)) {
+          await sendDocument(GROUP_ID, notice.attachmentUrl!, fullText);
+        } else {
+          await sendMessage(GROUP_ID, fullText, { disable_web_page_preview: !hasAttachment });
+        }
+      } catch (e) { console.error('[TG] Group send failed:', e); }
+    }
+
+    // --- Send to individual users (bot DM) ---
     const { sendDepartmentNotifications } = await import('@/lib/telegram/notifications');
-    await sendDepartmentNotifications(['ALL'], text, { type: 'notice', title: `${catLabel}: ${notice.title}` }).catch(() => {});
-  } catch {}
+    await sendDepartmentNotifications(['ALL'], fullText, {
+      type: 'notice', title: `${catLabel}: ${notice.title}`,
+    }).catch(() => {});
+  } catch (e) { console.error('[TG] broadcastNotice failed:', e); }
 }

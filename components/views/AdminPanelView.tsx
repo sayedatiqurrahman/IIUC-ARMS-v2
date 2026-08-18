@@ -21,6 +21,7 @@ import UsersTab from '@/components/admin/UsersTab';
 import FacultyTab from '@/components/admin/FacultyTab';
 import ActivityLogTab from '@/components/admin/ActivityLogTab';
 import NoticesTab from '@/components/admin/NoticesTab';
+import CronJobTab from '@/components/admin/CronJobTab';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import { filterAdminNav } from '@/components/admin/nav';
 import { useUrlTab } from '@/lib/use-url-tabs';
@@ -29,7 +30,7 @@ import { useUserAccess } from '@/lib/useUserAccess';
 // Deep-linkable tabs: /admin?tab=users&sub=pending (the `tab` param is only
 // owned here when the panel is rendered standalone — when embedded inside the
 // dashboard, DashboardView owns the `tab`/`admin` URL params).
-const TAB_KEYS: readonly Tab[] = ['overview', 'users', 'activity', 'faculty', 'facultyDept', 'courses', 'permissions', 'roles', 'rooms', 'batches', 'telegram', 'contributors', 'notices'];
+const TAB_KEYS: readonly Tab[] = ['overview', 'users', 'activity', 'faculty', 'facultyDept', 'courses', 'permissions', 'roles', 'rooms', 'batches', 'telegram', 'contributors', 'notices', 'cronJobs'];
 const SUB_KEYS: readonly UserSubTab[] = ['all', 'admin', 'manager', 'teacher', 'student', 'external', 'pending'];
 
 interface AdminPanelViewProps {
@@ -892,6 +893,8 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
       {activeTab === 'activity' && <ActivityLogTab activities={activities} />}
 
       {activeTab === 'notices' && <NoticesTab />}
+
+      {activeTab === 'cronJobs' && <CronJobTab />}
         </div>{/* end content */}
         </div>{/* end flex-1 min-w-0 */}
       </div>{/* end flex gap-4 */}

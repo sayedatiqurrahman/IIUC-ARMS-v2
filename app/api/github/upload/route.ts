@@ -3,7 +3,7 @@ import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { resolveUploadContext, commitUpload, logUploadActivity } from '@/lib/github-upload';
 import { validateRepoPath } from '@/lib/repo-path';
-import { canUploadToSemester, extractUploadSemester } from '@/lib/permissions';
+import { canUploadToSemester, extractUploadSemester, extractUploadDepartment } from '@/lib/permissions';
 
 export const maxDuration = 120;
 
@@ -95,10 +95,12 @@ export async function POST(req: NextRequest) {
       const role = config.getEffectiveRole(ctx.userEmail, profile?.role);
       const isCR = profile?.isCR || false;
       const userSemester = profile?.semester || null;
+      const userDepartment = profile?.department || null;
       for (const f of files) {
         const sem = extractUploadSemester(f.path);
+        const dept = extractUploadDepartment(f.path);
         if (!sem) continue;
-        const semCheck = await canUploadToSemester(ctx.userEmail, role, isCR, userSemester, sem);
+        const semCheck = await canUploadToSemester(ctx.userEmail, role, isCR, userSemester, sem, dept, userDepartment);
         if (!semCheck.allowed) {
           return NextResponse.json({ error: semCheck.reason }, { status: 403 });
         }
