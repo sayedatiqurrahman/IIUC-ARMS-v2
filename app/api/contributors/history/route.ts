@@ -10,7 +10,6 @@ const REPOS = [
 ];
 
 async function getGithubToken(): Promise<string> {
-  // Try GitHub App installation token first
   try {
     const installations = await getAppInstallations();
     if (Array.isArray(installations) && installations.length > 0) {
@@ -18,8 +17,6 @@ async function getGithubToken(): Promise<string> {
       if (token) return token;
     }
   } catch {}
-
-  // Fall back to env token
   return process.env.GITHUB_TOKEN || '';
 }
 
@@ -31,29 +28,29 @@ function ghHeaders(token: string) {
   };
 }
 
-// Fetch ALL pages of a GitHub API endpoint
-async function fetchAllPages(url: string, token: string): Promise<any[]> {
+async function fetchAllPages(url: string, token: string, maxPages = 10): Promise<{ data: any[]; rateLimited: boolean }> {
   const results: any[] = [];
   let page = 1;
-  const maxPages = 5; // safety limit: 5 * 100 = 500 items max
-
+  let rateLimited = false;
   while (page <= maxPages) {
     const separator = url.includes('?') ? '&' : '?';
     const pageUrl = `${url}${separator}per_page=100&page=${page}`;
     try {
       const res = await fetch(pageUrl, { headers: ghHeaders(token) });
+      if (res.status === 403 || res.status === 429) {
+        rateLimited = true;
+        console.warn(`[history] Rate limited on ${url} page ${page} (HTTP ${res.status})`);
+        break;
+      }
       if (!res.ok) break;
       const data = await res.json();
       if (!Array.isArray(data) || data.length === 0) break;
       results.push(...data);
-      if (data.length < 100) break; // last page
+      if (data.length < 100) break;
       page++;
-    } catch {
-      break;
-    }
+    } catch { break; }
   }
-
-  return results;
+  return { data: results, rateLimited };
 }
 
 export async function GET(request: Request) {
@@ -65,6 +62,32 @@ export async function GET(request: Request) {
     }
 
     const token = await getGithubToken();
+
+    // Fetch the contributor's email from DB profile so we can also match
+    // commits made by the app bot (where author.login won't match).
+    // NOTE: Profile.userId is a cuid — GitHub login is in Profile.githubLogin.
+    let profileEmail = '';
+    try {
+      const { prisma } = await import('@/lib/prisma');
+      const profile = await prisma.profile.findFirst({
+        where: { OR: [{ githubLogin: login }, { userId: login }] },
+      });
+      if (profile?.publicEmail) profileEmail = profile.publicEmail.toLowerCase();
+      else if (profile?.email) profileEmail = profile.email.toLowerCase();
+    } catch {}
+
+    // Also fetch the user's public email from GitHub profile
+    let ghPublicEmail = '';
+    try {
+      const userRes = await fetch(`${GITHUB_API}/users/${encodeURIComponent(login)}`, { headers: ghHeaders(token) });
+      if (userRes.ok) {
+        const ghUser = await userRes.json();
+        if (ghUser.email) ghPublicEmail = ghUser.email.toLowerCase();
+      }
+    } catch {}
+
+    const noreplyEmail = `${login}@users.noreply.github.com`.toLowerCase();
+
     const events: any[] = [];
     let commitCount = 0;
     let prCount = 0;
@@ -72,15 +95,51 @@ export async function GET(request: Request) {
     for (const { repo, key, label } of REPOS) {
       const base = `${GITHUB_API}/repos/${config.owner}/${repo}`;
 
-      const [commits, prs] = await Promise.all([
+      const [loginCommitResult, prResult] = await Promise.all([
         fetchAllPages(`${base}/commits?author=${encodeURIComponent(login)}`, token),
         fetchAllPages(`${base}/pulls?state=all`, token),
       ]);
+      const commits = loginCommitResult.data;
+      const prs = prResult.data;
 
-      for (const c of commits) {
-        // The `author` query already narrows by name/email/username; double-check login
-        // so name-collisions can't attribute someone else's commits to this user.
-        if (c.author?.login !== login && c.committer?.login !== login) continue;
+      // Fetch commits by all known emails to catch bot-authored commits
+      const emailSet = new Set<string>();
+      if (profileEmail) emailSet.add(profileEmail);
+      if (ghPublicEmail && ghPublicEmail !== profileEmail) emailSet.add(ghPublicEmail);
+      if (!emailSet.has(noreplyEmail)) emailSet.add(noreplyEmail);
+
+      let emailCommits: any[] = [];
+      for (const email of Array.from(emailSet)) {
+        try {
+          const { data: fetched, rateLimited } = await fetchAllPages(`${base}/commits?author=${encodeURIComponent(email)}`, token);
+          emailCommits.push(...fetched);
+          if (rateLimited) {
+            console.warn(`[history] Rate limited fetching commits for email ${email} in ${repo}`);
+          }
+        } catch {}
+      }
+
+      // Merge and dedupe by SHA
+      const seenShas = new Set<string>();
+      const allCommits = [...commits, ...emailCommits];
+
+      for (const c of allCommits) {
+        if (seenShas.has(c.sha)) continue;
+        seenShas.add(c.sha);
+
+        const authorLogin = c.author?.login || '';
+        const committerLogin = c.committer?.login || '';
+        const authorEmail = (c.commit?.author?.email || '').toLowerCase();
+        const committerEmail = (c.commit?.committer?.email || '').toLowerCase();
+
+        // Match if: login matches OR email matches any known email
+        const loginMatch = authorLogin === login || committerLogin === login;
+        const emailMatch = authorEmail === noreplyEmail || committerEmail === noreplyEmail
+          || (profileEmail && (authorEmail === profileEmail || committerEmail === profileEmail))
+          || (ghPublicEmail && (authorEmail === ghPublicEmail || committerEmail === ghPublicEmail));
+
+        if (!loginMatch && !emailMatch) continue;
+
         commitCount++;
         events.push({
           type: 'commit',

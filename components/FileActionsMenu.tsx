@@ -10,9 +10,10 @@ interface FileActionsMenuProps {
   onCopy: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onShare?: () => void;
 }
 
-export default function FileActionsMenu({ filePath, fileName, isFolder, onMove, onCopy, onRename, onDelete }: FileActionsMenuProps) {
+export default function FileActionsMenu({ filePath, fileName, isFolder, onMove, onCopy, onRename, onDelete, onShare }: FileActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -50,6 +51,12 @@ export default function FileActionsMenu({ filePath, fileName, isFolder, onMove, 
               <div className="w-10 h-1 bg-dark-border rounded-full mx-auto mb-4"></div>
               <div className="text-[0.75rem] text-dark-text3 mb-3 truncate font-mono">{fileName}</div>
               <div className="flex flex-col gap-1.5">
+                {onShare && (
+                  <button onClick={() => { setOpen(false); onShare(); }} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-dark-bg text-left transition-colors">
+                    <i className="fas fa-share-nodes text-green-400 w-5 text-center"></i>
+                    <span className="text-[0.85rem]">Share</span>
+                  </button>
+                )}
                 <button onClick={() => { setOpen(false); onMove(); }} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-dark-bg text-left transition-colors">
                   <i className="fas fa-arrows-alt text-cyan-400 w-5 text-center"></i>
                   <span className="text-[0.85rem]">Move</span>
@@ -88,6 +95,11 @@ export default function FileActionsMenu({ filePath, fileName, isFolder, onMove, 
 
       {open && (
         <div className="absolute right-0 top-full mt-1 bg-dark-bg2 border border-dark-border rounded-xl shadow-xl py-1.5 z-50 min-w-[160px]">
+          {onShare && (
+            <button onClick={() => { setOpen(false); onShare(); }} className="flex items-center gap-2.5 px-4 py-2 w-full text-left hover:bg-dark-bg text-[0.82rem] transition-colors">
+              <i className="fas fa-share-nodes text-green-400 w-4 text-center text-[0.75rem]"></i> Share
+            </button>
+          )}
           <button onClick={() => { setOpen(false); onMove(); }} className="flex items-center gap-2.5 px-4 py-2 w-full text-left hover:bg-dark-bg text-[0.82rem] transition-colors">
             <i className="fas fa-arrows-alt text-cyan-400 w-4 text-center text-[0.75rem]"></i> Move
           </button>

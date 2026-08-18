@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { hasPasswordProvider, changePassword, reauthenticateAndSetPassword, setInitialPassword } from '@/lib/firebase';
-import { showToast } from '@/lib/utils';
+import { hasPasswordProvider, reauthenticateAndSetPassword, setInitialPassword } from '@/lib/firebase';
 
 interface SecuritySectionProps {
   totpEnabled: boolean;

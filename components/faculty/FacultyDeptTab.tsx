@@ -6,7 +6,7 @@ import { useConfirm } from '@/components/ConfirmModal';
 import { showToast } from '@/lib/utils';
 import CustomSelect from '@/components/CustomSelect';
 import { ICON_OPTIONS } from './constants';
-import type { CustomFaculty, CustomDepartment, FacultyDeptTabProps } from './types';
+import type { CustomFaculty, FacultyDeptTabProps } from './types';
 
 export default function FacultyDeptTab({ effectiveRole, profile, canManage }: FacultyDeptTabProps) {
   const { confirm, confirmDialog } = useConfirm();

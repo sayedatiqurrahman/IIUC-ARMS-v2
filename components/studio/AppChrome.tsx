@@ -31,6 +31,7 @@ export default function AppChrome({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
   const [reportTitle, setReportTitle] = useState('');
   const [reportDesc, setReportDesc] = useState('');
   const [reporting, setReporting] = useState(false);
@@ -43,17 +44,17 @@ export default function AppChrome({
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
-  // Warm the app file (GitHub → edge cache) as soon as this page mounts, so the
-  // iframe loads instantly when the user hits Start instead of waiting on a
-  // GitHub round-trip. The browser also caches it for repeat opens.
   useEffect(() => {
     const ctrl = new AbortController();
     fetch(src, { signal: ctrl.signal, cache: 'force-cache' }).catch(() => {});
     return () => ctrl.abort();
   }, [src]);
 
-  const openNewTab = () => {
-    window.open(src, '_blank', 'noopener');
+  const openNewTab = () => window.open(src, '_blank', 'noopener');
+
+  const toggleFullscreen = async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await wrapRef.current?.requestFullscreen();
   };
 
   const submitReport = async () => {
@@ -71,141 +72,106 @@ export default function AppChrome({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (data.existingIssueUrl) {
-          setReported({ issueUrl: data.existingIssueUrl, issueNumber: data.issueNumber || 0 });
-        } else {
-          setReportError(data.error || 'Could not report the issue.');
-        }
+        if (data.existingIssueUrl) setReported({ issueUrl: data.existingIssueUrl, issueNumber: data.issueNumber || 0 });
+        else setReportError(data.error || 'Could not report the issue.');
         setReporting(false);
         return;
       }
       setReported({ issueUrl: data.issueUrl, issueNumber: data.issueNumber });
-      setReporting(false);
     } catch {
       setReportError('Network error — please try again.');
-      setReporting(false);
     }
+    setReporting(false);
   };
 
   return (
-    <div className="min-h-[80vh] flex flex-col">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <Link
-          href="/studio"
-          className="rounded-xl border border-dark-border bg-dark-bg2 px-3 py-2 text-[0.72rem] font-medium text-dark-text transition hover:border-qsis hover:text-qsis no-underline"
-        >
-          <span className="material-symbols-outlined align-middle mr-1 text-[0.95rem]">arrow_back</span>
-          Back to Studio
-        </Link>
-        <div className="flex items-center gap-2">
-          <span className="text-[0.7rem] text-dark-text3 truncate">{app.title}</span>
-          {isAuthor && (
-            <button
-              onClick={() => setShowUpdate(true)}
-              className="rounded-lg border border-qsis/40 bg-qsis/10 px-3 py-1.5 text-[0.68rem] font-medium text-qsis transition hover:bg-qsis/20 cursor-pointer"
-            >
-              <span className="material-symbols-outlined align-middle mr-1 text-[0.9rem]">update</span>
-              Update
-            </button>
-          )}
-          <button
-            onClick={() => setShowReport(true)}
-            className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-[0.68rem] font-medium text-rose-300 transition hover:bg-rose-500/20 cursor-pointer"
-          >
-            <span className="material-symbols-outlined align-middle mr-1 text-[0.9rem]">bug_report</span>
-          </button>
-          {isFullscreen && (
-            <button
-              onClick={async () => {
-                try {
-                  await document.exitFullscreen();
-                } catch {}
-              }}
-              className="rounded-lg border border-dark-border bg-dark-bg2 px-3 py-1.5 text-[0.68rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis cursor-pointer"
-            >
-              <span className="material-symbols-outlined align-middle mr-1 text-[0.9rem]">fullscreen_exit</span>
-              Exit fullscreen
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div
-        ref={wrapRef}
-        className="flex-1 rounded-2xl overflow-hidden border border-dark-border bg-white relative"
-      >
+    <>
+      {/* Full-viewport iframe — no borders, no wrapper chrome */}
+      <div ref={wrapRef} className="fixed top-[60px] left-0 right-0 bottom-[60px] md:bottom-0 z-[50]">
         <iframe
           ref={frameRef}
           src={src}
           title={app.title}
-          className="h-[calc(100dvh-220px)] min-h-[480px] w-full"
+          className="w-full h-full border-0"
           allow="clipboard-write; fullscreen; document-picture-in-picture; popups"
           onLoad={() => setIframeLoading(false)}
         />
-
         {iframeLoading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-dark-bg p-6 text-center">
-            <div className="w-10 h-10 border-3 border-dark-border border-t-qsis rounded-full animate-spin mb-4"></div>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-dark-bg p-6 text-center z-10">
+            <div className="w-10 h-10 border-3 border-dark-border border-t-qsis rounded-full animate-spin mb-4" />
             <p className="text-[0.78rem] text-dark-text2">Loading {app.title}…</p>
           </div>
         )}
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[0.68rem] text-dark-text3">
-          Community app · runs from GitHub, nothing leaves your browser.
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={async () => {
-              if (document.fullscreenElement) {
-                try {
-                  await document.exitFullscreen();
-                } catch {}
-              } else {
-                try {
-                  await wrapRef.current?.requestFullscreen();
-                } catch {}
-              }
-            }}
-            className="rounded-lg border border-dark-border bg-dark-bg2 px-3 py-1.5 text-[0.68rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis cursor-pointer"
-          >
-            <span className="material-symbols-outlined align-middle mr-1 text-[0.9rem]">
-              {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
-            </span>
-            {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-          </button>
-          <button
-            onClick={openNewTab}
-            className="rounded-lg border border-dark-border bg-dark-bg2 px-3 py-1.5 text-[0.68rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis cursor-pointer"
-          >
-            <span className="material-symbols-outlined align-middle mr-1 text-[0.9rem]">open_in_new</span>
-            Open in new tab
-          </button>
-        </div>
+      {/* Floating back button */}
+      <Link
+        href="/studio"
+        className="fixed top-[72px] left-3 z-[60] flex items-center gap-1.5 rounded-xl border border-dark-border bg-dark-bg2/90 backdrop-blur-sm px-3 py-2 text-[0.72rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis no-underline shadow-lg"
+      >
+        <span className="material-symbols-outlined align-middle text-[0.95rem]">arrow_back</span>
+        <span className="hidden sm:inline">Studio</span>
+      </Link>
+
+      {/* Floating action button */}
+      <div className="fixed bottom-[76px] md:bottom-4 right-3 z-[60] flex flex-col items-end gap-2">
+        {fabOpen && (
+          <>
+            <button
+              onClick={openNewTab}
+              className="w-10 h-10 rounded-full border border-dark-border bg-dark-bg2/90 backdrop-blur-sm flex items-center justify-center text-dark-text2 hover:text-qsis hover:border-qsis transition cursor-pointer shadow-lg"
+              title="Open in new tab"
+            >
+              <span className="material-symbols-outlined text-[1.1rem]">open_in_new</span>
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              className="w-10 h-10 rounded-full border border-dark-border bg-dark-bg2/90 backdrop-blur-sm flex items-center justify-center text-dark-text2 hover:text-qsis hover:border-qsis transition cursor-pointer shadow-lg"
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              <span className="material-symbols-outlined text-[1.1rem]">
+                {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+              </span>
+            </button>
+            {isAuthor && (
+              <>
+                <button
+                  onClick={() => { setShowReport(true); setFabOpen(false); }}
+                  className="w-10 h-10 rounded-full border border-dark-border bg-dark-bg2/90 backdrop-blur-sm flex items-center justify-center text-dark-text2 hover:text-rose-400 hover:border-rose-500/50 transition cursor-pointer shadow-lg"
+                  title="Report issue"
+                >
+                  <span className="material-symbols-outlined text-[1.1rem]">bug_report</span>
+                </button>
+                <button
+                  onClick={() => { setShowUpdate(true); setFabOpen(false); }}
+                  className="w-10 h-10 rounded-full border border-dark-border bg-dark-bg2/90 backdrop-blur-sm flex items-center justify-center text-dark-text2 hover:text-qsis hover:border-qsis transition cursor-pointer shadow-lg"
+                  title="Update app"
+                >
+                  <span className="material-symbols-outlined text-[1.1rem]">update</span>
+                </button>
+              </>
+            )}
+          </>
+        )}
+        <button
+          onClick={() => setFabOpen(!fabOpen)}
+          className="w-12 h-12 rounded-full bg-qsis flex items-center justify-center text-white shadow-lg shadow-qsis/30 cursor-pointer transition hover:brightness-110"
+        >
+          <span className="material-symbols-outlined text-[1.3rem]">{fabOpen ? 'close' : 'more_horiz'}</span>
+        </button>
       </div>
 
       {showReport && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={() => setShowReport(false)}>
-          <div
-            className="w-full max-w-md rounded-2xl border border-dark-border bg-dark-bg2 p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="w-full max-w-md rounded-2xl border border-dark-border bg-dark-bg2 p-6" onClick={(e) => e.stopPropagation()}>
             {reported ? (
               <div className="text-center py-4">
                 <div className="h-14 w-14 mx-auto rounded-2xl bg-emerald-500/15 flex items-center justify-center mb-4">
                   <span className="material-symbols-outlined text-emerald-400 text-3xl">verified</span>
                 </div>
                 <h3 className="text-lg font-bold text-dark-text mb-1">Issue reported</h3>
-                <p className="text-[0.78rem] text-dark-text2 mb-5">
-                  The author has been notified on GitHub and your report counts as a bug-issue contribution.
-                </p>
-                <a
-                  href={reported.issueUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-xl bg-qsis px-4 py-2 text-[0.78rem] font-semibold text-white no-underline hover:brightness-110"
-                >
+                <p className="text-[0.78rem] text-dark-text2 mb-5">The author has been notified on GitHub.</p>
+                <a href={reported.issueUrl} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-qsis px-4 py-2 text-[0.78rem] font-semibold text-white no-underline hover:brightness-110">
                   View issue #{reported.issueNumber}
                 </a>
               </div>
@@ -220,10 +186,6 @@ export default function AppChrome({
                     <span className="material-symbols-outlined">close</span>
                   </button>
                 </div>
-                <p className="text-[0.74rem] text-dark-text2 mb-4 leading-relaxed">
-                  This opens a GitHub issue on <strong className="text-dark-text">apps/{app.id}/</strong> assigned to{' '}
-                  <strong className="text-dark-text">{author?.name || 'the author'}</strong> so they get notified.
-                </p>
                 <label className="block text-[0.68rem] text-dark-text2 mb-1">Title (optional)</label>
                 <input
                   value={reportTitle}
@@ -237,7 +199,7 @@ export default function AppChrome({
                   value={reportDesc}
                   onChange={(e) => setReportDesc(e.target.value)}
                   rows={4}
-                  placeholder="Describe what happened, what you expected, and how to reproduce it…"
+                  placeholder="Describe what happened…"
                   className="w-full rounded-lg border border-dark-border bg-dark-bg px-2.5 py-2 text-[0.78rem] text-dark-text outline-none focus:border-qsis resize-none mb-3"
                 />
                 {reportError && (
@@ -270,6 +232,6 @@ export default function AppChrome({
           }}
         />
       )}
-    </div>
+    </>
   );
 }

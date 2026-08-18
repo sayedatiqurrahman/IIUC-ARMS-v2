@@ -72,7 +72,7 @@ export default function PdfStage({
         onPointerCancel={onStagePointerUp}
         style={{ touchAction: 'pan-x pan-y' }}
       >
-        <div className="p-3 flex flex-col gap-3 min-h-full" style={{ justifyContent: centerV ? 'center' : 'flex-start' }}>
+        <div className="p-3 flex flex-col gap-3 min-h-full w-full items-center" style={{ justifyContent: centerV ? 'center' : 'flex-start' }}>
           {Array.from({ length: pages }).map((_, i) => (
             <PdfPage
               key={i}

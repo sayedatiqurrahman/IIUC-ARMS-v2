@@ -32,11 +32,6 @@ export function getAdminAuth() {
   return _adminAuth;
 }
 
-export function getApp() {
-  initFirebase();
-  return _app;
-}
-
 // Lazy proxy — calling any method on adminAuth triggers init first
 export const adminAuth = new Proxy({} as any, {
   get(_target, prop) {

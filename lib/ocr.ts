@@ -1,7 +1,7 @@
 'use client';
 
 import { jsPDF } from 'jspdf';
-import { fileToDataUrl, canvasToBlob, type Point } from './image-utils';
+import { fileToDataUrl } from './image-utils';
 
 export interface OcrWord {
   text: string;
@@ -167,6 +167,3 @@ export async function blobToCanvas(blob: Blob | File): Promise<HTMLCanvasElement
     img.src = url;
   });
 }
-
-export { canvasToBlob };
-export type { Point };

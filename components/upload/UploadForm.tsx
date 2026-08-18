@@ -1,17 +1,15 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { config } from '@/lib/config';
 import { FACULTIES, getFacultyIdForDepartment, isShariahDepartmentId } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
-import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
 import { installGitHubApp } from '@/lib/github-install';
 import CustomSelect from '@/components/CustomSelect';
 import LinksEditor from './LinksEditor';
 import FilePreview from './FilePreview';
 import SubfolderPicker from './SubfolderPicker';
-import { CURRENT_YEAR, CURRENT_SEASON } from './types';
 import type { CourseGroup, FileWithMeta } from './types';
 import { renderMarkdown } from '@/lib/markdown';
 

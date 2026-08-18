@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
-import { useAppStore, getSavedPdfPage } from '@/lib/store';
+import { useAppStore } from '@/lib/store';
 import { getOnboardingData, hasDismissedOnboarding, dismissOnboarding } from '@/lib/onboarding-storage';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut, signIn } from 'next-auth/react';
@@ -20,6 +20,7 @@ import { handleGoogleRedirectResult } from '@/lib/firebase';
 import dynamic from 'next/dynamic';
 const DocumentViewer = dynamic(() => import('./DocumentViewer'), { ssr: false });
 const InstallAppButton = dynamic(() => import('@/components/dashboard/InstallAppButton'), { ssr: false });
+const FloatingFocus = dynamic(() => import('@/components/FloatingFocus'), { ssr: false });
 // Modals only load their JS when actually opened — keeps the always-loaded
 // shell light so the installed app starts fast on low-end devices.
 const LoginModal = dynamic(() => import('@/components/LoginModal'), { ssr: false });
@@ -346,7 +347,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: '/', match: isBrowse, icon: 'fa-book-open', label: 'Browse' },
     { href: '/routine', match: isActive('/routine'), icon: 'fa-calendar-alt', label: 'Routine' },
-    { href: '/studio', match: isActive('/studio'), icon: 'fa-tools', label: 'Studio' },
+    { href: '/focus', match: isActive('/focus'), icon: 'fa-list-check', label: 'Focus' },
     { href: '/contributors', match: isActive('/contributors'), icon: 'fa-users', label: 'Team' },
   ];
 
@@ -410,7 +411,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="relative" ref={exploreRef}>
               <button
                 onClick={() => setExploreOpen(!exploreOpen)}
-                className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all ${isActive('/faculty') || isActive('/history') || isActive('/notices') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}
+                className={`inline-flex items-center gap-[5px] px-3 py-1.5 rounded-lg text-[0.78rem] font-medium border-none cursor-pointer transition-all ${isActive('/faculty') || isActive('/history') || isActive('/notices') || isActive('/studio') || isActive('/blog') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'}`}
                 aria-haspopup="true"
                 aria-expanded={exploreOpen}
               >
@@ -422,11 +423,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <Link href="/notices" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
                     <i className="fas fa-bullhorn w-4 text-center text-amber-400"></i><span>Notice Board</span>
                   </Link>
+                  <Link href="/blog" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
+                    <i className="fas fa-pen-nib w-4 text-center text-emerald-400"></i><span>Blog</span>
+                  </Link>
                   <Link href="/faculty" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
                     <i className="fas fa-chalkboard-teacher w-4 text-center text-green-400"></i><span>Faculty</span>
                   </Link>
                   <Link href="/history" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
                     <i className="fas fa-history w-4 text-center text-orange-400"></i><span>History</span>
+                  </Link>
+                  <Link href="/studio" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
+                    <i className="fas fa-tools w-4 text-center text-orange-400"></i><span>Studio</span>
                   </Link>
                 </div>
               )}
@@ -486,6 +493,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <Link href="/history" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-history w-4 text-center"></i><span>History</span></Link>
                     <Link href="/routine" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-calendar-alt w-4 text-center"></i><span>Routine</span></Link>
                     <Link href="/notices" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-bullhorn w-4 text-center text-amber-400"></i><span>Notice Board</span></Link>
+                    <Link href="/blog" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-pen-nib w-4 text-center text-emerald-400"></i><span>Blog</span></Link>
                     <Link href="/contributors" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-users w-4 text-center"></i><span>Contributors</span></Link>
                     <Link href="/faculty" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-chalkboard-teacher w-4 text-center"></i><span>Faculty</span></Link>
                     <Link href="/studio" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-tools w-4 text-center"></i><span>Studio</span></Link>
@@ -600,9 +608,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <span className="text-[0.62rem] font-medium">Upload</span>
           </button>
-          <Link href="/studio" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/studio') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
-            <i className="fas fa-tools text-[1rem]"></i>
-            <span className="text-[0.62rem] font-medium">Studio</span>
+          <Link href="/focus" className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all no-underline ${isActive('/focus') ? 'bg-qsis/15 text-qsis' : 'bg-transparent text-dark-text2'}`}>
+            <i className="fas fa-list-check text-[1rem]"></i>
+            <span className="text-[0.62rem] font-medium">Focus</span>
           </Link>
           <button className={`flex flex-col items-center gap-[2px] px-2 py-1 rounded-lg border-none cursor-pointer transition-all bg-transparent ${showMoreSheet ? 'text-qsis' : 'text-dark-text2'}`} onClick={() => setShowMoreSheet(!showMoreSheet)}>
             <i className="fas fa-ellipsis-h text-[1rem]"></i>
@@ -666,13 +674,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   {([
                     ['home', '/', 'fas fa-house', 'bg-blue-500/15', 'text-blue-400', 'Browse', true, 'link'],
                     ['upload', '', 'fas fa-upload', 'bg-green-500/15', 'text-green-400', 'Upload', false, 'upload'],
-                    ['history', '/history', 'fas fa-clock-rotate-left', 'bg-yellow-500/15', 'text-yellow-400', 'History', true, 'link'],
+                    ['focus', '/focus', 'fas fa-list-check', 'bg-cyan-500/15', 'text-cyan-400', 'Focus', true, 'link'],
                     ['routine', '/routine', 'fas fa-calendar-days', 'bg-purple-500/15', 'text-purple-400', 'Routine', true, 'link'],
                     ['notices', '/notices', 'fas fa-bullhorn', 'bg-amber-500/15', 'text-amber-400', 'Notices', true, 'link'],
+                    ['blog', '/blog', 'fas fa-pen-nib', 'bg-emerald-500/15', 'text-emerald-400', 'Blog', true, 'link'],
                     ['studio', '/studio', 'fas fa-tools', 'bg-orange-500/15', 'text-orange-400', 'Studio', true, 'link'],
+                    ['history', '/history', 'fas fa-clock-rotate-left', 'bg-yellow-500/15', 'text-yellow-400', 'History', true, 'link'],
                     ['team', '/contributors', 'fas fa-users', 'bg-pink-500/15', 'text-pink-400', 'Team', true, 'link'],
                     ['faculty', '/faculty', 'fas fa-chalkboard-user', 'bg-teal-500/15', 'text-teal-400', 'Faculty', true, 'link'],
-                    ['github', '', 'fab fa-github', 'bg-slate-500/15', 'text-slate-300', 'GitHub', false, 'external'],
                   ] as const).map(([key, href, icon, bg, color, label, isLink, kind]) => {
                     const cls = `flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-dark-bg3 border border-dark-border transition-colors no-underline ${kind === 'link' ? 'hover:border-qsis/40' : kind === 'upload' ? 'hover:border-green-500/40' : 'hover:border-slate-400/40'}`;
                     const inner = (
@@ -689,10 +698,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     if (kind === 'upload') return (
                       <button key={key} onClick={() => { handleOpenUpload(); setShowMoreSheet(false); }} className={`${cls} cursor-pointer`}>{inner}</button>
                     );
-                    return (
-                      <a key={key} href={config.dataRepoUrl()} target="_blank" className={cls}>{inner}</a>
-                    );
+                    return null;
                   })}
+                </div>
+              </div>
+              {/* GitHub Repos */}
+              <div>
+                <h4 className="text-[0.75rem] font-bold text-dark-text3 uppercase tracking-wider mb-2"><i className="fab fa-github mr-1"></i>Star Our Repos</h4>
+                <p className="text-[0.68rem] text-dark-text3 mb-3">If this project helps you, give us a star — it motivates us to keep building for the IIUC community.</p>
+                <div className="space-y-2">
+                  {config.githubStarRepos.map((repo, i) => (
+                    <a key={i} href={`https://github.com/${repo.owner}/${repo.repo}`} target="_blank" rel="noopener noreferrer" onClick={() => setShowMoreSheet(false)} className="flex items-center gap-3 p-3 rounded-xl bg-dark-bg3 border border-dark-border hover:border-slate-400/40 transition-colors w-full">
+                      <div className="w-10 h-10 rounded-xl bg-slate-500/15 flex items-center justify-center flex-shrink-0"><i className="fab fa-github text-slate-300 text-lg"></i></div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[0.78rem] font-semibold text-dark-text block">{repo.label}</span>
+                        <span className="text-[0.65rem] text-dark-text3 block">{repo.description}</span>
+                        {repo.tags && <span className="mt-0.5 inline-block text-[0.58rem] text-dark-text3 opacity-70">{repo.tags}</span>}
+                      </div>
+                    </a>
+                  ))}
                 </div>
               </div>
               {/* Organizations */}
@@ -791,7 +815,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {!pathname?.startsWith('/dashboard') && !pathname?.startsWith('/admin') && !standalone && (
       <footer className="hidden md:block bg-dark-bg2 border-t border-dark-border mt-8">
         <div className="max-w-[1200px] mx-auto px-5 py-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
             <div>
               <div className="flex items-center gap-3 mb-3">
                 <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-qsis object-contain bg-white" />
@@ -809,7 +833,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <button className="text-[0.8rem] text-dark-text2 hover:text-qsis text-left bg-transparent border-none cursor-pointer transition-colors" onClick={handleOpenUpload}><i className="fas fa-upload mr-2"></i>Upload Files</button>
                 <Link href="/history" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-history mr-2"></i>History</Link>
                 <Link href="/routine" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-calendar-alt mr-2"></i>Routine</Link>
+                <Link href="/focus" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-list-check mr-2"></i>Focus</Link>
                 <Link href="/notices" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-bullhorn mr-2 text-amber-400"></i>Notice Board</Link>
+                <Link href="/blog" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-pen-nib mr-2 text-emerald-400"></i>Blog</Link>
                 <Link href="/contributors" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2"></i>Contributors</Link>
                 <Link href="/faculty" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-chalkboard-teacher mr-2"></i>Faculty</Link>
                <Link href="/studio" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-tools mr-2"></i>Studio</Link>
@@ -1055,6 +1081,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* GLOBAL OPERATION PROGRESS (delete / rename / create course) */}
       <OperationProgress label={operationLabel} />
+
+      {/* GLOBAL FLOATING FOCUS TIMER */}
+      <FloatingFocus />
     </div>
   );
 }

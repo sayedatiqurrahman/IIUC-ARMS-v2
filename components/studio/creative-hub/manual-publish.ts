@@ -1,4 +1,4 @@
-import { PAGE_SIZES, fieldLabel } from './templates';
+import { fieldLabel } from './templates';
 
 // Helpers for publishing a MANUAL (canvas) design as a real fill-up template.
 //

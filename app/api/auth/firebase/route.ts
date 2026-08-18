@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
 import { verifyTurnstile } from '@/lib/verifyTurnstile';
 
 export async function POST(req: NextRequest) {

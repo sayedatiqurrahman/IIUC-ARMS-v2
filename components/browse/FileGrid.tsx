@@ -10,10 +10,11 @@ interface FileGridProps {
   onCopy: (path: string, name: string, mode: 'move' | 'copy') => void;
   onRename: (path: string, name: string) => void;
   onDelete: (path: string, name: string) => void;
+  onShare?: (path: string, name: string, isFolder: boolean) => void;
   actionLoading: string;
 }
 
-export default function FileGrid({ items, onOpen, filePerms, onMove, onCopy, onRename, onDelete, actionLoading }: FileGridProps) {
+export default function FileGrid({ items, onOpen, filePerms, onMove, onCopy, onRename, onDelete, onShare, actionLoading }: FileGridProps) {
   if (!items || items.length === 0) {
     return <div className="text-center py-10 text-dark-text2"><i className="fas fa-folder-open"></i> No files here yet.</div>;
   }
@@ -29,6 +30,7 @@ export default function FileGrid({ items, onOpen, filePerms, onMove, onCopy, onR
           onCopy={onCopy}
           onRename={onRename}
           onDelete={onDelete}
+          onShare={onShare}
           actionLoading={actionLoading}
         />
       ))}

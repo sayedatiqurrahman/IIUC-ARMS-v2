@@ -118,7 +118,7 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
                 <i className="fas fa-envelope text-blue-400 text-[0.55rem] w-3 text-center flex-shrink-0"></i>
                 <div className="min-w-0">
                   <span className="text-[0.55rem] text-dark-text3 block leading-none">Email</span>
-                  <span className="text-[0.65rem] text-dark-text2 font-medium truncate block">{displayEmail}</span>
+                  <a href={`mailto:${displayEmail}`} className="text-[0.65rem] text-dark-text2 font-medium truncate block hover:text-qsis no-underline transition-colors">{displayEmail}</a>
                 </div>
               </div>
             );
@@ -128,7 +128,7 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
               <i className="fab fa-whatsapp text-green-400 text-[0.55rem] w-3 text-center flex-shrink-0"></i>
               <div className="min-w-0">
                 <span className="text-[0.55rem] text-dark-text3 block leading-none">WhatsApp</span>
-                <span className="text-[0.65rem] text-dark-text2 font-medium truncate block">{c.whatsapp}</span>
+                <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-dark-text2 font-medium truncate block hover:text-qsis no-underline transition-colors">{c.whatsapp}</a>
               </div>
             </div>
           )}

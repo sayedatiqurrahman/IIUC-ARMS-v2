@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useFacultySearch, deptShortName, type FacultyMember } from '@/components/useFacultySearch';
 
 interface TeacherAutocompleteProps {

@@ -171,8 +171,3 @@ export async function setInitialPassword(email: string, newPassword: string) {
   const { updatePassword } = await import('firebase/auth');
   await updatePassword(user, newPassword);
 }
-
-export async function logoutFirebase() {
-  await getFirebaseAuth().signOut();
-  await fetch('/api/auth/firebase-session', { method: 'DELETE' });
-}

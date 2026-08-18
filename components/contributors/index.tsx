@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
-import { FACULTIES } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
 import { Settings, DEFAULT_SETTINGS } from './types';
 import FounderCard from './FounderCard';

@@ -86,8 +86,8 @@ export default function MoveModal({ isOpen, onClose, sourcePath, sourceName, mod
     fetchFolders(parentPath);
   }, [breadcrumb, fetchFolders]);
 
-  const handleAction = async () => {
-    const destName = newName.trim() || sourceName;
+  const handleAction = async (asName?: string) => {
+    const destName = asName ?? (newName.trim() || sourceName);
     const destPath = currentFolder ? `${currentFolder}/${destName}` : destName;
 
     if (mode === 'move' && destPath === sourcePath) {
@@ -105,7 +105,25 @@ export default function MoveModal({ isOpen, onClose, sourcePath, sourceName, mod
     setLoading(false);
   };
 
+  const handleMoveHere = async () => {
+    const destPath = `${currentFolder}/${sourceName}`;
+    if (mode === 'move' && destPath === sourcePath) {
+      showToast('Source and destination are the same', 'error');
+      return;
+    }
+    setLoading(true);
+    try {
+      await onAction(sourcePath, destPath);
+      onClose();
+    } catch (e: any) {
+      showToast(e.message || 'Action failed', 'error');
+    }
+    setLoading(false);
+  };
+
   if (!isOpen) return null;
+
+  const canGoUp = breadcrumb.length > 1;
 
   return (
     <>
@@ -115,8 +133,8 @@ export default function MoveModal({ isOpen, onClose, sourcePath, sourceName, mod
       {/* Modal — mobile: bottom sheet, desktop: centered */}
       <div className={`fixed z-[201] bg-dark-bg2 border border-dark-border shadow-2xl
         ${isMobile
-          ? 'bottom-0 left-0 right-0 rounded-t-2xl max-h-[80vh]'
-          : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-2xl w-[480px] max-h-[70vh]'
+          ? 'bottom-0 left-0 right-0 rounded-t-2xl max-h-[85vh]'
+          : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-2xl w-[480px] max-h-[75vh]'
         } flex flex-col overflow-hidden`}
       >
         {/* Header */}
@@ -124,7 +142,7 @@ export default function MoveModal({ isOpen, onClose, sourcePath, sourceName, mod
           <div className="flex items-center gap-2">
             <i className={`fas ${mode === 'move' ? 'fa-arrows-alt' : 'fa-copy'} text-qsis`}></i>
             <h3 className="font-semibold text-[0.95rem]">
-              {mode === 'move' ? 'Move' : 'Copy'} File
+              {mode === 'move' ? 'Move' : 'Copy'}
             </h3>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-dark-bg3 text-dark-text2">
@@ -140,20 +158,31 @@ export default function MoveModal({ isOpen, onClose, sourcePath, sourceName, mod
           </div>
         </div>
 
-        {/* Breadcrumb */}
-        <div className="px-4 pt-2 pb-1 flex items-center gap-1 text-[0.72rem] text-dark-text2 overflow-x-auto flex-shrink-0">
-          {breadcrumb.map((b, i) => (
-            <span key={b.path} className="flex items-center gap-1 flex-shrink-0">
-              {i > 0 && <i className="fas fa-chevron-right text-[0.5rem] text-dark-text3"></i>}
-              <button
-                onClick={() => navigateTo(b.path, b.name)}
-                className={`hover:text-qsis transition-colors px-1 py-0.5 rounded ${i === breadcrumb.length - 1 ? 'text-qsis font-semibold' : ''}`}
-              >
-                {i === 0 && <i className="fas fa-building mr-1"></i>}
-                {b.name}
-              </button>
-            </span>
-          ))}
+        {/* Breadcrumb + Go Up */}
+        <div className="px-4 pt-2 pb-1 flex items-center gap-1 flex-shrink-0">
+          {canGoUp && (
+            <button
+              onClick={goUp}
+              className="flex items-center justify-center w-7 h-7 rounded-lg bg-dark-bg border border-dark-border hover:border-qsis hover:text-qsis text-dark-text2 transition-all flex-shrink-0 mr-1"
+              title="Go up one level"
+            >
+              <i className="fas fa-arrow-up text-[0.7rem]"></i>
+            </button>
+          )}
+          <div className="flex items-center gap-1 text-[0.72rem] text-dark-text2 overflow-x-auto min-w-0 flex-1">
+            {breadcrumb.map((b, i) => (
+              <span key={b.path} className="flex items-center gap-1 flex-shrink-0">
+                {i > 0 && <i className="fas fa-chevron-right text-[0.5rem] text-dark-text3"></i>}
+                <button
+                  onClick={() => navigateTo(b.path, b.name)}
+                  className={`hover:text-qsis transition-colors px-1 py-0.5 rounded whitespace-nowrap ${i === breadcrumb.length - 1 ? 'text-qsis font-semibold' : ''}`}
+                >
+                  {i === 0 && <i className="fas fa-building mr-1"></i>}
+                  {b.name}
+                </button>
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Folder list */}
@@ -165,7 +194,7 @@ export default function MoveModal({ isOpen, onClose, sourcePath, sourceName, mod
           ) : folders.length === 0 ? (
             <div className="text-center py-6 text-dark-text3 text-[0.8rem]">
               <i className="fas fa-folder-open text-xl mb-2 block opacity-40"></i>
-              No subfolders
+              No subfolders — you can {mode === 'move' ? 'move' : 'copy'} here
             </div>
           ) : (
             <div className="flex flex-col gap-0.5">
@@ -184,49 +213,33 @@ export default function MoveModal({ isOpen, onClose, sourcePath, sourceName, mod
           )}
         </div>
 
-        {/* Destination input */}
-        <div className="px-4 py-3 border-t border-dark-border flex-shrink-0">
-          <div className="text-[0.7rem] text-dark-text3 mb-1.5">To (in {currentFolder || 'root'}):</div>
+        {/* Destination input + Move here */}
+        <div className="px-4 py-3 border-t border-dark-border flex-shrink-0 space-y-2.5">
+          <div className="text-[0.7rem] text-dark-text3">
+            {mode === 'move' ? 'Move' : 'Copy'} to <span className="text-qsis font-medium">{currentFolder || 'root'}</span>:
+          </div>
           <div className="flex gap-2">
             <input
               type="text"
               value={newName}
               onChange={e => setNewName(e.target.value)}
               className="flex-1 bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-[0.82rem] text-dark-text focus:outline-none focus:border-qsis"
-              placeholder="File name"
+              placeholder="File/folder name"
             />
           </div>
-
-          {/* Up button */}
-          {breadcrumb.length > 1 && (
+          <div className="flex gap-2">
             <button
-              onClick={goUp}
-              className="mt-2 flex items-center gap-1.5 text-[0.72rem] text-dark-text2 hover:text-qsis transition-colors"
+              onClick={() => handleAction()}
+              disabled={loading || !newName.trim()}
+              className="flex-1 py-2.5 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold hover:bg-qsis/90 transition-colors disabled:opacity-50"
             >
-              <i className="fas fa-arrow-up"></i> Go up
+              {loading ? (
+                <><i className="fas fa-spinner fa-spin mr-1.5"></i>Processing...</>
+              ) : (
+                <><i className={`fas ${mode === 'move' ? 'fa-arrows-alt' : 'fa-copy'} mr-1.5`}></i>{mode === 'move' ? 'Move here' : 'Copy here'}</>
+              )}
             </button>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="px-4 pb-4 flex gap-2 flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl bg-dark-bg border border-dark-border text-dark-text2 text-[0.82rem] hover:bg-dark-bg3 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleAction}
-            disabled={loading || !newName.trim()}
-            className="flex-1 py-2.5 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold hover:bg-qsis/90 transition-colors disabled:opacity-50"
-          >
-            {loading ? (
-              <><i className="fas fa-spinner fa-spin mr-1.5"></i>Processing...</>
-            ) : (
-              <><i className={`fas ${mode === 'move' ? 'fa-arrows-alt' : 'fa-copy'} mr-1.5`}></i>{mode === 'move' ? 'Move' : 'Copy'}</>
-            )}
-          </button>
+          </div>
         </div>
       </div>
     </>

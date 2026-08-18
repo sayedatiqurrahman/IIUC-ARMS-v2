@@ -83,6 +83,16 @@ export const PERMISSION_GROUPS = [
       { key: 'manageCronJobs', label: 'Manage Cron Jobs', desc: 'View, run & schedule automated tasks', icon: 'fa-clock', color: 'text-orange-400' },
     ],
   },
+  {
+    key: 'blog',
+    label: 'Blog & Tutorials',
+    icon: 'fa-pen-nib',
+    color: 'text-emerald-400',
+    actions: [
+      { key: 'publishBlog', label: 'Publish Blog Posts', desc: 'Create & publish blog posts as .md files on GitHub', icon: 'fa-pen-nib', color: 'text-emerald-400' },
+      { key: 'publishTutorial', label: 'Publish Tutorials', desc: 'Create tutorials with attachments & videos', icon: 'fa-graduation-cap', color: 'text-blue-400' },
+    ],
+  },
 ];
 
 export const ALL_PERMISSION_ACTIONS = PERMISSION_GROUPS.flatMap(g => g.actions);

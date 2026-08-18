@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import Script from 'next/script';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import Providers from '@/components/Providers';
@@ -33,7 +32,7 @@ export const metadata: Metadata = {
     description: 'Free open-source academic resource management system for IIUC departments. Browse, share, and manage notes, sheets, syllabi, and previous questions.',
     images: [
       {
-        url: 'https://i.imgur.com/r7LuDVs.png',
+        url: `${siteUrl}/arms-logo-icon.png`,
         width: 1200,
         height: 630,
         alt: 'IIUC-ARMS',
@@ -45,7 +44,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'IIUC-ARMS | Academic Resource Management System',
     description: 'Free open-source academic resource management system for IIUC departments.',
-    images: ['https://i.imgur.com/r7LuDVs.png'],
+    images: [`${siteUrl}/arms-logo-icon.png`],
     creator: '@sayedatiqurrahman',
   },
   robots: {

@@ -82,9 +82,9 @@ export const config = {
   maxSingleFileUploadMB: 500,
   academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','webp','csv'],
   githubStarRepos: [
-    { owner: 'sayedatiqurrahman', repo: 'IIUC-ACADEMIC-FILES-MANAFGER', label: 'IIUC Academic Files' },
-    { owner: 'sayedatiqurrahman', repo: 'IIUC-ARMS-v2', label: 'IIUC-ARMS Source Code' },
-    { owner: 'sayedatiqurrahman', repo: 'IIUC-CREATIVE-HUB-THEMES', label: 'Creative Hub Themes' },
+    { owner: 'sayedatiqurrahman', repo: 'IIUC-ACADEMIC-FILES-MANAFGER', label: 'IIUC Academic Files', description: 'All course materials live here', tags: 'PDFs, notes, routines, schedules' },
+    { owner: 'sayedatiqurrahman', repo: 'IIUC-ARMS-v2', label: 'IIUC-ARMS v2', description: 'Web app source code', tags: 'Browse, Upload, Studio, Routine' },
+    { owner: 'sayedatiqurrahman', repo: 'IIUC-CREATIVE-HUB-THEMES', label: 'Creative Hub Themes', description: 'Studio themes & community', tags: 'designs for IIUC-ARMS' },
   ],
   // Dedicated repo that hosts the Creative Hub default themes AND community-
   // published designs. Defaults are served straight from it (raw GitHub); new

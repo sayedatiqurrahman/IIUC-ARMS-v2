@@ -3,7 +3,6 @@ import { config } from '../config';
 import { FACULTIES, resolveDepartmentId } from '../departments';
 import { safeJson, getRawUrl, getMimeFromExt } from '../utils';
 import { getOnboardingData, setOnboardingData as saveOnboarding, clearOnboardingData as clearOnboardingStorage } from '@/lib/onboarding-storage';
-import { getPdfPageKey } from './helpers';
 import { defaultProfile } from './types';
 import type { AppState, Profile, ViewerItem } from './types';
 import { createTreeHelpers } from './tree-helpers';
@@ -630,19 +629,3 @@ export const useAppStore = create<AppState>((set, get) => {
     ...treeHelpers,
   };
 });
-
-export function savePdfPage(filePath: string, pageNum: number) {
-  if (!filePath || !pageNum) return;
-  try {
-    localStorage.setItem(getPdfPageKey(filePath), String(pageNum));
-  } catch {}
-}
-
-export function getSavedPdfPage(filePath: string) {
-  if (!filePath) return 1;
-  try {
-    return parseInt(localStorage.getItem(getPdfPageKey(filePath)) || '1') || 1;
-  } catch {
-    return 1;
-  }
-}

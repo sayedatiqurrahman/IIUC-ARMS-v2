@@ -1,6 +1,6 @@
 'use client';
 
-import { ExamRow, ExamCourse, ExamAllSemesterSem } from './types';
+import { ExamRow, ExamAllSemesterSem } from './types';
 import { ExamSlot } from '@/lib/exam-routine-config';
 
 interface ExamAssignStepProps {

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
-import { getDepartmentFolder, getFacultyIdForDepartment } from '@/lib/departments';
+import { getDepartmentFolder } from '@/lib/departments';
 
 interface SubfolderPickerProps {
   department: string;

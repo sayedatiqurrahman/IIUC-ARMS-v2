@@ -26,6 +26,7 @@ const FolderCard = dynamic(() => import('@/components/browse/FolderCard'), { ssr
 const BrowseModals = dynamic(() => import('@/components/browse/BrowseModals'), { ssr: false });
 const CreateFolderModal = dynamic(() => import('@/components/browse/CreateFolderModal'), { ssr: false });
 const ReadmeEditor = dynamic(() => import('@/components/ReadmeEditor'), { ssr: false });
+import ShareModal, { type ShareItem } from '@/components/browse/ShareModal';
 export default function BrowsePage() {
   const { data: session } = useSession();
   const profile = useAppStore(s => s.profile);
@@ -51,6 +52,7 @@ export default function BrowsePage() {
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState<{ show: boolean; message: string; contact: string }>({ show: false, message: '', contact: '' });
   const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [shareItem, setShareItem] = useState<ShareItem | null>(null);
   const loading = useAppStore(s => s.loading);
   const error = useAppStore(s => s.error);
   const onboardData = useAppStore(s => s.onboardingData);
@@ -265,6 +267,27 @@ export default function BrowsePage() {
     useAppStore.getState().invalidateTreeCache();
     loadTree(session?.accessToken || '');
   }, [session?.accessToken, loadTree]);
+
+  const handleFileShare = useCallback((path: string, name: string, isFolder: boolean) => {
+    const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+    const params = new URLSearchParams();
+    if (currentDept) params.set('dept', getDepartmentFolder(currentDept));
+    if (currentSem) params.set('sem', currentSem);
+    if (currentCourseCode) params.set('course', currentCourseCode);
+    if (currentMidFinal) params.set('mf', currentMidFinal);
+    if (currentCat) {
+      const catMeta = config.categories[currentCat as keyof typeof config.categories];
+      params.set('cat', catMeta?.label || currentCat);
+    }
+    const qs = params.toString();
+    const pageUrl = qs ? `${SITE_URL}/?${qs}` : SITE_URL;
+    if (isFolder) {
+      const items = useAppStore.getState().tree.filter((t: any) => t.path.startsWith(path + '/') || t.path === path);
+      setShareItem({ title: name, url: pageUrl, type: 'course', githubPath: path, treeItems: items });
+    } else {
+      setShareItem({ title: name, url: pageUrl, type: 'file', githubPath: path });
+    }
+  }, [currentDept, currentSem, currentCourseCode, currentMidFinal, currentCat]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -631,7 +654,7 @@ export default function BrowsePage() {
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[1.05rem] font-semibold flex items-center gap-2"><i className="fas fa-folder-open"></i> Files</h3>
             <div className="flex items-center gap-2">
-              {canCreateFolder && (
+              {canCreateFolder && !(currentMidFinal && (currentCat === 'NOTES' || currentCat === 'Previous Questions')) && (
                 <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-qsis/40 bg-qsis/10 text-qsis cursor-pointer text-[0.75rem] font-semibold hover:bg-qsis/20 transition" onClick={() => setShowCreateFolder(true)}>
                   <i className="fas fa-folder-plus"></i> New Folder
                 </button>
@@ -652,6 +675,7 @@ export default function BrowsePage() {
             onCopy={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
             onRename={(p, n) => setRenameTarget({ path: p, name: n })}
             onDelete={(p, n) => setDeleteConfirm({ path: p, name: n })}
+            onShare={handleFileShare}
             actionLoading={actionLoading} />
         </section>
       )}
@@ -692,6 +716,7 @@ export default function BrowsePage() {
                 onCopy={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
                 onRename={(p, n) => setRenameTarget({ path: p, name: n })}
                 onDelete={(p, n) => setDeleteConfirm({ path: p, name: n })}
+                onShare={handleFileShare}
                 actionLoading={actionLoading} />
             </div>
           )}
@@ -785,6 +810,7 @@ export default function BrowsePage() {
           />
         );
       })()}
+      {shareItem && <ShareModal item={shareItem} onClose={() => setShareItem(null)} />}
     </>
   );
 }

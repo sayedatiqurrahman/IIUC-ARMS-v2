@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { CURRENT_YEAR } from './types';
-import { isPdf, isImage, isMarkdown } from './types';
-import type { FileWithMeta, CourseGroup } from './types';
+import { isPdf, isMarkdown } from './types';
+import type { FileWithMeta } from './types';
 import type { Profile } from '@/lib/store';
 import { renderMarkdown } from '@/lib/markdown';
 

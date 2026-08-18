@@ -8,7 +8,7 @@ import { getOnboardingData } from '@/lib/onboarding-storage';
 import { useAppStore } from '@/lib/store';
 import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, AllSemesterDraft, AllSemesterDraftSection, AllSemBuilderStep } from './types';
 import { DEFAULT_PERIODS, DEFAULT_FEMALE_PERIODS } from './types';
-import { loadAllSemDraft, saveAllSemDraft, clearAllSemDraft, createEmptyDraft, findTeacherConflicts } from './helpers';
+import { loadAllSemDraft, saveAllSemDraft, createEmptyDraft, findTeacherConflicts } from './helpers';
 import { showToast } from '@/lib/utils';
 import PeriodEditor from './PeriodEditor';
 

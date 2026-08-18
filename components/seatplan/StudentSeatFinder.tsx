@@ -4,7 +4,7 @@ import { RefObject } from 'react';
 import { config } from '@/lib/config';
 import CustomSelect from '@/components/CustomSelect';
 import { FACULTIES, findDepartment } from '@/lib/departments';
-import { SeatPlanDraft, SeatPlanEntry, StudentResultGroup } from './types';
+import { SeatPlanDraft, StudentResultGroup } from './types';
 
 interface StudentSeatFinderProps {
   studentDept: string;

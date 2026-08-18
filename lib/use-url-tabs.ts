@@ -7,8 +7,6 @@ export function getUrlParam(name: string): string {
   return new URLSearchParams(window.location.search).get(name) || '';
 }
 
-// Updates one or more search params via history.replaceState so the page
-// itself is NOT re-navigated/re-mounted (in-memory tab state survives).
 export function writeUrlParams(updates: Record<string, string | null>): void {
   if (typeof window === 'undefined') return;
   const params = new URLSearchParams(window.location.search);
@@ -21,12 +19,6 @@ export function writeUrlParams(updates: Record<string, string | null>): void {
   window.history.replaceState({}, '', url);
 }
 
-// Keeps a tab/sub-tab's value in sync with a URL search param so tabs are
-// deep-linkable and survive refreshes:
-//  - reads the param on mount and on popstate (back/forward buttons)
-//  - writes the param (replaceState) whenever the tab changes
-// When `enabled` is false the param is never read or written (used by
-// controlled components that delegate URL ownership to a parent).
 export function useUrlTab<T extends string>(
   param: string,
   value: T,

@@ -1,17 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useSession } from 'next-auth/react';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import CustomSelect from '@/components/CustomSelect';
-import { config } from '@/lib/config';
 import { resolveDepartment, getDepartmentSelectOptions } from '@/lib/departments';
 import { getOnboardingData } from '@/lib/onboarding-storage';
 import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, BuilderStep, DraftData } from './types';
 import { SEMESTERS, DEFAULT_PERIODS, DEFAULT_DAYS, DEFAULT_FEMALE_PERIODS } from './types';
 import { getDefaultSession, getSlot, loadDraft, saveDraft, clearDraft, to24h, to12h } from './helpers';
 import { showToast } from '@/lib/utils';
-import PeriodEditor from './PeriodEditor';
 import { useAppStore } from '@/lib/store';
 
 export default function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem | null; onSave: (r: RoutineItem) => void; onCancel: () => void }) {

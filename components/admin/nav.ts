@@ -59,6 +59,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { key: 'rooms', label: 'Rooms', icon: 'fa-door-open', color: 'text-cyan-400', show: ctx => ctx.isAdmin || ctx.isManager || ctx.isTeacherUser || ctx.has('manageRooms') },
       { key: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400', show: ctx => ctx.isAdmin || ctx.isManager || ctx.isTeacherUser || ctx.profileIsCR || ctx.has('manageBatches') },
       { key: 'notices', label: 'Notice Board', icon: 'fa-bullhorn', color: 'text-amber-400', show: ctx => ctx.isAdmin || ctx.isManager || ctx.isTeacherUser || ctx.has('publishNotice') },
+      { key: 'blog', label: 'Blog & Tutorials', icon: 'fa-pen-nib', color: 'text-emerald-400', show: ctx => ctx.isAdmin || ctx.isManager || ctx.isTeacherUser || ctx.has('publishBlog') || ctx.has('publishTutorial') },
     ],
   },
   {

@@ -64,7 +64,11 @@ export default function CoursesView({
   function openCourseShare(course: any) {
     const coursePath = `${currentDept || ''}/${currentSem || ''}/${course.code}`;
     const items = tree.filter((t: any) => t.path.startsWith(coursePath + '/') || t.path === coursePath);
-    const url = `${SITE_URL}/?view=course&code=${course.code}`;
+    const params = new URLSearchParams();
+    if (currentDept) params.set('dept', currentDept);
+    if (currentSem) params.set('sem', currentSem);
+    params.set('course', course.code);
+    const url = `${SITE_URL}/?${params.toString()}`;
     setShareItem({ title: `${course.code} \u2014 ${course.title}`, url, type: 'course', githubPath: coursePath, treeItems: items });
   }
 
@@ -184,6 +188,10 @@ export default function CoursesView({
                 <>
                   <div className="fixed inset-0 z-[210]" onClick={(e) => { e.stopPropagation(); setOpenMenu(null); }} />
                   <div className="absolute right-0 top-9 z-[220] w-44 rounded-xl border border-dark-border bg-dark-bg3 shadow-2xl overflow-hidden">
+                    <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); openCourseShare(course); }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-dark-text hover:bg-dark-bg2 cursor-pointer border-none text-left">
+                      <i className="fas fa-share-nodes text-green-400 w-4 text-center"></i> Share
+                    </button>
                     {canEditThis && (
                       <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setEditTarget({ code: course.code, title: course.title, folderPath: course.folderPath }); setEditTitle(course.title); setEditError(''); }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-dark-text hover:bg-dark-bg2 cursor-pointer border-none text-left">
@@ -236,10 +244,6 @@ export default function CoursesView({
                   </div>
                 )}
               </div>
-              <button onClick={(e) => { e.stopPropagation(); openCourseShare(course); }}
-                className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 hover:text-qsis hover:border-qsis/40 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0" title="Share course">
-                <i className="fas fa-share-nodes text-sm"></i>
-              </button>
               {menuButton}
             </div>
 
@@ -266,10 +270,6 @@ export default function CoursesView({
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={(e) => { e.stopPropagation(); openCourseShare(course); }}
-                    className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 hover:text-qsis hover:border-qsis/40 flex items-center justify-center cursor-pointer transition-colors" title="Share course">
-                    <i className="fas fa-share-nodes text-sm"></i>
-                  </button>
                   {menuButton}
                 </div>
               </div>
@@ -347,6 +347,11 @@ export default function CoursesView({
             </div>
           </div>
         </div>,
+        document.body
+      )}
+
+      {shareItem && createPortal(
+        <ShareModal item={shareItem} onClose={() => setShareItem(null)} />,
         document.body
       )}
     </section>

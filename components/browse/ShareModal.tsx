@@ -173,7 +173,7 @@ export default function ShareModal({ item, onClose }: { item: ShareItem; onClose
           </div>
         </div>
 
-        {/* Download as ZIP */}
+        {/* Download */}
         {item.type === 'course' && item.githubPath && item.treeItems && item.treeItems.length > 0 && (
           <div className="px-5 pb-4">
             <button onClick={handleDownloadZip} disabled={downloading}
@@ -184,6 +184,20 @@ export default function ShareModal({ item, onClose }: { item: ShareItem; onClose
                 <><i className="fas fa-file-zipper text-amber-400"></i>Download as ZIP ({item.treeItems.filter(t => t.type === 'blob').length} files)</>
               )}
             </button>
+          </div>
+        )}
+        {item.type === 'file' && (
+          <div className="px-5 pb-4">
+            {item.githubPath ? (
+              <a href={`https://raw.githubusercontent.com/${process.env.NEXT_PUBLIC_GITHUB_OWNER || 'sayedatiqurrahman'}/${process.env.NEXT_PUBLIC_GITHUB_REPO || 'IIUC-ACADEMIC-FILES-MANAFGER'}/${process.env.NEXT_PUBLIC_GITHUB_BRANCH || 'main'}/${item.githubPath}`} download={item.title}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-[0.8rem] font-semibold hover:border-qsis/40 transition no-underline">
+                <i className="fas fa-download text-amber-400"></i>Download file
+              </a>
+            ) : (
+              <a href={item.url} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-[0.8rem] font-semibold hover:border-qsis/40 transition no-underline">
+                <i className="fas fa-external-link-alt text-blue-400"></i>Open in IIUC-ARMS
+              </a>
+            )}
           </div>
         )}
 

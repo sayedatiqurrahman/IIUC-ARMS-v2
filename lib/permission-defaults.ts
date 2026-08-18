@@ -24,6 +24,8 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   saveCourseToGitHub: ['admin', 'manager', 'teacher', 'cr'],
   manageRooms: ['admin', 'manager', 'teacher'],
   viewExternalUsers: ['admin', 'manager'],
+  publishTutorial: ['admin', 'manager', 'teacher'],
+  publishBlog: ['admin', 'manager', 'teacher', 'cr'],
 };
 
 export { DEFAULT_PERMISSIONS };

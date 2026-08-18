@@ -11,15 +11,16 @@ interface FileCardProps {
   onCopy: (path: string, name: string, mode: 'move' | 'copy') => void;
   onRename: (path: string, name: string) => void;
   onDelete: (path: string, name: string) => void;
+  onShare?: (path: string, name: string, isFolder: boolean) => void;
   actionLoading: string;
 }
 
-export default function FileCard({ item, onOpen, filePerms, onMove, onCopy, onRename, onDelete, actionLoading }: FileCardProps) {
+export default function FileCard({ item, onOpen, filePerms, onMove, onCopy, onRename, onDelete, onShare, actionLoading }: FileCardProps) {
   const name = item.path.split('/').pop() || '';
   const ext = name.split('.').pop()?.toLowerCase() || '';
   const mime = getMimeFromExt(ext);
   const isFolder = item.type === 'tree';
-  const hasActions = filePerms.move || filePerms.copy || filePerms.rename || filePerms.delete;
+  const hasActions = filePerms.move || filePerms.copy || filePerms.rename || filePerms.delete || !!onShare;
   const actionPath = item.githubPath || item.path;
 
   return (
@@ -44,6 +45,7 @@ export default function FileCard({ item, onOpen, filePerms, onMove, onCopy, onRe
             onCopy={() => onCopy(actionPath, name, 'copy')}
             onRename={() => onRename(actionPath, name)}
             onDelete={() => onDelete(actionPath, name)}
+            onShare={onShare ? () => onShare(actionPath, name, isFolder) : undefined}
           />
         )}
       </div>

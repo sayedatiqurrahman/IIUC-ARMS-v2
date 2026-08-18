@@ -433,11 +433,11 @@ export async function GET(req: NextRequest) {
       }))
       .filter((f: { name: string; path: string }) => {
         const parts = f.path.split('/');
-        // At semester level (parts has dept/sem), only show course folders
-        if (parts.length === 2) {
+        // Inside a semester (dept/sem/...), show only course folders
+        if (parts.length === 3) {
           return /^[A-Z]{2,5}\s*[-–]?\s*\d{3,5}[A-Z]?\s*[-–]\s*.*$/i.test(f.name);
         }
-        // Inside a course folder, show all subfolders
+        // Everywhere else show all subfolders
         return true;
       });
 

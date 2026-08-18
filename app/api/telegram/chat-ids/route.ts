@@ -26,6 +26,11 @@ export async function GET(req: NextRequest) {
   const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
 
   try {
+    // 0. Verify bot is connected
+    const meRes = await fetch(`${API}/getMe`);
+    const meData = await meRes.json();
+    const botInfo = meData.ok ? meData.result : null;
+
     // 1. Drop the webhook WITHOUT discarding pending updates
     const dropRes = await fetch(`${API}/deleteWebhook`, {
       method: 'POST',
@@ -83,19 +88,31 @@ export async function GET(req: NextRequest) {
     const group = chatList.find((c) => c.type === 'group' || c.type === 'supergroup');
     const privateChat = chatList.find((c) => c.type === 'private');
 
+    const hasChats = chatList.length > 0;
+
     return NextResponse.json({
       ok: true,
+      bot: botInfo ? { id: botInfo.id, username: botInfo.username, first_name: botInfo.first_name } : null,
       webhookDropped: dropData.ok,
       webhookReRegistered: reRegData.ok,
       webhookUrl,
       updatesCount: updatesData.result?.length || 0,
       allChats: chatList,
       suggested: {
-        TELEGRAM_CHANNEL_ID: channel?.id ? String(channel.id) : '(none found — send a message to your channel first)',
-        TELEGRAM_GROUP_ID: group?.id ? String(group.id) : '(none found — send a message to your group first)',
-        TELEGRAM_OWNER_CHAT_ID: privateChat?.id ? String(privateChat.id) : '(none found — send /start to the bot first)',
+        TELEGRAM_CHANNEL_ID: channel?.id ? String(channel.id) : '(not found)',
+        TELEGRAM_GROUP_ID: group?.id ? String(group.id) : '(not found)',
+        TELEGRAM_OWNER_CHAT_ID: privateChat?.id ? String(privateChat.id) : '(not found)',
       },
-      note: 'Add these IDs to your .env file on Vercel and redeploy.',
+      steps: hasChats ? null : [
+        '1. Open your Telegram CHANNEL (where bot is admin) → send any message',
+        '2. Open your Telegram GROUP (where bot is a member) → send any message',
+        '3. Open the bot in PRIVATE CHAT → send /start',
+        '4. Re-run this endpoint to discover the chat IDs',
+        '5. Add the IDs to Vercel env vars and redeploy',
+      ],
+      note: hasChats
+        ? 'Add the suggested IDs to your .env file on Vercel and redeploy.'
+        : 'No messages found. Follow the steps above, then re-run this endpoint.',
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

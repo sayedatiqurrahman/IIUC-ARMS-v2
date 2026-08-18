@@ -362,9 +362,15 @@ export default function NoticeBoardView() {
             return (
               <div key={n.id} className={`rounded-xl border bg-dark-bg2 transition-all hover:border-qsis/30 ${n.pinned ? 'border-qsis/40' : 'border-dark-border'}`}>
               <div className="flex items-center gap-3 px-4 py-3">
-                <span className={`w-8 h-8 rounded-lg ${meta.bg} flex items-center justify-center shrink-0`}>
-                  <i className={`${meta.icon} ${meta.color} text-sm`}></i>
-                </span>
+                {n.attachmentUrl && ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes((n.attachmentName || n.attachmentUrl).split('.').pop()?.toLowerCase() || '') ? (
+                  <Link href={`/notices/${n.id}`} className="shrink-0">
+                    <img src={n.attachmentUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-dark-border" loading="lazy" />
+                  </Link>
+                ) : (
+                  <span className={`w-8 h-8 rounded-lg ${meta.bg} flex items-center justify-center shrink-0`}>
+                    <i className={`${meta.icon} ${meta.color} text-sm`}></i>
+                  </span>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <Link href={`/notices/${n.id}`} className="block">
@@ -402,13 +408,8 @@ export default function NoticeBoardView() {
               </div>
               {n.attachmentUrl && (() => {
                 const ext = (n.attachmentName || n.attachmentUrl).split('.').pop()?.toLowerCase() || '';
-                const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
                 const isPdf = ext === 'pdf';
-                return isImage ? (
-                  <Link href={`/notices/${n.id}`} className="block border-t border-dark-border">
-                    <img src={n.attachmentUrl} alt={n.attachmentName || 'Attachment'} className="w-full max-h-32 object-cover" loading="lazy" />
-                  </Link>
-                ) : isPdf ? (
+                return isPdf ? (
                   <Link href={`/notices/${n.id}`} className="flex items-center gap-2 px-4 py-2 border-t border-dark-border bg-red-500/5 hover:bg-red-500/10 transition">
                     <i className="fas fa-file-pdf text-red-400"></i>
                     <span className="text-[0.72rem] text-dark-text truncate">{n.attachmentName || 'PDF'}</span>

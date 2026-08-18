@@ -90,7 +90,11 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
     if (!scroll) return;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        scroll.scrollLeft = (scroll.scrollWidth - scroll.clientWidth) / 2;
+        if (zoomRef.current > 1) {
+          scroll.scrollLeft = (scroll.scrollWidth - scroll.clientWidth) / 2;
+        } else {
+          scroll.scrollLeft = 0;
+        }
       });
     });
   }, []);
@@ -363,14 +367,12 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
       const sc = scrollRef.current;
       if (!sc) return;
       if (isPdf) {
-        sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2;
         setCenterV(sc.scrollHeight <= sc.clientHeight + 2);
         renderAllPages();
       } else if (fitModeRef.current) {
         fit();
       }
-      recenter();
-      if (!isPdf) syncOverlays();
+      if (!isPdf) { recenter(); syncOverlays(); }
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -452,51 +454,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
         onClose={onClose}
       />
 
-      {annotating && status === 'ready' && (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 shrink-0 wco-aware flex-wrap">
-          {ANNO_TOOLS.map((tool) => (
-            <button
-              key={tool.id}
-              onClick={() => setAnnoTool(tool.id)}
-              className="pdf-btn capitalize"
-              title={tool.label}
-              style={
-                annoTool === tool.id
-                  ? { background: 'rgba(139,92,246,0.35)', border: '1px solid rgba(139,92,246,0.9)', color: '#fff' }
-                  : undefined
-              }
-            >
-              <i className={`fas ${tool.icon} mr-1`}></i>
-              {tool.label}
-            </button>
-          ))}
-          <span className="w-px h-6 bg-neutral-700 mx-1"></span>
-          {ANNO_COLORS.map((c) => (
-            <button
-              key={c}
-              onClick={() => setAnnoColor(c)}
-              className="h-5 w-5 rounded-full border transition cursor-pointer"
-              title={c}
-              style={{
-                background: c,
-                borderColor: annoColor === c ? '#fff' : 'rgba(255,255,255,0.25)',
-                boxShadow: annoColor === c ? '0 0 0 2px rgba(139,92,246,0.8)' : undefined,
-              }}
-            />
-          ))}
-          <button
-            className="pdf-btn"
-            onClick={undoLastAnno}
-            disabled={annos.length === 0}
-            title="Undo last annotation"
-          >
-            <i className="fas fa-undo"></i>
-          </button>
-          <span className="text-neutral-500 text-[0.7rem] ml-auto hidden md:block">
-            Click &amp; drag on a page to draw · text tool: click, then type
-          </span>
-        </div>
-      )}
+
 
       {isPdf ? (
         <PdfStage

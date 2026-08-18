@@ -1,7 +1,3 @@
-export function isFullscreen(): boolean {
-  return typeof document !== 'undefined' && !!document.fullscreenElement;
-}
-
 export async function toggleFullscreen(el?: HTMLElement | null): Promise<void> {
   if (!el) return;
   try {
@@ -11,8 +7,4 @@ export async function toggleFullscreen(el?: HTMLElement | null): Promise<void> {
       await el.requestFullscreen();
     }
   } catch {}
-}
-
-export function toggleFullscreenSync(el?: HTMLElement | null) {
-  void toggleFullscreen(el);
 }

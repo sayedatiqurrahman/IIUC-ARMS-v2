@@ -57,9 +57,9 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
             {(c as any).departmentShortName && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-building mr-1 text-teal-400"></i>{(c as any).departmentShortName}</span>}
             {c.universityId && !c.hideUniversityId && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-id-card mr-1 text-qsis"></i>{c.universityId}</span>}
             {c.semester && !c.hideSemester && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-graduation-cap mr-1 text-accent"></i>{c.semester === 'graduated' ? '🎓 Graduated' : config.semesters.find((s: any) => s.id === c.semester)?.label || c.semester}</span>}
-            {(() => { const e = c.publicEmail || c.email; if (e && !c.hideEmail) return <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-envelope mr-1 text-blue-400"></i>{e}</span>; })()}
-            {c.whatsapp && !c.hideWhatsapp && <span className="text-[0.65rem] text-dark-text3"><i className="fab fa-whatsapp mr-1 text-green-400"></i>{c.whatsapp}</span>}
-            {c.company && !c.hideCompany && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-briefcase mr-1 text-purple-400"></i>{c.company}</span>}
+            {(() => { const e = c.publicEmail || c.email; if (e && !c.hideEmail) return <a href={`mailto:${e}`} className="text-[0.65rem] text-dark-text3 hover:text-qsis transition-colors no-underline"><i className="fas fa-envelope mr-1 text-blue-400"></i>{e}</a>; })()}
+            {c.whatsapp && !c.hideWhatsapp && <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-dark-text3 hover:text-qsis transition-colors no-underline"><i className="fab fa-whatsapp mr-1 text-green-400"></i>{c.whatsapp}</a>}
+            {c.company && !c.hideCompany && (c.companyUrl ? <a href={c.companyUrl} target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-dark-text3 hover:text-qsis transition-colors no-underline"><i className="fas fa-briefcase mr-1 text-purple-400"></i>{c.company}</a> : <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-briefcase mr-1 text-purple-400"></i>{c.company}</span>)}
           </div>
         </div>
         {settings.showStats && (
@@ -162,19 +162,25 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           {(() => { const e = c.publicEmail || c.email; if (e && !c.hideEmail) return (
             <div className="flex items-center gap-1.5">
               <i className="fas fa-envelope text-blue-400 text-[0.5rem] w-3 text-center flex-shrink-0"></i>
-              <div className="min-w-0"><span className="text-[0.5rem] text-dark-text3 block leading-none">Email</span><span className="text-[0.6rem] text-dark-text2 font-medium truncate block">{e}</span></div>
+              <div className="min-w-0"><span className="text-[0.5rem] text-dark-text3 block leading-none">Email</span><a href={`mailto:${e}`} className="text-[0.6rem] text-dark-text2 font-medium truncate block hover:text-qsis no-underline transition-colors">{e}</a></div>
             </div>
           ); })()}
           {c.whatsapp && !c.hideWhatsapp && (
             <div className="flex items-center gap-1.5">
               <i className="fab fa-whatsapp text-green-400 text-[0.5rem] w-3 text-center flex-shrink-0"></i>
-              <div className="min-w-0"><span className="text-[0.5rem] text-dark-text3 block leading-none">WhatsApp</span><span className="text-[0.6rem] text-dark-text2 font-medium truncate block">{c.whatsapp}</span></div>
+              <div className="min-w-0"><span className="text-[0.5rem] text-dark-text3 block leading-none">WhatsApp</span><a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.6rem] text-dark-text2 font-medium truncate block hover:text-qsis no-underline transition-colors">{c.whatsapp}</a></div>
             </div>
           )}
           {c.company && !c.hideCompany && (
             <div className="flex items-center gap-1.5">
               <i className="fas fa-briefcase text-purple-400 text-[0.5rem] w-3 text-center flex-shrink-0"></i>
-              <div className="min-w-0"><span className="text-[0.5rem] text-dark-text3 block leading-none">Company</span><span className="text-[0.6rem] text-dark-text2 font-medium truncate block">{c.company}</span></div>
+              <div className="min-w-0"><span className="text-[0.5rem] text-dark-text3 block leading-none">Company</span>
+                {c.companyUrl ? (
+                  <a href={c.companyUrl} target="_blank" rel="noopener noreferrer" className="text-[0.6rem] text-dark-text2 font-medium truncate block hover:text-qsis no-underline transition-colors">{c.company}</a>
+                ) : (
+                  <span className="text-[0.6rem] text-dark-text2 font-medium truncate block">{c.company}</span>
+                )}
+              </div>
             </div>
           )}
         </div>

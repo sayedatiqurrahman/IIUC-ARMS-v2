@@ -1,7 +1,6 @@
 'use client';
 
 import { ExamRow, ExamAllSemesterSem, DAYS, EXAM_TYPES } from './types';
-import { ExamSlot } from '@/lib/exam-routine-config';
 import { config } from '@/lib/config';
 import CustomSelect from '@/components/CustomSelect';
 import { FACULTIES } from '@/lib/departments';

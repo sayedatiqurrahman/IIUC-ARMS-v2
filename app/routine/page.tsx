@@ -1,5 +1,5 @@
 "use client";
-import { config } from '@/lib/config'; import { resolveDepartment } from '@/lib/departments';
+import { resolveDepartment } from '@/lib/departments';
 import { getOnboardingData } from '@/lib/onboarding-storage';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';

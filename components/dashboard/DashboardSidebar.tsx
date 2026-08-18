@@ -1,7 +1,5 @@
 'use client';
 
-import { config } from '@/lib/config';
-
 interface MenuItem {
   id: string;
   label: string;

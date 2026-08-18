@@ -75,7 +75,3 @@ export function parseCourseFilePath(rel: string): ParsedFile | null {
     subPath: parts.slice(catIdx + 1),
   };
 }
-
-export function getPdfPageKey(filePath: string) {
-  return 'pdf-page-' + filePath;
-}

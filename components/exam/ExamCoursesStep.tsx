@@ -1,6 +1,5 @@
 'use client';
 
-import { useRef } from 'react';
 import { ExamCourse, ExamAllSemesterSem } from './types';
 import { showToast } from '@/lib/utils';
 

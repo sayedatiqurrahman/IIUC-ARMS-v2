@@ -81,6 +81,11 @@
     border-radius: 8px; padding: 6px 9px; font-size: 14px; width: 100%; outline: none;
   }
 
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; background: var(--bg2); border-radius: 12px; padding: 3px; }
+  .tabs button { flex: 1; padding: 8px 12px; border: none; border-radius: 10px; background: transparent; color: var(--text2); font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .tabs button.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+  .tabs .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 9px; background: var(--border); font-size: 10px; font-weight: 700; margin-left: 5px; padding: 0 5px; }
+  .tabs button.active .badge { background: var(--green); color: #06210f; }
   .foot { margin-top: 20px; text-align: center; font-size: 11px; color: var(--text3); }
   .foot a { color: var(--text2); }
 
@@ -143,10 +148,11 @@
     <div>
       <h1><span class="dot" id="hdot"></span>Todos</h1>
     </div>
-    <div style="text-align:right">
-      <div class="counter" id="counter"></div>
-      <button class="clear" id="clearDone" title="Remove completed tasks">Clear done</button>
-    </div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="active" data-tab="active">Active <span class="badge" id="activeCount">0</span></button>
+    <button data-tab="done">Completed <span class="badge" id="doneCount">0</span></button>
   </div>
 
   <div class="add">
@@ -220,6 +226,7 @@
   let popWindow = null;     // fallback always-on-top popup window
   let popupId = null;
   let editingId = null;     // todo whose text is being edited
+  let tabView = 'active';   // 'active' or 'done'
 
   const running = () => todos.find((t) => t.running);
 
@@ -343,6 +350,14 @@
     todos = todos.filter((t) => !t.done);
     if (!todos.some((t) => t.running)) activeId = null;
     save(); render();
+  }
+
+  function setTab(view) {
+    tabView = view;
+    document.querySelectorAll('#tabs button').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.tab === view);
+    });
+    render();
   }
 
   function durationOptions(selected) {
@@ -597,14 +612,14 @@
     $('hdot').classList.toggle('off', !activeId);
     const list = $('list');
     list.innerHTML = '';
-    $('empty').style.display = todos.length ? 'none' : '';
-    const active = todos.filter((t) => !t.done).length;
-    const done = todos.length - active;
-    $('counter').innerHTML = todos.length
-      ? '<b>' + active + '</b> active · <b>' + done + '</b> done'
-      : '';
-    $('clearDone').disabled = done === 0;
-    for (const t of todos) {
+    const active = todos.filter((t) => !t.done);
+    const done = todos.filter((t) => t.done);
+    $('activeCount').textContent = active.length;
+    $('doneCount').textContent = done.length;
+    const visible = tabView === 'active' ? active : done;
+    $('empty').style.display = visible.length ? 'none' : '';
+    $('empty').textContent = tabView === 'active' ? 'No active tasks. Add one above.' : 'No completed tasks yet.';
+    for (const t of visible) {
       const row = document.createElement('div');
       row.className = 'todo' + (t.running ? ' running' : '') + (t.done ? ' done' : '');
       row.innerHTML =
@@ -707,7 +722,9 @@
     $('newDurCustom').style.display = on ? '' : 'none';
     if (on) $('newDurCustom').focus();
   });
-  $('clearDone').addEventListener('click', clearDone);
+  document.querySelectorAll('#tabs button').forEach((btn) => {
+    btn.addEventListener('click', () => setTab(btn.dataset.tab));
+  });
   $('pStart').addEventListener('click', () => { const t = find(popupId); if (t) t.running ? pauseTodo(t.id) : startTodo(t.id); });
   $('pReset').addEventListener('click', () => { if (popupId) resetTodo(popupId); });
   $('pMin').addEventListener('click', () => closePopup());
