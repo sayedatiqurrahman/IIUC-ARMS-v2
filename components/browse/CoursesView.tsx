@@ -185,13 +185,13 @@ export default function CoursesView({
           const canEditThis = isMyCourse || coursePerms.canEdit;
           const canDeleteThis = isMyCourse || coursePerms.canDelete;
 
-          // Share button — visible to ALL users (logged in or not)
-          const shareButton = (
+          // Share button — only for non-logged-in users (logged-in users have share in the 3-dot menu)
+          const shareButton = !session ? (
             <button onClick={(e) => { e.stopPropagation(); openCourseShare(course); }}
               className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 hover:text-green-400 hover:border-green-400/40 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0" title="Share course">
               <i className="fas fa-share-nodes text-sm"></i>
             </button>
-          );
+          ) : null;
 
           // 3-dot menu — only for logged-in users with at least one action
           const menuButton = !!session ? (
