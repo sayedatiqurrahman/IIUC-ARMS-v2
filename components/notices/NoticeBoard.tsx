@@ -7,6 +7,7 @@ import { config } from '@/lib/config';
 import type { Notice, NoticeCategory } from '@/lib/notices';
 import { CATEGORY_META } from '@/lib/notices';
 import NoticePublishModal, { type NoticePublishOptions } from './NoticePublishModal';
+import { isNoticesTickerVisible, setNoticesTickerVisible } from './LatestNotices';
 
 const CATEGORIES: { key: NoticeCategory | 'all'; label: string; icon: string }[] = [
   { key: 'all', label: 'All', icon: 'fas fa-layer-group' },
@@ -42,6 +43,18 @@ export default function NoticeBoardView() {
   // Publish modal state
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [pendingNotice, setPendingNotice] = useState<{ notice: any; action: string } | null>(null);
+
+  // Ticker re-attach
+  const [tickerVisible, setTickerVisible] = useState(true);
+  useEffect(() => {
+    setTickerVisible(isNoticesTickerVisible(email));
+  }, [email]);
+
+  const toggleTicker = () => {
+    const next = !tickerVisible;
+    setTickerVisible(next);
+    setNoticesTickerVisible(email, next);
+  };
 
   const fetchNotices = useCallback(async () => {
     try {
@@ -220,11 +233,18 @@ export default function NoticeBoardView() {
           </h1>
           <p className="text-[0.78rem] text-dark-text2 mt-0.5">Academic notices, calendar updates, and bus schedules</p>
         </div>
-        {isPrivileged && (
-          <button onClick={openCreate} className="px-4 py-2 rounded-xl bg-qsis text-white text-[0.8rem] font-semibold hover:brightness-110 transition cursor-pointer">
-            <i className="fas fa-plus mr-1.5"></i>New Notice
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={toggleTicker}
+            className={`px-3 py-2 rounded-xl text-[0.78rem] font-medium border transition cursor-pointer ${tickerVisible ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-dark-bg2 border-dark-border text-dark-text2 hover:text-dark-text'}`}>
+            <i className={`fas ${tickerVisible ? 'fa-check-circle' : 'fa-plus-circle'} mr-1.5`}></i>
+            {tickerVisible ? 'Showing on Browse' : 'Show on Browse'}
           </button>
-        )}
+          {isPrivileged && (
+            <button onClick={openCreate} className="px-4 py-2 rounded-xl bg-qsis text-white text-[0.8rem] font-semibold hover:brightness-110 transition cursor-pointer">
+              <i className="fas fa-plus mr-1.5"></i>New Notice
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filters */}

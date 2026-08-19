@@ -2299,3 +2299,16 @@ button { font-family: inherit; }
   color: var(--text);
   padding: 0.3em 0;
 }
+
+/* ── Notices Marquee ─────────────────────────────────────────────────── */
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee-scroll 30s linear infinite;
+  padding-left: 0.5rem;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}

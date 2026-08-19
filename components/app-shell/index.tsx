@@ -239,6 +239,37 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Auto-sync personalization with profile: when the user completes their
+  // profile (department + semester), automatically update onboarding data so
+  // the browse page reflects their info without re-doing the onboarding wizard.
+  const profileLoaded = useAppStore(s => s.profileLoaded);
+  useEffect(() => {
+    if (!profileLoaded) return;
+    const dept = profile.department || '';
+    const sem = profile.semester || '';
+    if (!dept || !sem || sem === 'graduated') return;
+
+    const existing = getOnboardingData();
+    if (!existing) {
+      // No onboarding yet — create from profile
+      setStoreOnboarding({
+        gender: 'male',
+        department: dept,
+        semester: sem,
+        fileView: 'all-prioritized',
+        completedAt: Date.now(),
+      });
+      setOnboardingDone(true);
+    } else if (existing.department !== dept || existing.semester !== sem) {
+      // Onboarding exists but profile has changed — update department/semester
+      setStoreOnboarding({
+        ...existing,
+        department: dept,
+        semester: sem,
+      });
+    }
+  }, [profileLoaded, profile.department, profile.semester]);
+
   // Register service worker for offline/PWA support
   useEffect(() => {
     if ('serviceWorker' in navigator) {
