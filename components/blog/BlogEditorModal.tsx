@@ -96,11 +96,15 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
   };
 
   const handleThumbnailUpload = async (file: File) => {
-    const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
-    if (!slug) return;
     const localUrl = URL.createObjectURL(file);
     setThumbnailLocalPreview(localUrl);
     setThumbnailUploading(true);
+
+    const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+    if (!slug) {
+      setThumbnailUploading(false);
+      return;
+    }
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -129,14 +133,20 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
     e.preventDefault();
     const file = imageItem.getAsFile();
     if (!file) return;
-    const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
-    if (!slug) return;
+
     const ta = textareaRef.current;
     const placeholder = `\n![Uploading image...](uploading)\n`;
     if (ta) {
       const start = ta.selectionStart;
       setContent(c => c.substring(0, start) + placeholder + c.substring(ta.selectionEnd));
     }
+
+    const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+    if (!slug) {
+      setContent(c => c.replace(placeholder, ''));
+      return;
+    }
+
     try {
       const fd = new FormData();
       fd.append('file', file);
