@@ -3,7 +3,12 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { useAppStore } from '@/lib/store';
+import { config } from '@/lib/config';
+import { useUserAccess } from '@/lib/useUserAccess';
 import type { BlogPostListItem } from '@/lib/blog';
+import BlogEditorModal from '@/components/blog/BlogEditorModal';
 
 const TABS = [
   { key: 'all', label: 'All', icon: 'fa-layer-group' },
@@ -15,23 +20,37 @@ function BlogContent() {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get('tab') as 'all' | 'tutorial' | 'post') || 'all';
 
+  const { data: session } = useSession();
+  const profile = useAppStore(s => s.profile);
+  const email = session?.user?.email || profile.email || '';
+  const role = email ? config.detectRole(email) : null;
+  const isCR = profile.isCR || false;
+  const customPerms = (profile as any).customPermissions || {};
+
+  const { has } = useUserAccess(email, role || '', isCR, customPerms);
+  const canPublishBlog = has('publishBlog');
+  const canPublishTutorial = has('publishTutorial');
+  const canPublish = canPublishBlog || canPublishTutorial;
+
   const [posts, setPosts] = useState<BlogPostListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'tutorial' | 'post'>(initialTab);
   const [search, setSearch] = useState(searchParams.get('q') || '');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/blogs');
-        const data = await res.json();
-        if (data.success) {
-          setPosts(data.posts.filter((p: BlogPostListItem) => p.status === 'published'));
-        }
-      } catch {}
-      setLoading(false);
-    })();
+  const [showEditor, setShowEditor] = useState(false);
+
+  const fetchPosts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/blogs');
+      const data = await res.json();
+      if (data.success) {
+        setPosts(data.posts.filter((p: BlogPostListItem) => p.status === 'published'));
+      }
+    } catch {}
+    setLoading(false);
   }, []);
+
+  useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
   const handleTab = useCallback((tab: 'all' | 'tutorial' | 'post') => {
     setActiveTab(tab);
@@ -60,11 +79,23 @@ function BlogContent() {
         <i className="fas fa-arrow-left"></i> Back to Home
       </Link>
 
-      <div className="mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-dark-text flex items-center gap-2">
-          <i className="fas fa-blog text-qsis"></i> Blog
-        </h1>
-        <p className="text-[0.82rem] text-dark-text2 mt-1">Tutorials, guides, and updates from the IIUC-ARMS community.</p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-dark-text flex items-center gap-2">
+            <i className="fas fa-blog text-qsis"></i> Blog
+          </h1>
+          <p className="text-[0.82rem] text-dark-text2 mt-1">Tutorials, guides, and updates from the IIUC-ARMS community.</p>
+        </div>
+
+        {canPublish && email && (
+          <button
+            onClick={() => setShowEditor(true)}
+            className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold hover:brightness-110 transition cursor-pointer"
+          >
+            <i className="fas fa-plus text-[0.7rem]"></i>
+            <span className="hidden sm:inline">New Post</span>
+          </button>
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
@@ -161,6 +192,16 @@ function BlogContent() {
             </Link>
           ))}
         </div>
+      )}
+
+      {canPublish && (
+        <BlogEditorModal
+          open={showEditor}
+          onClose={() => setShowEditor(false)}
+          onSaved={fetchPosts}
+          canPublishTutorial={canPublishTutorial}
+          canPublishBlog={canPublishBlog}
+        />
       )}
     </div>
   );
