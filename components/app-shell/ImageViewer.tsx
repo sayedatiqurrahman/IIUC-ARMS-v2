@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { toggleFullscreen } from '@/lib/fullscreen';
+import { cachedFetch } from '@/lib/file-cache';
 
 export default function ImageViewer({ item, onClose }: { item: any; onClose: () => void }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -10,11 +11,42 @@ export default function ImageViewer({ item, onClose }: { item: any; onClose: () 
   const imgRef = useRef<HTMLImageElement>(null);
   const panRef = useRef({x:0,y:0});
   const dragRef = useRef({dragging:false,startX:0,startY:0});
+  const blobUrlRef = useRef<string>('');
+
+  const [imgSrc, setImgSrc] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const zoom = useAppStore(s => s.imgZoom);
   const rotation = useAppStore(s => s.imgRotation);
   const setZoom = useAppStore(s => s.setImgZoom);
   const setRotation = useAppStore(s => s.setImgRotation);
+
+  // Load image via cache
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await cachedFetch(item.rawUrl);
+        if (cancelled) return;
+        const blob = await res.blob();
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        blobUrlRef.current = url;
+        setImgSrc(url);
+      } catch {
+        // Fallback to direct URL if cache fails
+        if (!cancelled) setImgSrc(item.rawUrl);
+      }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = '';
+      }
+    };
+  }, [item.rawUrl]);
 
   function applyTransform(z: number, r: number) {
     const img = imgRef.current;
@@ -107,7 +139,14 @@ export default function ImageViewer({ item, onClose }: { item: any; onClose: () 
         <button className="pdf-btn" onClick={onClose} title="Close" style={{background:'#ef4444',color:'white',borderRadius:'7px'}}><i className="fas fa-times"></i></button>
       </div>
       <div className="image-scroll-area" ref={scrollRef} style={{cursor: zoom > 100 ? 'grab' : 'default'}}>
-        <img ref={imgRef} src={item.rawUrl} alt={item.name} draggable={false} className="max-w-full max-h-full object-contain rounded transition-transform" />
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <i className="fas fa-spinner fa-spin text-qsis text-2xl"></i>
+          </div>
+        )}
+        {imgSrc && (
+          <img ref={imgRef} src={imgSrc} alt={item.name} draggable={false} className="max-w-full max-h-full object-contain rounded transition-transform" />
+        )}
       </div>
     </div>
   );

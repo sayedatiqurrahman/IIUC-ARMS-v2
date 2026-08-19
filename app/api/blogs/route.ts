@@ -9,17 +9,33 @@ import {
   readBlogsIndex,
   writeBlogsIndex,
   writeBlogContent,
-  deleteBlogFile,
   deleteBlogPostFolder,
   uploadBlogThumbnail,
   uploadBlogAsset,
   writeBlogPostMeta,
-  slugify,
+  generatePostFolderName,
   type BlogPostListItem,
   type BlogCategory,
 } from '@/lib/blog';
 
 export async function GET(req: NextRequest) {
+  const action = req.nextUrl.searchParams.get('action');
+
+  // ─── Fetch post content for editor ───
+  if (action === 'content') {
+    const slug = req.nextUrl.searchParams.get('slug');
+    if (!slug) return NextResponse.json({ error: 'Slug required' }, { status: 400 });
+
+    const posts = await readBlogsIndex();
+    const post = posts.find(p => p.slug === slug);
+    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+
+    const { readBlogContent } = await import('@/lib/blog');
+    const content = await readBlogContent(post.category, post.folderName);
+    return NextResponse.json({ success: true, content });
+  }
+
+  // ─── List posts ───
   let posts = await readBlogsIndex();
 
   const category = req.nextUrl.searchParams.get('category');
@@ -53,49 +69,67 @@ export async function POST(req: NextRequest) {
   const effectiveRole = (session.user as any)?.role || 'user';
   const isCR = !!(session.user as any)?.isCR;
   const userEmail = session.user?.email || '';
+  const userName = (session.user as any)?.name || userEmail.split('@')[0];
 
   try {
     const contentType = req.headers.get('content-type') || '';
 
-    // Handle FormData uploads (thumbnail or content asset)
+    // ─── FormData uploads (thumbnail or content asset) ───
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
-      const slug = formData.get('slug') as string | null;
-      const action = formData.get('action') as string | null;
+      const category = (formData.get('category') as string || 'post') as BlogCategory;
+      const folderName = formData.get('folderName') as string | null;
       const isContent = formData.get('content') === '1';
 
-      if (!file || !slug) {
-        return NextResponse.json({ error: 'File and slug required' }, { status: 400 });
-      }
-
-      const posts = await readBlogsIndex();
-      const post = posts.find(p => p.slug === slug);
-      if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-
-      const permAction = post.category === 'tutorial' ? 'publishTutorial' : 'publishBlog';
-      if (!(await hasPermission(permAction, effectiveRole, isCR, userEmail))) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      if (!file) {
+        return NextResponse.json({ error: 'File required' }, { status: 400 });
       }
 
       const token = await getToken(userEmail);
 
-      // Content images go to assets/, thumbnails go to thumbnail.{ext}
-      if (isContent || action === 'upload-asset') {
-        const url = await uploadBlogAsset(slug, file, token);
+      // Check permission for this category
+      const permAction = category === 'tutorial' ? 'publishTutorial' : 'publishBlog';
+      if (!(await hasPermission(permAction, effectiveRole, isCR, userEmail))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      // If folderName provided — upload directly (post already created or in progress)
+      if (folderName) {
+        if (isContent) {
+          const url = await uploadBlogAsset(category, folderName, file, token);
+          return NextResponse.json({ success: true, url });
+        }
+        const url = await uploadBlogThumbnail(category, folderName, file, token);
         return NextResponse.json({ success: true, url });
       }
 
-      const url = await uploadBlogThumbnail(slug, file, token);
-      return NextResponse.json({ success: true, url });
+      // No folderName — check if post exists in index (editing existing)
+      const slug = formData.get('slug') as string | null;
+      if (slug) {
+        const posts = await readBlogsIndex();
+        const post = posts.find(p => p.slug === slug);
+        if (post) {
+          if (isContent) {
+            const url = await uploadBlogAsset(post.category, post.folderName, file, token);
+            return NextResponse.json({ success: true, url });
+          }
+          const url = await uploadBlogThumbnail(post.category, post.folderName, file, token);
+          return NextResponse.json({ success: true, url });
+        }
+      }
+
+      return NextResponse.json({ error: 'Provide folderName or slug of existing post' }, { status: 400 });
     }
 
-    // Handle JSON actions
+    // ─── JSON actions ───
     const body = await req.json();
     const { action } = body;
 
+    // ─── CREATE ───
     if (action === 'create') {
-      const { title, category, excerpt, content, tags, thumbnailUrl, status } = body as {
+      const { slug: clientSlug, title, category, excerpt, content, tags, thumbnailUrl, status } = body as {
+        slug?: string;
         title: string;
         category?: BlogCategory;
         excerpt?: string;
@@ -113,29 +147,35 @@ export async function POST(req: NextRequest) {
 
       const token = await getToken(userEmail);
       const posts = await readBlogsIndex();
-      const slug = slugify(title);
+
+      // Use client-provided slug so folder matches where assets were uploaded
+      const slug = clientSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
       const now = new Date().toISOString();
+      const cat = (category as BlogCategory) || 'post';
 
       const newPost: BlogPostListItem = {
-        id: `blog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: generateId(),
         slug,
+        folderName: slug,
         title: title.trim(),
-        category: (category as BlogCategory) || 'post',
+        category: cat,
         excerpt: (excerpt || '').trim(),
         thumbnailUrl,
         authorLogin: (session.user as any).login || '',
-        authorName: (session.user as any).name || userEmail.split('@')[0],
+        authorName: userName,
         authorAvatar: (session.user as any).image || '',
+        authorEmail: userEmail,
         publishedAt: now,
         tags: tags || [],
         status: status || 'published',
       };
 
-      await writeBlogContent(slug, content || '', token);
-      await writeBlogPostMeta(slug, {
+      await writeBlogContent(cat, slug, content || '', token);
+      await writeBlogPostMeta(cat, slug, {
         slug,
+        folderName: slug,
         title: newPost.title,
-        category: newPost.category,
+        category: cat,
         excerpt: newPost.excerpt,
         tags: newPost.tags,
         status: newPost.status,
@@ -152,6 +192,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, post: newPost });
     }
 
+    // ─── UPDATE ───
     if (action === 'update') {
       const { slug, title, excerpt, content, tags, thumbnailUrl, status } = body as {
         slug: string;
@@ -175,6 +216,8 @@ export async function POST(req: NextRequest) {
 
       const token = await getToken(userEmail);
       const updatedAt = new Date().toISOString();
+      const cat = posts[idx].category;
+      const folderName = posts[idx].folderName;
 
       posts[idx] = {
         ...posts[idx],
@@ -187,13 +230,14 @@ export async function POST(req: NextRequest) {
       };
 
       if (content !== undefined) {
-        await writeBlogContent(slug, content, token);
+        await writeBlogContent(cat, folderName, content, token);
       }
 
-      await writeBlogPostMeta(slug, {
+      await writeBlogPostMeta(cat, folderName, {
         slug,
+        folderName,
         title: posts[idx].title,
-        category: posts[idx].category,
+        category: cat,
         excerpt: posts[idx].excerpt,
         tags: posts[idx].tags,
         status: posts[idx].status,
@@ -210,6 +254,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, post: posts[idx] });
     }
 
+    // ─── DELETE ───
     if (action === 'delete') {
       const { slug } = body as { slug: string };
       if (!slug) return NextResponse.json({ error: 'Slug required' }, { status: 400 });
@@ -224,9 +269,7 @@ export async function POST(req: NextRequest) {
       }
 
       const token = await getToken(userEmail);
-
-      // Delete entire post folder (index.md + thumbnail + meta.json + assets/)
-      await deleteBlogPostFolder(slug, token);
+      await deleteBlogPostFolder(post.category, post.folderName, token);
 
       const filtered = posts.filter(p => p.slug !== slug);
       await writeBlogsIndex(filtered, token, `blog: delete "${post.title}"`);
@@ -238,6 +281,10 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Failed' }, { status: 500 });
   }
+}
+
+function generateId(): string {
+  return `blog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 async function getToken(email: string): Promise<string> {

@@ -35,10 +35,11 @@ export default function NoticeBoardView() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Notice | null>(null);
   const [form, setForm] = useState({ title: '', description: '', category: 'notice' as NoticeCategory, date: '', pinned: false, link: '', ttlDays: 183 as number | null });
-  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+  const pendingAttachmentRef = useRef<File | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(''); // blob URL for local preview
 
   // Publish modal state
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -89,6 +90,9 @@ export default function NoticeBoardView() {
   const openCreate = () => {
     setEditing(null);
     setForm({ title: '', description: '', category: 'notice', date: new Date().toISOString().split('T')[0], pinned: false, link: '', ttlDays: 183 });
+    pendingAttachmentRef.current = null;
+    if (attachmentPreview.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview);
+    setAttachmentPreview('');
     setShowForm(true);
   };
 
@@ -103,11 +107,38 @@ export default function NoticeBoardView() {
       ttlDays = null; // never expires
     }
     setForm({ title: n.title, description: n.description, category: n.category, date: n.date, pinned: n.pinned, link: n.link || '', ttlDays });
+    pendingAttachmentRef.current = null;
+    if (attachmentPreview.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview);
+    setAttachmentPreview('');
     setShowForm(true);
   };
 
-  const uploadFile = async (file: File) => {
-    setUploading(true);
+  // ─── Store file locally only — upload happens on save ───
+  const handleAttachmentSelect = (file: File) => {
+    // Revoke old preview
+    if (attachmentPreview.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview);
+    const blobUrl = URL.createObjectURL(file);
+    setAttachmentPreview(blobUrl);
+    pendingAttachmentRef.current = file;
+    setForm(f => ({ ...f, attachmentName: file.name } as any));
+  };
+
+  const removeAttachment = () => {
+    if (attachmentPreview.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview);
+    setAttachmentPreview('');
+    pendingAttachmentRef.current = null;
+    setForm(f => ({ ...f, attachmentUrl: '', attachmentName: '' } as any));
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    removeAttachment();
+  };
+
+  // Upload attachment to GitHub — called only during save
+  const uploadPendingAttachment = async (): Promise<{ url: string; name: string } | null> => {
+    if (!pendingAttachmentRef.current) return null;
+    const file = pendingAttachmentRef.current;
     try {
       const reader = new FileReader();
       const base64 = await new Promise<string>((resolve) => {
@@ -121,15 +152,17 @@ export default function NoticeBoardView() {
       });
       const data = await res.json();
       if (data.success) {
-        setForm(f => ({ ...f, attachmentUrl: data.url, attachmentName: data.fileName }));
+        pendingAttachmentRef.current = null;
+        return { url: data.url, name: data.fileName };
       }
     } catch {}
-    setUploading(false);
+    return null;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) uploadFile(file);
+    if (file) handleAttachmentSelect(file);
+    if (e.target) e.target.value = '';
   };
 
   const handlePaste = useCallback((e: ClipboardEvent) => {
@@ -140,7 +173,7 @@ export default function NoticeBoardView() {
       const item = items[i];
       if (item.kind === 'file') {
         const file = item.getAsFile();
-        if (file) { e.preventDefault(); uploadFile(file); break; }
+        if (file) { e.preventDefault(); handleAttachmentSelect(file); break; }
       }
     }
   }, [showForm]);
@@ -152,6 +185,20 @@ export default function NoticeBoardView() {
 
   const handleSave = async () => {
     if (!form.title.trim()) return;
+
+    // Upload pending attachment first
+    let attachmentUrl = (form as any).attachmentUrl || '';
+    let attachmentName = (form as any).attachmentName || '';
+    if (pendingAttachmentRef.current) {
+      setSaving(true);
+      const uploaded = await uploadPendingAttachment();
+      if (uploaded) {
+        attachmentUrl = uploaded.url;
+        attachmentName = uploaded.name;
+        setForm(f => ({ ...f, attachmentUrl, attachmentName } as any));
+      }
+    }
+
     // For edits, save directly (no publish modal)
     if (editing) {
       setSaving(true);
@@ -161,12 +208,12 @@ export default function NoticeBoardView() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'update',
-            notice: { ...form, id: editing.id, attachmentUrl: (form as any).attachmentUrl, attachmentName: (form as any).attachmentName },
+            notice: { ...form, id: editing.id, attachmentUrl, attachmentName },
           }),
         });
         const data = await res.json();
         if (data.success) {
-          setShowForm(false);
+          closeForm();
           fetchNotices();
         }
       } catch {}
@@ -174,11 +221,12 @@ export default function NoticeBoardView() {
     } else {
       // For new notices, open publish modal
       setPendingNotice({
-        notice: { ...form, attachmentUrl: (form as any).attachmentUrl, attachmentName: (form as any).attachmentName },
+        notice: { ...form, attachmentUrl, attachmentName },
         action: 'create',
       });
       setShowForm(false);
       setShowPublishModal(true);
+      setSaving(false);
     }
   };
 
@@ -199,6 +247,7 @@ export default function NoticeBoardView() {
       });
       const data = await res.json();
       if (data.success) {
+        removeAttachment();
         fetchNotices();
       }
     } catch {}
@@ -445,11 +494,11 @@ export default function NoticeBoardView() {
 
       {/* Create/Edit Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4" onClick={closeForm}>
           <div className="w-full max-w-lg rounded-2xl border border-dark-border bg-dark-bg2 p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-dark-text">{editing ? 'Edit Notice' : 'New Notice'}</h2>
-              <button onClick={() => setShowForm(false)} className="w-8 h-8 rounded-full bg-dark-bg3 flex items-center justify-center text-dark-text2 border-none cursor-pointer"><i className="fas fa-times text-sm"></i></button>
+              <button onClick={closeForm} className="w-8 h-8 rounded-full bg-dark-bg3 flex items-center justify-center text-dark-text2 border-none cursor-pointer"><i className="fas fa-times text-sm"></i></button>
             </div>
             <div className="space-y-4">
               <div>
@@ -513,7 +562,7 @@ export default function NoticeBoardView() {
                   onDrop={e => {
                     e.preventDefault(); e.stopPropagation(); setDragOver(false);
                     const file = e.dataTransfer.files?.[0];
-                    if (file) uploadFile(file);
+                    if (file) handleAttachmentSelect(file);
                   }}
                   className={`rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-all ${dragOver ? 'border-qsis bg-qsis/10' : 'border-dark-border hover:border-qsis/40 bg-dark-bg3'}`}
                   onClick={() => dropRef.current?.querySelector('input')?.click()}
@@ -523,23 +572,32 @@ export default function NoticeBoardView() {
                   <p className="text-[0.75rem] text-dark-text2 font-medium">{dragOver ? 'Drop file here' : 'Click, drag & drop, or paste (Ctrl+V)'}</p>
                   <p className="text-[0.65rem] text-dark-text3 mt-0.5">PDF, Image, or Document</p>
                 </div>
-                {uploading && <p className="text-[0.72rem] text-dark-text3 mt-1"><i className="fas fa-spinner fa-spin mr-1"></i>Uploading...</p>}
-                {(form as any).attachmentUrl && (() => {
-                  const ext = ((form as any).attachmentName || (form as any).attachmentUrl || '').split('.').pop()?.toLowerCase() || '';
+                {saving && pendingAttachmentRef.current && <p className="text-[0.72rem] text-dark-text3 mt-1"><i className="fas fa-spinner fa-spin mr-1"></i>Uploading attachment...</p>}
+                {(attachmentPreview || (form as any).attachmentUrl) && (() => {
+                  const name = (form as any).attachmentName || '';
+                  const src = attachmentPreview || (form as any).attachmentUrl || '';
+                  const ext = name.split('.').pop()?.toLowerCase() || src.split('.').pop()?.toLowerCase() || '';
                   const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+                  const isLocal = !!pendingAttachmentRef.current;
                   return (
                     <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-dark-bg2 border border-dark-border">
                       {isImage ? (
-                        <img src={(form as any).attachmentUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-dark-border" />
+                        <div className="relative">
+                          <img src={src} alt="" className="w-12 h-12 rounded-lg object-cover border border-dark-border" />
+                          {isLocal && <span className="absolute -bottom-1 left-0 right-0 text-center text-[0.45rem] text-dark-text3 bg-dark-bg2/80 rounded">local</span>}
+                        </div>
                       ) : (
                         <div className="w-12 h-12 rounded-lg bg-amber-500/15 flex items-center justify-center">
                           <i className="fas fa-file text-amber-400"></i>
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-[0.72rem] text-green-400 font-medium truncate"><i className="fas fa-check mr-1"></i>{(form as any).attachmentName}</p>
+                        <p className={`text-[0.72rem] font-medium truncate ${isLocal ? 'text-yellow-400' : 'text-green-400'}`}>
+                          <i className={`fas ${isLocal ? 'fa-clock' : 'fa-check'} mr-1`}></i>{name}
+                        </p>
+                        {isLocal && <p className="text-[0.6rem] text-dark-text3">No upload until you save</p>}
                       </div>
-                      <button type="button" onClick={() => setForm(f => ({ ...f, attachmentUrl: '', attachmentName: '' } as any))}
+                      <button type="button" onClick={removeAttachment}
                         className="w-6 h-6 rounded-full bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-red-400 cursor-pointer border-none">
                         <i className="fas fa-times text-[0.55rem]"></i>
                       </button>
@@ -552,7 +610,7 @@ export default function NoticeBoardView() {
                   className="flex-1 py-2.5 rounded-xl bg-qsis text-white text-[0.85rem] font-semibold hover:brightness-110 transition cursor-pointer disabled:opacity-50">
                   {saving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : editing ? 'Update Notice' : 'Continue to Publish'}
                 </button>
-                <button onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.85rem] hover:text-dark-text cursor-pointer">Cancel</button>
+                <button onClick={closeForm} className="px-5 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.85rem] hover:text-dark-text cursor-pointer">Cancel</button>
               </div>
             </div>
           </div>

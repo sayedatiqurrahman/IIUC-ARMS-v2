@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ANNO_COLORS, clearXdrawCache, preloadXdraw, type Annotation, type AnnoTool } from '@/lib/annotations';
+import { cachedFetch } from '@/lib/file-cache';
 import DocToolbar from './doc-viewer/DocToolbar';
 import PdfStage from './doc-viewer/PdfStage';
 import DocxStage from './doc-viewer/DocxStage';
@@ -197,16 +198,25 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
 
     (async () => {
       try {
+        // Check cache first — if hit, skip retries
         let res: Response | null = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            res = await fetch(src);
-            if (res.ok) break;
-          } catch {
-            res = null;
+        try {
+          res = await cachedFetch(src);
+        } catch { res = null; }
+
+        // If cache miss or failed, retry from network
+        if (!res || !res.ok) {
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              res = await fetch(src);
+              if (res.ok) break;
+            } catch {
+              res = null;
+            }
+            if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
           }
-          if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
         }
+
         if (!res || !res.ok) {
           throw new Error(res ? `Failed to load file (HTTP ${res.status})` : 'Failed to load this file. Please check your connection.');
         }

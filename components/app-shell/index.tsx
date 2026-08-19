@@ -10,6 +10,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut, signIn } from 'next-auth/react';
 import { config } from '@/lib/config';
 import { checkAndBustCache, forceResetApp, checkForAppUpdate, startUpdateWatcher, applyAppUpdate } from '@/lib/cache';
+import { purgeExpiredCache } from '@/lib/file-cache';
 import { useConfirm } from '@/components/ConfirmModal';
 import OperationProgress from '@/components/OperationProgress';
 import { isStandalone, isInBrowser, isIOSBrowser, type BeforeInstallPromptEvent } from '@/lib/standalone';
@@ -305,6 +306,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       window.location.reload();
       return;
     }
+    // Purge file cache entries older than 30 days
+    purgeExpiredCache();
     return startUpdateWatcher((hasUpdate) => {
       if (!hasUpdate) return;
       if (updateAppliedRef.current || updateDismissedRef.current) return;

@@ -14,163 +14,217 @@ interface Props {
   canPublishBlog: boolean;
 }
 
+type Step = 'idle' | 'uploading-assets' | 'saving-post' | 'done' | 'error';
+
+const STEP_LABELS: Record<Step, string> = {
+  'idle': '',
+  'uploading-assets': 'Uploading assets to GitHub...',
+  'saving-post': 'Saving post to GitHub...',
+  'done': 'Published!',
+  'error': 'Failed',
+};
+
 export default function BlogEditorModal({ open, onClose, onSaved, editingPost, canPublishTutorial, canPublishBlog }: Props) {
   const [saving, setSaving] = useState(false);
-  const [thumbnailUploading, setThumbnailUploading] = useState(false);
-  const [thumbnailLocalPreview, setThumbnailLocalPreview] = useState('');
+  const [step, setStep] = useState<Step>('idle');
+  const [stepDetail, setStepDetail] = useState('');
+  const [stepError, setStepError] = useState('');
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<BlogCategory>('post');
   const [excerpt, setExcerpt] = useState('');
   const [content, setContent] = useState('');
   const [tags, setTags] = useState('');
-  const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [status, setStatus] = useState<'published' | 'draft'>('draft');
   const [showPreview, setShowPreview] = useState(false);
+
+  // All local state only — no GitHub upload until save
+  const [thumbnailPreview, setThumbnailPreview] = useState(''); // blob URL
+  const [thumbnailRemoteUrl, setThumbnailRemoteUrl] = useState(''); // from editing post
+  const pendingThumbnailRef = useRef<File | null>(null);
+  const pendingImagesRef = useRef<{ marker: string; file: File; index: number }[]>([]);
+  const [pastedPreviews, setPastedPreviews] = useState<Map<number, string>>(new Map()); // index → blob URL
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
+  const imageCounterRef = useRef(0);
+  const contentRef = useRef(''); // tracks latest content synchronously
+
+  // Sync helper: always update both state AND ref
+  const updateContent = useCallback((val: string | ((prev: string) => string)) => {
+    if (typeof val === 'function') {
+      setContent(prev => {
+        const next = val(prev);
+        contentRef.current = next;
+        return next;
+      });
+    } else {
+      contentRef.current = val;
+      setContent(val);
+    }
+  }, []);
 
   useEffect(() => {
     if (!open) {
-      setThumbnailLocalPreview('');
+      setThumbnailPreview('');
+      setThumbnailRemoteUrl('');
+      pendingThumbnailRef.current = null;
+      pendingImagesRef.current = [];
+      setPastedPreviews(new Map());
+      setStep('idle');
+      setStepDetail('');
+      setStepError('');
       return;
     }
     if (editingPost) {
       setTitle(editingPost.title);
       setCategory(editingPost.category);
       setExcerpt(editingPost.excerpt);
-      setContent('');
+      updateContent('');
       setTags(editingPost.tags.join(', '));
-      setThumbnailUrl(editingPost.thumbnailUrl || '');
-      setThumbnailLocalPreview('');
+      setThumbnailPreview('');
+      setThumbnailRemoteUrl(editingPost.thumbnailUrl || '');
       setStatus(editingPost.status);
       setShowPreview(false);
+      setPastedPreviews(new Map());
       fetch(`/api/blogs?action=content&slug=${editingPost.slug}`)
         .then(r => r.json())
-        .then(data => { if (data.content) setContent(data.content); })
+        .then(data => { if (data.content) updateContent(data.content); })
         .catch(() => {});
     } else {
       setTitle('');
       setCategory(canPublishTutorial ? 'tutorial' : 'post');
       setExcerpt('');
-      setContent('');
+      updateContent('');
       setTags('');
-      setThumbnailUrl('');
-      setThumbnailLocalPreview('');
+      setThumbnailPreview('');
+      setThumbnailRemoteUrl('');
       setStatus('draft');
       setShowPreview(false);
+      setPastedPreviews(new Map());
     }
   }, [open, editingPost, canPublishTutorial]);
 
+  // ─── Upload file via API FormData → returns remote URL ───
+  const uploadViaApi = async (file: File, folderName: string, isContent: boolean): Promise<string | null> => {
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('category', category);
+      fd.append('folderName', folderName);
+      if (isContent) fd.append('content', '1');
+      const res = await fetch('/api/blogs', { method: 'POST', body: fd });
+      const data = await res.json();
+      return data.success ? data.url : null;
+    } catch { return null; }
+  };
+
+  // ─── handleSave: upload assets first, then save post ───
   const handleSave = async () => {
     if (!title.trim()) return;
     setSaving(true);
+    setStepError('');
+    const isEdit = !!editingPost;
+    const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+
     try {
-      const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+      const hasThumbnail = !!pendingThumbnailRef.current;
+      const hasImages = pendingImagesRef.current.length > 0;
+      let thumbUrl = thumbnailRemoteUrl;
+
+      // Step 1: Upload all assets FIRST via API
+      if (hasThumbnail || hasImages) {
+        setStep('uploading-assets');
+
+        // Upload thumbnail
+        if (hasThumbnail) {
+          setStepDetail(`Thumbnail (1/${hasImages ? 2 : 1})...`);
+          const url = await uploadViaApi(pendingThumbnailRef.current!, slug, false);
+          if (url) thumbUrl = url;
+        }
+
+        // Upload pasted images, build final content with resolved URLs
+        if (hasImages) {
+          let resolvedContent = contentRef.current;
+          let i = 0;
+          for (const { marker, file } of pendingImagesRef.current) {
+            i++;
+            setStepDetail(`Image ${i}/${pendingImagesRef.current.length}...`);
+            const url = await uploadViaApi(file, slug, true);
+            if (url) {
+              resolvedContent = resolvedContent.replace(marker, `\n![${file.name || 'image'}](${url})\n`);
+            } else {
+              resolvedContent = resolvedContent.replace(marker, '');
+            }
+          }
+          // Update both ref and state
+          contentRef.current = resolvedContent;
+          updateContent(resolvedContent);
+          pendingImagesRef.current = [];
+          setPastedPreviews(new Map());
+        }
+      }
+
+      // Step 2: Save the post — read from ref (always synchronous latest)
+      setStep('saving-post');
+      setStepDetail('');
+
       const body: any = {
-        action: editingPost ? 'update' : 'create',
+        action: isEdit ? 'update' : 'create',
         slug,
         title: title.trim(),
         category,
         excerpt: excerpt.trim(),
-        content,
+        content: contentRef.current,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-        thumbnailUrl: thumbnailUrl || undefined,
+        thumbnailUrl: thumbUrl || undefined,
         status,
       };
       if (editingPost) body.originalSlug = editingPost.slug;
+
       const res = await fetch('/api/blogs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (data.success) {
+      if (!data.success) throw new Error(data.error || 'Failed to save post');
+
+      setStep('done');
+      setTimeout(() => {
         onClose();
         onSaved();
-      }
-    } catch {}
+      }, 600);
+    } catch (e: any) {
+      setStep('error');
+      setStepError(e?.message || 'Something went wrong');
+    }
     setSaving(false);
   };
 
-  const handleThumbnailUpload = async (file: File) => {
+  // ─── Thumbnail selection: local preview ONLY ───
+  const handleThumbnailSelect = (file: File) => {
+    // Revoke old blob URL
+    if (thumbnailPreview && thumbnailPreview.startsWith('blob:')) URL.revokeObjectURL(thumbnailPreview);
     const localUrl = URL.createObjectURL(file);
-    setThumbnailLocalPreview(localUrl);
-    setThumbnailUploading(true);
-
-    const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
-    if (!slug) {
-      setThumbnailUploading(false);
-      return;
-    }
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('slug', slug);
-      const res = await fetch('/api/blogs', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (data.success && data.url) {
-        setThumbnailUrl(data.url);
-        setThumbnailLocalPreview('');
-        URL.revokeObjectURL(localUrl);
-      } else {
-        setThumbnailLocalPreview('');
-        URL.revokeObjectURL(localUrl);
-      }
-    } catch {
-      setThumbnailLocalPreview('');
-      URL.revokeObjectURL(localUrl);
-    }
-    setThumbnailUploading(false);
+    setThumbnailPreview(localUrl);
+    pendingThumbnailRef.current = file;
   };
 
-  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = Array.from(e.clipboardData.items);
-    const imageItem = items.find(item => item.type.startsWith('image/'));
-    if (!imageItem) return;
-    e.preventDefault();
-    const file = imageItem.getAsFile();
-    if (!file) return;
-
-    const ta = textareaRef.current;
-    const placeholder = `\n![Uploading image...](uploading)\n`;
-    if (ta) {
-      const start = ta.selectionStart;
-      setContent(c => c.substring(0, start) + placeholder + c.substring(ta.selectionEnd));
-    }
-
-    const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
-    if (!slug) {
-      setContent(c => c.replace(placeholder, ''));
-      return;
-    }
-
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('slug', slug);
-      fd.append('content', '1');
-      const res = await fetch('/api/blogs', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (data.success && data.url) {
-        const imgMd = `\n![${file.name || 'image'}](${data.url})\n`;
-        setContent(c => c.replace(placeholder, imgMd));
-      } else {
-        setContent(c => c.replace(placeholder, ''));
-      }
-    } catch {
-      setContent(c => c.replace(placeholder, ''));
-    }
-  }, [editingPost, title]);
+  const removeThumbnail = () => {
+    if (thumbnailPreview.startsWith('blob:')) URL.revokeObjectURL(thumbnailPreview);
+    setThumbnailPreview('');
+    setThumbnailRemoteUrl('');
+    pendingThumbnailRef.current = null;
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (dropRef.current) dropRef.current.classList.remove('border-qsis', 'bg-qsis/10');
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) handleThumbnailUpload(file);
+    if (file && file.type.startsWith('image/')) handleThumbnailSelect(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -186,10 +240,34 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) handleThumbnailUpload(file);
+    if (file) handleThumbnailSelect(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  // ─── Content image paste: local preview ONLY, upload on save ───
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItem = items.find(item => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (!file) return;
+
+    const idx = ++imageCounterRef.current;
+    const marker = `\n![PASTED_IMAGE_${idx}](local://pending)\n`;
+    const blobUrl = URL.createObjectURL(file);
+
+    setPastedPreviews(prev => new Map(prev).set(idx, blobUrl));
+    pendingImagesRef.current.push({ marker, file, index: idx });
+
+    const ta = textareaRef.current;
+    if (ta) {
+      const start = ta.selectionStart;
+      updateContent(c => c.substring(0, start) + marker + c.substring(ta.selectionEnd));
+    }
+  }, []);
+
+  // ─── Markdown insertion helpers ───
   const insertMarkdown = (before: string, after: string = '', placeholder: string = '') => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -198,7 +276,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
     const selected = content.substring(start, end);
     const replacement = selected || placeholder;
     const newText = content.substring(0, start) + before + replacement + after + content.substring(end);
-    setContent(newText);
+    updateContent(newText);
     setTimeout(() => {
       ta.focus();
       const cursorPos = start + before.length + replacement.length;
@@ -212,7 +290,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
     const start = ta.selectionStart;
     const lineStart = content.lastIndexOf('\n', start - 1) + 1;
     const newText = content.substring(0, lineStart) + prefix + content.substring(lineStart);
-    setContent(newText);
+    updateContent(newText);
     setTimeout(() => { ta.focus(); }, 0);
   };
 
@@ -228,13 +306,26 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
     else if (key === 'e') { e.preventDefault(); insertMarkdown('`', '`', 'code'); }
   }, [content]);
 
-  const renderedPreview = useMemo(() => renderMarkdown(content), [content]);
+  // ─── Content with pasted image previews injected for preview mode ───
+  const contentForPreview = useMemo(() => {
+    let c = content;
+    const entries = Array.from(pastedPreviews.entries());
+    for (const [idx, blobUrl] of entries) {
+      const marker = `![PASTED_IMAGE_${idx}](local://pending)`;
+      c = c.replace(marker, `![Pasted image](${blobUrl})`);
+    }
+    return c;
+  }, [content, pastedPreviews]);
+
+  const renderedPreview = useMemo(() => renderMarkdown(contentForPreview), [contentForPreview]);
+  const showThumbPreview = thumbnailPreview || thumbnailRemoteUrl;
 
   if (!open) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={onClose}>
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl w-full max-w-4xl max-h-[95vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border shrink-0">
           <h2 className="text-lg font-bold text-dark-text">
             <i className={`fas ${editingPost ? 'fa-edit text-blue-400' : 'fa-plus text-green-400'} mr-2`}></i>
@@ -244,6 +335,30 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
             <i className="fas fa-times text-sm"></i>
           </button>
         </div>
+
+        {/* Progress bar */}
+        {saving && step !== 'done' && step !== 'error' && (
+          <div className="px-6 py-2 border-b border-dark-border bg-dark-bg3/50">
+            <div className="flex items-center gap-2">
+              <i className="fas fa-spinner fa-spin text-qsis text-sm"></i>
+              <span className="text-[0.78rem] text-dark-text2">{STEP_LABELS[step]}</span>
+              {stepDetail && <span className="text-[0.7rem] text-dark-text3 ml-1">{stepDetail}</span>}
+            </div>
+            <div className="mt-1.5 h-1 rounded-full bg-dark-border overflow-hidden">
+              <div className="h-full bg-qsis rounded-full animate-pulse transition-all" style={{
+                width: step === 'uploading-assets' ? '40%' :
+                       step === 'saving-post' ? '80%' : '30%'
+              }}></div>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {step === 'error' && (
+          <div className="mx-6 mt-3 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-[0.78rem] flex items-center gap-2">
+            <i className="fas fa-exclamation-circle"></i>{stepError}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           <div>
@@ -304,6 +419,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
             )}
           </div>
 
+          {/* Thumbnail — local preview only, upload on save */}
           <div>
             <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Thumbnail</label>
             <div
@@ -311,37 +427,36 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`relative rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-all bg-dark-bg3 ${thumbnailLocalPreview || thumbnailUrl ? 'border-green-500/40' : 'border-dark-border hover:border-qsis/40'}`}
-              onClick={() => !thumbnailUploading && fileInputRef.current?.click()}
+              className={`relative rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-all bg-dark-bg3 ${showThumbPreview ? 'border-green-500/40' : 'border-dark-border hover:border-qsis/40'}`}
+              onClick={() => fileInputRef.current?.click()}
             >
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileInput} className="hidden" />
-              {(thumbnailLocalPreview || thumbnailUrl) ? (
+              {showThumbPreview ? (
                 <div className="relative inline-block">
-                  <img src={thumbnailLocalPreview || thumbnailUrl} alt="Thumbnail preview" className="max-h-32 rounded-lg object-cover" />
-                  {thumbnailUploading && (
-                    <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
-                      <i className="fas fa-spinner fa-spin text-white text-xl"></i>
-                    </div>
+                  <img src={showThumbPreview} alt="Thumbnail preview" className="max-h-32 rounded-lg object-cover" />
+                  {pendingThumbnailRef.current && (
+                    <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[0.6rem] py-0.5 rounded-b-lg">
+                      Local preview — uploads on save
+                    </span>
                   )}
-                  {!thumbnailUploading && (
-                    <button onClick={e => { e.stopPropagation(); setThumbnailUrl(''); setThumbnailLocalPreview(''); }}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[0.6rem] border-none cursor-pointer hover:bg-red-500/80">
-                      <i className="fas fa-times"></i>
-                    </button>
-                  )}
+                  <button onClick={e => { e.stopPropagation(); removeThumbnail(); }}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[0.6rem] border-none cursor-pointer hover:bg-red-500/80">
+                    <i className="fas fa-times"></i>
+                  </button>
                 </div>
               ) : (
                 <>
-                  <i className={`fas ${thumbnailUploading ? 'fa-spinner fa-spin' : 'fa-cloud-upload-alt'} text-2xl text-dark-text3 mb-1 block`}></i>
-                  <p className="text-[0.75rem] text-dark-text2 font-medium">{thumbnailUploading ? 'Uploading...' : 'Click or drag to upload thumbnail'}</p>
-                  <p className="text-[0.65rem] text-dark-text3 mt-0.5">PNG, JPG, or WebP</p>
+                  <i className="fas fa-cloud-upload-alt text-2xl text-dark-text3 mb-1 block"></i>
+                  <p className="text-[0.75rem] text-dark-text2 font-medium">Click or drag to set thumbnail</p>
+                  <p className="text-[0.65rem] text-dark-text3 mt-0.5">No upload until you save</p>
                 </>
               )}
             </div>
           </div>
 
+          {/* Content */}
           <div>
-            <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Content (Markdown)</label>
+            <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Content (Markdown) — Ctrl+V to paste images</label>
             <div className="border border-dark-border rounded-xl overflow-hidden">
               <div className="flex items-center gap-0.5 px-2 py-1.5 bg-dark-bg3 border-b border-dark-border flex-wrap">
                 <button type="button" onClick={() => insertMarkdown('**', '**', 'bold text')} title="Bold"
@@ -372,7 +487,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
               <div>
                 {showPreview ? (
                   <div className="px-4 py-3 bg-dark-bg2 min-h-[400px] max-h-[600px] overflow-y-auto">
-                    {content.trim() ? (
+                    {contentForPreview.trim() ? (
                       <div className="prose-content text-[0.82rem] text-dark-text2"
                         dangerouslySetInnerHTML={{ __html: renderedPreview }}
                       />
@@ -384,7 +499,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
                   <textarea
                     ref={textareaRef}
                     value={content}
-                    onChange={e => setContent(e.target.value)}
+                    onChange={e => updateContent(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
                     placeholder="Write your post in Markdown... (Ctrl+V to paste images)"
@@ -397,12 +512,15 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
           </div>
         </div>
 
+        {/* Footer */}
         <div className="flex gap-2 px-6 py-4 border-t border-dark-border shrink-0">
           <button onClick={handleSave} disabled={saving || !title.trim()}
             className="flex-1 py-2.5 rounded-xl bg-qsis text-white text-[0.85rem] font-semibold hover:brightness-110 transition cursor-pointer disabled:opacity-50">
-            {saving ? <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</> : editingPost ? 'Update Post' : 'Create Post'}
+            {saving ? (
+              <><i className="fas fa-spinner fa-spin mr-1"></i>{STEP_LABELS[step] || 'Publishing...'}</>
+            ) : editingPost ? 'Update Post' : 'Create Post'}
           </button>
-          <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.85rem] cursor-pointer hover:bg-dark-bg">
+          <button onClick={onClose} disabled={saving} className="px-5 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.85rem] cursor-pointer hover:bg-dark-bg disabled:opacity-50">
             Cancel
           </button>
         </div>
