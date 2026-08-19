@@ -80,10 +80,41 @@ export async function DELETE(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { ids, type } = body as { ids: string[]; type: string };
+    const { ids, type, filter, filterType } = body as { ids?: string[]; type?: string; filter?: string; filterType?: string };
 
+    // Bulk delete by filter (all matching user/email across all pages)
+    if (filter && filterType && type) {
+      const { prisma } = await import('@/lib/prisma');
+      let where: any = {};
+
+      if (type === 'activity') {
+        if (filterType === 'userId') where = { userId: { contains: filter, mode: 'insensitive' } };
+        else if (filterType === 'action') where = { action: { contains: filter, mode: 'insensitive' } };
+      } else if (type === 'telegram') {
+        if (filterType === 'sentBy') where = { sentBy: { contains: filter, mode: 'insensitive' } };
+        else if (filterType === 'department') where = { department: { contains: filter, mode: 'insensitive' } };
+        else if (filterType === 'type') where = { type: { contains: filter, mode: 'insensitive' } };
+      } else if (type === 'upload') {
+        if (filterType === 'userId') where = { userId: { contains: filter, mode: 'insensitive' } };
+      }
+
+      let deleted = 0;
+      if (type === 'activity') {
+        const r = await prisma.activityLog.deleteMany({ where });
+        deleted = r.count;
+      } else if (type === 'telegram') {
+        const r = await prisma.telegramNotification.deleteMany({ where });
+        deleted = r.count;
+      } else if (type === 'upload') {
+        const r = await prisma.uploadChunk.deleteMany({ where });
+        deleted = r.count;
+      }
+      return NextResponse.json({ success: true, deleted, message: `Deleted ${deleted} logs matching "${filter}"` });
+    }
+
+    // Delete specific IDs
     if (!ids?.length || !type) {
-      return NextResponse.json({ error: 'Missing ids or type' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing ids/type or filter/filterType' }, { status: 400 });
     }
 
     const { prisma } = await import('@/lib/prisma');
