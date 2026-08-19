@@ -524,9 +524,28 @@ export default function NoticeBoardView() {
                   <p className="text-[0.65rem] text-dark-text3 mt-0.5">PDF, Image, or Document</p>
                 </div>
                 {uploading && <p className="text-[0.72rem] text-dark-text3 mt-1"><i className="fas fa-spinner fa-spin mr-1"></i>Uploading...</p>}
-                {(form as any).attachmentUrl && (
-                  <p className="text-[0.72rem] text-green-400 mt-1"><i className="fas fa-check mr-1"></i>File attached: {(form as any).attachmentName}</p>
-                )}
+                {(form as any).attachmentUrl && (() => {
+                  const ext = ((form as any).attachmentName || (form as any).attachmentUrl || '').split('.').pop()?.toLowerCase() || '';
+                  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+                  return (
+                    <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-dark-bg2 border border-dark-border">
+                      {isImage ? (
+                        <img src={(form as any).attachmentUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-dark-border" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-amber-500/15 flex items-center justify-center">
+                          <i className="fas fa-file text-amber-400"></i>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[0.72rem] text-green-400 font-medium truncate"><i className="fas fa-check mr-1"></i>{(form as any).attachmentName}</p>
+                      </div>
+                      <button type="button" onClick={() => setForm(f => ({ ...f, attachmentUrl: '', attachmentName: '' } as any))}
+                        className="w-6 h-6 rounded-full bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-red-400 cursor-pointer border-none">
+                        <i className="fas fa-times text-[0.55rem]"></i>
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="flex gap-2 pt-2">
                 <button onClick={handleSave} disabled={saving || !form.title.trim()}

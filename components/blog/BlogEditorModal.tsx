@@ -17,6 +17,7 @@ interface Props {
 export default function BlogEditorModal({ open, onClose, onSaved, editingPost, canPublishTutorial, canPublishBlog }: Props) {
   const [saving, setSaving] = useState(false);
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
+  const [thumbnailLocalPreview, setThumbnailLocalPreview] = useState('');
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<BlogCategory>('post');
@@ -32,7 +33,10 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
   const dropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setThumbnailLocalPreview('');
+      return;
+    }
     if (editingPost) {
       setTitle(editingPost.title);
       setCategory(editingPost.category);
@@ -40,6 +44,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
       setContent('');
       setTags(editingPost.tags.join(', '));
       setThumbnailUrl(editingPost.thumbnailUrl || '');
+      setThumbnailLocalPreview('');
       setStatus(editingPost.status);
       setShowPreview(false);
       fetch(`/api/blogs?action=content&slug=${editingPost.slug}`)
@@ -53,6 +58,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
       setContent('');
       setTags('');
       setThumbnailUrl('');
+      setThumbnailLocalPreview('');
       setStatus('draft');
       setShowPreview(false);
     }
@@ -71,6 +77,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
         excerpt: excerpt.trim(),
         content,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+        thumbnailUrl: thumbnailUrl || undefined,
         status,
       };
       if (editingPost) body.originalSlug = editingPost.slug;
@@ -91,6 +98,8 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
   const handleThumbnailUpload = async (file: File) => {
     const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
     if (!slug) return;
+    const localUrl = URL.createObjectURL(file);
+    setThumbnailLocalPreview(localUrl);
     setThumbnailUploading(true);
     try {
       const fd = new FormData();
@@ -98,10 +107,53 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
       fd.append('slug', slug);
       const res = await fetch('/api/blogs', { method: 'POST', body: fd });
       const data = await res.json();
-      if (data.success && data.url) setThumbnailUrl(data.url);
-    } catch {}
+      if (data.success && data.url) {
+        setThumbnailUrl(data.url);
+        setThumbnailLocalPreview('');
+        URL.revokeObjectURL(localUrl);
+      } else {
+        setThumbnailLocalPreview('');
+        URL.revokeObjectURL(localUrl);
+      }
+    } catch {
+      setThumbnailLocalPreview('');
+      URL.revokeObjectURL(localUrl);
+    }
     setThumbnailUploading(false);
   };
+
+  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItem = items.find(item => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+    if (!slug) return;
+    const ta = textareaRef.current;
+    const placeholder = `\n![Uploading image...](uploading)\n`;
+    if (ta) {
+      const start = ta.selectionStart;
+      setContent(c => c.substring(0, start) + placeholder + c.substring(ta.selectionEnd));
+    }
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('slug', slug);
+      fd.append('content', '1');
+      const res = await fetch('/api/blogs', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.success && data.url) {
+        const imgMd = `\n![${file.name || 'image'}](${data.url})\n`;
+        setContent(c => c.replace(placeholder, imgMd));
+      } else {
+        setContent(c => c.replace(placeholder, ''));
+      }
+    } catch {
+      setContent(c => c.replace(placeholder, ''));
+    }
+  }, [editingPost, title]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -249,17 +301,24 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className="relative rounded-xl border-2 border-dashed border-dark-border p-4 text-center cursor-pointer transition-all hover:border-qsis/40 bg-dark-bg3"
-              onClick={() => fileInputRef.current?.click()}
+              className={`relative rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-all bg-dark-bg3 ${thumbnailLocalPreview || thumbnailUrl ? 'border-green-500/40' : 'border-dark-border hover:border-qsis/40'}`}
+              onClick={() => !thumbnailUploading && fileInputRef.current?.click()}
             >
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileInput} className="hidden" />
-              {thumbnailUrl ? (
+              {(thumbnailLocalPreview || thumbnailUrl) ? (
                 <div className="relative inline-block">
-                  <img src={thumbnailUrl} alt="Thumbnail preview" className="max-h-32 rounded-lg object-cover" />
-                  <button onClick={e => { e.stopPropagation(); setThumbnailUrl(''); }}
-                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[0.6rem] border-none cursor-pointer hover:bg-red-500/80">
-                    <i className="fas fa-times"></i>
-                  </button>
+                  <img src={thumbnailLocalPreview || thumbnailUrl} alt="Thumbnail preview" className="max-h-32 rounded-lg object-cover" />
+                  {thumbnailUploading && (
+                    <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                      <i className="fas fa-spinner fa-spin text-white text-xl"></i>
+                    </div>
+                  )}
+                  {!thumbnailUploading && (
+                    <button onClick={e => { e.stopPropagation(); setThumbnailUrl(''); setThumbnailLocalPreview(''); }}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[0.6rem] border-none cursor-pointer hover:bg-red-500/80">
+                      <i className="fas fa-times"></i>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <>
@@ -317,7 +376,8 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
                     value={content}
                     onChange={e => setContent(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Write your post in Markdown..."
+                    onPaste={handlePaste}
+                    placeholder="Write your post in Markdown... (Ctrl+V to paste images)"
                     rows={16}
                     className="w-full px-4 py-3 bg-dark-bg2 text-[0.82rem] text-dark-text font-mono focus:outline-none resize-none placeholder:text-dark-text3"
                   />

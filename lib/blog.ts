@@ -4,8 +4,7 @@ import { commitFilesToBranch } from '@/lib/github-commit';
 
 const BLOGS_PATH = 'blogs';
 const BLOGS_INDEX = `${BLOGS_PATH}/index.json`;
-const BLOGS_CONTENT_DIR = `${BLOGS_PATH}/posts`;
-const BLOGS_THUMBNAILS_DIR = `${BLOGS_PATH}/thumbnails`;
+const BLOGS_POSTS_DIR = `${BLOGS_PATH}/posts`;
 
 export type BlogCategory = 'tutorial' | 'post';
 
@@ -88,7 +87,7 @@ export async function readBlogsIndex(): Promise<BlogPostListItem[]> {
 }
 
 export async function readBlogContent(slug: string): Promise<string> {
-  const contentPath = `${BLOGS_CONTENT_DIR}/${slug}.md`;
+  const contentPath = `${BLOGS_POSTS_DIR}/${slug}/index.md`;
   try {
     const rawUrl = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${contentPath}`;
     const res = await fetch(rawUrl, { cache: 'no-store' });
@@ -146,7 +145,7 @@ export async function writeBlogContent(
   markdown: string,
   token: string,
 ): Promise<void> {
-  const contentPath = `${BLOGS_CONTENT_DIR}/${slug}.md`;
+  const contentPath = `${BLOGS_POSTS_DIR}/${slug}/index.md`;
   const contentBase64 = Buffer.from(markdown).toString('base64');
 
   const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${contentPath}`;
@@ -195,13 +194,7 @@ export async function deleteBlogFile(filePath: string, token: string, message: s
   }
 }
 
-export async function uploadBlogThumbnail(
-  slug: string,
-  file: File,
-  token: string,
-): Promise<string> {
-  const ext = file.name.split('.').pop() || 'jpg';
-  const filePath = `${BLOGS_THUMBNAILS_DIR}/${slug}.${ext}`;
+async function uploadToGitHub(filePath: string, file: File, token: string, message: string): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const base64 = Buffer.from(arrayBuffer).toString('base64');
 
@@ -216,7 +209,7 @@ export async function uploadBlogThumbnail(
   } catch {}
 
   const body: any = {
-    message: `Blog thumbnail: ${slug}`,
+    message,
     content: base64,
     branch: config.branch,
   };
@@ -227,7 +220,105 @@ export async function uploadBlogThumbnail(
     headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error('Failed to upload thumbnail');
+  if (!res.ok) throw new Error(`Failed to upload ${filePath}`);
 
   return `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${filePath}`;
+}
+
+export async function uploadBlogThumbnail(
+  slug: string,
+  file: File,
+  token: string,
+): Promise<string> {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const filePath = `${BLOGS_POSTS_DIR}/${slug}/thumbnail.${ext}`;
+  return uploadToGitHub(filePath, file, token, `Blog thumbnail: ${slug}`);
+}
+
+export async function uploadBlogAsset(
+  slug: string,
+  file: File,
+  token: string,
+): Promise<string> {
+  const fileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const uniqueName = `${Date.now()}-${fileName}`;
+  const filePath = `${BLOGS_POSTS_DIR}/${slug}/assets/${uniqueName}`;
+  return uploadToGitHub(filePath, file, token, `Blog asset: ${slug}/${uniqueName}`);
+}
+
+export interface BlogPostMeta {
+  slug: string;
+  title: string;
+  category: BlogCategory;
+  excerpt: string;
+  tags: string[];
+  status: 'published' | 'draft';
+  thumbnailUrl?: string;
+  authorLogin: string;
+  authorName: string;
+  authorAvatar: string;
+  authorEmail: string;
+  publishedAt: string;
+  updatedAt?: string;
+  scheduledAt?: string;
+}
+
+export async function writeBlogPostMeta(
+  slug: string,
+  meta: BlogPostMeta,
+  token: string,
+): Promise<void> {
+  const metaPath = `${BLOGS_POSTS_DIR}/${slug}/meta.json`;
+  const content = JSON.stringify(meta, null, 2);
+  const contentBase64 = Buffer.from(content).toString('base64');
+
+  const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${metaPath}`;
+  let existingSha = '';
+  try {
+    const checkRes = await fetch(apiUrl, { headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' } });
+    if (checkRes.ok) {
+      const existing = await checkRes.json();
+      existingSha = existing.sha || '';
+    }
+  } catch {}
+
+  const body: any = {
+    message: `Blog meta: ${slug}`,
+    content: contentBase64,
+    branch: config.branch,
+  };
+  if (existingSha) body.sha = existingSha;
+
+  await fetch(apiUrl, {
+    method: 'PUT',
+    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function readBlogPostMeta(slug: string): Promise<BlogPostMeta | null> {
+  const metaPath = `${BLOGS_POSTS_DIR}/${slug}/meta.json`;
+  try {
+    const rawUrl = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${metaPath}`;
+    const res = await fetch(rawUrl, { cache: 'no-store' });
+    if (res.ok) return await res.json();
+  } catch {}
+  return null;
+}
+
+export async function deleteBlogPostFolder(slug: string, token: string): Promise<void> {
+  try {
+    const dirPath = `${BLOGS_POSTS_DIR}/${slug}`;
+    const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${dirPath}`;
+    const res = await fetch(apiUrl, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
+    });
+    if (!res.ok) return;
+    const items = await res.json();
+    if (!Array.isArray(items)) return;
+
+    for (const item of items) {
+      await deleteBlogFile(item.path, token, `Blog cleanup: ${item.path}`);
+    }
+  } catch {}
 }

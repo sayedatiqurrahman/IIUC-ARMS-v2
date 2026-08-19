@@ -10,7 +10,10 @@ import {
   writeBlogsIndex,
   writeBlogContent,
   deleteBlogFile,
+  deleteBlogPostFolder,
   uploadBlogThumbnail,
+  uploadBlogAsset,
+  writeBlogPostMeta,
   slugify,
   type BlogPostListItem,
   type BlogCategory,
@@ -52,6 +55,42 @@ export async function POST(req: NextRequest) {
   const userEmail = session.user?.email || '';
 
   try {
+    const contentType = req.headers.get('content-type') || '';
+
+    // Handle FormData uploads (thumbnail or content asset)
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      const file = formData.get('file') as File | null;
+      const slug = formData.get('slug') as string | null;
+      const action = formData.get('action') as string | null;
+      const isContent = formData.get('content') === '1';
+
+      if (!file || !slug) {
+        return NextResponse.json({ error: 'File and slug required' }, { status: 400 });
+      }
+
+      const posts = await readBlogsIndex();
+      const post = posts.find(p => p.slug === slug);
+      if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+
+      const permAction = post.category === 'tutorial' ? 'publishTutorial' : 'publishBlog';
+      if (!(await hasPermission(permAction, effectiveRole, isCR, userEmail))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      const token = await getToken(userEmail);
+
+      // Content images go to assets/, thumbnails go to thumbnail.{ext}
+      if (isContent || action === 'upload-asset') {
+        const url = await uploadBlogAsset(slug, file, token);
+        return NextResponse.json({ success: true, url });
+      }
+
+      const url = await uploadBlogThumbnail(slug, file, token);
+      return NextResponse.json({ success: true, url });
+    }
+
+    // Handle JSON actions
     const body = await req.json();
     const { action } = body;
 
@@ -93,6 +132,20 @@ export async function POST(req: NextRequest) {
       };
 
       await writeBlogContent(slug, content || '', token);
+      await writeBlogPostMeta(slug, {
+        slug,
+        title: newPost.title,
+        category: newPost.category,
+        excerpt: newPost.excerpt,
+        tags: newPost.tags,
+        status: newPost.status,
+        thumbnailUrl: newPost.thumbnailUrl,
+        authorLogin: newPost.authorLogin,
+        authorName: newPost.authorName,
+        authorAvatar: newPost.authorAvatar,
+        authorEmail: userEmail,
+        publishedAt: now,
+      }, token);
       posts.unshift(newPost);
       await writeBlogsIndex(posts, token, `blog: publish "${newPost.title}"`);
 
@@ -121,6 +174,7 @@ export async function POST(req: NextRequest) {
       }
 
       const token = await getToken(userEmail);
+      const updatedAt = new Date().toISOString();
 
       posts[idx] = {
         ...posts[idx],
@@ -129,12 +183,28 @@ export async function POST(req: NextRequest) {
         thumbnailUrl: thumbnailUrl ?? posts[idx].thumbnailUrl,
         tags: tags ?? posts[idx].tags,
         status: status || posts[idx].status,
-        updatedAt: new Date().toISOString(),
+        updatedAt,
       };
 
       if (content !== undefined) {
         await writeBlogContent(slug, content, token);
       }
+
+      await writeBlogPostMeta(slug, {
+        slug,
+        title: posts[idx].title,
+        category: posts[idx].category,
+        excerpt: posts[idx].excerpt,
+        tags: posts[idx].tags,
+        status: posts[idx].status,
+        thumbnailUrl: posts[idx].thumbnailUrl,
+        authorLogin: posts[idx].authorLogin,
+        authorName: posts[idx].authorName,
+        authorAvatar: posts[idx].authorAvatar,
+        authorEmail: userEmail,
+        publishedAt: posts[idx].publishedAt,
+        updatedAt,
+      }, token);
 
       await writeBlogsIndex(posts, token, `blog: update "${posts[idx].title}"`);
       return NextResponse.json({ success: true, post: posts[idx] });
@@ -155,43 +225,13 @@ export async function POST(req: NextRequest) {
 
       const token = await getToken(userEmail);
 
-      await deleteBlogFile(`blogs/posts/${slug}.md`, token, `blog: delete content "${slug}"`);
-
-      if (post.thumbnailUrl) {
-        const fileName = post.thumbnailUrl.split('/').pop() || '';
-        if (fileName) {
-          await deleteBlogFile(`blogs/thumbnails/${fileName}`, token, `blog: delete thumbnail "${slug}"`);
-        }
-      }
+      // Delete entire post folder (index.md + thumbnail + meta.json + assets/)
+      await deleteBlogPostFolder(slug, token);
 
       const filtered = posts.filter(p => p.slug !== slug);
       await writeBlogsIndex(filtered, token, `blog: delete "${post.title}"`);
 
       return NextResponse.json({ success: true });
-    }
-
-    if (action === 'upload-thumbnail') {
-      const formData = await req.formData();
-      const file = formData.get('file') as File | null;
-      const slug = formData.get('slug') as string | null;
-
-      if (!file || !slug) {
-        return NextResponse.json({ error: 'File and slug required' }, { status: 400 });
-      }
-
-      const posts = await readBlogsIndex();
-      const post = posts.find(p => p.slug === slug);
-      if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-
-      const permAction = post.category === 'tutorial' ? 'publishTutorial' : 'publishBlog';
-      if (!(await hasPermission(permAction, effectiveRole, isCR, userEmail))) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-
-      const token = await getToken(userEmail);
-      const url = await uploadBlogThumbnail(slug, file, token);
-
-      return NextResponse.json({ success: true, url });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
