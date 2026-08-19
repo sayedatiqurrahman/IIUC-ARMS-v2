@@ -231,13 +231,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     loadCourses();
     loadRecentReads();
     loadOnboarding();
-    // Check onboarding
+    // Check onboarding — for logged-in users, defer modal until profile loads
+    // (profile auto-sync below will create onboarding from profile, skipping the modal)
     const data = getOnboardingData();
-    if (!data && !hasDismissedOnboarding()) {
-      setShowOnboarding(true);
-    } else {
+    if (data) {
       setOnboardingDone(true);
+    } else if (!session || status !== 'authenticated') {
+      // Not logged in — show onboarding modal immediately
+      if (!hasDismissedOnboarding()) setShowOnboarding(true);
+      else setOnboardingDone(true);
     }
+    // If logged in but no onboarding data, don't show modal yet —
+    // the profileLoaded effect below will handle it.
   }, []);
 
   // Auto-sync personalization with profile: when the user completes their
@@ -247,8 +252,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!profileLoaded) return;
     const dept = profile.department || '';
-    const sem = profile.semester || '';
-    if (!dept || !sem || sem === 'graduated') return;
+    const semId = profile.semester || '';
+    if (!dept || !semId || semId === 'graduated') {
+      // Profile loaded but no dept/sem — show onboarding for logged-in users
+      if (status === 'authenticated' && !getOnboardingData() && !hasDismissedOnboarding()) {
+        setShowOnboarding(true);
+      } else {
+        setOnboardingDone(true);
+      }
+      return;
+    }
+
+    // Profile stores semester as ID (e.g. "6th-semister"), but onboardData
+    // uses the label (e.g. "6th Semester") — convert for consistency.
+    const semLabel = config.semesters.find(s => s.id === semId)?.label || semId;
 
     const existing = getOnboardingData();
     if (!existing) {
@@ -256,17 +273,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       setStoreOnboarding({
         gender: 'male',
         department: dept,
-        semester: sem,
+        semester: semLabel,
         fileView: 'all-prioritized',
         completedAt: Date.now(),
       });
       setOnboardingDone(true);
-    } else if (existing.department !== dept || existing.semester !== sem) {
+      // Close the modal if it was shown
+      setShowOnboarding(false);
+    } else if (existing.department !== dept || existing.semester !== semLabel) {
       // Onboarding exists but profile has changed — update department/semester
       setStoreOnboarding({
         ...existing,
         department: dept,
-        semester: sem,
+        semester: semLabel,
       });
     }
   }, [profileLoaded, profile.department, profile.semester]);

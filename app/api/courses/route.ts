@@ -467,7 +467,12 @@ export async function DELETE(req: NextRequest) {
     // Build folder path — try rawFolderPath first, then reconstruct. Existing
     // folders may use different spacing or Arabic titles, so search GitHub by
     // dept → semester → course code to find the real folder.
-    let folderPath = rawFolderPath;
+    // Client sends paths relative to config.uploadPath (e.g. "cse/6th-sem/CS101"),
+    // but deleteCourseFolder expects the full repo path including uploadPath prefix.
+    let folderPath: string | null = null;
+    if (typeof rawFolderPath === 'string' && rawFolderPath.startsWith(config.uploadPath + '/') && rawFolderPath.length > config.uploadPath.length + 1) {
+      folderPath = rawFolderPath;
+    }
     if (!folderPath) {
       const cleanTitle = cleanCourseTitle(courseTitle);
       folderPath = `${config.uploadPath}/${getDepartmentFolder(courseDept)}/${courseSem}/${courseCode} - ${cleanTitle}`;
@@ -483,7 +488,13 @@ export async function DELETE(req: NextRequest) {
 
     // Admin/owner/manager/teacher/CR → direct delete, no confirmation
     if (canDeleteByRole) {
-      const githubDeleted = await deleteCourseFolder(folderPath).catch(() => 0);
+      let githubDeleted = 0;
+      try {
+        githubDeleted = await deleteCourseFolder(folderPath);
+      } catch (e: any) {
+        console.error('[course-delete] GitHub delete failed:', e?.message);
+        return NextResponse.json({ error: `GitHub deletion failed: ${e?.message || 'Unknown error'}. The course was NOT deleted.` }, { status: 500 });
+      }
 
       // Delete from DB if exists
       if (course) {

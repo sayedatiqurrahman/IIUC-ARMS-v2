@@ -112,28 +112,38 @@ export async function getAllFilesInFolder(token: string, folderPath: string): Pr
 async function batchDeleteEntries(token: string, entries: { path: string; mode: string; type: string }[]): Promise<number> {
   if (entries.length === 0) return 0;
   const base = await getBranchBase(token);
-  if (!base) return 0;
+  if (!base) throw new Error('Cannot read branch from GitHub for batch delete');
 
   const treeItems = entries.map(e => ({ path: e.path, mode: e.mode, type: e.type, sha: null }));
   const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
     method: 'POST', headers: ghHeaders(token),
     body: JSON.stringify({ base_tree: base.baseTreeSha, tree: treeItems }),
   });
-  if (!treeRes.ok) return 0;
+  if (!treeRes.ok) {
+    const body = await treeRes.text().catch(() => '');
+    throw new Error(`Failed to create delete tree: ${treeRes.status} ${body.slice(0, 200)}`);
+  }
   const treeData = await treeRes.json();
 
   const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
     method: 'POST', headers: ghHeaders(token),
     body: JSON.stringify({ message: `Delete course: ${entries.length} file(s) removed`, tree: treeData.sha, parents: [base.baseCommitSha] }),
   });
-  if (!newCommitRes.ok) return 0;
+  if (!newCommitRes.ok) {
+    const body = await newCommitRes.text().catch(() => '');
+    throw new Error(`Failed to create delete commit: ${newCommitRes.status} ${body.slice(0, 200)}`);
+  }
   const newCommitData = await newCommitRes.json();
 
   const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
     method: 'PATCH', headers: ghHeaders(token),
     body: JSON.stringify({ sha: newCommitData.sha, force: true }),
   });
-  return refRes.ok ? entries.length : 0;
+  if (!refRes.ok) {
+    const body = await refRes.text().catch(() => '');
+    throw new Error(`Failed to update branch reference: ${refRes.status} ${body.slice(0, 200)}`);
+  }
+  return entries.length;
 }
 
 // Removes the course's GitHub folder and returns the number of entries deleted.

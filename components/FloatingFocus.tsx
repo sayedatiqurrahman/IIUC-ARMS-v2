@@ -196,84 +196,87 @@ export default function FloatingFocus() {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onClick={() => {
+        if (!hasDragged.current) setExpanded(!expanded);
+      }}
       className="fixed right-3 bottom-[80px] md:bottom-4 z-[80] select-none touch-none"
     >
       <div
-        onClick={() => {
-          if (!hasDragged.current) setExpanded(!expanded);
-        }}
-        className={`flex items-center gap-2 px-3 py-2 border bg-dark-bg2/95 backdrop-blur-sm shadow-xl cursor-grab transition-all rounded-full ${expanded ? 'rounded-2xl' : ''}`}
-        style={{ borderColor: running ? 'rgba(34,197,94,0.5)' : 'var(--color-dark-border, #2a3a5c)', maxWidth: 'min(360px, calc(100vw - 24px))' }}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 border bg-dark-bg2/95 backdrop-blur-sm shadow-xl cursor-grab transition-all rounded-full ${expanded ? 'rounded-2xl' : ''}`}
+        style={{ borderColor: running ? 'rgba(34,197,94,0.5)' : 'var(--color-dark-border, #2a3a5c)', maxWidth: 'min(300px, calc(100vw - 24px))' }}
       >
         <div className="relative flex-none">
-          <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,.5)]" />
-          <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-green-500 animate-ping opacity-75" />
+          <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,.5)]" />
+          <div className="absolute inset-0 w-2 h-2 rounded-full bg-green-500 animate-ping opacity-75" />
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="text-[0.7rem] font-semibold text-dark-text2 truncate max-w-[200px]">
+          <div className="text-[0.62rem] font-semibold text-dark-text2 truncate max-w-[140px]">
             {running.text}
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-sm font-bold tabular-nums text-green-400">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xs font-bold tabular-nums text-green-400">
               {fmt(running.remaining)}
             </span>
-            <span className="text-[0.6rem] font-bold uppercase tracking-wider text-green-400">
+            <span className="text-[0.5rem] font-bold uppercase tracking-wider text-green-400">
               Focus
             </span>
           </div>
-          <div className="mt-1 h-0.5 w-full bg-dark-border rounded-full overflow-hidden">
+          <div className="mt-0.5 h-[2px] w-full bg-dark-border rounded-full overflow-hidden">
             <div className="h-full bg-green-500/60 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, progress)}%` }} />
           </div>
         </div>
       </div>
 
       {expanded && (
-        <div className="mt-1.5 mx-1 rounded-2xl bg-dark-bg2/95 backdrop-blur-sm border border-green-500/30 p-2.5 space-y-2">
-          <div className="flex items-center justify-between text-[0.65rem] text-dark-text3 px-1">
+        <div
+          className="mt-1.5 mx-1 rounded-2xl bg-dark-bg2/95 backdrop-blur-sm border border-green-500/30 p-2 space-y-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between text-[0.6rem] text-dark-text3 px-1">
             <span>{fmt(running.duration - running.remaining)} elapsed</span>
             <span>{fmt(running.duration)} total</span>
           </div>
 
-          <div className="flex gap-1.5">
+          <div className="flex gap-1">
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => sendCommand('play')}
-              className="flex-1 h-9 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.7rem] font-semibold cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1.5"
+              className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.65rem] font-semibold cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1"
             >
-              <i className={`fas ${running ? 'fa-pause' : 'fa-play'} text-[0.6rem]`}></i>
+              <i className={`fas ${running ? 'fa-pause' : 'fa-play'} text-[0.55rem]`}></i>
               {running ? 'Pause' : 'Resume'}
             </button>
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => sendCommand('+5')}
-              className="h-9 px-3 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.7rem] font-semibold cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1"
+              className="h-8 px-2.5 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.65rem] font-semibold cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-0.5"
             >
-              <i className="fas fa-plus text-[0.55rem]"></i> 5m
+              <i className="fas fa-plus text-[0.5rem]"></i>5m
             </button>
           </div>
 
-          <div className="flex gap-1.5">
+          <div className="flex gap-1">
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => sendCommand('reset')}
-              className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.68rem] font-medium cursor-pointer hover:border-amber-500 hover:text-amber-400 transition flex items-center justify-center gap-1"
+              className="flex-1 h-7 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.62rem] font-medium cursor-pointer hover:border-amber-500 hover:text-amber-400 transition flex items-center justify-center gap-1"
             >
-              <i className="fas fa-rotate-left text-[0.55rem]"></i> Reset
+              <i className="fas fa-rotate-left text-[0.5rem]"></i> Reset
             </button>
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => sendCommand('done')}
-              className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.68rem] font-medium cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1"
+              className="flex-1 h-7 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.62rem] font-medium cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1"
             >
-              <i className="fas fa-check text-[0.55rem]"></i> Done
+              <i className="fas fa-check text-[0.5rem]"></i> Done
             </button>
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => sendCommand('close')}
-              className="h-8 px-2.5 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.68rem] font-medium cursor-pointer hover:border-rose-500 hover:text-rose-400 transition"
+              className="h-7 px-2 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.62rem] font-medium cursor-pointer hover:border-rose-500 hover:text-rose-400 transition"
             >
-              <i className="fas fa-times text-[0.55rem]"></i>
+              <i className="fas fa-times text-[0.5rem]"></i>
             </button>
           </div>
         </div>

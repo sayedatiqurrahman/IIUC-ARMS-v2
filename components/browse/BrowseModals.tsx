@@ -21,6 +21,7 @@ interface BrowseModalsProps {
   permissionDenied: { show: boolean; message: string; contact: string };
   setPermissionDenied: (v: { show: boolean; message: string; contact: string }) => void;
   handleFileAction: (action: string, from: string, to?: string, newName?: string) => Promise<any>;
+  canDeleteFile?: boolean;
 }
 
 export default function BrowseModals({
@@ -32,6 +33,7 @@ export default function BrowseModals({
   onAddCourse,
   permissionDenied, setPermissionDenied,
   handleFileAction,
+  canDeleteFile = false,
 }: BrowseModalsProps) {
   const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
 
@@ -79,9 +81,9 @@ export default function BrowseModals({
                 <i className="fas fa-trash text-red-400 text-xl"></i>
               </div>
               <h3 className="font-semibold text-[1rem] mb-2">Delete File?</h3>
-              <p className="text-[0.82rem] text-dark-text2 mb-1">This will permanently delete:</p>
+              <p className="text-[0.82rem] text-dark-text2 mb-1">{canDeleteFile ? 'This will permanently delete:' : 'This will send a delete request for:'}</p>
               <p className="text-[0.78rem] text-dark-text font-mono bg-dark-bg rounded-lg px-3 py-2 border border-dark-border truncate">{deleteConfirm.name}</p>
-              <p className="text-[0.72rem] text-red-400 mt-3"><i className="fas fa-exclamation-triangle mr-1"></i>This action cannot be undone.</p>
+              <p className="text-[0.72rem] text-red-400 mt-3"><i className="fas fa-exclamation-triangle mr-1"></i>{canDeleteFile ? 'This action cannot be undone.' : 'An admin will need to approve this deletion.'}</p>
             </div>
             <div className="flex gap-2 mt-5">
               <button
@@ -99,7 +101,7 @@ export default function BrowseModals({
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[0.82rem] font-semibold hover:bg-red-500/90 transition-colors"
               >
-                <i className="fas fa-trash mr-1.5"></i>Delete
+                <i className="fas fa-trash mr-1.5"></i>{canDeleteFile ? 'Delete' : 'Request Delete'}
               </button>
             </div>
           </div>

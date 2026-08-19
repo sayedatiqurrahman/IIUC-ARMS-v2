@@ -9,7 +9,7 @@ export default function FocusPage() {
   return (
     <>
       {/* Full-viewport iframe — same native look as AppChrome */}
-      <div className="fixed top-[60px] left-0 right-0 bottom-[60px] md:bottom-0 z-[50]">
+      <div className="fixed top-[59px] left-0 right-0 bottom-[60px] md:bottom-0 z-[50]">
         <iframe
           src="/api/studio-apps/serve/todos/index.html"
           title="Focus"
@@ -28,7 +28,7 @@ export default function FocusPage() {
       {/* Floating back button */}
       <Link
         href="/"
-        className="fixed top-[72px] left-3 z-[60] flex items-center gap-1.5 rounded-xl border border-dark-border bg-dark-bg2/90 backdrop-blur-sm px-3 py-2 text-[0.72rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis no-underline shadow-lg"
+        className="fixed top-[80px] left-3 z-[60] flex items-center gap-1.5 rounded-xl border border-dark-border bg-dark-bg2/90 backdrop-blur-sm px-3 py-2 text-[0.72rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis no-underline shadow-lg"
       >
         <span className="material-symbols-outlined align-middle text-[0.95rem]">arrow_back</span>
         <span className="hidden sm:inline">Home</span>

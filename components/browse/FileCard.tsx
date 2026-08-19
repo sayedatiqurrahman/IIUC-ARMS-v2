@@ -36,7 +36,14 @@ export default function FileCard({ item, onOpen, filePerms, onMove, onCopy, onRe
         <button className="bg-transparent border border-dark-border text-dark-text2 cursor-pointer w-[30px] h-[30px] rounded-md inline-flex items-center justify-center text-[0.8rem] hover:bg-dark-bg3 hover:text-qsis hover:border-qsis transition-all" title="View" onClick={(e) => { e.stopPropagation(); onOpen(item); }}>
           <i className="fas fa-eye"></i>
         </button>
-        {hasActions && (
+        {/* Share button — visible to ALL users (logged in or not) */}
+        {onShare && (
+          <button className="bg-transparent border border-dark-border text-dark-text2 cursor-pointer w-[30px] h-[30px] rounded-md inline-flex items-center justify-center text-[0.8rem] hover:bg-dark-bg3 hover:text-green-400 hover:border-green-400/40 transition-all" title="Share" onClick={(e) => { e.stopPropagation(); onShare(actionPath, name, isFolder); }}>
+            <i className="fas fa-share-nodes"></i>
+          </button>
+        )}
+        {/* 3-dot menu — only for logged-in users with at least one of move/copy/rename/delete */}
+        {hasActions && (filePerms.move || filePerms.copy || filePerms.rename || filePerms.delete) && (
           <FileActionsMenu
             filePath={actionPath}
             fileName={name}
@@ -45,7 +52,7 @@ export default function FileCard({ item, onOpen, filePerms, onMove, onCopy, onRe
             onCopy={() => onCopy(actionPath, name, 'copy')}
             onRename={() => onRename(actionPath, name)}
             onDelete={() => onDelete(actionPath, name)}
-            onShare={onShare ? () => onShare(actionPath, name, isFolder) : undefined}
+            onShare={undefined}
           />
         )}
       </div>

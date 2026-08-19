@@ -215,6 +215,14 @@ export default function UploadForm({
 
   if (result?.success) {
     const autoMerged = result.direct || result.merged;
+    const firstCourse = courses.find(c => c.selectedCourseCode);
+    const browseParams = new URLSearchParams();
+    if (department) browseParams.set('dept', department);
+    if (semester) browseParams.set('sem', semester);
+    if (firstCourse?.selectedCourseCode) browseParams.set('course', firstCourse.selectedCourseCode);
+    if (firstCourse?.midFinal) browseParams.set('mf', firstCourse.midFinal);
+    if (category) browseParams.set('cat', category);
+    const browseUrl = `/?${browseParams.toString()}`;
     return (
       <div className="text-center py-8">
         <div className="mb-4">
@@ -228,9 +236,16 @@ export default function UploadForm({
               : 'Your files were merged into the repository.'
             : 'Your files are pending review.'}
         </p>
-        <a href={result.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-qsis text-white font-semibold text-[0.85rem] hover:opacity-90 transition-opacity">
-          <i className="fab fa-github"></i> {result.direct ? 'View Commit' : 'View Pull Request'}
-        </a>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+          <a href={browseUrl} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-qsis text-white font-semibold text-[0.85rem] hover:opacity-90 transition-opacity no-underline">
+            <i className="fas fa-folder-open"></i> Visit your file directory
+          </a>
+          {result.prUrl && (
+            <a href={result.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 font-semibold text-[0.85rem] hover:border-qsis hover:text-qsis transition-all no-underline">
+              <i className="fab fa-github"></i> {result.direct ? 'View Commit' : 'View Pull Request'}
+            </a>
+          )}
+        </div>
         <button className="block mx-auto mt-3 px-4 py-2 text-qsis text-[0.82rem] font-semibold bg-transparent border-none cursor-pointer hover:underline" onClick={onClose}>Close</button>
       </div>
     );

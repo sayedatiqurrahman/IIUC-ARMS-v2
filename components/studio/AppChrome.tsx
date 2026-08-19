@@ -31,6 +31,7 @@ export default function AppChrome({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
+  const [showAuthorInfo, setShowAuthorInfo] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [reportTitle, setReportTitle] = useState('');
   const [reportDesc, setReportDesc] = useState('');
@@ -86,8 +87,8 @@ export default function AppChrome({
 
   return (
     <>
-      {/* Full-viewport iframe — no borders, no wrapper chrome */}
-      <div ref={wrapRef} className="fixed top-[60px] left-0 right-0 bottom-[60px] md:bottom-0 z-[50]">
+      {/* Full-viewport iframe — starts at navbar bottom (py-2.5 + 40px logo −1px border overlap) */}
+      <div ref={wrapRef} className="fixed top-[59px] left-0 right-0 bottom-[60px] md:bottom-0 z-[50]">
         <iframe
           ref={frameRef}
           src={src}
@@ -107,7 +108,7 @@ export default function AppChrome({
       {/* Floating back button */}
       <Link
         href="/studio"
-        className="fixed top-[72px] left-3 z-[60] flex items-center gap-1.5 rounded-xl border border-dark-border bg-dark-bg2/90 backdrop-blur-sm px-3 py-2 text-[0.72rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis no-underline shadow-lg"
+        className="fixed top-[80px] left-3 z-[60] flex items-center gap-1.5 rounded-xl border border-dark-border bg-dark-bg2/90 backdrop-blur-sm px-3 py-2 text-[0.72rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis no-underline shadow-lg"
       >
         <span className="material-symbols-outlined align-middle text-[0.95rem]">arrow_back</span>
         <span className="hidden sm:inline">Studio</span>
@@ -117,6 +118,13 @@ export default function AppChrome({
       <div className="fixed bottom-[76px] md:bottom-4 right-3 z-[60] flex flex-col items-end gap-2">
         {fabOpen && (
           <>
+            <button
+              onClick={() => { setShowAuthorInfo(true); setFabOpen(false); }}
+              className="w-10 h-10 rounded-full border border-dark-border bg-dark-bg2/90 backdrop-blur-sm flex items-center justify-center text-dark-text2 hover:text-amber-400 hover:border-amber-500/50 transition cursor-pointer shadow-lg"
+              title="Author info"
+            >
+              <span className="material-symbols-outlined text-[1.1rem]">person_info</span>
+            </button>
             <button
               onClick={openNewTab}
               className="w-10 h-10 rounded-full border border-dark-border bg-dark-bg2/90 backdrop-blur-sm flex items-center justify-center text-dark-text2 hover:text-qsis hover:border-qsis transition cursor-pointer shadow-lg"
@@ -231,6 +239,62 @@ export default function AppChrome({
             window.location.reload();
           }}
         />
+      )}
+
+      {showAuthorInfo && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={() => setShowAuthorInfo(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-dark-border bg-dark-bg2 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <h3 className="text-lg font-bold text-dark-text flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-400">person_info</span>
+                Author Info
+              </h3>
+              <button onClick={() => setShowAuthorInfo(false)} className="text-dark-text3 hover:text-dark-text cursor-pointer">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Author card */}
+            {author ? (
+              <div className="px-5 pb-5">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-dark-bg border border-dark-border">
+                  {author.githubLogin && (
+                    <img
+                      src={`https://github.com/${author.githubLogin}.png?size=80`}
+                      alt={author.name}
+                      className="w-12 h-12 rounded-full border border-dark-border"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[0.88rem] font-bold text-dark-text truncate">{author.name}</p>
+                    {author.githubLogin && (
+                      <a
+                        href={`https://github.com/${author.githubLogin}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[0.72rem] text-dark-text2 hover:text-qsis transition no-underline flex items-center gap-1"
+                      >
+                        <i className="fab fa-github"></i> {author.githubLogin}
+                      </a>
+                    )}
+                    {author.email && (
+                      <p className="text-[0.68rem] text-dark-text3 mt-0.5 truncate">{author.email}</p>
+                    )}
+                    {author.universityId && (
+                      <p className="text-[0.66rem] text-dark-text3">ID: {author.universityId}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="px-5 pb-5">
+                <p className="text-[0.78rem] text-dark-text3 text-center py-3">No author information available.</p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </>
   );

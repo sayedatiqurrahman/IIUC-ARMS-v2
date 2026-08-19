@@ -117,7 +117,9 @@ export async function POST(req: NextRequest) {
     const hasUserGrant = allowedUsers.includes(email.toLowerCase());
     const hasRoleGrant = await hasPermission(`${action}File`, effectiveRole, isCR, email);
 
-    if (!hasUserGrant && !hasRoleGrant && !isOwner) {
+    // For delete: any logged-in user can REQUEST deletion (routed to pending
+    // approval below).  For other actions: require explicit permission.
+    if (action !== 'delete' && !hasUserGrant && !hasRoleGrant && !isOwner) {
       return NextResponse.json({ error: 'Permission denied. Ask admin to enable this action in Settings → Permissions.' }, { status: 403 });
     }
 

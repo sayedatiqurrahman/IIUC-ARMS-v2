@@ -83,7 +83,12 @@ export async function POST(req: NextRequest) {
     let githubDeleted = 0;
     if (action === 'approve') {
       if (details.folderPath) {
-        githubDeleted = await deleteCourseFolder(details.folderPath);
+        try {
+          githubDeleted = await deleteCourseFolder(details.folderPath);
+        } catch (e: any) {
+          console.error('[course-delete-requests] GitHub delete failed:', e?.message);
+          return NextResponse.json({ error: `GitHub deletion failed: ${e?.message || 'Unknown error'}` }, { status: 500 });
+        }
       }
       // Remove the DB row if it exists
       try {

@@ -61,6 +61,9 @@ export default function WhiteboardsPage() {
     <div className="min-h-[60vh]">
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <div className="mr-auto">
+          <Link href="/studio" className="inline-flex items-center gap-1.5 text-[0.72rem] font-medium text-dark-text2 hover:text-qsis transition mb-2 no-underline">
+            <i className="fas fa-arrow-left"></i> Studio
+          </Link>
           <h1 className="text-xl font-bold text-dark-text flex items-center">
             <i className="fas fa-draw-polygon text-qsis mr-2"></i>Whiteboard
           </h1>

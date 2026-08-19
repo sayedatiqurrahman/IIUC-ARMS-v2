@@ -796,6 +796,7 @@ export default function BrowsePage() {
         onAddCourse={handleAddCourse}
         permissionDenied={permissionDenied} setPermissionDenied={setPermissionDenied}
         handleFileAction={handleFileAction}
+        canDeleteFile={filePerms.delete}
       />
       {(() => {
         const deptFolder = getDepartmentFolder(currentDept);

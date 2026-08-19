@@ -69,7 +69,18 @@ export default function CoursesView({
     if (currentSem) params.set('sem', currentSem);
     params.set('course', course.code);
     const url = `${SITE_URL}/?${params.toString()}`;
-    setShareItem({ title: `${course.code} \u2014 ${course.title}`, url, type: 'course', githubPath: coursePath, treeItems: items });
+    setShareItem({ title: `${course.code} — ${course.title}`, url, type: 'course', githubPath: coursePath, treeItems: items });
+  }
+
+  function openMidFinalShare(course: any, mf: 'Mid' | 'Final') {
+    const coursePath = `${currentDept || ''}/${currentSem || ''}/${course.code}`;
+    const params = new URLSearchParams();
+    if (currentDept) params.set('dept', currentDept);
+    if (currentSem) params.set('sem', currentSem);
+    params.set('course', course.code);
+    params.set('mf', mf);
+    const url = `${SITE_URL}/?${params.toString()}`;
+    setShareItem({ title: `${course.code} — ${mf} Term`, url, type: 'course', githubPath: `${coursePath}/${mf}` });
   }
 
   async function handleEdit() {
@@ -173,12 +184,17 @@ export default function CoursesView({
           const isMyCourse = !!session && addedBy.toLowerCase() === myEmail;
           const canEditThis = isMyCourse || coursePerms.canEdit;
           const canDeleteThis = isMyCourse || coursePerms.canDelete;
-          // The 3-dot menu is only for signed-in users, and only when they hold
-          // at least one course action (rename or delete). Each action is shown
-          // on its own based on the matching permission.
-          const showMenu = !!session && (canEditThis || canDeleteThis);
 
-          const menuButton = showMenu ? (
+          // Share button — visible to ALL users (logged in or not)
+          const shareButton = (
+            <button onClick={(e) => { e.stopPropagation(); openCourseShare(course); }}
+              className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 hover:text-green-400 hover:border-green-400/40 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0" title="Share course">
+              <i className="fas fa-share-nodes text-sm"></i>
+            </button>
+          );
+
+          // 3-dot menu — only for logged-in users with at least one action
+          const menuButton = !!session ? (
             <div className="relative flex-shrink-0">
               <button onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === course.code ? null : course.code); }}
                 className="w-8 h-8 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text2 hover:text-dark-text hover:border-qsis/40 flex items-center justify-center cursor-pointer transition-colors" title="Course actions">
@@ -187,7 +203,7 @@ export default function CoursesView({
               {openMenu === course.code && (
                 <>
                   <div className="fixed inset-0 z-[210]" onClick={(e) => { e.stopPropagation(); setOpenMenu(null); }} />
-                  <div className="absolute right-0 top-9 z-[220] w-44 rounded-xl border border-dark-border bg-dark-bg3 shadow-2xl overflow-hidden">
+                  <div className="absolute right-0 top-9 z-[220] w-48 rounded-xl border border-dark-border bg-dark-bg3 shadow-2xl overflow-hidden">
                     <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); openCourseShare(course); }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-dark-text hover:bg-dark-bg2 cursor-pointer border-none text-left">
                       <i className="fas fa-share-nodes text-green-400 w-4 text-center"></i> Share
@@ -198,12 +214,13 @@ export default function CoursesView({
                         <i className="fas fa-pen text-blue-400 w-4 text-center"></i> Rename course
                       </button>
                     )}
-                    {canDeleteThis && (
-                      <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setDeleteTarget({ code: course.code, title: course.title, folderPath: course.folderPath }); setDeleteError(''); }}
-                        className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-red-400 hover:bg-red-500/10 cursor-pointer border-none text-left">
-                        <i className="fas fa-trash w-4 text-center"></i> Delete course
-                      </button>
-                    )}
+                    {/* Delete — always shown for logged-in users.
+                        If user has deletePermission → direct delete.
+                        If not → sends a delete request to admins for approval. */}
+                    <button onClick={(e) => { e.stopPropagation(); setOpenMenu(null); setDeleteTarget({ code: course.code, title: course.title, folderPath: course.folderPath }); setDeleteError(''); }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-[0.78rem] text-red-400 hover:bg-red-500/10 cursor-pointer border-none text-left">
+                      <i className="fas fa-trash w-4 text-center"></i> {canDeleteThis ? 'Delete course' : 'Request delete'}
+                    </button>
                   </div>
                 </>
               )}
@@ -239,12 +256,21 @@ export default function CoursesView({
                 </div>
                 {course.hasMidFinal && (
                   <div className="flex gap-1 mt-1 justify-end">
-                    <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-yellow-400/15 text-yellow-400">Mid Term</span>
-                    <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-green-400/15 text-green-400">Final Term</span>
+                    <button onClick={(e) => { e.stopPropagation(); openMidFinalShare(course, 'Mid'); }}
+                      className="text-[0.6rem] px-1.5 py-0.5 rounded bg-yellow-400/15 text-yellow-400 hover:bg-yellow-400/25 cursor-pointer border-none transition-colors" title="Share Mid Term">
+                      Mid Term
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); openMidFinalShare(course, 'Final'); }}
+                      className="text-[0.6rem] px-1.5 py-0.5 rounded bg-green-400/15 text-green-400 hover:bg-green-400/25 cursor-pointer border-none transition-colors" title="Share Final Term">
+                      Final Term
+                    </button>
                   </div>
                 )}
               </div>
-              {menuButton}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {shareButton}
+                {menuButton}
+              </div>
             </div>
 
             {/* ── Mobile layout (below sm) ───────────────────────────────── */}
@@ -270,6 +296,7 @@ export default function CoursesView({
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {shareButton}
                   {menuButton}
                 </div>
               </div>
@@ -280,8 +307,14 @@ export default function CoursesView({
                   {(course as any).hasMd && !(course as any).hasSharedLinks && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[0.6rem] font-bold border border-blue-500/30"><i className="fas fa-file-alt text-[0.55rem]"></i>.md</span>}
                   {course.hasMidFinal && (
                     <>
-                      <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-yellow-400/15 text-yellow-400">Mid Term</span>
-                      <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-green-400/15 text-green-400">Final Term</span>
+                      <button onClick={(e) => { e.stopPropagation(); openMidFinalShare(course, 'Mid'); }}
+                        className="text-[0.6rem] px-1.5 py-0.5 rounded bg-yellow-400/15 text-yellow-400 hover:bg-yellow-400/25 cursor-pointer border-none transition-colors" title="Share Mid Term">
+                        Mid Term
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); openMidFinalShare(course, 'Final'); }}
+                        className="text-[0.6rem] px-1.5 py-0.5 rounded bg-green-400/15 text-green-400 hover:bg-green-400/25 cursor-pointer border-none transition-colors" title="Share Final Term">
+                        Final Term
+                      </button>
                     </>
                   )}
                 </div>
@@ -341,7 +374,7 @@ export default function CoursesView({
             <div className="flex gap-2">
               <button onClick={handleDelete} disabled={deleteLoading}
                 className="flex-1 py-2 rounded-lg bg-red-500 text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50">
-                {deleteLoading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Deleting...</> : <><i className="fas fa-trash mr-1"></i>Delete</>}
+                {deleteLoading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Deleting...</> : <><i className="fas fa-trash mr-1"></i>{coursePerms.canDelete ? 'Delete' : 'Request Delete'}</>}
               </button>
               <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.82rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2">Cancel</button>
             </div>
