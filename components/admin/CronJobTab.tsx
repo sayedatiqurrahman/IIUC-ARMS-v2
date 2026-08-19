@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { CRON_JOBS_META, type CronJobMeta } from '@/lib/cron/jobs-config';
+import LogViewer from '@/components/admin/LogViewer';
 
 interface JobRunResult {
   jobId: string;
@@ -339,7 +340,17 @@ export default function CronJobTab() {
         })}
       </div>
 
-      {/* Log Management Section */}
+      {/* Log Viewers */}
+      <div className="space-y-3">
+        <h4 className="text-[0.85rem] font-semibold text-dark-text flex items-center gap-2">
+          <i className="fas fa-list-check text-qsis"></i> Log Viewer
+        </h4>
+        <LogViewer type="activity" />
+        <LogViewer type="telegram" />
+        <LogViewer type="upload" />
+      </div>
+
+      {/* Log Management */}
       <div className="rounded-xl border border-dark-border bg-dark-bg2 p-4">
         <h4 className="text-[0.85rem] font-semibold text-dark-text mb-3 flex items-center gap-2">
           <i className="fas fa-trash-can text-red-400"></i> Log Management
