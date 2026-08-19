@@ -18,6 +18,8 @@ function enc(t: string) { return encodeURIComponent(t); }
 const SOCIAL = [
   { key: 'whatsapp', label: 'WhatsApp', icon: 'fab fa-whatsapp', color: '#25D366', getUrl: (u: string, t: string) => `https://wa.me/?text=${enc(t + '\n' + u)}` },
   { key: 'telegram', label: 'Telegram', icon: 'fab fa-telegram-plane', color: '#0088cc', getUrl: (u: string, t: string) => `https://t.me/share/url?url=${enc(u)}&text=${enc(t)}` },
+  { key: 'messenger', label: 'Messenger', icon: 'fab fa-facebook-messenger', color: '#0084FF', getUrl: (u: string) => `https://www.facebook.com/sharer/sharer.php?u=${enc(u)}&quote=${enc('Check this out')}`, copyFallback: true },
+  { key: 'discord', label: 'Discord', icon: 'fab fa-discord', color: '#5865F2', getUrl: () => '', copyFallback: true },
   { key: 'facebook', label: 'Facebook', icon: 'fab fa-facebook-f', color: '#1877F2', getUrl: (u: string) => `https://www.facebook.com/sharer/sharer.php?u=${enc(u)}` },
   { key: 'twitter', label: 'X / Twitter', icon: 'fab fa-x-twitter', color: '#1DA1F2', getUrl: (u: string, t: string) => `https://twitter.com/intent/tweet?url=${enc(u)}&text=${enc(t)}` },
   { key: 'linkedin', label: 'LinkedIn', icon: 'fab fa-linkedin-in', color: '#0A66C2', getUrl: (u: string) => `https://www.linkedin.com/sharing/share-offsite/?url=${enc(u)}` },
@@ -29,6 +31,7 @@ export default function ShareModal({ item, onClose }: { item: ShareItem; onClose
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [dlProgress, setDlProgress] = useState('');
+  const [copyToast, setCopyToast] = useState('');
 
   const shareText = item.type === 'course'
     ? `${item.title} \u2014 IIUC-ARMS Academic Files`
@@ -113,14 +116,22 @@ export default function ShareModal({ item, onClose }: { item: ShareItem; onClose
     }
   }, [item, onClose]);
 
-  const openApp = useCallback((url: string) => {
+  const openApp = useCallback((url: string, copyFallback?: boolean) => {
+    if (copyFallback) {
+      const text = `${shareText}\n${item.url}`;
+      navigator.clipboard.writeText(text).then(() => {
+        setCopyToast('Link copied! Open the app and paste it.');
+        setTimeout(() => setCopyToast(''), 2500);
+      }).catch(() => {});
+      return;
+    }
     window.open(url, '_blank', 'noopener,noreferrer');
-  }, []);
+  }, [shareText, item.url]);
 
   return (
     <div className="fixed inset-0 z-[250] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4" onClick={onClose}>
       <div
-        className="w-full sm:max-w-md bg-dark-bg2 rounded-t-2xl sm:rounded-2xl border border-dark-border overflow-hidden animate-in slide-in-from-bottom duration-200"
+        className="w-full sm:max-w-md bg-dark-bg2 rounded-t-2xl sm:rounded-2xl border border-dark-border overflow-hidden animate-in slide-in-from-bottom duration-200 relative"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -149,9 +160,9 @@ export default function ShareModal({ item, onClose }: { item: ShareItem; onClose
         {/* Social Platforms */}
         <div className="px-5 pt-3 pb-2">
           <p className="text-[0.68rem] text-dark-text3 mb-2 font-medium uppercase tracking-wider">Share to</p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-5 gap-2">
             {SOCIAL.map(s => (
-              <button key={s.key} onClick={() => openApp(s.getUrl(item.url, shareText))}
+              <button key={s.key} onClick={() => openApp(s.getUrl(item.url, shareText), s.copyFallback)}
                 className="flex flex-col items-center gap-1.5 py-2.5 rounded-xl hover:bg-dark-bg3 transition cursor-pointer border-none bg-transparent">
                 <span className="w-10 h-10 rounded-full flex items-center justify-center text-white text-lg" style={{ backgroundColor: s.color }}>
                   <i className={s.icon}></i>
@@ -207,6 +218,13 @@ export default function ShareModal({ item, onClose }: { item: ShareItem; onClose
             Shared from <span className="font-semibold text-dark-text2">IIUC-ARMS</span> &middot; {SITE_URL}
           </p>
         </div>
+
+        {/* Copy fallback toast */}
+        {copyToast && (
+          <div className="absolute bottom-16 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-green-600 text-white text-[0.75rem] font-semibold shadow-lg animate-in fade-in duration-150 whitespace-nowrap">
+            <i className="fas fa-check-circle mr-1.5"></i>{copyToast}
+          </div>
+        )}
       </div>
     </div>
   );
