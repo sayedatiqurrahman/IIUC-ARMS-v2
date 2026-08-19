@@ -1077,8 +1077,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* GLOBAL OPERATION PROGRESS (delete / rename / create course) */}
       <OperationProgress label={operationLabel} />
 
-      {/* GLOBAL FLOATING FOCUS TIMER */}
-      <FloatingFocus />
+      {/* GLOBAL FLOATING FOCUS TIMER — hidden on /focus page (iframe has its own) */}
+      {pathname !== '/focus' && <FloatingFocus />}
     </div>
   );
 }
