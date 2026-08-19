@@ -528,6 +528,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <Link href="/contributors" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-users w-4 text-center"></i><span>Contributors</span></Link>
                     <Link href="/faculty" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-chalkboard-teacher w-4 text-center"></i><span>Faculty</span></Link>
                     <Link href="/studio" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-tools w-4 text-center"></i><span>Studio</span></Link>
+                    <Link href="/settings" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-cog w-4 text-center"></i><span>Settings</span></Link>
                     <div className="my-1 h-px bg-dark-border" />
                     <div className="px-2 pt-1 pb-1 text-[0.65rem] uppercase tracking-wider text-dark-muted font-semibold">Organizations</div>
                     <a href="https://www.iiuc.ac.bd/" target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"><Image src="/iiuc-logo.png" alt="" width={20} height={20} className="w-5 h-5 rounded object-contain bg-white" /><span className="text-[0.78rem]">IIUC</span></a>
@@ -868,6 +869,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link href="/contributors" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2"></i>Contributors</Link>
                 <Link href="/faculty" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-chalkboard-teacher mr-2"></i>Faculty</Link>
                <Link href="/studio" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-tools mr-2"></i>Studio</Link>
+               <Link href="/settings" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-cog mr-2"></i>Settings</Link>
               </div>
             </div>
             <div>

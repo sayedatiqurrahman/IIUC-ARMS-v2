@@ -1,5 +1,31 @@
 const CACHE_NAME = 'iiuc-files-v1';
-const TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const STORAGE_KEY = 'iiuc_file_cache_ttl';
+const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+export const TTL_OPTIONS = [
+  { value: 1, label: '1 Day', ms: 1 * 24 * 60 * 60 * 1000 },
+  { value: 7, label: '7 Days', ms: 7 * 24 * 60 * 60 * 1000 },
+  { value: 14, label: '14 Days', ms: 14 * 24 * 60 * 60 * 1000 },
+  { value: 30, label: '30 Days (Default)', ms: 30 * 24 * 60 * 60 * 1000 },
+  { value: 60, label: '60 Days', ms: 60 * 24 * 60 * 60 * 1000 },
+  { value: 90, label: '90 Days', ms: 90 * 24 * 60 * 60 * 1000 },
+  { value: -1, label: 'Never expire', ms: Infinity },
+] as const;
+
+export function getUserTTL(): number {
+  if (typeof window === 'undefined') return DEFAULT_TTL_MS;
+  try {
+    const val = localStorage.getItem(STORAGE_KEY);
+    if (val === null) return DEFAULT_TTL_MS;
+    const num = Number(val);
+    if (num === -1) return Infinity;
+    return num * 24 * 60 * 60 * 1000;
+  } catch { return DEFAULT_TTL_MS; }
+}
+
+export function setUserTTL(days: number): void {
+  try { localStorage.setItem(STORAGE_KEY, String(days)); } catch {}
+}
 
 // ─── IndexedDB for tracking access timestamps ───
 function openDB(): Promise<IDBDatabase> {
@@ -57,27 +83,18 @@ async function getCache(): Promise<Cache | null> {
   } catch { return null; }
 }
 
-/**
- * Fetch a URL with cache-first strategy (30-day TTL).
- * Returns the cached response if fresh, otherwise fetches from network,
- * stores it, and returns it.
- */
 export async function cachedFetch(url: string): Promise<Response> {
   const cache = await getCache();
   if (!cache) return fetch(url);
 
-  // Check cache
   const cached = await cache.match(url);
   if (cached) {
-    // Touch access time (fire and forget)
     setAccessTime(url);
     return cached;
   }
 
-  // Fetch from network
   const res = await fetch(url);
   if (res.ok) {
-    // Clone before consuming — store in cache
     const toCache = res.clone();
     try { await cache.put(url, toCache); } catch {}
     setAccessTime(url);
@@ -85,29 +102,21 @@ export async function cachedFetch(url: string): Promise<Response> {
   return res;
 }
 
-/**
- * Fetch URL and return as ArrayBuffer, with caching.
- */
 export async function cachedFetchArrayBuffer(url: string): Promise<ArrayBuffer> {
   const res = await cachedFetch(url);
   return res.arrayBuffer();
 }
 
-/**
- * Fetch URL and return as Blob URL, with caching.
- * The caller is responsible for revoking the URL when done.
- */
 export async function cachedFetchBlobUrl(url: string): Promise<string> {
   const res = await cachedFetch(url);
   const blob = await res.blob();
   return URL.createObjectURL(blob);
 }
 
-/**
- * Purge expired entries (older than 30 days since last access).
- * Call on app init or periodically.
- */
 export async function purgeExpiredCache(): Promise<number> {
+  const ttlMs = getUserTTL();
+  if (!isFinite(ttlMs)) return 0; // "Never" selected
+
   const cache = await getCache();
   if (!cache) return 0;
 
@@ -120,7 +129,6 @@ export async function purgeExpiredCache(): Promise<number> {
     const store = tx.objectStore('meta');
     const req = store.openCursor();
 
-    // Collect expired keys first (can't delete during iteration)
     const expiredKeys: string[] = [];
 
     await new Promise<void>((resolve) => {
@@ -129,7 +137,7 @@ export async function purgeExpiredCache(): Promise<number> {
         if (!cursor) { resolve(); return; }
         const url = cursor.key as string;
         const lastAccess = cursor.value as number;
-        if (now - lastAccess > TTL_MS) {
+        if (now - lastAccess > ttlMs) {
           expiredKeys.push(url);
         }
         cursor.continue();
@@ -137,7 +145,6 @@ export async function purgeExpiredCache(): Promise<number> {
       req.onerror = () => resolve();
     });
 
-    // Delete expired entries
     for (const url of expiredKeys) {
       await cache.delete(url);
       await deleteAccessTime(url);
@@ -148,19 +155,23 @@ export async function purgeExpiredCache(): Promise<number> {
   return purged;
 }
 
-/**
- * Get cache size info (approximate).
- */
-export async function getCacheStats(): Promise<{ entries: number; keys: string[] }> {
+export async function getCacheStats(): Promise<{ entries: number; totalSize: number }> {
   const cache = await getCache();
-  if (!cache) return { entries: 0, keys: [] };
+  if (!cache) return { entries: 0, totalSize: 0 };
   const keys = await cache.keys();
-  return { entries: keys.length, keys: keys.map(r => r.url) };
+  let totalSize = 0;
+  for (const req of keys) {
+    try {
+      const res = await cache.match(req);
+      if (res) {
+        const blob = await res.blob();
+        totalSize += blob.size;
+      }
+    } catch {}
+  }
+  return { entries: keys.length, totalSize };
 }
 
-/**
- * Clear all cached files.
- */
 export async function clearFileCache(): Promise<void> {
   const cache = await getCache();
   if (cache) await caches.delete(CACHE_NAME);
