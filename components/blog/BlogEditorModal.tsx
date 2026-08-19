@@ -304,7 +304,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
                 {showPreview ? (
                   <div className="px-4 py-3 bg-dark-bg2 min-h-[400px] max-h-[600px] overflow-y-auto">
                     {content.trim() ? (
-                      <div className="prose prose-invert prose-sm max-w-none text-[0.82rem] text-dark-text2 [&_h1]:text-dark-text [&_h2]:text-dark-text [&_h3]:text-dark-text [&_strong]:text-dark-text [&_a]:text-qsis [&_code]:bg-dark-bg3 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_pre]:bg-dark-bg3 [&_pre]:p-3 [&_pre]:rounded-lg [&_blockquote]:border-l-2 [&_blockquote]:border-qsis [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-dark-text3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_p]:my-2 [&_hr]:border-dark-border"
+                      <div className="prose-content text-[0.82rem] text-dark-text2"
                         dangerouslySetInnerHTML={{ __html: renderedPreview }}
                       />
                     ) : (

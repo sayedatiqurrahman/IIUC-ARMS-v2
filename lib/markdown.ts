@@ -1,143 +1,72 @@
-// Minimal, dependency-free Markdown -> HTML renderer for the upload Markdown
-// editor preview. It escapes all HTML first and only ever emits a whitelist of
-// safe tags, so user-authored Markdown can never inject scripts (no XSS).
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+marked.setOptions({
+  gfm: true,
+  breaks: false,
+});
+
+const ALLOWED_TAGS = [
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'p', 'br', 'hr',
+  'strong', 'em', 'del', 's',
+  'a', 'img',
+  'ul', 'ol', 'li',
+  'blockquote',
+  'pre', 'code',
+  'table', 'thead', 'tbody', 'tr', 'th', 'td',
+  'input',
+  'figure', 'figcaption',
+  'dl', 'dt', 'dd',
+  'details', 'summary',
+];
+
+const ALLOWED_ATTR = [
+  'href', 'src', 'alt', 'title', 'class', 'target', 'rel',
+  'width', 'height', 'align', 'valign',
+  'type', 'checked', 'disabled',
+];
+
+function sanitize(html: string): string {
+  if (typeof window !== 'undefined') {
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS,
+      ALLOWED_ATTR,
+    }) as string;
+  }
+  return html;
 }
 
-function inline(text: string): string {
-  let t = escapeHtml(text);
+const renderer = new marked.Renderer();
 
-  // Protect inline code spans so formatting isn't applied inside them.
-  const codes: string[] = [];
-  t = t.replace(/`([^`]+)`/g, (_m: string, c: string) => {
-    codes.push(c);
-    return ' X' + (codes.length - 1) + 'X ';
-  });
+renderer.link = function (token: any) {
+  const href = token.href || '';
+  const title = token.title || '';
+  const text = token.text || '';
+  const safeHref = /^(https?:|mailto:|#)/i.test(href) ? href : '#';
+  const titleAttr = title ? ` title="${title}"` : '';
+  return `<a href="${safeHref}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+};
 
-  // Links — only allow http(s) / mailto destinations.
-  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m: string, label: string, url: string) => {
-    const safe = /^(https?:|mailto:)/i.test(url) ? url : '#';
-    return '<a href="' + safe + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
-  });
+renderer.image = function (token: any) {
+  const href = token.href || '';
+  const title = token.title || '';
+  const text = token.text || '';
+  const alt = text ? ` alt="${text}"` : '';
+  const titleAttr = title ? ` title="${title}"` : '';
+  return `<img src="${href}"${alt}${titleAttr} loading="lazy" />`;
+};
 
-  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  t = t.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-  t = t.replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, '$1<em>$2</em>');
-  t = t.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+renderer.code = function (token: any) {
+  const text = token.text || '';
+  const lang = token.lang || '';
+  const langClass = lang ? ` class="language-${lang}"` : '';
+  return `<pre><code${langClass}>${text}</code></pre>`;
+};
 
-  // Restore code spans (content already escaped).
-  t = t.replace(/ X(\d+)X /g, (_m: string, idx: string) => '<code>' + codes[Number(idx)] + '</code>');
-  return t;
-}
+marked.use({ renderer });
 
 export function renderMarkdown(src: string): string {
-  const lines = src.replace(/\r\n/g, '\n').split('\n');
-  const out: string[] = [];
-  let listType: 'ul' | 'ol' | null = null;
-  let listItems: string[] = [];
-  let paragraph: string[] = [];
-
-  const flushList = () => {
-    if (listType) {
-      out.push('<' + listType + '>' + listItems.map(li => '<li>' + inline(li) + '</li>').join('') + '</' + listType + '>');
-      listType = null;
-      listItems = [];
-    }
-  };
-  const flushPara = () => {
-    if (paragraph.length) {
-      out.push('<p>' + paragraph.map(inline).join('<br>') + '</p>');
-      paragraph = [];
-    }
-  };
-
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (/^```/.test(line)) {
-      flushPara();
-      flushList();
-      const buf: string[] = [];
-      i++;
-      while (i < lines.length && !/^```/.test(lines[i])) {
-        buf.push(lines[i]);
-        i++;
-      }
-      i++; // skip closing fence
-      out.push('<pre><code>' + escapeHtml(buf.join('\n')) + '</code></pre>');
-      continue;
-    }
-
-    if (/^\s*$/.test(line)) {
-      flushPara();
-      flushList();
-      i++;
-      continue;
-    }
-
-    const h = line.match(/^(#{1,6})\s+(.*)$/);
-    if (h) {
-      flushPara();
-      flushList();
-      const lvl = h[1].length;
-      out.push('<h' + lvl + '>' + inline(h[2]) + '</h' + lvl + '>');
-      i++;
-      continue;
-    }
-
-    if (/^\s*---\s*$/.test(line)) {
-      flushPara();
-      flushList();
-      out.push('<hr>');
-      i++;
-      continue;
-    }
-
-    const bq = line.match(/^>\s?(.*)$/);
-    if (bq) {
-      flushPara();
-      flushList();
-      out.push('<blockquote>' + inline(bq[1]) + '</blockquote>');
-      i++;
-      continue;
-    }
-
-    const ul = line.match(/^\s*[-*]\s+(.*)$/);
-    if (ul) {
-      flushPara();
-      if (listType !== 'ul') {
-        flushList();
-        listType = 'ul';
-      }
-      listItems.push(ul[1]);
-      i++;
-      continue;
-    }
-
-    const ol = line.match(/^\s*\d+\.\s+(.*)$/);
-    if (ol) {
-      flushPara();
-      if (listType !== 'ol') {
-        flushList();
-        listType = 'ol';
-      }
-      listItems.push(ol[1]);
-      i++;
-      continue;
-    }
-
-    flushList();
-    paragraph.push(line);
-    i++;
-  }
-
-  flushPara();
-  flushList();
-  return out.join('\n');
+  const raw = marked.parse(src) as string;
+  return sanitize(raw);
 }

@@ -26,7 +26,40 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { jobId } = body as { jobId?: string };
+    const { jobId, action } = body as { jobId?: string; action?: string };
+
+    if (action === 'deleteAllLogs') {
+      const { prisma } = await import('@/lib/prisma');
+      const [activity, telegram, chunks] = await Promise.all([
+        prisma.activityLog.deleteMany({}),
+        prisma.telegramNotification.deleteMany({}),
+        prisma.uploadChunk.deleteMany({}),
+      ]);
+      const total = activity.count + telegram.count + chunks.count;
+      return NextResponse.json({
+        success: true,
+        message: `Deleted all logs: ${activity.count} activity, ${telegram.count} telegram, ${chunks.count} upload chunks`,
+        details: `${total} total records removed`,
+      });
+    }
+
+    if (action === 'deleteLogsByRetention') {
+      const { prisma } = await import('@/lib/prisma');
+      const days = typeof body.days === 'number' ? body.days : 90;
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      const [activity, telegram, chunks] = await Promise.all([
+        prisma.activityLog.deleteMany({ where: { createdAt: { lt: cutoff } } }),
+        prisma.telegramNotification.deleteMany({ where: { sentAt: { lt: cutoff } } }),
+        prisma.uploadChunk.deleteMany({ where: { createdAt: { lt: cutoff } } }),
+      ]);
+      const total = activity.count + telegram.count + chunks.count;
+      return NextResponse.json({
+        success: true,
+        message: `Deleted logs older than ${days} days: ${activity.count} activity, ${telegram.count} telegram, ${chunks.count} upload chunks`,
+        details: `${total} total records removed`,
+      });
+    }
 
     if (jobId) {
       const job = getJobById(jobId);

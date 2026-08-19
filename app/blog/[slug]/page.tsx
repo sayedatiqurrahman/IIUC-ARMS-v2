@@ -121,7 +121,7 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
 
           {content && (
             <div
-              className="text-[0.88rem] text-dark-text leading-relaxed [&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-dark-text [&_h1]:mt-6 [&_h1]:mb-3 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-dark-text [&_h2]:mt-5 [&_h2]:mb-2 [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-dark-text [&_h3]:mt-4 [&_h3]:mb-2 [&_p]:mb-3 [&_a]:text-qsis [&_a]:underline [&_a]:hover:text-qsis-dark [&_strong]:text-dark-text [&_strong]:font-bold [&_em]:italic [&_code]:bg-dark-bg3 [&_code]:text-qsis [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[0.82rem] [&_pre]:bg-dark-bg3 [&_pre]:border [&_pre]:border-dark-border [&_pre]:rounded-xl [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:text-dark-text2 [&_pre_code]:p-0 [&_blockquote]:border-l-4 [&_blockquote]:border-qsis/40 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-dark-text2 [&_blockquote]:my-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3 [&_li]:mb-1 [&_hr]:border-dark-border [&_hr]:my-6 [&_del]:text-dark-text3"
+              className="prose-content text-[0.88rem] text-dark-text leading-relaxed"
               dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
             />
           )}
