@@ -155,6 +155,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const navigateToDashboard = useAppStore(s => s.navigateToDashboard);
   const loadOnboarding = useAppStore(s => s.loadOnboarding);
   const setStoreOnboarding = useAppStore(s => s.setOnboardingData);
+  const updateProfile = useAppStore(s => s.updateProfile);
 
   // ─── GitHub connect prompt (shown before opening upload panel when not connected) ───
   const githubToken = useAppStore(s => s.githubToken);
@@ -260,17 +261,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [status, isGithubConnected]);
 
-  // Auto-sync personalization with profile: when the user completes their
-  // profile (department + semester), automatically update onboarding data so
-  // the browse page reflects their info without re-doing the onboarding wizard.
+  // Auto-sync personalization with profile: bidirectional sync between
+  // onboarding data (localStorage) and the server profile.
   const profileLoaded = useAppStore(s => s.profileLoaded);
   useEffect(() => {
     if (!profileLoaded) return;
     const dept = profile.department || '';
     const semId = profile.semester || '';
-    if (!dept || !semId || semId === 'graduated') {
-      // Profile loaded but no dept/sem — show onboarding for logged-in users
-      if (status === 'authenticated' && !getOnboardingData() && !hasDismissedOnboarding()) {
+    const semLabel = config.semesters.find(s => s.id === semId)?.label || semId;
+    const hasDept = !!dept;
+    const hasSem = !!semId && semId !== 'graduated';
+
+    // Case 1: profile is incomplete — show modal (unless already dismissed)
+    if (!hasDept || !hasSem) {
+      if (status === 'authenticated' && !hasDismissedOnboarding()) {
         setShowOnboarding(true);
       } else {
         setOnboardingDone(true);
@@ -278,13 +282,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Profile stores semester as ID (e.g. "6th-semister"), but onboardData
-    // uses the label (e.g. "6th Semester") — convert for consistency.
-    const semLabel = config.semesters.find(s => s.id === semId)?.label || semId;
-
+    // Case 2: profile is complete — sync to onboarding data
     const existing = getOnboardingData();
     if (!existing) {
-      // No onboarding yet — create from profile
+      // No onboarding yet — auto-create from profile (skip modal)
       setStoreOnboarding({
         gender: 'male',
         department: dept,
@@ -293,15 +294,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         completedAt: Date.now(),
       });
       setOnboardingDone(true);
-      // Close the modal if it was shown
       setShowOnboarding(false);
     } else if (existing.department !== dept || existing.semester !== semLabel) {
-      // Onboarding exists but profile has changed — update department/semester
-      setStoreOnboarding({
-        ...existing,
-        department: dept,
-        semester: semLabel,
-      });
+      // Profile changed (e.g. from settings) — silently update onboarding
+      setStoreOnboarding({ ...existing, department: dept, semester: semLabel });
     }
   }, [profileLoaded, profile.department, profile.semester]);
 
@@ -1126,10 +1122,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* ONBOARDING MODAL */}
       {showOnboarding && (
         <OnboardingModal
+          initialDept={profile.department || undefined}
+          initialSemester={profile.semester ? (config.semesters.find(s => s.id === profile.semester)?.label || profile.semester) : undefined}
           onComplete={(data) => {
             setStoreOnboarding(data);
             setShowOnboarding(false);
             setOnboardingDone(true);
+            // Bidirectional sync: save department + semester to server profile
+            const semId = config.semesters.find(s => s.label === data.semester)?.id || data.semester;
+            updateProfile({ department: data.department, semester: semId });
           }}
           onClose={() => { dismissOnboarding(); setShowOnboarding(false); setOnboardingDone(true); }}
         />

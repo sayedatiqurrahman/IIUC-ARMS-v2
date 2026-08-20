@@ -27,7 +27,7 @@
     "dompurify": "^3.4.13",
     "eduone-scanner-sdk": "^1.2.3",
     "epubjs": "^0.3.93",
-    "fabric": "^6.9.1",
+    "fabric": "^7.4.0",
     "fflate": "^0.8.2",
     "firebase": "^12.16.0",
     "firebase-admin": "^14.2.0",
@@ -59,6 +59,15 @@
     "@xmldom/xmldom": "^0.9.10",
     "postcss": "^8.5.26",
     "sharp": "^0.35.0",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "@mapbox/node-pre-gyp": "^2.0.3",
+    "deepmerge-ts": "^8.0.0",
+    "lodash-es": "^4.18.1",
+    "@excalidraw/mermaid-to-excalidraw": {
+      "nanoid": "^5.1.16"
+    },
+    "@excalidraw/excalidraw": {
+      "nanoid": "^3.3.18"
+    }
   }
 }

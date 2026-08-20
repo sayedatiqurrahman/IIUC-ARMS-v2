@@ -13,12 +13,29 @@ import {
 export type { OnboardingData };
 export { getOnboardingData, hasDismissedOnboarding, dismissOnboarding, setOnboardingData, clearOnboardingData } from '@/lib/onboarding-storage';
 
-export default function OnboardingModal({ onComplete, onClose }: { onComplete: (data: OnboardingData) => void; onClose: () => void }) {
+export default function OnboardingModal({ onComplete, onClose, initialDept, initialSemester }: {
+  onComplete: (data: OnboardingData) => void;
+  onClose: () => void;
+  initialDept?: string;
+  initialSemester?: string;
+}) {
   const allDepts = getAllDepartments();
-  const defaultDept = allDepts.find(d => d.department.id === 'qsis');
+
+  // Pre-fill from existing profile data
+  const matchedDept = initialDept
+    ? allDepts.find(d => d.department.name === initialDept || d.department.id === initialDept)
+    : undefined;
+  const defaultDept = matchedDept || allDepts.find(d => d.department.id === 'qsis');
+
+  // Convert semester label to ID to check, then back — accept both label and ID
+  const matchedSem = initialSemester
+    ? config.semesters.find(s => s.label === initialSemester)?.label
+      || config.semesters.find(s => s.id === initialSemester)?.label
+      || initialSemester
+    : undefined;
 
   const [gender, setGender] = useState<'male' | 'female'>('male');
-  const [semester, setSemester] = useState(config.semesters[0]?.label || '1st Semester');
+  const [semester, setSemester] = useState(matchedSem || config.semesters[0]?.label || '1st Semester');
   const [fileView, setFileView] = useState<'all-prioritized' | 'my-semester-only'>('all-prioritized');
   const [step, setStep] = useState(0);
   const [selectedDeptId, setSelectedDeptId] = useState(defaultDept?.department.id || 'qsis');
