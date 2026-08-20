@@ -3,7 +3,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission } from '@/lib/permissions';
-import { readNoticesIndex, writeNoticesIndex, uploadNoticeAttachment, isNoticeExpired, renameNoticeAttachment, type Notice, type NoticeCategory } from '@/lib/notices';
+import { readNoticesIndex, writeNoticesIndex, uploadNoticeAttachment, isNoticeExpired, renameNoticeAttachment, deleteNoticeAttachments, type Notice, type NoticeCategory } from '@/lib/notices';
 
 /** Default auto-delete TTL in days (≈6 months). */
 const DEFAULT_NOTICE_TTL_DAYS = 183;
@@ -144,12 +144,19 @@ export async function POST(req: NextRequest) {
     if (action === 'delete') {
       const { id } = body as { id: string };
       const notices = await readNoticesIndex();
-      const filtered = notices.filter(n => n.id !== id);
-      if (filtered.length === notices.length) {
+      const target = notices.find(n => n.id === id);
+      if (!target) {
         return NextResponse.json({ error: 'Notice not found' }, { status: 404 });
       }
       const author = { name: profile?.name || email.split('@')[0], email };
-      await writeNoticesIndex(filtered, (await getToken(email))!, `notice: delete`, author);
+      const token = (await getToken(email))!;
+
+      // Delete attachment from GitHub if present
+      await deleteNoticeAttachments(target, token, author);
+
+      // Remove from JSON index
+      const filtered = notices.filter(n => n.id !== id);
+      await writeNoticesIndex(filtered, token, `notice: delete "${target.title}"`, author);
       return NextResponse.json({ success: true });
     }
 

@@ -220,6 +220,39 @@ export async function renameNoticeAttachment(
   return { url: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${newPath}`, name: newName };
 }
 
+/** Delete notice attachment files from GitHub. */
+export async function deleteNoticeAttachments(
+  notice: Notice,
+  token: string,
+  author?: { name: string; email: string },
+): Promise<void> {
+  if (!notice.attachmentUrl) return;
+  const owner = config.owner;
+  const repo = config.repo;
+  const branch = config.branch;
+
+  const rawPrefix = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/`;
+  const filePath = notice.attachmentUrl.startsWith(rawPrefix)
+    ? notice.attachmentUrl.slice(rawPrefix.length)
+    : null;
+  if (!filePath) return;
+
+  const refRes = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+    headers: ghHeaders(token),
+  });
+  if (!refRes.ok) return;
+  const refData = await refRes.json();
+  const baseSha = refData.object.sha;
+
+  await commitFilesToBranch({
+    token, owner, repo, branch, baseSha,
+    files: [],
+    deletePaths: [filePath],
+    message: `notice: delete attachment "${notice.title}"`,
+    author,
+  });
+}
+
 /** Remove expired notices from the index. Returns the number removed. */
 export async function removeExpiredNotices(
   token: string,
@@ -227,9 +260,14 @@ export async function removeExpiredNotices(
 ): Promise<number> {
   const notices = await readNoticesIndex();
   const before = notices.length;
+  const expired = notices.filter(n => isNoticeExpired(n));
   const alive = notices.filter(n => !isNoticeExpired(n));
   const removed = before - alive.length;
   if (removed > 0) {
+    // Delete attachments of expired notices from GitHub
+    for (const notice of expired) {
+      await deleteNoticeAttachments(notice, token, author).catch(() => {});
+    }
     await writeNoticesIndex(alive, token, `notice: auto-delete ${removed} expired notice(s)`, author);
   }
   return removed;
