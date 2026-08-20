@@ -87,7 +87,7 @@ export default function AppChrome({
 
   return (
     <>
-      {/* Full-viewport iframe — starts at navbar bottom (py-2.5 + 40px logo −1px border overlap) */}
+      {/* Full-viewport iframe — starts at navbar bottom */}
       <div ref={wrapRef} className="fixed top-[59px] left-0 right-0 bottom-[60px] md:bottom-0 z-[50]">
         <iframe
           ref={frameRef}
@@ -105,12 +105,12 @@ export default function AppChrome({
         )}
       </div>
 
-      {/* Floating back button */}
+      {/* Floating back button — positioned just below navbar, safe from iframe content */}
       <Link
         href="/studio"
-        className="fixed top-[80px] left-3 z-[60] flex items-center gap-1.5 rounded-xl border border-dark-border bg-dark-bg2/90 backdrop-blur-sm px-3 py-2 text-[0.72rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis no-underline shadow-lg"
+        className="fixed top-[64px] left-3 z-[60] flex items-center gap-1 rounded-lg border border-dark-border bg-dark-bg2/95 backdrop-blur-sm px-2 py-1.5 text-[0.68rem] font-medium text-dark-text2 transition hover:border-qsis hover:text-qsis no-underline shadow-lg"
       >
-        <span className="material-symbols-outlined align-middle text-[0.95rem]">arrow_back</span>
+        <span className="material-symbols-outlined text-[0.85rem]">arrow_back</span>
         <span className="hidden sm:inline">Studio</span>
       </Link>
 
@@ -121,9 +121,9 @@ export default function AppChrome({
             <button
               onClick={() => { setShowAuthorInfo(true); setFabOpen(false); }}
               className="w-10 h-10 rounded-full border border-dark-border bg-dark-bg2/90 backdrop-blur-sm flex items-center justify-center text-dark-text2 hover:text-amber-400 hover:border-amber-500/50 transition cursor-pointer shadow-lg"
-              title="Author info"
+              title="App info"
             >
-              <span className="material-symbols-outlined text-[1.1rem]">person_info</span>
+              <span className="material-symbols-outlined text-[1.1rem]">info</span>
             </button>
             <button
               onClick={openNewTab}
@@ -247,8 +247,8 @@ export default function AppChrome({
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h3 className="text-lg font-bold text-dark-text flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-400">person_info</span>
-                Author Info
+                <span className="material-symbols-outlined text-amber-400">info</span>
+                App Info
               </h3>
               <button onClick={() => setShowAuthorInfo(false)} className="text-dark-text3 hover:text-dark-text cursor-pointer">
                 <span className="material-symbols-outlined">close</span>

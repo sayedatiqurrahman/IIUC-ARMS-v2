@@ -56,7 +56,7 @@
 
   .list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
   .todo {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
     background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px;
     transition: border-color .2s, box-shadow .2s;
   }
@@ -72,9 +72,9 @@
   .todo .body { flex: 1; min-width: 0; }
   .todo .text { font-size: 14px; word-break: break-word; }
   .todo.done .text { text-decoration: line-through; color: var(--text3); }
-  .todo .time { font-size: 12px; color: var(--text2); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .todo .time { font-size: 12px; color: var(--text2); margin-top: 2px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .todo.running .time { color: var(--green); font-weight: 600; }
-  .todo .act { display: flex; gap: 6px; flex: none; align-items: center; }
+  .todo .act { display: flex; gap: 6px; flex: none; align-items: center; flex-wrap: wrap; }
   .todo .dur {
     background: var(--bg); color: var(--text2); border: 1px solid var(--border);
     border-radius: 8px; padding: 4px 5px; font-size: 11px; outline: none; cursor: pointer;
@@ -114,7 +114,7 @@
     position: fixed; right: 14px; bottom: 14px; left: auto; top: auto;
     display: none; align-items: center; gap: 9px; padding: 6px 13px 6px 8px;
     background: var(--bg3); border: 1px solid var(--border); border-radius: 999px;
-    box-shadow: 0 10px 28px rgba(0,0,0,.55); z-index: 40;
+    box-shadow: 0 10px 28px rgba(0,0,0,.55); z-index: 1600;
     cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none;
     transition: box-shadow .15s, border-color .15s, border-radius .15s, padding .15s;
     max-width: min(360px, calc(100vw - 24px));
@@ -144,6 +144,45 @@
   .empty { text-align: center; color: var(--text3); font-size: 13px; margin-top: 40px; }
   .empty .mi { font-size: 28px; display: block; margin-bottom: 8px; opacity: .5; }
   .note { margin-top: 14px; font-size: 11.5px; color: var(--text3); line-height: 1.5; }
+
+  .deadline { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; padding: 2px 6px; border-radius: 6px; font-weight: 600; }
+  .deadline.soon { background: rgba(245,158,11,.15); color: #f59e0b; }
+  .deadline.overdue { background: rgba(244,63,94,.15); color: #f43f5e; }
+  .deadline.ok { background: rgba(34,197,94,.1); color: #22c55e; }
+  .deadline .mi { font-size: 12px; }
+  .subnotes { width: 100%; padding-left: 32px; margin-top: 4px; }
+  .subnote { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+  .subnote .sn-check { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--text3); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; transition: background .15s, transform .1s; background: transparent; }
+  .subnote .sn-check:active { transform: scale(.85); }
+  .subnote.done .sn-check { background: var(--green); border-color: var(--green); }
+  .subnote .sn-text { font-size: 12px; color: var(--text2); flex: 1; min-width: 0; word-break: break-word; }
+  .subnote.done .sn-text { text-decoration: line-through; color: var(--text3); }
+  .subnote .sn-del { background: none; border: none; color: var(--text3); font-size: 14px; cursor: pointer; padding: 0 2px; border-radius: 4px; opacity: 0; transition: opacity .15s, color .15s; display: inline-flex; align-items: center; line-height: 1; }
+  .subnote:hover .sn-del { opacity: 1; }
+  .subnote .sn-del:hover { color: var(--rose); }
+  .subnote-add { display: flex; gap: 4px; margin-top: 4px; width: 100%; }
+  .subnote-add input { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; font-size: 12px; outline: none; }
+  .subnote-add input:focus { border-color: var(--green); }
+  .subnote-add .btn { padding: 4px 8px; font-size: 11px; border-radius: 8px; }
+  .add-note-btn { background: none; border: 1px dashed var(--border); color: var(--text3); font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 3px; margin-top: 4px; }
+  .add-note-btn:hover { border-color: var(--green); color: var(--green); }
+  .add-note-btn .mi { font-size: 13px; }
+  .toggle-dl { background: none; border: 1px solid var(--border); color: var(--text3); font-size: 11px; padding: 4px 6px; border-radius: 8px; cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 3px; }
+  .toggle-dl:hover { border-color: var(--green); color: var(--green); }
+  .toggle-dl .mi { font-size: 13px; }
+
+  @media (max-width: 420px) {
+    body { padding: 16px 12px 100px; }
+    .add { flex-wrap: wrap; }
+    .add input[type=text] { flex: 1 1 100%; min-width: 0; }
+    .add select, .add input[type=number], .add .btn.primary { flex: 1; min-width: 0; }
+    .todo .body { flex: 1 1 100%; min-width: 0; order: 1; }
+    .todo .check { order: 0; }
+    .todo .act { flex: 1 1 100%; order: 2; width: 100%; justify-content: flex-end; padding-top: 6px; border-top: 1px solid var(--border); margin-top: 2px; }
+    .todo .act .btn.icon { width: 34px; height: 34px; }
+    .todo .act .dur { min-width: 0; }
+    .subnotes { padding-left: 0; }
+  }
 </style>
 </head>
 <body>
@@ -161,14 +200,17 @@
   <div class="add">
     <input id="newText" type="text" placeholder="What are you focusing on?" maxlength="120" />
     <select id="newDur">
+      <option value="0">No timer</option>
       <option value="300">5 min</option>
       <option value="900">15 min</option>
       <option value="1500" selected>25 min</option>
       <option value="2700">45 min</option>
       <option value="3600">1 hr</option>
-      <option value="custom">Custom…</option>
+      <option value="custom">Custom...</option>
     </select>
     <input id="newDurCustom" type="number" min="1" max="1440" step="1" placeholder="min" title="Minutes" style="display:none" />
+    <button class="btn icon toggle-dl" id="newDlBtn" title="Set deadline"><span class="mi">calendar_today</span></button>
+    <input id="newDeadline" type="datetime-local" style="display:none" />
     <button class="btn primary" id="addBtn"><span class="mi">add</span></button>
   </div>
 
@@ -223,20 +265,20 @@
     return h > 0 ? h + ':' + mm + ':' + ss : mm + ':' + ss;
   };
 
-  // When embedded in an iframe, hide the capsule (parent FloatingFocus handles it)
   if (inIframe) {
     const cap = $('capsule');
     if (cap) cap.style.display = 'none';
   }
 
   let todos = loadTodos();
-  let activeId = null;      // id of the running timer
-  let capsuleId = null;     // todo referenced by the capsule
+  let activeId = null;
+  let capsuleId = null;
   let pipWindow = null;
-  let popWindow = null;     // fallback always-on-top popup window
+  let popWindow = null;
   let popupId = null;
-  let editingId = null;     // todo whose text is being edited
-  let tabView = 'active';   // 'active' or 'done'
+  let editingId = null;
+  let tabView = 'active';
+  let addingNoteId = null;
 
   const running = () => todos.find((t) => t.running);
 
@@ -247,18 +289,23 @@
       return list.map((t) => ({
         id: String(t.id || Math.random().toString(36).slice(2, 10)),
         text: String(t.text || ''),
-        duration: Math.max(5, Number(t.duration) || 1500),
-        remaining: Math.max(0, t.remaining !== undefined && t.remaining !== null ? Number(t.remaining) : (Number(t.duration) || 1500)),
+        duration: t.duration === 0 ? 0 : Math.max(5, Number(t.duration) || 1500),
+        remaining: t.duration === 0 ? 0 : Math.max(0, t.remaining !== undefined && t.remaining !== null ? Number(t.remaining) : (Number(t.duration) || 1500)),
         running: !!t.running,
         done: !!t.done,
         lastTick: Number(t.lastTick) || 0,
         createdAt: Number(t.createdAt) || Date.now(),
+        notes: Array.isArray(t.notes) ? t.notes.map(n => ({
+          id: String(n.id || Math.random().toString(36).slice(2, 8)),
+          text: String(n.text || ''),
+          done: !!n.done,
+        })) : [],
+        deadline: t.deadline || null,
       }));
     } catch { return []; }
   }
   function save() { localStorage.setItem(STORE_KEY, JSON.stringify({ todos })); }
 
-  // Reconcile a timer that was running when the page closed.
   (function reconcile() {
     const t = todos.find((x) => x.running);
     if (t && t.lastTick) {
@@ -295,7 +342,7 @@
 
   function startTodo(id) {
     const t = find(id); if (!t) return;
-    // pause any other running timer
+    if (t.duration === 0) return;
     const other = todos.find((x) => x.running && x.id !== id);
     if (other) { other.running = false; other.lastTick = 0; }
     t.done = false;
@@ -340,14 +387,19 @@
       secs = Math.round(Number($('newDurCustom').value) * 60);
       if (!(secs >= 60 && secs <= 86400)) { $('newDurCustom').focus(); return; }
     }
+    const deadlineVal = $('newDeadline').value || null;
     todos.unshift({
       id: Math.random().toString(36).slice(2, 10),
       text, duration: secs, remaining: secs,
       running: false, done: false, lastTick: 0, createdAt: Date.now(),
+      notes: [],
+      deadline: deadlineVal ? new Date(deadlineVal).toISOString() : null,
     });
     $('newText').value = '';
     $('newDurCustom').value = '';
     $('newDurCustom').style.display = 'none';
+    $('newDeadline').value = '';
+    $('newDeadline').style.display = 'none';
     save(); render();
   }
   function setDuration(id, d) {
@@ -373,10 +425,12 @@
   function durationOptions(selected) {
     const mins = [5, 15, 25, 45, 60];
     const preset = mins.some((m) => m * 60 === selected);
-    return mins
-      .map((m) => '<option value="' + m * 60 + '"' + (selected === m * 60 ? ' selected' : '') + '>' + m + ' min</option>')
-      .join('') +
-      '<option value="custom"' + (preset ? '' : ' selected') + '>Custom…</option>';
+    const isZero = selected === 0;
+    return '<option value="0"' + (isZero ? ' selected' : '') + '>No timer</option>' +
+      mins
+        .map((m) => '<option value="' + m * 60 + '"' + (selected === m * 60 ? ' selected' : '') + '>' + m + ' min</option>')
+        .join('') +
+      '<option value="custom"' + (isZero || preset ? '' : ' selected') + '>Custom...</option>';
   }
 
   function editTodo(id) {
@@ -391,6 +445,46 @@
     const inp = document.querySelector('.edit-input');
     if (t && inp && inp.value.trim()) t.text = inp.value.trim();
     editingId = null;
+    save(); render();
+  }
+
+  function deadlineClass(dl) {
+    if (!dl) return '';
+    const diff = new Date(dl).getTime() - Date.now();
+    if (diff < 0) return 'overdue';
+    if (diff < 3600000) return 'soon';
+    return 'ok';
+  }
+  function deadlineText(dl) {
+    if (!dl) return '';
+    const d = new Date(dl);
+    const now = new Date();
+    const diff = d.getTime() - now.getTime();
+    if (diff < 0) return 'Overdue';
+    if (diff < 3600000) return Math.ceil(diff / 60000) + 'm left';
+    if (diff < 86400000) return Math.ceil(diff / 3600000) + 'h left';
+    return d.toLocaleDateString();
+  }
+
+  function addSubNote(todoId, text) {
+    const t = find(todoId); if (!t || !text.trim()) return;
+    t.notes.push({ id: Math.random().toString(36).slice(2, 8), text: text.trim(), done: false });
+    save(); render();
+  }
+  function toggleSubNote(todoId, noteId) {
+    const t = find(todoId); if (!t) return;
+    const n = t.notes.find(x => x.id === noteId); if (n) n.done = !n.done;
+    save(); render();
+  }
+  function deleteSubNote(todoId, noteId) {
+    const t = find(todoId); if (!t) return;
+    t.notes = t.notes.filter(x => x.id !== noteId);
+    save(); render();
+  }
+
+  function setDeadline(id, dl) {
+    const t = find(id); if (!t) return;
+    t.deadline = dl ? new Date(dl).toISOString() : null;
     save(); render();
   }
 
@@ -412,18 +506,18 @@
     $('pipNote').textContent = isFloating() ? 'Floating — look at the small on-top window.' : '';
   }
 
-  // ── Floating timer bubble (sports-score style) ───────────────────────────
+  // ── Floating timer bubble ────────────────────────────────────────────────
   const CAP_POS_KEY = 'qsis_todos_capsule_pos';
   const CAP_DRAG_THRESHOLD = 6;
   const CAP_MARGIN = 8;
 
-  let capPos = null;        // saved {x,y} top-left position (px)
+  let capPos = null;
   let capExpanded = false;
   let capDragging = false;
   let capMoved = false;
   let capDragStart = null;
   let capDragBase = null;
-  let capDismissed = null;  // todo whose bubble the user closed
+  let capDismissed = null;
 
   function loadCapPos() {
     try {
@@ -496,7 +590,7 @@
   }
   loadCapPos();
 
-  // ── Floating always-on-top window (Picture-in-Picture, popup fallback) ──
+  // ── Floating always-on-top window ────────────────────────────────────────
   const FLOAT_ID_KEY = 'qsis_todos_float_id';
   const FLOAT_CMD_KEY = 'qsis_todos_cmd';
   const isFloating = () => !!(pipWindow || popWindow);
@@ -642,18 +736,35 @@
     for (const t of visible) {
       const row = document.createElement('div');
       row.className = 'todo' + (t.running ? ' running' : '') + (t.done ? ' done' : '');
+      const isNote = t.duration === 0;
+
+      let timeHtml = '';
+      if (isNote) {
+        timeHtml = '<span>Note</span>';
+      } else {
+        timeHtml = '<span>' + fmt(t.remaining) + ' &middot; ' +
+          (t.duration >= 3600 ? (t.duration / 3600) + ' hr' : t.duration / 60 + ' min') + '</span>';
+      }
+
+      if (t.deadline) {
+        const dlCls = deadlineClass(t.deadline);
+        const dlTxt = deadlineText(t.deadline);
+        timeHtml += '<span class="deadline ' + dlCls + '"><span class="mi">schedule</span> ' + dlTxt + '</span>';
+      }
+
       row.innerHTML =
         '<span class="check">' + (t.done ? '<span class="mi" style="font-size:14px;color:#06210f">check</span>' : '') + '</span>' +
-        '<div class="body"><div class="text"></div><div class="time">' + fmt(t.remaining) + ' · ' +
-          (t.duration >= 3600 ? (t.duration / 3600) + ' hr' : t.duration / 60 + ' min') + '</div></div>' +
+        '<div class="body"><div class="text"></div><div class="time">' + timeHtml + '</div></div>' +
         '<div class="act">' +
-          '<button class="btn icon" data-act="popup" title="Open timer popup"><span class="mi">timer</span></button>' +
-          '<button class="btn icon" data-act="play" title="Start / Pause"><span class="mi">' + (t.running ? 'pause' : 'play_arrow') + '</span></button>' +
+          (isNote ? '' : '<button class="btn icon" data-act="popup" title="Open timer popup"><span class="mi">timer</span></button>') +
+          (isNote ? '' : '<button class="btn icon" data-act="play" title="Start / Pause"><span class="mi">' + (t.running ? 'pause' : 'play_arrow') + '</span></button>') +
+          '<button class="btn icon toggle-dl" data-act="deadline" title="Set deadline"><span class="mi">calendar_today</span></button>' +
           '<select class="dur" data-act="dur" title="Duration">' + durationOptions(t.duration) + '</select>' +
           '<button class="btn icon" data-act="edit" title="Edit text"><span class="mi">edit</span></button>' +
-          '<button class="btn icon" data-act="reset" title="Reset"><span class="mi">restart_alt</span></button>' +
+          (isNote ? '' : '<button class="btn icon" data-act="reset" title="Reset"><span class="mi">restart_alt</span></button>') +
           '<button class="btn icon" data-act="del" title="Delete"><span class="mi">delete_outline</span></button>' +
         '</div>';
+
       if (editingId === t.id) {
         row.querySelector('.body').innerHTML = '<input class="edit-input" maxlength="120">';
         const inp = row.querySelector('.edit-input');
@@ -666,9 +777,38 @@
       } else {
         row.querySelector('.text').textContent = t.text;
       }
+
       row.querySelector('.check').addEventListener('click', () => toggleDone(t.id));
-      row.querySelector('[data-act="popup"]').addEventListener('click', () => openPopup(t.id));
-      row.querySelector('[data-act="play"]').addEventListener('click', () => (t.running ? pauseTodo(t.id) : startTodo(t.id)));
+
+      const popupBtn = row.querySelector('[data-act="popup"]');
+      if (popupBtn) popupBtn.addEventListener('click', () => openPopup(t.id));
+
+      const playBtn = row.querySelector('[data-act="play"]');
+      if (playBtn) playBtn.addEventListener('click', () => (t.running ? pauseTodo(t.id) : startTodo(t.id)));
+
+      row.querySelector('[data-act="deadline"]').addEventListener('click', () => {
+        const dlInput = document.createElement('input');
+        dlInput.type = 'datetime-local';
+        dlInput.className = 'dur';
+        dlInput.style.cssText = 'width:auto;min-width:0;';
+        if (t.deadline) {
+          const d = new Date(t.deadline);
+          dlInput.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + 'T' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+        }
+        dlInput.addEventListener('change', () => {
+          setDeadline(t.id, dlInput.value || null);
+        });
+        dlInput.addEventListener('blur', () => render());
+        dlInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') render();
+        });
+        const actDiv = row.querySelector('.act');
+        const dlBtn = row.querySelector('[data-act="deadline"]');
+        dlBtn.replaceWith(dlInput);
+        dlInput.focus();
+        if (dlInput.showPicker) { try { dlInput.showPicker(); } catch {} }
+      });
+
       row.querySelector('[data-act="dur"]').addEventListener('change', (e) => {
         const sel = e.target;
         if (sel.value === 'custom') {
@@ -692,9 +832,65 @@
         }
         setDuration(t.id, Number(sel.value));
       });
+
       row.querySelector('[data-act="edit"]').addEventListener('click', () => editTodo(t.id));
-      row.querySelector('[data-act="reset"]').addEventListener('click', () => resetTodo(t.id));
+
+      const resetBtn = row.querySelector('[data-act="reset"]');
+      if (resetBtn) resetBtn.addEventListener('click', () => resetTodo(t.id));
+
       row.querySelector('[data-act="del"]').addEventListener('click', () => deleteTodo(t.id));
+
+      if (t.notes.length > 0 || addingNoteId === t.id) {
+        const subDiv = document.createElement('div');
+        subDiv.className = 'subnotes';
+        for (const n of t.notes) {
+          const sn = document.createElement('div');
+          sn.className = 'subnote' + (n.done ? ' done' : '');
+          sn.innerHTML =
+            '<div class="sn-check">' + (n.done ? '<span class="mi" style="font-size:10px;color:#06210f">check</span>' : '') + '</div>' +
+            '<span class="sn-text"></span>' +
+            '<button class="sn-del"><span class="mi" style="font-size:14px">close</span></button>';
+          sn.querySelector('.sn-text').textContent = n.text;
+          sn.querySelector('.sn-check').addEventListener('click', () => toggleSubNote(t.id, n.id));
+          sn.querySelector('.sn-del').addEventListener('click', () => deleteSubNote(t.id, n.id));
+          subDiv.appendChild(sn);
+        }
+
+        if (addingNoteId === t.id) {
+          const addForm = document.createElement('div');
+          addForm.className = 'subnote-add';
+          addForm.innerHTML = '<input type="text" placeholder="Add a note..." maxlength="120" /><button class="btn primary">Add</button>';
+          const snInp = addForm.querySelector('input');
+          const snBtn = addForm.querySelector('button');
+          snBtn.addEventListener('click', () => {
+            if (snInp.value.trim()) { addSubNote(t.id, snInp.value); addingNoteId = null; }
+          });
+          snInp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && snInp.value.trim()) { addSubNote(t.id, snInp.value); addingNoteId = null; }
+            if (e.key === 'Escape') { addingNoteId = null; render(); }
+          });
+          subDiv.appendChild(addForm);
+          setTimeout(() => { snInp.focus(); }, 10);
+        } else {
+          const addBtn = document.createElement('button');
+          addBtn.className = 'add-note-btn';
+          addBtn.innerHTML = '<span class="mi">add</span> Note';
+          addBtn.addEventListener('click', () => { addingNoteId = t.id; render(); });
+          subDiv.appendChild(addBtn);
+        }
+
+        row.querySelector('.body').appendChild(subDiv);
+      } else {
+        const addBtnWrap = document.createElement('div');
+        addBtnWrap.style.cssText = 'width:100%;padding-left:32px;';
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-note-btn';
+        addBtn.innerHTML = '<span class="mi">add</span> Note';
+        addBtn.addEventListener('click', () => { addingNoteId = t.id; render(); });
+        addBtnWrap.appendChild(addBtn);
+        row.querySelector('.body').appendChild(addBtnWrap);
+      }
+
       list.appendChild(row);
     }
     if (!capsuleId && activeId && activeId !== capDismissed) capsuleId = activeId;
@@ -726,8 +922,15 @@
     document.querySelectorAll('.todo').forEach((row, i) => {
       const t = todos[i];
       const el = row.querySelector('.time');
-      if (t && el) el.textContent = fmt(t.remaining) + ' · ' +
-        (t.duration >= 3600 ? (t.duration / 3600) + ' hr' : t.duration / 60 + ' min');
+      if (!t || !el || t.duration === 0) return;
+      let timeHtml = '<span>' + fmt(t.remaining) + ' &middot; ' +
+        (t.duration >= 3600 ? (t.duration / 3600) + ' hr' : t.duration / 60 + ' min') + '</span>';
+      if (t.deadline) {
+        const dlCls = deadlineClass(t.deadline);
+        const dlTxt = deadlineText(t.deadline);
+        timeHtml += '<span class="deadline ' + dlCls + '"><span class="mi">schedule</span> ' + dlTxt + '</span>';
+      }
+      el.innerHTML = timeHtml;
     });
     $('pTime').textContent = popupId && find(popupId) ? fmt(find(popupId).remaining) : $('pTime').textContent;
     $('pTime').classList.toggle('warn', !!running() && running().remaining <= 60 && running().remaining > 0);
@@ -738,9 +941,21 @@
   $('addBtn').addEventListener('click', addTodo);
   $('newText').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
   $('newDur').addEventListener('change', () => {
-    const on = $('newDur').value === 'custom';
+    const v = $('newDur').value;
+    const on = v === 'custom';
     $('newDurCustom').style.display = on ? '' : 'none';
     if (on) $('newDurCustom').focus();
+  });
+  $('newDlBtn').addEventListener('click', () => {
+    const dl = $('newDeadline');
+    if (dl.style.display === 'none') {
+      dl.style.display = '';
+      dl.focus();
+      if (dl.showPicker) { try { dl.showPicker(); } catch {} }
+    } else {
+      dl.style.display = 'none';
+      dl.value = '';
+    }
   });
   document.querySelectorAll('#tabs button').forEach((btn) => {
     btn.addEventListener('click', () => setTab(btn.dataset.tab));
@@ -788,7 +1003,6 @@
     }
   });
 
-  // bubble drag (move) vs click (expand)
   $('capsule').addEventListener('pointerdown', (e) => {
     if (e.target.closest('button')) return;
     capDragging = true;

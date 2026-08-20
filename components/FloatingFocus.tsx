@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const STORE_KEY = 'qsis_todos_v1';
 
@@ -13,6 +13,8 @@ interface Todo {
   done: boolean;
   lastTick: number;
   createdAt: number;
+  notes?: { id: string; text: string; done: boolean }[];
+  deadline?: string | null;
 }
 
 function fmt(s: number) {
@@ -32,12 +34,14 @@ function readTodos(): Todo[] {
     return list.map((t) => ({
       id: String(t.id || ''),
       text: String(t.text || ''),
-      duration: Math.max(5, Number(t.duration) || 1500),
-      remaining: Math.max(0, t.remaining !== undefined ? Number(t.remaining) : (Number(t.duration) || 1500)),
+      duration: Number(t.duration) || 0,
+      remaining: Math.max(0, t.remaining !== undefined ? Number(t.remaining) : (Number(t.duration) || 0)),
       running: !!t.running,
       done: !!t.done,
       lastTick: Number(t.lastTick) || 0,
       createdAt: Number(t.createdAt) || Date.now(),
+      notes: Array.isArray(t.notes) ? t.notes : [],
+      deadline: t.deadline || null,
     }));
   } catch { return []; }
 }
@@ -46,16 +50,37 @@ function writeTodos(todos: Todo[]) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify({ todos })); } catch {}
 }
 
+function playBeep() {
+  try {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new Ctx();
+    [0, 0.18, 0.36, 0.54].forEach((dt) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.value = 880;
+      o.connect(g);
+      g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.001, ctx.currentTime + dt);
+      g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + dt + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dt + 0.35);
+      o.start(ctx.currentTime + dt);
+      o.stop(ctx.currentTime + dt + 0.4);
+    });
+  } catch {}
+}
+
 export default function FloatingFocus() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [expanded, setExpanded] = useState(false);
+  const [offscreen, setOffscreen] = useState(false);
   const capsuleRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const dragBase = useRef<{ left: number; top: number } | null>(null);
   const hasDragged = useRef(false);
   const lastSavedRef = useRef<string>('');
+  const lastBeepRef = useRef<string>('');
 
-  // Core tick — THIS is the single source of truth for the timer
+  // Core tick — single source of truth for the timer
   useEffect(() => {
     const tick = () => {
       try {
@@ -70,11 +95,13 @@ export default function FloatingFocus() {
         running.remaining = Math.max(0, running.remaining - elapsed);
         running.lastTick = now;
 
+        let justFinished = false;
         if (running.remaining <= 0) {
           running.remaining = 0;
           running.running = false;
           running.lastTick = 0;
           running.done = true;
+          justFinished = true;
         }
 
         const serialized = JSON.stringify(current);
@@ -83,10 +110,15 @@ export default function FloatingFocus() {
           lastSavedRef.current = serialized;
         }
         setTodos(current);
+
+        if (justFinished && lastBeepRef.current !== running.id) {
+          lastBeepRef.current = running.id;
+          playBeep();
+        }
       } catch {}
     };
 
-    // Reconcile on mount — catch up any time that passed while this component wasn't mounted
+    // Reconcile on mount
     try {
       const current = readTodos();
       const running = current.find(t => t.running);
@@ -95,14 +127,20 @@ export default function FloatingFocus() {
         if (elapsed > 0) {
           running.remaining = Math.max(0, running.remaining - elapsed);
           running.lastTick = Date.now();
+          let justFinished = false;
           if (running.remaining <= 0) {
             running.remaining = 0;
             running.running = false;
             running.lastTick = 0;
             running.done = true;
+            justFinished = true;
           }
           writeTodos(current);
           setTodos(current);
+          if (justFinished) {
+            lastBeepRef.current = running.id;
+            playBeep();
+          }
         }
       }
     } catch {}
@@ -111,7 +149,7 @@ export default function FloatingFocus() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load from localStorage periodically (for non-running state changes)
+  // Load from localStorage periodically
   useEffect(() => {
     const interval = setInterval(() => {
       setTodos(readTodos());
@@ -119,16 +157,42 @@ export default function FloatingFocus() {
     return () => clearInterval(interval);
   }, []);
 
-  // Only show when a timer is actually running
-  const running = todos.find(t => t.running);
-  if (!running) return null;
+  // Clamp capsule to viewport on resize
+  useEffect(() => {
+    const onResize = () => {
+      const el = capsuleRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const isOff = rect.right < 0 || rect.left > vw || rect.bottom < 0 || rect.top > vh;
+      setOffscreen(isOff);
+      if (isOff) {
+        el.style.left = '';
+        el.style.top = '';
+        el.style.right = '12px';
+        el.style.bottom = '80px';
+        setOffscreen(false);
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
-  const progress = running.duration > 0 ? ((running.duration - running.remaining) / running.duration) * 100 : 0;
+  // Only show when a timer is actually running (or just finished in the last few seconds)
+  const running = todos.find(t => t.running);
+  const justFinished = todos.find(t => t.done && !t.running && t.remaining <= 0);
+  const active = running || null;
+  if (!active && !justFinished) return null;
+
+  const display = active || justFinished!;
+  const progress = display.duration > 0 ? ((display.duration - display.remaining) / display.duration) * 100 : 0;
+  const isActive = !!running;
 
   const sendCommand = (cmd: string) => {
     try {
       const current = readTodos();
-      const t = current.find(x => x.id === running.id);
+      const t = current.find(x => x.id === display.id);
       if (!t) return;
 
       if (cmd === 'play') {
@@ -164,6 +228,16 @@ export default function FloatingFocus() {
     } catch {}
   };
 
+  const resetPosition = () => {
+    const el = capsuleRef.current;
+    if (!el) return;
+    el.style.left = '';
+    el.style.top = '';
+    el.style.right = '12px';
+    el.style.bottom = '80px';
+    setOffscreen(false);
+  };
+
   const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) return;
     hasDragged.current = false;
@@ -183,6 +257,11 @@ export default function FloatingFocus() {
     capsuleRef.current.style.top = `${dragBase.current.top + dy}px`;
     capsuleRef.current.style.right = 'auto';
     capsuleRef.current.style.bottom = 'auto';
+    // Check if off-screen after drag
+    const rect = capsuleRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    setOffscreen(rect.right < 0 || rect.left > vw || rect.bottom < 0 || rect.top > vh);
   };
 
   const handlePointerUp = () => {
@@ -190,97 +269,121 @@ export default function FloatingFocus() {
   };
 
   return (
-    <div
-      ref={capsuleRef}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onClick={() => {
-        if (!hasDragged.current) setExpanded(!expanded);
-      }}
-      className="fixed right-3 bottom-[80px] md:bottom-4 z-[80] select-none touch-none"
-    >
-      <div
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 border bg-dark-bg2/95 backdrop-blur-sm shadow-xl cursor-grab transition-all rounded-full ${expanded ? 'rounded-2xl' : ''}`}
-        style={{ borderColor: running ? 'rgba(34,197,94,0.5)' : 'var(--color-dark-border, #2a3a5c)', maxWidth: 'min(300px, calc(100vw - 24px))' }}
-      >
-        <div className="relative flex-none">
-          <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,.5)]" />
-          <div className="absolute inset-0 w-2 h-2 rounded-full bg-green-500 animate-ping opacity-75" />
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="text-[0.62rem] font-semibold text-dark-text2 truncate max-w-[140px]">
-            {running.text}
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-xs font-bold tabular-nums text-green-400">
-              {fmt(running.remaining)}
-            </span>
-            <span className="text-[0.5rem] font-bold uppercase tracking-wider text-green-400">
-              Focus
-            </span>
-          </div>
-          <div className="mt-0.5 h-[2px] w-full bg-dark-border rounded-full overflow-hidden">
-            <div className="h-full bg-green-500/60 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, progress)}%` }} />
-          </div>
-        </div>
-      </div>
-
-      {expanded && (
-        <div
-          className="mt-1.5 mx-1 rounded-2xl bg-dark-bg2/95 backdrop-blur-sm border border-green-500/30 p-2 space-y-1.5"
-          onClick={(e) => e.stopPropagation()}
+    <>
+      {/* Off-screen reset button */}
+      {offscreen && (
+        <button
+          onClick={resetPosition}
+          className="fixed bottom-[80px] md:bottom-4 right-3 z-[1700] w-10 h-10 rounded-full border border-amber-500/50 bg-dark-bg2/95 backdrop-blur-sm flex items-center justify-center text-amber-400 cursor-pointer shadow-lg animate-pulse"
+          title="Bring timer back to screen"
         >
-          <div className="flex items-center justify-between text-[0.6rem] text-dark-text3 px-1">
-            <span>{fmt(running.duration - running.remaining)} elapsed</span>
-            <span>{fmt(running.duration)} total</span>
+          <span className="material-symbols-outlined text-[1.1rem]">focus_center</span>
+        </button>
+      )}
+
+      <div
+        ref={capsuleRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onClick={() => {
+          if (!hasDragged.current) setExpanded(!expanded);
+        }}
+        className="fixed right-3 bottom-[80px] md:bottom-4 z-[1600] select-none touch-none"
+      >
+        <div
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 border bg-dark-bg2/95 backdrop-blur-sm shadow-xl cursor-grab transition-all rounded-full ${expanded ? 'rounded-2xl' : ''}`}
+          style={{ borderColor: isActive ? 'rgba(34,197,94,0.5)' : 'var(--color-dark-border, #2a3a5c)', maxWidth: 'min(300px, calc(100vw - 24px))' }}
+        >
+          <div className="relative flex-none">
+            <div className={`w-2 h-2 rounded-full shadow-[0_0_6px_rgba(34,197,94,.5)] ${isActive ? 'bg-green-500' : 'bg-amber-400'}`} />
+            {isActive && <div className="absolute inset-0 w-2 h-2 rounded-full bg-green-500 animate-ping opacity-75" />}
           </div>
 
-          <div className="flex gap-1">
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => sendCommand('play')}
-              className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.65rem] font-semibold cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1"
-            >
-              <i className={`fas ${running ? 'fa-pause' : 'fa-play'} text-[0.55rem]`}></i>
-              {running ? 'Pause' : 'Resume'}
-            </button>
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => sendCommand('+5')}
-              className="h-8 px-2.5 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.65rem] font-semibold cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-0.5"
-            >
-              <i className="fas fa-plus text-[0.5rem]"></i>5m
-            </button>
-          </div>
-
-          <div className="flex gap-1">
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => sendCommand('reset')}
-              className="flex-1 h-7 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.62rem] font-medium cursor-pointer hover:border-amber-500 hover:text-amber-400 transition flex items-center justify-center gap-1"
-            >
-              <i className="fas fa-rotate-left text-[0.5rem]"></i> Reset
-            </button>
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => sendCommand('done')}
-              className="flex-1 h-7 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.62rem] font-medium cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1"
-            >
-              <i className="fas fa-check text-[0.5rem]"></i> Done
-            </button>
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => sendCommand('close')}
-              className="h-7 px-2 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.62rem] font-medium cursor-pointer hover:border-rose-500 hover:text-rose-400 transition"
-            >
-              <i className="fas fa-times text-[0.5rem]"></i>
-            </button>
+          <div className="flex-1 min-w-0">
+            <div className="text-[0.62rem] font-semibold text-dark-text2 truncate max-w-[140px]">
+              {display.text}
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-xs font-bold tabular-nums ${isActive ? 'text-green-400' : 'text-amber-400'}`}>
+                {fmt(display.remaining)}
+              </span>
+              <span className={`text-[0.5rem] font-bold uppercase tracking-wider ${isActive ? 'text-green-400' : 'text-amber-400'}`}>
+                {isActive ? 'Focus' : 'Done'}
+              </span>
+            </div>
+            <div className="mt-0.5 h-[2px] w-full bg-dark-border rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all duration-1000 ${isActive ? 'bg-green-500/60' : 'bg-amber-400/60'}`} style={{ width: `${Math.min(100, progress)}%` }} />
+            </div>
           </div>
         </div>
-      )}
-    </div>
+
+        {expanded && (
+          <div
+            className="mt-1.5 mx-1 rounded-2xl bg-dark-bg2/95 backdrop-blur-sm border border-green-500/30 p-3 space-y-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between text-[0.6rem] text-dark-text3 px-1">
+              <span>{fmt(display.duration - display.remaining)} elapsed</span>
+              <span>{fmt(display.duration)} total</span>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => sendCommand('play')}
+                className="flex-1 h-9 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.7rem] font-semibold cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1.5"
+              >
+                <i className={`fas ${isActive ? 'fa-pause' : 'fa-play'} text-[0.6rem]`}></i>
+                {isActive ? 'Pause' : 'Resume'}
+              </button>
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => sendCommand('+5')}
+                className="h-9 px-3 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.7rem] font-semibold cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1"
+              >
+                <i className="fas fa-plus text-[0.55rem]"></i> 5m
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => sendCommand('reset')}
+                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.65rem] font-medium cursor-pointer hover:border-amber-500 hover:text-amber-400 transition flex items-center justify-center gap-1.5"
+              >
+                <i className="fas fa-rotate-left text-[0.55rem]"></i> Reset
+              </button>
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => sendCommand('done')}
+                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.65rem] font-medium cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1.5"
+              >
+                <i className="fas fa-check text-[0.55rem]"></i> Done
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={resetPosition}
+                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.65rem] font-medium cursor-pointer hover:border-blue-500 hover:text-blue-400 transition flex items-center justify-center gap-1.5"
+                title="Reset position"
+              >
+                <i className="fas fa-crosshairs text-[0.55rem]"></i> Reposition
+              </button>
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => sendCommand('close')}
+                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.65rem] font-medium cursor-pointer hover:border-rose-500 hover:text-rose-400 transition flex items-center justify-center gap-1.5"
+              >
+                <i className="fas fa-times text-[0.55rem]"></i> Hide
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
