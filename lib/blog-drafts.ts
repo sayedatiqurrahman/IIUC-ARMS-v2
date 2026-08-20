@@ -1,7 +1,7 @@
 import type { BlogPostListItem, BlogCategory } from '@/lib/blog';
 
 const DB_NAME = 'iiuc-blog-drafts';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const DRAFTS_STORE = 'drafts';
 const CONTENT_STORE = 'content';
 
@@ -22,6 +22,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(CONTENT_STORE)) {
         db.createObjectStore(CONTENT_STORE, { keyPath: 'slug' });
+      }
+      if (!db.objectStoreNames.contains(THUMB_STORE)) {
+        db.createObjectStore(THUMB_STORE, { keyPath: 'slug' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -115,23 +118,8 @@ export async function deleteDraftContent(slug: string): Promise<void> {
 
 const THUMB_STORE = 'thumbnails';
 
-function ensureThumbStore(db: IDBDatabase): void {
-  if (!db.objectStoreNames.contains(THUMB_STORE)) {
-    db.createObjectStore(THUMB_STORE, { keyPath: 'slug' });
-  }
-}
-
 export async function saveDraftThumbnailBlob(slug: string, blob: Blob, previewUrl: string): Promise<void> {
   const db = await openDB();
-  if (!db.objectStoreNames.contains(THUMB_STORE)) {
-    db.close();
-    const req2 = indexedDB.open(DB_NAME, DB_VERSION + 1);
-    await new Promise<void>((resolve) => {
-      req2.onupgradeneeded = () => ensureThumbStore(req2.result);
-      req2.onsuccess = () => { req2.result.close(); resolve(); };
-    });
-    return saveDraftThumbnailBlob(slug, blob, previewUrl);
-  }
   return new Promise<void>((resolve) => {
     const tx = db.transaction(THUMB_STORE, 'readwrite');
     tx.objectStore(THUMB_STORE).put({ slug, blob, previewUrl });
