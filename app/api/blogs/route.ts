@@ -59,10 +59,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const effectiveRole = (session.user as any)?.role || 'user';
-  const isCR = !!(session.user as any)?.isCR;
   const userEmail = session.user?.email || '';
   const userName = (session.user as any)?.name || userEmail.split('@')[0];
+  const profile = await (await import('@/lib/prisma')).prisma.profile.findUnique({ where: { userId: userEmail } });
+  const effectiveRole = config.getEffectiveRole(userEmail, profile?.role);
+  const isCR = !!(profile?.isCR);
 
   try {
     const contentType = req.headers.get('content-type') || '';
