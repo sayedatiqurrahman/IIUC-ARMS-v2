@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSession } from 'next-auth/react';
 import type { BlogPostListItem } from '@/lib/blog';
 import { useUserAccess } from '@/lib/useUserAccess';
 import BlogEditorModal from '@/components/blog/BlogEditorModal';
@@ -17,14 +18,10 @@ const CATEGORY_META: Record<string, { label: string; icon: string; color: string
   post: { label: 'Blog Post', icon: 'fa-pen-nib', color: 'text-green-400', bg: 'bg-green-500/15 text-green-400' },
 };
 
-const STATUS_META: Record<string, { label: string; bg: string }> = {
-  published: { label: 'Published', bg: 'bg-green-500/15 text-green-400' },
-  draft: { label: 'Draft', bg: 'bg-yellow-500/15 text-yellow-400' },
-};
-
 type FilterType = 'all' | 'tutorial' | 'post';
 
 export default function BlogTab({ email, effectiveRole, isCR, customPermissions }: Props) {
+  const { data: session } = useSession();
   const { has } = useUserAccess(email, effectiveRole, isCR, customPermissions);
 
   const canPublishBlog = has('publishBlog');
@@ -159,7 +156,6 @@ export default function BlogTab({ email, effectiveRole, isCR, customPermissions 
         <div className="space-y-2">
           {filteredPosts.map(post => {
             const catMeta = CATEGORY_META[post.category];
-            const statusMeta = STATUS_META[post.status];
             return (
               <div key={post.slug} className="flex items-center gap-3 rounded-xl border border-dark-border bg-dark-bg2 px-4 py-3 hover:border-dark-text3 transition">
                 {post.thumbnailUrl && (
@@ -170,9 +166,6 @@ export default function BlogTab({ email, effectiveRole, isCR, customPermissions 
                     <span className="text-[0.82rem] font-semibold text-dark-text truncate">{post.title}</span>
                     <span className={`shrink-0 text-[0.6rem] font-medium px-2 py-0.5 rounded-full ${catMeta.bg}`}>
                       <i className={`fas ${catMeta.icon} mr-1`}></i>{catMeta.label}
-                    </span>
-                    <span className={`shrink-0 text-[0.6rem] font-medium px-2 py-0.5 rounded-full ${statusMeta.bg}`}>
-                      {statusMeta.label}
                     </span>
                   </div>
                   <p className="text-[0.7rem] text-dark-text3 truncate">{post.excerpt || 'No excerpt'}</p>
@@ -203,6 +196,7 @@ export default function BlogTab({ email, effectiveRole, isCR, customPermissions 
         editingPost={editingPost}
         canPublishTutorial={canPublishTutorial}
         canPublishBlog={canPublishBlog}
+        sessionUser={session?.user as any}
       />
     </div>
   );

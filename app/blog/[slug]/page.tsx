@@ -3,11 +3,11 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { renderMarkdown } from '@/lib/markdown';
-import type { BlogPost } from '@/lib/blog';
+import type { BlogPostListItem } from '@/lib/blog';
 
 export default function BlogDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const [post, setPost] = useState<BlogPost | null>(null);
+  const [post, setPost] = useState<BlogPostListItem | null>(null);
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -21,7 +21,7 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
         const metaData = await metaRes.json();
         const contentData = await contentRes.json();
         if (metaData.success) {
-          const found = metaData.posts.find((p: BlogPost) => p.slug === slug);
+          const found = metaData.posts.find((p: BlogPostListItem) => p.slug === slug);
           setPost(found || null);
         }
         if (contentData.success) {

@@ -289,24 +289,3 @@ model TelegramNotification {
   @@index([department])
   @@index([sentAt])
 }
-
-model BlogDraft {
-  id            String   @id @default(cuid())
-  authorEmail   String
-  category      String   @default("post")
-  slug          String
-  title         String
-  excerpt       String   @default("")
-  content       String   @default("")
-  tags          String   @default("[]")
-  thumbnailUrl  String?
-  status        String   @default("draft")
-  publishedAt   DateTime?
-  updatedAt     DateTime @default(now())
-  createdAt     DateTime @default(now())
-
-  @@index([authorEmail])
-  @@index([category])
-  @@index([slug])
-  @@index([status])
-}

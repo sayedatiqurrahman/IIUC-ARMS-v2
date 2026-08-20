@@ -8,6 +8,7 @@ import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { useUserAccess } from '@/lib/useUserAccess';
 import type { BlogPostListItem } from '@/lib/blog';
+import { listDrafts } from '@/lib/blog-drafts';
 import BlogEditorModal from '@/components/blog/BlogEditorModal';
 
 const TABS = [
@@ -31,10 +32,10 @@ function BlogContent() {
   const { has } = useUserAccess(email, role || '', isCR, customPerms);
   const canPublishBlog = has('publishBlog');
   const canPublishTutorial = has('publishTutorial');
-  const canPublish = canPublishBlog || canPublishTutorial;
   const isLoggedIn = !!email;
 
-  const [posts, setPosts] = useState<BlogPostListItem[]>([]);
+  const [publishedPosts, setPublishedPosts] = useState<BlogPostListItem[]>([]);
+  const [localDrafts, setLocalDrafts] = useState<BlogPostListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'tutorial' | 'post' | 'draft'>(initialTab);
   const [search, setSearch] = useState(searchParams.get('q') || '');
@@ -43,17 +44,24 @@ function BlogContent() {
   const [editingPost, setEditingPost] = useState<BlogPostListItem | null>(null);
 
   const fetchPosts = useCallback(async () => {
+    // Fetch published from API
     try {
       const res = await fetch('/api/blogs');
       const data = await res.json();
-      if (data.success) {
-        setPosts(data.posts);
-      }
+      if (data.success) setPublishedPosts(data.posts);
+    } catch {}
+    // Load local drafts from IndexedDB
+    try {
+      const drafts = await listDrafts();
+      setLocalDrafts(drafts);
     } catch {}
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
+
+  // Merge: drafts first, then published
+  const allPosts = [...localDrafts, ...publishedPosts];
 
   const handleTab = useCallback((tab: 'all' | 'tutorial' | 'post' | 'draft') => {
     setActiveTab(tab);
@@ -64,10 +72,9 @@ function BlogContent() {
     window.history.replaceState({}, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
   }, []);
 
-  const filtered = posts.filter(p => {
-    if (activeTab === 'draft') return p.status === 'draft' && p.authorEmail === email;
+  const filtered = allPosts.filter(p => {
+    if (activeTab === 'draft') return p.status === 'draft';
     if (activeTab !== 'all' && p.category !== activeTab) return false;
-    if (p.status === 'draft' && p.authorEmail !== email) return false;
     if (search) {
       const q = search.toLowerCase();
       if (p.title.toLowerCase().includes(q)) return true;
@@ -77,6 +84,15 @@ function BlogContent() {
     }
     return true;
   });
+
+  const handleDeleteDraft = async (slug: string) => {
+    if (!confirm('Delete this draft?')) return;
+    const { deleteDraft, deleteDraftContent, deleteDraftThumbnailBlob } = await import('@/lib/blog-drafts');
+    await deleteDraft(slug);
+    await deleteDraftContent(slug);
+    await deleteDraftThumbnailBlob(slug);
+    setLocalDrafts(prev => prev.filter(d => d.slug !== slug));
+  };
 
   return (
     <div className="min-h-screen max-w-6xl mx-auto px-4 py-6">
@@ -117,6 +133,9 @@ function BlogContent() {
             >
               <i className={`fas ${t.icon}`}></i>
               {t.label}
+              {t.key === 'draft' && localDrafts.length > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 text-[0.6rem]">{localDrafts.length}</span>
+              )}
             </button>
           ))}
         </div>
@@ -184,9 +203,9 @@ function BlogContent() {
                       alt=""
                       className="w-6 h-6 rounded-full"
                     />
-                    <span className="text-[0.7rem] text-dark-text2">{post.authorName}</span>
+                    <span className="text-[0.7rem] text-dark-text2">{post.authorName || 'You'}</span>
                     <span className="text-[0.65rem] text-dark-text3 ml-auto">
-                      {new Date(post.publishedAt).toLocaleDateString()}
+                      {new Date(isDraft ? post.updatedAt || post.publishedAt : post.publishedAt).toLocaleDateString()}
                     </span>
                   </div>
                   {post.tags.length > 0 && (
@@ -204,9 +223,18 @@ function BlogContent() {
 
             if (isDraft) {
               return (
-                <button key={post.id} onClick={() => { setEditingPost(post); setShowEditor(true); }} className="text-left border-none bg-transparent p-0 cursor-pointer">
-                  {CardContent}
-                </button>
+                <div key={post.id} className="relative group">
+                  <button onClick={() => { setEditingPost(post); setShowEditor(true); }} className="text-left border-none bg-transparent p-0 cursor-pointer w-full">
+                    {CardContent}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteDraft(post.slug); }}
+                    className="absolute top-2 left-2 w-7 h-7 rounded-full bg-red-500/80 flex items-center justify-center text-white text-[0.6rem] border-none cursor-pointer opacity-0 group-hover:opacity-100 transition"
+                    title="Delete draft"
+                  >
+                    <i className="fas fa-trash"></i>
+                  </button>
+                </div>
               );
             }
             return (
@@ -218,15 +246,15 @@ function BlogContent() {
         </div>
       )}
 
-      {canPublish && (
-        <BlogEditorModal
-          open={showEditor}
-          onClose={() => setShowEditor(false)}
-          onSaved={fetchPosts}
-          canPublishTutorial={canPublishTutorial}
-          canPublishBlog={canPublishBlog}
-        />
-      )}
+      <BlogEditorModal
+        open={showEditor}
+        onClose={() => setShowEditor(false)}
+        onSaved={fetchPosts}
+        editingPost={editingPost}
+        canPublishTutorial={canPublishTutorial}
+        canPublishBlog={canPublishBlog}
+        sessionUser={session?.user as any}
+      />
     </div>
   );
 }

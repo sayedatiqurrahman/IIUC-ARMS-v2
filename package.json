@@ -5,7 +5,7 @@
   "author": "s.atiqurrahman2003@gmail.com",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --skip-generate && node scripts/fix-profile-columns.js && node scripts/copy-jsquash-wasm.js && next build",
+    "build": "prisma generate && node scripts/fix-profile-columns.js && node scripts/copy-jsquash-wasm.js && next build",
     "start": "next start",
     "postinstall": "prisma generate && node -e \"const fs=require('fs');const o='node_modules/@techstark/opencv-js/dist/opencv.js';if(fs.existsSync(o)){fs.mkdirSync('public',{recursive:true});fs.copyFileSync(o,'public/opencv.js')}\" && patch-package",
     "db:migrate": "node scripts/fix-profile-columns.js"
