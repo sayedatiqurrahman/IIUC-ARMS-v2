@@ -119,7 +119,6 @@ export default function ContributorsTab() {
             >
               <option value="contributions">Total Contributions</option>
               <option value="commits">Commits</option>
-              <option value="prs">Pull Requests</option>
               <option value="name">Name</option>
             </select>
           </div>

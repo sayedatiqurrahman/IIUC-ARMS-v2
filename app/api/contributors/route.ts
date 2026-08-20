@@ -17,7 +17,6 @@ interface Contributor {
   dataContributions: number;
   designContributions: number;
   issueContributions: number;
-  prCount: number;
   role: string;
   roleType: 'developer' | 'resource_provider' | 'both';
   department: string;
@@ -176,11 +175,9 @@ export async function GET() {
     const token = await getGithubToken();
     const GITHUB_API = 'https://api.github.com';
 
-    const [v2Contributors, dataContributors, v2Prs, dataPrs, v2Issues, designAuthors] = await Promise.all([
+    const [v2Contributors, dataContributors, v2Issues, designAuthors] = await Promise.all([
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.sourceRepo}/contributors`, token),
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contributors`, token),
-      fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.sourceRepo}/pulls?state=all`, token),
-      fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.repo}/pulls?state=all`, token),
       fetchAllPages(`${GITHUB_API}/repos/${config.owner}/${config.sourceRepo}/issues?state=all`, token),
       // Creative Hub design authors (public raw file in the themes repo).
       fetch(`https://raw.githubusercontent.com/${config.creativeHub.owner}/${config.creativeHub.repo}/main/authors.json`, { cache: 'no-store' })
@@ -195,7 +192,7 @@ export async function GET() {
       if (map.has(login)) return map.get(login)!;
       const c: Contributor = {
         id, login, name: login, title: '', email: '', avatar_url: avatar, html_url: htmlUrl,
-        contributions: 0, v2Contributions: 0, dataContributions: 0, designContributions: 0, issueContributions: 0, prCount: 0,
+        contributions: 0, v2Contributions: 0, dataContributions: 0, designContributions: 0, issueContributions: 0,
         role: 'Contributor', roleType: 'developer',
         department: '', section: '',
         universityId: '', whatsapp: '', semester: '',
@@ -233,34 +230,6 @@ export async function GET() {
         } else {
           c.role = 'Resource Provider';
           c.roleType = 'resource_provider';
-        }
-      }
-    }
-
-    // Process PRs — track PR authors and count (PRs are display-only, not scored)
-    for (const pr of [...v2Prs, ...dataPrs]) {
-      const u = pr.user;
-      if (!u?.login || isBot(u.login, u.type)) continue;
-      const isV2 = v2Prs.includes(pr);
-      const isData = dataPrs.includes(pr);
-      const c = ensure(u.login, u.avatar_url, u.html_url, String(u.id));
-      c.prCount += 1;
-      // Update role based on PR repos
-      if (c.role !== 'Founder & Lead') {
-        if (isV2 && isData) {
-          c.role = 'Developer & Resource Provider';
-          c.roleType = 'both';
-        } else if (isData && c.v2Contributions > 1) {
-          c.role = 'Developer & Resource Provider';
-          c.roleType = 'both';
-        } else if (isData) {
-          c.role = 'Resource Provider';
-          c.roleType = 'resource_provider';
-        } else if (isV2) {
-          if (c.role === 'Contributor' || c.role === 'Resource Provider') {
-            c.role = c.dataContributions > 0 ? 'Developer & Resource Provider' : 'Developer';
-            c.roleType = c.dataContributions > 0 ? 'both' : 'developer';
-          }
         }
       }
     }
@@ -378,7 +347,6 @@ export async function GET() {
         const bTotal = b.v2Contributions + b.dataContributions + b.designContributions + b.issueContributions;
         if (settings.sortBy === 'name') return a.name.localeCompare(b.name);
         if (settings.sortBy === 'commits') return (b.v2Contributions + b.dataContributions) - (a.v2Contributions + a.dataContributions);
-        if (settings.sortBy === 'prs') return b.prCount - a.prCount;
         return bTotal - aTotal;
       });
 

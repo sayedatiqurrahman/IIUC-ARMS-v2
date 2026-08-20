@@ -104,9 +104,6 @@ export default function HistoryModal({ c, onClose }: { c: any; onClose: () => vo
             <span className="text-[0.7rem] font-bold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full" title="Commits made by this user across the source-code repo and the data repo — every commit counts as 1.">
               <i className="fas fa-code-commit mr-1"></i>{commitCount} Commits
             </span>
-            <span className="text-[0.7rem] font-bold text-accent bg-accent/10 px-2.5 py-1 rounded-full" title="Pull requests this user opened — counted across both repos.">
-              <i className="fas fa-code-merge mr-1"></i>{prCount} PRs
-            </span>
             {allEvents.length > PAGE_SIZE && (
               <span className="text-[0.6rem] text-dark-text3 ml-auto">
                 Showing {events.length} of {allEvents.length}
