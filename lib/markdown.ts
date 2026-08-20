@@ -29,10 +29,14 @@ const ALLOWED_ATTR = [
 
 function sanitize(html: string): string {
   if (typeof window !== 'undefined') {
-    return DOMPurify.sanitize(html, {
-      ALLOWED_TAGS,
-      ALLOWED_ATTR,
-    }) as string;
+    try {
+      return DOMPurify.sanitize(html, {
+        ALLOWED_TAGS,
+        ALLOWED_ATTR,
+      }) as string;
+    } catch {
+      return html;
+    }
   }
   return html;
 }
@@ -66,12 +70,32 @@ renderer.code = function (token: any) {
 
 marked.use({ renderer });
 
+function fallbackHtml(src: string): string {
+  return `<p>${src.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`;
+}
+
 export function renderMarkdown(src: string): string {
   try {
     if (!src || !src.trim()) return '';
-    const raw = marked.parse(src) as string;
-    return sanitize(raw);
-  } catch {
-    return `<p>${src.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`;
+    const result = marked.parse(src);
+    if (result instanceof Promise) {
+      console.error('[renderMarkdown] marked.parse returned a Promise — falling back to plain text');
+      return fallbackHtml(src);
+    }
+    return sanitize(result);
+  } catch (e) {
+    console.error('[renderMarkdown] error:', e);
+    return fallbackHtml(src);
+  }
+}
+
+export async function renderMarkdownAsync(src: string): Promise<string> {
+  try {
+    if (!src || !src.trim()) return '';
+    const result = await marked.parse(src);
+    return sanitize(result);
+  } catch (e) {
+    console.error('[renderMarkdownAsync] error:', e);
+    return fallbackHtml(src);
   }
 }

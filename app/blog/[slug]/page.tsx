@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useMemo, use } from 'react';
 import Link from 'next/link';
-import { renderMarkdown } from '@/lib/markdown';
+import { renderMarkdown, renderMarkdownAsync } from '@/lib/markdown';
 import type { BlogPostListItem } from '@/lib/blog';
 import { getDraft, getDraftContent } from '@/lib/blog-drafts';
 
@@ -12,6 +12,8 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [isDraft, setIsDraft] = useState(false);
+  const [renderedHtml, setRenderedHtml] = useState('');
+  const [renderError, setRenderError] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -27,13 +29,14 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
           const found = metaData.posts.find((p: BlogPostListItem) => p.slug === slug);
           if (found) {
             setPost(found);
-            if (contentData.success) setContent(contentData.content || '');
+            if (contentData.success && contentData.content) {
+              setContent(contentData.content);
+            }
             setLoading(false);
             return;
           }
         }
 
-        // Fallback: check IndexedDB for local draft
         const draft = await getDraft(slug);
         if (draft) {
           setPost(draft);
@@ -45,6 +48,29 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
       setLoading(false);
     })();
   }, [slug]);
+
+  useEffect(() => {
+    if (!content) { setRenderedHtml(''); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const sync = renderMarkdown(content);
+        if (!cancelled) {
+          setRenderedHtml(sync);
+          if (!sync || sync === '<p></p>') {
+            const asyncResult = await renderMarkdownAsync(content);
+            if (!cancelled) setRenderedHtml(asyncResult);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setRenderError(true);
+          setRenderedHtml(`<p style="white-space:pre-wrap;color:#f87171">${content}</p>`);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [content]);
 
   if (loading) {
     return (
@@ -73,13 +99,14 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
     );
   }
 
-  if (isDraft) {
-    return (
-      <div className="min-h-[80vh] max-w-4xl mx-auto px-4 py-6">
-        <Link href="/blog" className="inline-flex items-center gap-1.5 text-[0.78rem] text-dark-text2 hover:text-qsis transition mb-5">
-          <i className="fas fa-arrow-left"></i> Back to Blog
-        </Link>
+  const formatDate = (d: string) => {
+    try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); }
+    catch { return d; }
+  };
 
+  const ContentBody = () => (
+    <>
+      {isDraft && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 mb-5 flex items-start gap-3">
           <i className="fas fa-file-alt text-amber-400 text-lg mt-0.5"></i>
           <div>
@@ -90,31 +117,21 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
             </p>
           </div>
         </div>
+      )}
 
-        <article className="rounded-2xl border border-dark-border bg-dark-bg2 overflow-hidden">
-          {post.thumbnailUrl && (
-            <div className="border-b border-dark-border">
-              <img src={post.thumbnailUrl} alt={post.title} className="w-full max-h-[360px] object-cover" />
-            </div>
-          )}
-          <div className="p-5 sm:p-6">
-            <h1 className="text-xl sm:text-2xl font-bold text-dark-text leading-snug mb-4">{post.title}</h1>
-            {content && (
-              <div
-                className="prose-content text-[0.88rem] text-dark-text leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
-              />
-            )}
-          </div>
-        </article>
-      </div>
-    );
-  }
-
-  const formatDate = (d: string) => {
-    try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); }
-    catch { return d; }
-  };
+      {renderedHtml ? (
+        <div
+          className={`prose-content text-[0.88rem] text-dark-text leading-relaxed ${renderError ? 'text-red-400' : ''}`}
+          dangerouslySetInnerHTML={{ __html: renderedHtml }}
+          suppressHydrationWarning
+        />
+      ) : content ? (
+        <div className="text-[0.88rem] text-dark-text2 italic">Loading content...</div>
+      ) : (
+        <p className="text-dark-text3 italic text-[0.82rem]">No content available.</p>
+      )}
+    </>
+  );
 
   return (
     <div className="min-h-[80vh] max-w-4xl mx-auto px-4 py-6">
@@ -123,19 +140,21 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
       </Link>
 
       <article className="rounded-2xl border border-dark-border bg-dark-bg2 overflow-hidden">
-        <div className="px-5 py-4 border-b border-dark-border bg-dark-bg3/30">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`px-2.5 py-0.5 rounded-lg text-[0.68rem] font-semibold ${post.category === 'tutorial' ? 'bg-blue-500/15 text-blue-400' : 'bg-green-500/15 text-green-400'}`}>
-              <i className={`${post.category === 'tutorial' ? 'fa-graduation-cap' : 'fa-pen-nib'} mr-1`}></i>
-              {post.category === 'tutorial' ? 'Tutorial' : 'Blog Post'}
-            </span>
-            {post.tags.map(tag => (
-              <span key={tag} className="px-2 py-0.5 rounded-lg text-[0.65rem] font-medium bg-dark-bg2 text-dark-text3 border border-dark-border">
-                {tag}
+        {!isDraft && (
+          <div className="px-5 py-4 border-b border-dark-border bg-dark-bg3/30">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`px-2.5 py-0.5 rounded-lg text-[0.68rem] font-semibold ${post.category === 'tutorial' ? 'bg-blue-500/15 text-blue-400' : 'bg-green-500/15 text-green-400'}`}>
+                <i className={`${post.category === 'tutorial' ? 'fa-graduation-cap' : 'fa-pen-nib'} mr-1`}></i>
+                {post.category === 'tutorial' ? 'Tutorial' : 'Blog Post'}
               </span>
-            ))}
+              {post.tags.map(tag => (
+                <span key={tag} className="px-2 py-0.5 rounded-lg text-[0.65rem] font-medium bg-dark-bg2 text-dark-text3 border border-dark-border">
+                  {tag}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {post.thumbnailUrl && (
           <div className="border-b border-dark-border">
@@ -146,43 +165,42 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
         <div className="p-5 sm:p-6">
           <h1 className="text-xl sm:text-2xl font-bold text-dark-text leading-snug mb-4">{post.title}</h1>
 
-          <div className="flex flex-wrap items-center gap-4 text-[0.75rem] text-dark-text3 mb-5 pb-5 border-b border-dark-border">
-            <span className="flex items-center gap-1.5">
-              <img
-                src={post.authorAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(post.authorName)}&background=22c55e&color=fff&bold=true&size=32`}
-                alt=""
-                className="w-5 h-5 rounded-full"
-              />
-              {post.authorName}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <i className="fas fa-calendar text-qsis"></i>
-              {formatDate(post.publishedAt)}
-            </span>
-            {post.updatedAt && post.updatedAt !== post.publishedAt && (
+          {!isDraft && (
+            <div className="flex flex-wrap items-center gap-4 text-[0.75rem] text-dark-text3 mb-5 pb-5 border-b border-dark-border">
               <span className="flex items-center gap-1.5">
-                <i className="fas fa-pen text-qsis"></i>
-                Updated {formatDate(post.updatedAt)}
+                <img
+                  src={post.authorAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(post.authorName)}&background=22c55e&color=fff&bold=true&size=32`}
+                  alt=""
+                  className="w-5 h-5 rounded-full"
+                />
+                {post.authorName}
               </span>
-            )}
-          </div>
+              <span className="flex items-center gap-1.5">
+                <i className="fas fa-calendar text-qsis"></i>
+                {formatDate(post.publishedAt)}
+              </span>
+              {post.updatedAt && post.updatedAt !== post.publishedAt && (
+                <span className="flex items-center gap-1.5">
+                  <i className="fas fa-pen text-qsis"></i>
+                  Updated {formatDate(post.updatedAt)}
+                </span>
+              )}
+            </div>
+          )}
 
           {post.excerpt && (
             <p className="text-[0.88rem] text-dark-text2 italic mb-5 pb-5 border-b border-dark-border">{post.excerpt}</p>
           )}
 
-          {content && (
-            <div
-              className="prose-content text-[0.88rem] text-dark-text leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
-            />
-          )}
+          <ContentBody />
         </div>
 
-        <div className="px-5 py-3 border-t border-dark-border bg-dark-bg3/20 flex items-center justify-between text-[0.68rem] text-dark-text3">
-          <span>Published by {post.authorName}</span>
-          <span>{formatDate(post.publishedAt)}</span>
-        </div>
+        {!isDraft && (
+          <div className="px-5 py-3 border-t border-dark-border bg-dark-bg3/20 flex items-center justify-between text-[0.68rem] text-dark-text3">
+            <span>Published by {post.authorName}</span>
+            <span>{formatDate(post.publishedAt)}</span>
+          </div>
+        )}
       </article>
     </div>
   );
