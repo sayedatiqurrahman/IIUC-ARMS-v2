@@ -243,7 +243,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
     // If logged in but no onboarding data, don't show modal yet —
     // the profileLoaded effect below will handle it.
+
+    // Auto-open GitHub token modal from direct link (?action=github-token)
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('action') === 'github-token') {
+      window.history.replaceState({}, '', window.pathname);
+    }
   }, []);
+
+  // Open PAT modal when ?action=github-token is in the URL (after auth resolves)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('action') === 'github-token') {
+      window.history.replaceState({}, '', window.pathname);
+      if (status === 'authenticated' && !isGithubConnected) {
+        setPatPromptOpen(true);
+      }
+    }
+  }, [status, isGithubConnected]);
 
   // Auto-sync personalization with profile: when the user completes their
   // profile (department + semester), automatically update onboarding data so
@@ -1070,7 +1088,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               onChange={e => setPatInputToken(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handlePatSaveAndContinue()}
             />
-            <a href="https://github.com/settings/tokens/new?description=IIUC-ARMS&scopes=repo" target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-qsis hover:underline inline-block mb-3">
+            <a href="https://github.com/settings/tokens/new?scopes=repo,user:follow&description=IIUC-ARMS" target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-qsis hover:underline inline-block mb-3">
               Create a classic token — Note <code className="bg-dark-bg3 px-1 rounded">IIUC-ARMS</code> and <code className="bg-dark-bg3 px-1 rounded">repo</code> scope are pre-filled
             </a>
 

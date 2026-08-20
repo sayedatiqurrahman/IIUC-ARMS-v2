@@ -779,7 +779,7 @@ export default function DashboardView() {
                 <p className="text-[0.78rem] text-qsis font-semibold"><i className="fas fa-star mr-1.5"></i>Why connect?</p>
                 <p className="text-[0.72rem] text-dark-text2 mt-1">Once connected, your name and profile will appear in our <strong>Contributors</strong> list.</p>
               </div>
-              <a href="https://github.com/settings/tokens/new?scopes=repo&description=IIUC-ARMS" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-lg border border-qsis/30 bg-qsis/5 text-qsis text-[0.82rem] font-semibold hover:bg-qsis/10 transition-all mb-4 no-underline">
+              <a href="https://github.com/settings/tokens/new?scopes=repo,user:follow&description=IIUC-ARMS" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-lg border border-qsis/30 bg-qsis/5 text-qsis text-[0.82rem] font-semibold hover:bg-qsis/10 transition-all mb-4 no-underline">
                 <i className="fas fa-external-link-alt"></i> Open GitHub Token Page
               </a>
               <label className="text-[0.78rem] text-dark-text2 block mb-1.5">Paste your token here:</label>
