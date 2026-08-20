@@ -29,6 +29,7 @@ export default function BlogTab({ email, effectiveRole, isCR, customPermissions 
 
   const canPublishBlog = has('publishBlog');
   const canPublishTutorial = has('publishTutorial');
+  const canPublishAny = canPublishBlog || canPublishTutorial;
 
   const [posts, setPosts] = useState<BlogPostListItem[]>([]);
   const [loading, setLoading] = useState(true);

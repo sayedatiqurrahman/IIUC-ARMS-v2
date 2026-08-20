@@ -1,9 +1,9 @@
 import { config } from '@/lib/config';
 import { getRepoBotToken } from '@/lib/github-app';
 import { commitFilesToBranch } from '@/lib/github-commit';
+import { prisma } from '@/lib/prisma';
 
 const BLOGS_PATH = 'blogs';
-const BLOGS_INDEX = `${BLOGS_PATH}/index.json`;
 const BLOGS_TUTORIALS_DIR = `${BLOGS_PATH}/tutorials`;
 const BLOGS_POSTS_DIR = `${BLOGS_PATH}/posts`;
 
@@ -21,6 +21,7 @@ export interface BlogPost {
   authorLogin: string;
   authorName: string;
   authorAvatar: string;
+  authorEmail: string;
   publishedAt: string;
   updatedAt?: string;
   tags: string[];
@@ -72,13 +73,20 @@ export function getCategoryDir(category: BlogCategory): string {
   return category === 'tutorial' ? BLOGS_TUTORIALS_DIR : BLOGS_POSTS_DIR;
 }
 
+function getCategoryIndexPath(category: BlogCategory): string {
+  return `${getCategoryDir(category)}/index.json`;
+}
+
 function generateId(): string {
   return `blog-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export async function readBlogsIndex(): Promise<BlogPostListItem[]> {
+// ─── Category-specific index (GitHub) ───
+
+export async function readCategoryIndex(category: BlogCategory): Promise<BlogPostListItem[]> {
+  const indexPath = getCategoryIndexPath(category);
   try {
-    const rawUrl = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${BLOGS_INDEX}`;
+    const rawUrl = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${indexPath}`;
     const res = await fetch(rawUrl, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
@@ -88,7 +96,7 @@ export async function readBlogsIndex(): Promise<BlogPostListItem[]> {
 
   try {
     const token = await getRepoBotToken(config.owner, config.repo) || process.env.GITHUB_TOKEN || '';
-    const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${BLOGS_INDEX}`;
+    const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${indexPath}`;
     const res = await fetch(apiUrl, {
       headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
     });
@@ -101,6 +109,141 @@ export async function readBlogsIndex(): Promise<BlogPostListItem[]> {
     return [];
   }
 }
+
+export async function writeCategoryIndex(
+  category: BlogCategory,
+  posts: BlogPostListItem[],
+  token: string,
+  message: string,
+): Promise<boolean> {
+  try {
+    const indexPath = getCategoryIndexPath(category);
+    const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`;
+    const refRes = await fetch(apiUrl, { headers: { Authorization: `token ${token}` } });
+    if (!refRes.ok) return false;
+    const { object } = await refRes.json();
+
+    const indexContent = JSON.stringify(posts, null, 2);
+    const files = [
+      { path: indexPath, content: Buffer.from(indexContent).toString('base64'), encoding: 'base64' as const },
+    ];
+
+    await commitFilesToBranch({
+      token,
+      owner: config.owner,
+      repo: config.repo,
+      branch: config.branch,
+      baseSha: object.sha,
+      files,
+      message,
+    });
+    return true;
+  } catch (e: any) {
+    console.error('[Blog] writeCategoryIndex error:', e?.message);
+    return false;
+  }
+}
+
+// ─── Combined index (published from both categories) ───
+
+export async function readBlogsIndex(): Promise<BlogPostListItem[]> {
+  const tutorials = await readCategoryIndex('tutorial');
+  const posts = await readCategoryIndex('post');
+  return [...tutorials, ...posts];
+}
+
+// ─── Draft CRUD (DB) ───
+
+export interface BlogDraftInput {
+  id?: string;
+  authorEmail: string;
+  category: BlogCategory;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  tags: string[];
+  thumbnailUrl?: string;
+  publishedAt?: string;
+  updatedAt?: string;
+  createdAt?: string;
+}
+
+export async function saveBlogDraft(input: BlogDraftInput): Promise<{ id: string; isUpdate: boolean }> {
+  const existing = await prisma.blogDraft.findFirst({
+    where: { slug: input.slug, authorEmail: input.authorEmail },
+  });
+
+  const data = {
+    authorEmail: input.authorEmail,
+    category: input.category,
+    slug: input.slug,
+    title: input.title,
+    excerpt: input.excerpt,
+    content: input.content,
+    tags: JSON.stringify(input.tags),
+    thumbnailUrl: input.thumbnailUrl || null,
+    updatedAt: new Date(),
+  };
+
+  if (existing) {
+    await prisma.blogDraft.update({ where: { id: existing.id }, data });
+    return { id: existing.id, isUpdate: true };
+  }
+
+  const result = await prisma.blogDraft.create({ data });
+  return { id: result.id, isUpdate: false };
+}
+
+export async function getBlogDrafts(authorEmail?: string): Promise<BlogDraftInput[]> {
+  const where = authorEmail ? { authorEmail } : {};
+  const records = await prisma.blogDraft.findMany({
+    where,
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  return records.map(r => ({
+    id: r.id,
+    authorEmail: r.authorEmail,
+    category: r.category as BlogCategory,
+    slug: r.slug,
+    title: r.title,
+    excerpt: r.excerpt,
+    content: r.content,
+    tags: JSON.parse(r.tags || '[]'),
+    thumbnailUrl: r.thumbnailUrl || undefined,
+    publishedAt: r.publishedAt?.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+    createdAt: r.createdAt.toISOString(),
+  })) as any;
+}
+
+export async function getBlogDraftBySlug(slug: string, authorEmail?: string): Promise<any> {
+  const where: any = { slug };
+  if (authorEmail) where.authorEmail = authorEmail;
+  const record = await prisma.blogDraft.findFirst({ where });
+  if (!record) return null;
+  return {
+    ...record,
+    tags: JSON.parse(record.tags || '[]'),
+  };
+}
+
+export async function deleteBlogDraft(slug: string, authorEmail: string): Promise<boolean> {
+  const draft = await prisma.blogDraft.findFirst({ where: { slug, authorEmail } });
+  if (!draft) return false;
+  await prisma.blogDraft.delete({ where: { id: draft.id } });
+  return true;
+}
+
+export async function deleteBlogDraftBySlug(slug: string): Promise<boolean> {
+  const draft = await prisma.blogDraft.findFirst({ where: { slug } });
+  if (!draft) return false;
+  await prisma.blogDraft.delete({ where: { id: draft.id } });
+  return true;
+}
+
+// ─── Content read (draft from DB, published from GitHub) ───
 
 export async function readBlogContent(category: BlogCategory, folderName: string): Promise<string> {
   const dir = getCategoryDir(category);
@@ -125,37 +268,12 @@ export async function readBlogContent(category: BlogCategory, folderName: string
   }
 }
 
-export async function writeBlogsIndex(
-  posts: BlogPostListItem[],
-  token: string,
-  message: string,
-): Promise<boolean> {
-  try {
-    const apiUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`;
-    const refRes = await fetch(apiUrl, { headers: { Authorization: `token ${token}` } });
-    if (!refRes.ok) return false;
-    const { object } = await refRes.json();
-
-    const indexContent = JSON.stringify(posts, null, 2);
-    const files = [
-      { path: BLOGS_INDEX, content: Buffer.from(indexContent).toString('base64'), encoding: 'base64' as const },
-    ];
-
-    await commitFilesToBranch({
-      token,
-      owner: config.owner,
-      repo: config.repo,
-      branch: config.branch,
-      baseSha: object.sha,
-      files,
-      message,
-    });
-    return true;
-  } catch (e: any) {
-    console.error('[Blog] writeBlogsIndex error:', e?.message);
-    return false;
-  }
+export async function readDraftContent(slug: string, authorEmail: string): Promise<string> {
+  const draft = await prisma.blogDraft.findFirst({ where: { slug, authorEmail } });
+  return draft?.content || '';
 }
+
+// ─── GitHub file operations (published posts) ───
 
 async function uploadToGitHub(filePath: string, file: File, token: string, message: string): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
@@ -336,7 +454,6 @@ export async function deleteBlogPostFolder(category: BlogCategory, folderName: s
 
     for (const item of items) {
       if (item.type === 'dir') {
-        // Recursively list and delete subdirectory contents
         const subRes = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${item.path}`, {
           headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
         });

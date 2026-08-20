@@ -6,14 +6,21 @@ import { prisma } from '@/lib/prisma';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission } from '@/lib/permissions';
 import {
+  readCategoryIndex,
   readBlogsIndex,
-  writeBlogsIndex,
+  writeCategoryIndex,
   writeBlogContent,
   deleteBlogPostFolder,
   uploadBlogThumbnail,
   uploadBlogAsset,
   writeBlogPostMeta,
   generatePostFolderName,
+  saveBlogDraft,
+  getBlogDrafts,
+  getBlogDraftBySlug,
+  deleteBlogDraft,
+  deleteBlogDraftBySlug,
+  readDraftContent,
   type BlogPostListItem,
   type BlogCategory,
 } from '@/lib/blog';
@@ -21,40 +28,86 @@ import {
 export async function GET(req: NextRequest) {
   const action = req.nextUrl.searchParams.get('action');
 
-  // ─── Fetch post content for editor ───
+  // ─── Fetch content for editor (draft from DB or published from GitHub) ───
   if (action === 'content') {
     const slug = req.nextUrl.searchParams.get('slug');
     if (!slug) return NextResponse.json({ error: 'Slug required' }, { status: 400 });
 
-    const posts = await readBlogsIndex();
-    const post = posts.find(p => p.slug === slug);
-    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    const session = await getServerSession(authOptions);
+    const userEmail = session?.user?.email || '';
 
-    const { readBlogContent } = await import('@/lib/blog');
-    const content = await readBlogContent(post.category, post.folderName);
-    return NextResponse.json({ success: true, content });
+    // Check published posts first
+    const publishedPosts = await readBlogsIndex();
+    const publishedPost = publishedPosts.find(p => p.slug === slug);
+    if (publishedPost) {
+      const { readBlogContent } = await import('@/lib/blog');
+      const content = await readBlogContent(publishedPost.category, publishedPost.folderName);
+      return NextResponse.json({ success: true, content, status: 'published' });
+    }
+
+    // Check drafts (only own drafts)
+    if (userEmail) {
+      const draft = await getBlogDraftBySlug(slug, userEmail);
+      if (draft) {
+        return NextResponse.json({ success: true, content: draft.content, status: 'draft' });
+      }
+    }
+
+    return NextResponse.json({ error: 'Post not found' }, { status: 404 });
   }
 
   // ─── List posts ───
-  let posts = await readBlogsIndex();
-
   const category = req.nextUrl.searchParams.get('category');
+  const session = await getServerSession(authOptions);
+  const userEmail = session?.user?.email || '';
+  const effectiveRole = (session?.user as any)?.role || 'user';
+  const isCR = !!(session?.user as any)?.isCR;
+
+  // Published posts from GitHub (per-category indexes)
+  let publishedPosts: BlogPostListItem[] = [];
   if (category && (category === 'tutorial' || category === 'post')) {
-    posts = posts.filter(p => p.category === category);
+    publishedPosts = await readCategoryIndex(category as BlogCategory);
+  } else {
+    publishedPosts = await readBlogsIndex();
+  }
+  publishedPosts = publishedPosts.filter(p => p.status === 'published');
+
+  // Drafts from DB
+  const isAdmin = effectiveRole === 'admin' || effectiveRole === 'manager';
+  let drafts: BlogPostListItem[] = [];
+  if (userEmail) {
+    const rawDrafts = await getBlogDrafts(isAdmin ? undefined : userEmail);
+    drafts = rawDrafts.map(d => ({
+      id: d.id || `draft-${d.slug}`,
+      slug: d.slug,
+      folderName: d.slug,
+      title: d.title,
+      category: d.category,
+      excerpt: d.excerpt || '',
+      thumbnailUrl: d.thumbnailUrl,
+      authorLogin: '',
+      authorName: d.authorEmail.split('@')[0],
+      authorAvatar: '',
+      authorEmail: d.authorEmail,
+      publishedAt: d.publishedAt || d.createdAt || new Date().toISOString(),
+      tags: d.tags || [],
+      status: 'draft' as const,
+    }));
+
+    if (category && (category === 'tutorial' || category === 'post')) {
+      drafts = drafts.filter(d => d.category === category);
+    }
   }
 
-  let isAdmin = false;
-  try {
-    const session = await getServerSession(authOptions);
-    const effectiveRole = (session?.user as any)?.role || 'user';
-    isAdmin = effectiveRole === 'admin';
-  } catch {}
-
+  // Non-admins only see their own drafts
   if (!isAdmin) {
-    posts = posts.filter(p => p.status === 'published');
+    drafts = drafts.filter(d => d.authorEmail === userEmail);
   }
 
-  return NextResponse.json({ success: true, posts });
+  // Merge: drafts first, then published
+  const allPosts = [...drafts, ...publishedPosts];
+
+  return NextResponse.json({ success: true, posts: allPosts });
 }
 
 export async function POST(req: NextRequest) {
@@ -74,7 +127,7 @@ export async function POST(req: NextRequest) {
   try {
     const contentType = req.headers.get('content-type') || '';
 
-    // ─── FormData uploads (thumbnail or content asset) ───
+    // ─── FormData uploads (thumbnail or content asset) — only for published posts ───
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
@@ -88,13 +141,11 @@ export async function POST(req: NextRequest) {
 
       const token = await getToken(userEmail);
 
-      // Check permission for this category
       const permAction = category === 'tutorial' ? 'publishTutorial' : 'publishBlog';
       if (!(await hasPermission(permAction, effectiveRole, isCR, userEmail))) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      // If folderName provided — upload directly (post already created or in progress)
       if (folderName) {
         if (isContent) {
           const url = await uploadBlogAsset(category, folderName, file, token);
@@ -104,7 +155,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, url });
       }
 
-      // No folderName — check if post exists in index (editing existing)
       const slug = formData.get('slug') as string | null;
       if (slug) {
         const posts = await readBlogsIndex();
@@ -126,7 +176,37 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action } = body;
 
-    // ─── CREATE ───
+    // ─── SAVE DRAFT (any logged-in user) ───
+    if (action === 'saveDraft') {
+      const { slug: clientSlug, title, category, excerpt, content, tags, thumbnailUrl } = body as {
+        slug?: string;
+        title: string;
+        category?: BlogCategory;
+        excerpt?: string;
+        content?: string;
+        tags?: string[];
+        thumbnailUrl?: string;
+      };
+      if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 });
+
+      const slug = clientSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+      const cat = (category as BlogCategory) || 'post';
+
+      const result = await saveBlogDraft({
+        authorEmail: userEmail,
+        category: cat,
+        slug,
+        title: title.trim(),
+        excerpt: (excerpt || '').trim(),
+        content: content || '',
+        tags: tags || [],
+        thumbnailUrl,
+      });
+
+      return NextResponse.json({ success: true, draft: result, slug });
+    }
+
+    // ─── CREATE (published — requires permission) ───
     if (action === 'create') {
       const { slug: clientSlug, title, category, excerpt, content, tags, thumbnailUrl, status } = body as {
         slug?: string;
@@ -140,18 +220,34 @@ export async function POST(req: NextRequest) {
       };
       if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 });
 
-      const permAction = category === 'tutorial' ? 'publishTutorial' : 'publishBlog';
+      const cat = (category as BlogCategory) || 'post';
+      const finalStatus = status || 'published';
+
+      // If saving as draft, use saveDraft instead (no permission needed)
+      if (finalStatus === 'draft') {
+        const slug = clientSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+        const result = await saveBlogDraft({
+          authorEmail: userEmail,
+          category: cat,
+          slug,
+          title: title.trim(),
+          excerpt: (excerpt || '').trim(),
+          content: content || '',
+          tags: tags || [],
+          thumbnailUrl,
+        });
+        return NextResponse.json({ success: true, draft: result, slug });
+      }
+
+      // Publishing requires permission
+      const permAction = cat === 'tutorial' ? 'publishTutorial' : 'publishBlog';
       if (!(await hasPermission(permAction, effectiveRole, isCR, userEmail))) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return NextResponse.json({ error: 'You do not have permission to publish. Save as draft instead.' }, { status: 403 });
       }
 
       const token = await getToken(userEmail);
-      const posts = await readBlogsIndex();
-
-      // Use client-provided slug so folder matches where assets were uploaded
       const slug = clientSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
       const now = new Date().toISOString();
-      const cat = (category as BlogCategory) || 'post';
 
       const newPost: BlogPostListItem = {
         id: generateId(),
@@ -167,7 +263,7 @@ export async function POST(req: NextRequest) {
         authorEmail: userEmail,
         publishedAt: now,
         tags: tags || [],
-        status: status || 'published',
+        status: 'published',
       };
 
       await writeBlogContent(cat, slug, content || '', token);
@@ -178,7 +274,7 @@ export async function POST(req: NextRequest) {
         category: cat,
         excerpt: newPost.excerpt,
         tags: newPost.tags,
-        status: newPost.status,
+        status: 'published',
         thumbnailUrl: newPost.thumbnailUrl,
         authorLogin: newPost.authorLogin,
         authorName: newPost.authorName,
@@ -186,8 +282,13 @@ export async function POST(req: NextRequest) {
         authorEmail: userEmail,
         publishedAt: now,
       }, token);
-      posts.unshift(newPost);
-      await writeBlogsIndex(posts, token, `blog: publish "${newPost.title}"`);
+
+      const existingIndex = await readCategoryIndex(cat);
+      existingIndex.unshift(newPost);
+      await writeCategoryIndex(cat, existingIndex, token, `blog: publish "${newPost.title}"`);
+
+      // Delete draft if it existed
+      await deleteBlogDraftBySlug(slug);
 
       return NextResponse.json({ success: true, post: newPost });
     }
@@ -205,6 +306,25 @@ export async function POST(req: NextRequest) {
       };
       if (!slug) return NextResponse.json({ error: 'Slug required' }, { status: 400 });
 
+      // Check if this is a draft in DB
+      const draft = await getBlogDraftBySlug(slug, userEmail);
+
+      if (draft) {
+        // Updating a draft — just save to DB (any owner)
+        const result = await saveBlogDraft({
+          authorEmail: draft.authorEmail,
+          category: (draft.category as BlogCategory) || 'post',
+          slug: draft.slug,
+          title: title?.trim() || draft.title,
+          excerpt: (excerpt?.trim() ?? draft.excerpt) || '',
+          content: content !== undefined ? content : draft.content,
+          tags: tags ?? JSON.parse(draft.tags || '[]'),
+          thumbnailUrl: thumbnailUrl ?? draft.thumbnailUrl ?? undefined,
+        });
+        return NextResponse.json({ success: true, draft: result });
+      }
+
+      // Updating a published post on GitHub — requires permission
       const posts = await readBlogsIndex();
       const idx = posts.findIndex(p => p.slug === slug);
       if (idx === -1) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
@@ -250,8 +370,70 @@ export async function POST(req: NextRequest) {
         updatedAt,
       }, token);
 
-      await writeBlogsIndex(posts, token, `blog: update "${posts[idx].title}"`);
+      await writeCategoryIndex(cat, posts, token, `blog: update "${posts[idx].title}"`);
       return NextResponse.json({ success: true, post: posts[idx] });
+    }
+
+    // ─── PUBLISH DRAFT (draft → GitHub) ───
+    if (action === 'publishDraft') {
+      const { slug } = body as { slug: string };
+      if (!slug) return NextResponse.json({ error: 'Slug required' }, { status: 400 });
+
+      const permAction = body.category === 'tutorial' ? 'publishTutorial' : 'publishBlog';
+      if (!(await hasPermission(permAction, effectiveRole, isCR, userEmail))) {
+        return NextResponse.json({ error: 'You do not have permission to publish.' }, { status: 403 });
+      }
+
+      const draft = await getBlogDraftBySlug(slug);
+      if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
+
+      const token = await getToken(userEmail);
+      const cat = (draft.category as BlogCategory) || 'post';
+      const now = new Date().toISOString();
+
+      const newPost: BlogPostListItem = {
+        id: generateId(),
+        slug: draft.slug,
+        folderName: draft.slug,
+        title: draft.title,
+        category: cat,
+        excerpt: draft.excerpt || '',
+        thumbnailUrl: draft.thumbnailUrl || undefined,
+        authorLogin: (session.user as any).login || '',
+        authorName: userName,
+        authorAvatar: (session.user as any).image || '',
+        authorEmail: draft.authorEmail,
+        publishedAt: now,
+        tags: JSON.parse(draft.tags || '[]'),
+        status: 'published',
+      };
+
+      // Commit content, meta, and index to GitHub
+      await writeBlogContent(cat, draft.slug, draft.content || '', token);
+      await writeBlogPostMeta(cat, draft.slug, {
+        slug: draft.slug,
+        folderName: draft.slug,
+        title: newPost.title,
+        category: cat,
+        excerpt: newPost.excerpt,
+        tags: newPost.tags,
+        status: 'published',
+        thumbnailUrl: newPost.thumbnailUrl,
+        authorLogin: newPost.authorLogin,
+        authorName: newPost.authorName,
+        authorAvatar: newPost.authorAvatar,
+        authorEmail: draft.authorEmail,
+        publishedAt: now,
+      }, token);
+
+      const existingIndex = await readCategoryIndex(cat);
+      existingIndex.unshift(newPost);
+      await writeCategoryIndex(cat, existingIndex, token, `blog: publish "${newPost.title}"`);
+
+      // Delete draft from DB
+      await deleteBlogDraftBySlug(slug);
+
+      return NextResponse.json({ success: true, post: newPost });
     }
 
     // ─── DELETE ───
@@ -259,6 +441,18 @@ export async function POST(req: NextRequest) {
       const { slug } = body as { slug: string };
       if (!slug) return NextResponse.json({ error: 'Slug required' }, { status: 400 });
 
+      // Try deleting draft first
+      const draft = await getBlogDraftBySlug(slug);
+      if (draft) {
+        // Owner can delete their own draft, or admin
+        if (draft.authorEmail === userEmail || effectiveRole === 'admin' || effectiveRole === 'manager') {
+          await deleteBlogDraftBySlug(slug);
+          return NextResponse.json({ success: true, type: 'draft' });
+        }
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      // Delete published post from GitHub
       const posts = await readBlogsIndex();
       const post = posts.find(p => p.slug === slug);
       if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
@@ -272,9 +466,9 @@ export async function POST(req: NextRequest) {
       await deleteBlogPostFolder(post.category, post.folderName, token);
 
       const filtered = posts.filter(p => p.slug !== slug);
-      await writeBlogsIndex(filtered, token, `blog: delete "${post.title}"`);
+      await writeCategoryIndex(post.category, filtered, token, `blog: delete "${post.title}"`);
 
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, type: 'published' });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

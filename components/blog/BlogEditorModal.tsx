@@ -120,13 +120,62 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
     } catch { return null; }
   };
 
-  // ─── handleSave: upload assets first, then save post ───
+  const canPublish = (category === 'tutorial' && canPublishTutorial) || (category === 'post' && canPublishBlog);
+  const canPublishAny = canPublishTutorial || canPublishBlog;
+  const isEditingDraft = editingPost?.status === 'draft';
+
+  const handleSaveDraft = async () => {
+    if (!title.trim()) return;
+    setSaving(true);
+    setStepError('');
+    setStep('saving-post');
+    setStepDetail('Saving draft...');
+
+    try {
+      const body: any = {
+        action: 'saveDraft',
+        slug: editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80),
+        title: title.trim(),
+        category,
+        excerpt: excerpt.trim(),
+        content: contentRef.current,
+        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+        thumbnailUrl: thumbnailRemoteUrl || undefined,
+      };
+
+      const res = await fetch('/api/blogs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to save draft');
+
+      setStep('done');
+      setTimeout(() => {
+        onClose();
+        onSaved();
+      }, 600);
+    } catch (e: any) {
+      setStep('error');
+      setStepError(e?.message || 'Something went wrong');
+    }
+    setSaving(false);
+  };
+
+  // ─── handleSave: upload assets first, then save/publish ───
   const handleSave = async () => {
     if (!title.trim()) return;
     setSaving(true);
     setStepError('');
     const isEdit = !!editingPost;
     const slug = editingPost?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+
+    // If user doesn't have publish permission, save as draft
+    if (!canPublish && status === 'published') {
+      await handleSaveDraft();
+      return;
+    }
 
     try {
       const hasThumbnail = !!pendingThumbnailRef.current;
@@ -371,12 +420,10 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
             <div>
               <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Category</label>
               <div className="flex gap-2">
-                {canPublishTutorial && (
-                  <button type="button" onClick={() => setCategory('tutorial')}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[0.78rem] font-medium border cursor-pointer transition ${category === 'tutorial' ? 'bg-blue-500/15 border-blue-500/30 text-blue-400' : 'bg-dark-bg3 border-dark-border text-dark-text2'}`}>
-                    <i className="fas fa-graduation-cap"></i>Tutorial
-                  </button>
-                )}
+                <button type="button" onClick={() => setCategory('tutorial')}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[0.78rem] font-medium border cursor-pointer transition ${category === 'tutorial' ? 'bg-blue-500/15 border-blue-500/30 text-blue-400' : 'bg-dark-bg3 border-dark-border text-dark-text2'}`}>
+                  <i className="fas fa-graduation-cap"></i>Tutorial
+                </button>
                 <button type="button" onClick={() => setCategory('post')}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[0.78rem] font-medium border cursor-pointer transition ${category === 'post' ? 'bg-green-500/15 border-green-500/30 text-green-400' : 'bg-dark-bg3 border-dark-border text-dark-text2'}`}>
                   <i className="fas fa-pen-nib"></i>Blog Post
@@ -514,12 +561,28 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
 
         {/* Footer */}
         <div className="flex gap-2 px-6 py-4 border-t border-dark-border shrink-0">
-          <button onClick={handleSave} disabled={saving || !title.trim()}
-            className="flex-1 py-2.5 rounded-xl bg-qsis text-white text-[0.85rem] font-semibold hover:brightness-110 transition cursor-pointer disabled:opacity-50">
-            {saving ? (
-              <><i className="fas fa-spinner fa-spin mr-1"></i>{STEP_LABELS[step] || 'Publishing...'}</>
-            ) : editingPost ? 'Update Post' : 'Create Post'}
+          <button onClick={handleSaveDraft} disabled={saving || !title.trim()}
+            className="px-4 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-[0.82rem] font-semibold hover:bg-dark-bg disabled:opacity-50 cursor-pointer transition">
+            {saving && step === 'saving-post' ? (
+              <><i className="fas fa-spinner fa-spin mr-1"></i>Saving...</>
+            ) : (
+              <><i className="fas fa-save mr-1.5"></i>Save Draft</>
+            )}
           </button>
+          {canPublish && (
+            <button onClick={handleSave} disabled={saving || !title.trim()}
+              className="flex-1 py-2.5 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold hover:brightness-110 transition cursor-pointer disabled:opacity-50">
+              {saving ? (
+                <><i className="fas fa-spinner fa-spin mr-1"></i>{STEP_LABELS[step] || 'Publishing...'}</>
+              ) : editingPost ? 'Update & Publish' : 'Publish'}
+            </button>
+          )}
+          {!canPublish && (
+            <div className="flex-1 flex items-center justify-center text-[0.72rem] text-dark-text3">
+              <i className="fas fa-info-circle mr-1"></i>
+              You can save drafts. Publishing requires permission.
+            </div>
+          )}
           <button onClick={onClose} disabled={saving} className="px-5 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text2 text-[0.85rem] cursor-pointer hover:bg-dark-bg disabled:opacity-50">
             Cancel
           </button>

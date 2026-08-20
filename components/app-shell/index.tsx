@@ -243,22 +243,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
     // If logged in but no onboarding data, don't show modal yet —
     // the profileLoaded effect below will handle it.
-
-    // Auto-open GitHub token modal from direct link (?action=github-token)
-    const p = new URLSearchParams(window.location.search);
-    if (p.get('action') === 'github-token') {
-      window.history.replaceState({}, '', window.location.pathname);
-    }
   }, []);
 
   // Open PAT modal when ?action=github-token is in the URL (after auth resolves)
+  // For non-logged-in users: URL param survives login redirect, modal opens after return.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const p = new URLSearchParams(window.location.search);
     if (p.get('action') === 'github-token') {
-      window.history.replaceState({}, '', window.location.pathname);
       if (status === 'authenticated' && !isGithubConnected) {
         setPatPromptOpen(true);
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (status !== 'authenticated') {
+        // Not logged in yet — don't strip param, let it survive the login redirect
       }
     }
   }, [status, isGithubConnected]);

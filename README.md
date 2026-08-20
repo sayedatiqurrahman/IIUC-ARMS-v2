@@ -68,12 +68,44 @@ A centralized platform where IIUC students, teachers, and staff can **browse, up
 
 ---
 
-## File Storage
+## Connected Repositories
 
-All academic files live in a separate GitHub repo:
-- **[IIUC-ACADEMIC-FILES-MANAFGER](https://github.com/sayedatiqurrahman/IIUC-ACADEMIC-FILES-MANAFGER)** — Fork this to contribute files directly
+IIUC-ARMS uses **3 GitHub repositories** that work together:
 
-### Repository Structure
+| Repository | Purpose |
+|---|---|
+| **[IIUC-ARMS-v2](https://github.com/sayedatiqurrahman/IIUC-ARMS-v2)** | The main web app (Next.js). Handles UI, API, auth, database. Users interact with this. |
+| **[IIUC-ACADEMIC-FILES-MANAFGER](https://github.com/sayedatiqurrahman/IIUC-ACADEMIC-FILES-MANAFGER)** | The academic files storage. All uploaded files (notes, question papers, sheets) live here, organized by department/semester/course. |
+| **Your Fork** | When you upload files, IIUC-ARMS creates a branch on your fork and opens a Pull Request to the main files repo. Your contributions are credited to your GitHub profile. |
+
+### How They Connect
+
+```
+IIUC-ARMS-v2 (Web App)
+       │
+       ├── writes files → IIUC-ACADEMIC-FILES-MANAFGER
+       │                     ├── notices/notices.json    (notice board)
+       │                     ├── blogs/tutorials/        (published tutorials)
+       │                     ├── blogs/posts/            (published blog posts)
+       │                     └── routines/               (routine schedules)
+       │
+       └── reads files ← IIUC-ACADEMIC-FILES-MANAFGER
+                           └── {dept}/{semester}/{course}/{category}/  (academic files)
+
+Your Fork
+       │
+       └── Pull Request → IIUC-ACADEMIC-FILES-MANAFGER (main branch)
+```
+
+### Per-User GitHub Account
+
+Each user connects their own GitHub account via a **Personal Access Token (PAT)**. When a user uploads files:
+1. IIUC-ARMS commits the files to a branch under **their fork**
+2. A Pull Request is created to merge into the main files repo
+3. The user gets **credited as a contributor** on GitHub
+4. The user appears on the **[Contributors page](/contributors)**
+
+> **Note:** Only the admin's bot token can commit directly to the main branch. All other users go through the Pull Request flow.
 ```
 IIUC-ACADEMIC-FILES-MANAFGER/
 ├── {department}/                    # e.g. qsis, ece, cse, bba
@@ -104,14 +136,15 @@ IIUC-ACADEMIC-FILES-MANAFGER/
 │   ├── notices.json
 │   └── attachments/
 ├── blogs/                           # Blog system
-│   ├── index.json                   # Post registry
 │   ├── tutorials/                   # Tutorial posts
+│   │   ├── index.json               # Tutorial index
 │   │   └── {slug}/
 │   │       ├── index.md
 │   │       ├── thumbnail.{ext}
 │   │       ├── meta.json
 │   │       └── assets/
 │   └── posts/                       # Blog posts
+│       ├── index.json               # Post index
 │       └── {slug}/
 │           ├── index.md
 │           ├── thumbnail.{ext}
@@ -154,14 +187,18 @@ IIUC-ACADEMIC-FILES-MANAFGER/
 - Full-screen document viewer for attachments
 
 ### Blog System
-- Folder-based storage: each post gets its own folder with `index.md`, `thumbnail`, `meta.json`, `assets/`
+- **Draft/Publish separation**: Drafts stored in DB (no GitHub push), published posts stored on GitHub
+- **Any logged-in user** can create drafts — no special permission needed
+- **Publishing** requires `publishTutorial` or `publishBlog` permission
+- Folder-based storage on GitHub: each published post gets its own folder with `index.md`, `thumbnail`, `meta.json`, `assets/`
+- Separate indexes: `blogs/tutorials/index.json` and `blogs/posts/index.json`
 - Markdown editor with toolbar (bold, italic, heading, link, image, code, quote, list)
-- Ctrl+V image paste → uploads to assets folder on save
+- Ctrl+V image paste → uploads to assets folder on publish
 - Thumbnail upload with local blob preview
 - Preview mode with full GFM rendering
 - Categories: Tutorial and Blog Post
 - Public listing + detail pages with SEO metadata
-- Permission-gated: `publishTutorial`, `publishBlog`
+- Admin sees all drafts; authors see only their own drafts
 
 ### Studio (Contributed Apps)
 - Community-built HTML/CSS/JS apps

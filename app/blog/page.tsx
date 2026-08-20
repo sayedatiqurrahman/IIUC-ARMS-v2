@@ -14,11 +14,12 @@ const TABS = [
   { key: 'all', label: 'All', icon: 'fa-layer-group' },
   { key: 'tutorial', label: 'Tutorials', icon: 'fa-graduation-cap' },
   { key: 'post', label: 'Blog Posts', icon: 'fa-pen-nib' },
+  { key: 'draft', label: 'My Drafts', icon: 'fa-file-alt' },
 ] as const;
 
 function BlogContent() {
   const searchParams = useSearchParams();
-  const initialTab = (searchParams.get('tab') as 'all' | 'tutorial' | 'post') || 'all';
+  const initialTab = (searchParams.get('tab') as 'all' | 'tutorial' | 'post' | 'draft') || 'all';
 
   const { data: session } = useSession();
   const profile = useAppStore(s => s.profile);
@@ -31,20 +32,22 @@ function BlogContent() {
   const canPublishBlog = has('publishBlog');
   const canPublishTutorial = has('publishTutorial');
   const canPublish = canPublishBlog || canPublishTutorial;
+  const isLoggedIn = !!email;
 
   const [posts, setPosts] = useState<BlogPostListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'all' | 'tutorial' | 'post'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'all' | 'tutorial' | 'post' | 'draft'>(initialTab);
   const [search, setSearch] = useState(searchParams.get('q') || '');
 
   const [showEditor, setShowEditor] = useState(false);
+  const [editingPost, setEditingPost] = useState<BlogPostListItem | null>(null);
 
   const fetchPosts = useCallback(async () => {
     try {
       const res = await fetch('/api/blogs');
       const data = await res.json();
       if (data.success) {
-        setPosts(data.posts.filter((p: BlogPostListItem) => p.status === 'published'));
+        setPosts(data.posts);
       }
     } catch {}
     setLoading(false);
@@ -52,7 +55,7 @@ function BlogContent() {
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
-  const handleTab = useCallback((tab: 'all' | 'tutorial' | 'post') => {
+  const handleTab = useCallback((tab: 'all' | 'tutorial' | 'post' | 'draft') => {
     setActiveTab(tab);
     const params = new URLSearchParams(window.location.search);
     if (tab === 'all') params.delete('tab');
@@ -62,7 +65,9 @@ function BlogContent() {
   }, []);
 
   const filtered = posts.filter(p => {
+    if (activeTab === 'draft') return p.status === 'draft' && p.authorEmail === email;
     if (activeTab !== 'all' && p.category !== activeTab) return false;
+    if (p.status === 'draft' && p.authorEmail !== email) return false;
     if (search) {
       const q = search.toLowerCase();
       if (p.title.toLowerCase().includes(q)) return true;
@@ -87,9 +92,9 @@ function BlogContent() {
           <p className="text-[0.82rem] text-dark-text2 mt-1">Tutorials, guides, and updates from the IIUC-ARMS community.</p>
         </div>
 
-        {canPublish && email && (
+        {isLoggedIn && (
           <button
-            onClick={() => setShowEditor(true)}
+            onClick={() => { setEditingPost(null); setShowEditor(true); }}
             className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold hover:brightness-110 transition cursor-pointer"
           >
             <i className="fas fa-plus text-[0.7rem]"></i>
@@ -150,14 +155,20 @@ function BlogContent() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(post => (
-            <Link key={post.id} href={`/blog/${post.slug}`} className="group">
+          {filtered.map(post => {
+            const isDraft = post.status === 'draft';
+            const CardContent = (
               <div className="rounded-2xl bg-dark-bg3 border border-dark-border overflow-hidden hover:border-qsis/40 transition-all cursor-pointer h-full">
-                <div className="h-40 bg-gradient-to-br from-qsis/20 to-accent/20 flex items-center justify-center overflow-hidden">
+                <div className="h-40 bg-gradient-to-br from-qsis/20 to-accent/20 flex items-center justify-center overflow-hidden relative">
                   {post.thumbnailUrl ? (
                     <img src={post.thumbnailUrl} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : (
                     <i className={`fas ${post.category === 'tutorial' ? 'fa-graduation-cap' : 'fa-pen-nib'} text-3xl text-dark-text3`}></i>
+                  )}
+                  {isDraft && (
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-yellow-500/90 text-black text-[0.6rem] font-bold">
+                      DRAFT
+                    </span>
                   )}
                 </div>
                 <div className="p-4">
@@ -189,8 +200,21 @@ function BlogContent() {
                   )}
                 </div>
               </div>
-            </Link>
-          ))}
+            );
+
+            if (isDraft) {
+              return (
+                <button key={post.id} onClick={() => { setEditingPost(post); setShowEditor(true); }} className="text-left border-none bg-transparent p-0 cursor-pointer">
+                  {CardContent}
+                </button>
+              );
+            }
+            return (
+              <Link key={post.id} href={`/blog/${post.slug}`} className="group">
+                {CardContent}
+              </Link>
+            );
+          })}
         </div>
       )}
 
