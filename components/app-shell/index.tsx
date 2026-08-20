@@ -247,7 +247,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     // Auto-open GitHub token modal from direct link (?action=github-token)
     const p = new URLSearchParams(window.location.search);
     if (p.get('action') === 'github-token') {
-      window.history.replaceState({}, '', window.pathname);
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
@@ -256,7 +256,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return;
     const p = new URLSearchParams(window.location.search);
     if (p.get('action') === 'github-token') {
-      window.history.replaceState({}, '', window.pathname);
+      window.history.replaceState({}, '', window.location.pathname);
       if (status === 'authenticated' && !isGithubConnected) {
         setPatPromptOpen(true);
       }

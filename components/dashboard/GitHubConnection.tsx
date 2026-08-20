@@ -14,7 +14,6 @@ interface GitHubConnectionProps {
   patReplacing: boolean;
   setPatReplacing: (v: boolean) => void;
   handlePastePAT: () => void;
-  handleInstallGitHub: () => void;
   handleDisconnect: () => void;
 }
 
@@ -22,7 +21,7 @@ export default function GitHubConnection({
   hasGitHub, ghUser, ghStats, profile,
   showTokenModal, setShowTokenModal,
   patInput, setPatInput, patLoading, patValid, patReplacing, setPatReplacing,
-  handlePastePAT, handleInstallGitHub, handleDisconnect,
+  handlePastePAT, handleDisconnect,
 }: GitHubConnectionProps) {
   return (
     <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
@@ -47,33 +46,11 @@ export default function GitHubConnection({
               <div className="flex items-center gap-1.5 mt-1">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
                 <span className="text-[0.68rem] text-green-400">
-                  {profile.githubToken?.startsWith('ghp_') || profile.githubToken?.startsWith('github_pat_')
-                    ? 'Connected via Personal Access Token'
-                    : 'Connected via GitHub App'}
+                  Connected via Personal Access Token
                 </span>
               </div>
             </div>
           </div>
-
-          {!(profile.githubToken?.startsWith('ghp_') || profile.githubToken?.startsWith('github_pat_')) && (
-            <div className="mb-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <div className="flex items-start gap-2.5">
-                <i className="fas fa-exclamation-triangle text-amber-400 text-[0.8rem] mt-0.5"></i>
-                <div className="flex-1">
-                  <p className="text-[0.78rem] font-semibold text-amber-400 mb-1">Want to appear in Contributors?</p>
-                  <p className="text-[0.7rem] text-dark-text2 leading-relaxed">
-                    Connected via <strong>GitHub App</strong> — your uploads are committed as <strong>qsis-arms[bot]</strong>, not your account. Switch to a <strong>Personal Access Token</strong> so your uploads credit you and you appear in the Contributors list.
-                  </p>
-                  <button
-                    onClick={() => setShowTokenModal(true)}
-                    className="mt-2 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 text-[0.72rem] font-semibold cursor-pointer hover:bg-amber-500/30 border-none transition-all"
-                  >
-                    <i className="fas fa-key mr-1"></i>Switch to PAT
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {ghStats && (
             <div className="flex gap-2 flex-wrap mb-3">
@@ -203,9 +180,6 @@ export default function GitHubConnection({
             <a href={`https://github.com/${ghUser.login}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] font-semibold cursor-pointer hover:border-qsis hover:text-qsis transition-all no-underline">
               <i className="fab fa-github"></i> View Profile
             </a>
-            <button className="px-3 py-1.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.72rem] font-semibold cursor-pointer hover:border-qsis transition-all" onClick={handleInstallGitHub}>
-              <i className="fab fa-github mr-1"></i> Reinstall
-            </button>
             <button className="px-3 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-[0.72rem] font-semibold cursor-pointer hover:bg-red-500/20 transition-all" onClick={handleDisconnect}>
               <i className="fas fa-unlink mr-1"></i> Disconnect
             </button>
@@ -219,24 +193,16 @@ export default function GitHubConnection({
             </div>
             <div className="flex-1">
               <span className="text-[0.85rem] font-semibold block">Not Connected</span>
-              <span className="text-[0.72rem] text-dark-text2">Connect GitHub to upload files and appear in Contributors</span>
+              <span className="text-[0.72rem] text-dark-text2">Connect with a Personal Access Token to appear in Contributors</span>
             </div>
           </div>
           <button className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.85rem] font-bold cursor-pointer hover:opacity-90 transition-all shadow-lg shadow-qsis/20" onClick={() => setShowTokenModal(true)}>
             <i className="fas fa-key"></i> Connect with Personal Access Token
-            <span className="text-[0.65rem] bg-white/20 px-2 py-0.5 rounded-full ml-1">Recommended</span>
           </button>
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg3">
-            <button className="flex items-center gap-2 bg-transparent border-none text-dark-text2 text-[0.78rem] font-semibold cursor-pointer hover:text-qsis transition-colors" onClick={handleInstallGitHub}>
-              <i className="fab fa-github"></i> Or connect with GitHub App
-            </button>
-          </div>
-          <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/15">
-            <p className="text-[0.68rem] text-amber-400 text-center leading-relaxed">
-              <i className="fas fa-info-circle mr-1"></i>
-              <strong>PAT</strong> = your uploads credited to you, you appear in Contributors.
-              <br/>
-              <strong>GitHub App</strong> = uploads as bot, you won&apos;t appear in Contributors. Optional.
+          <div className="p-2.5 rounded-lg bg-qsis/5 border border-qsis/15">
+            <p className="text-[0.68rem] text-dark-text2 text-center leading-relaxed">
+              <i className="fas fa-info-circle mr-1 text-qsis"></i>
+              A <strong className="text-dark-text">PAT</strong> credits your uploads to you and shows you in the Contributors list.
             </p>
           </div>
         </div>

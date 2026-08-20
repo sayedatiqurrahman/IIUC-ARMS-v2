@@ -316,8 +316,8 @@ export default function ContributeModal({
                 <span className="material-symbols-outlined text-amber-400 align-middle mr-1 text-[1rem]">link_off</span>
                 <strong className="text-amber-400">Connect GitHub to contribute.</strong> Your app is published to the
                 IIUC-ARMS-v2 repo with your name, and you get credited as a code contributor.
-                Connect your GitHub account from your{' '}
-                <Link href="/dashboard" className="text-qsis underline" onClick={onClose}>Dashboard</Link> first.
+                Connect your Personal Access Token from your{' '}
+                <Link href="/dashboard?section=github" className="text-qsis underline" onClick={onClose}>Dashboard</Link> first.
               </div>
             ) : (
               <>

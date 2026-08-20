@@ -730,7 +730,7 @@ export default function UploadForm({
           {(result.tokenExpired || result?.needsPAT) && (
             <div className="mt-3 space-y-2.5">
               <a
-                href="https://github.com/settings/tokens"
+                href="https://github.com/settings/tokens/new?scopes=repo,user:follow&description=IIUC-ARMS"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block w-full py-2.5 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white border-none font-semibold text-[0.82rem] cursor-pointer text-center hover:opacity-90 transition-opacity"

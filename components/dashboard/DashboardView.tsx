@@ -7,7 +7,6 @@ import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { getFileIconByType, showToast, timeAgo } from '@/lib/utils';
 import { updateUserProfile } from '@/lib/firebase';
-import { installGitHubApp } from '@/lib/github-install';
 import { useConfirm } from '@/components/ConfirmModal';
 import DashboardSidebar from './DashboardSidebar';
 import {
@@ -227,37 +226,11 @@ export default function DashboardView() {
       setGhUser(null);
       setGhStats(null);
       setPatValid(null);
+      localStorage.removeItem('patSkipForever');
+      localStorage.removeItem('patAskCount');
       showToast('GitHub disconnected', 'success');
     } catch {
       showToast('Disconnect failed. Please try again.', 'error');
-    }
-  }
-
-  async function handleInstallGitHub() {
-    showToast('Opening GitHub...', 'info');
-    const result = await installGitHubApp();
-    if (result.error || !result.token) {
-      showToast(result.error || 'GitHub connection cancelled', 'error');
-      return;
-    }
-    try {
-      const res = await fetch('/api/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          githubLogin: result.login, githubToken: result.token,
-          githubInstallationId: result.installationId, githubAvatar: result.avatarUrl,
-        }),
-      });
-      if (!res.ok) throw new Error('Failed to save');
-      useAppStore.setState(s => ({
-        profile: { ...s.profile, githubLogin: result.login, githubToken: result.token, githubInstallationId: result.installationId, githubAvatar: result.avatarUrl },
-        githubToken: result.token,
-      }));
-      setGhUser({ login: result.login, name: result.login, avatar_url: result.avatarUrl });
-      showToast(`Connected as @${result.login}!`, 'success');
-    } catch {
-      showToast('Failed to save. Please try again.', 'error');
     }
   }
 
@@ -604,7 +577,7 @@ export default function DashboardView() {
               showTokenModal={showTokenModal} setShowTokenModal={setShowTokenModal}
               patInput={patInput} setPatInput={setPatInput} patLoading={patLoading}
               patValid={patValid} patReplacing={patReplacing} setPatReplacing={setPatReplacing}
-              handlePastePAT={handlePastePAT} handleInstallGitHub={handleInstallGitHub} handleDisconnect={handleDisconnect}
+              handlePastePAT={handlePastePAT} handleDisconnect={handleDisconnect}
             />
             <TelegramVerify
               telegramChatId={(profile as any).telegramChatId}
