@@ -16,7 +16,7 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
       try {
         const [metaRes, contentRes] = await Promise.all([
           fetch('/api/blogs'),
-          fetch(`/api/blogs?slug=${encodeURIComponent(slug)}`),
+          fetch(`/api/blogs?action=content&slug=${encodeURIComponent(slug)}`),
         ]);
         const metaData = await metaRes.json();
         const contentData = await contentRes.json();

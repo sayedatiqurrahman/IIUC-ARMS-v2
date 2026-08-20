@@ -226,7 +226,7 @@ export async function GET() {
       if (c.role !== 'Founder & Lead') {
         if (c.v2Contributions > 0) {
           c.role = 'Developer & Resource Provider';
-          c.roleType = 'both';
+          c.roleType = 'developer';
         } else {
           c.role = 'Resource Provider';
           c.roleType = 'resource_provider';

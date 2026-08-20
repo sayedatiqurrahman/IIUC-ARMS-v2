@@ -211,11 +211,11 @@ export default function ContributorsTab() {
               {/* Stats */}
               {settings.showStats && (
                 <div className="flex gap-3 text-[0.7rem]">
-                  <span className="text-blue-400" title="Commits to the IIUC-ARMS-v2 source-code repo — every commit counts as 1, and each merged pull request adds 1 too."><i className="fas fa-code-branch mr-1"></i>{c.v2Contributions}</span>
-                  <span className="text-green-400" title="Files uploaded to the Academic Files data repo — every file you upload counts as 1 (merged pull requests there count too)."><i className="fas fa-database mr-1"></i>{c.dataContributions}</span>
-                  <span className="text-purple-400" title="Pull requests you opened that got merged — counted across both the source-code repo and the data repo."><i className="fas fa-code-merge mr-1"></i>{c.prCount}</span>
-                  <span className="text-rose-400" title="Issues (bug reports, feature requests) you opened on the IIUC-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1."><i className="fas fa-bug mr-1"></i>{c.issueContributions || 0}</span>
-                  <span className="text-dark-text3" title="Total"><i className="fas fa-star mr-1"></i>{c.contributions}</span>
+                  <span className="text-blue-400" title="Commits to the IIUC-ARMS-v2 source-code repo — every commit counts as 1."><i className="fas fa-code-branch mr-1"></i>{c.v2Contributions}</span>
+                  <span className="text-green-400" title="Files uploaded to the Academic Files data repo — every file you upload counts as 1."><i className="fas fa-database mr-1"></i>{c.dataContributions}</span>
+                  <span className="text-emerald-400" title="Designs published on the Creative Hub."><i className="fas fa-palette mr-1"></i>{c.designContributions || 0}</span>
+                  <span className="text-rose-400" title="Issues (bug reports, feature requests) you opened on the IIUC-ARMS-v2 repo."><i className="fas fa-bug mr-1"></i>{c.issueContributions || 0}</span>
+                  <span className="text-dark-text3" title="Total"><i className="fas fa-star mr-1"></i>{c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0)}</span>
                 </div>
               )}
 

@@ -58,8 +58,8 @@ export default function ContributorsView() {
     [contributors]
   );
   // Both = people in both lists
-  const bothRepos = useMemo(() =>
-    contributors.filter((c: any) => c.v2Contributions > 0 && c.dataContributions > 0),
+  const issueContributors = useMemo(() =>
+    contributors.filter((c: any) => (c.issueContributions || 0) > 0),
     [contributors]
   );
   // Designers = anyone who published a Creative Hub design (themes repo)
@@ -154,7 +154,7 @@ export default function ContributorsView() {
                 </div>
               </div>
               <div className="text-[0.65rem] text-dark-text3 hidden sm:flex items-center gap-3">
-                <span><i className="fas fa-code-branch mr-1"></i>{bothRepos.length} both</span>
+                <span><i className="fas fa-bug mr-1"></i>{issueContributors.length} issues</span>
                 <span className="w-px h-3 bg-dark-border"></span>
                 <span><i className="fas fa-laptop-code mr-1"></i>{developers.length} devs</span>
                 <span className="w-px h-3 bg-dark-border"></span>
@@ -165,9 +165,9 @@ export default function ContributorsView() {
             </div>
             {/* Category breakdown — equal-width chips */}
             <div className="grid grid-cols-4 gap-2">
-              <div className="bg-dark-bg2 border border-purple-500/20 rounded-xl p-2 sm:p-3 text-center">
-                <div className="text-[1rem] sm:text-[1.2rem] font-bold text-purple-400">{bothRepos.length}</div>
-                <div className="text-[0.6rem] sm:text-[0.68rem] text-dark-text2 font-medium"><i className="fas fa-code-branch mr-0.5"></i>Both</div>
+              <div className="bg-dark-bg2 border border-rose-500/20 rounded-xl p-2 sm:p-3 text-center">
+                <div className="text-[1rem] sm:text-[1.2rem] font-bold text-rose-400">{issueContributors.length}</div>
+                <div className="text-[0.6rem] sm:text-[0.68rem] text-dark-text2 font-medium"><i className="fas fa-bug mr-0.5"></i>Issues</div>
               </div>
               <div className="bg-dark-bg2 border border-blue-500/20 rounded-xl p-2 sm:p-3 text-center">
                 <div className="text-[1rem] sm:text-[1.2rem] font-bold text-blue-400">{developers.length}</div>
@@ -219,7 +219,7 @@ export default function ContributorsView() {
                     }`}
                   >
                     <i className="fas fa-layer-group mr-1"></i>All
-                    <span className="ml-1 text-[0.6rem] opacity-70">({developers.length + resources.length - bothRepos.length})</span>
+                    <span className="ml-1 text-[0.6rem] opacity-70">({contributors.length})</span>
                   </button>
                   {settings.sectionCount === 3 && (
                     <button
