@@ -61,14 +61,17 @@ function getCategoryIndexPath(category: BlogCategory): string {
 }
 
 export async function getToken(email: string): Promise<string> {
+  // User's personal access token takes priority so commits are attributed
+  // to the publisher and blog/tutorial work counts as their data contributions.
+  const { prisma } = await import('@/lib/prisma');
+  const profile = await prisma.profile.findUnique({ where: { userId: email } });
+  if (profile?.githubToken) return profile.githubToken;
+  // Fall back to bot token when the user has no personal token.
   try {
     const { getRepoBotToken } = await import('@/lib/github-app');
     const bot = await getRepoBotToken(config.owner, config.repo);
     if (bot) return bot;
   } catch {}
-  const { prisma } = await import('@/lib/prisma');
-  const profile = await prisma.profile.findUnique({ where: { userId: email } });
-  if (profile?.githubToken) return profile.githubToken;
   return process.env.GITHUB_TOKEN || '';
 }
 
@@ -151,25 +154,19 @@ export async function readCategoryIndex(category: BlogCategory): Promise<BlogPos
   return Array.isArray(data) ? data : [];
 }
 
-export async function writeCategoryIndex(category: BlogCategory, posts: BlogPostListItem[], token: string, message: string): Promise<boolean> {
-  try {
-    const { commitFilesToBranch } = await import('@/lib/github-commit');
-    const refRes = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
-      headers: { Authorization: `token ${token}` },
-    });
-    if (!refRes.ok) return false;
-    const { object } = await refRes.json();
-    await commitFilesToBranch({
-      token, owner: config.owner, repo: config.repo, branch: config.branch,
-      baseSha: object.sha,
-      files: [{ path: getCategoryIndexPath(category), content: Buffer.from(JSON.stringify(posts, null, 2)).toString('base64') }],
-      message,
-    });
-    return true;
-  } catch (e: any) {
-    console.error('[Blog] writeCategoryIndex error:', e?.message);
-    return false;
-  }
+export async function writeCategoryIndex(category: BlogCategory, posts: BlogPostListItem[], token: string, message: string): Promise<void> {
+  const { commitFilesToBranch } = await import('@/lib/github-commit');
+  const refRes = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
+    headers: { Authorization: `token ${token}` },
+  });
+  if (!refRes.ok) throw new Error(`Failed to read branch ref: ${refRes.status}`);
+  const { object } = await refRes.json();
+  await commitFilesToBranch({
+    token, owner: config.owner, repo: config.repo, branch: config.branch,
+    baseSha: object.sha,
+    files: [{ path: getCategoryIndexPath(category), content: Buffer.from(JSON.stringify(posts, null, 2)).toString('base64') }],
+    message,
+  });
 }
 
 export async function readBlogsIndex(): Promise<BlogPostListItem[]> {

@@ -148,6 +148,7 @@ export async function POST(req: NextRequest) {
       }
       indexPosts.unshift(postEntry);
       await writeCategoryIndex(cat, indexPosts, token, `blog: ${existingIdx >= 0 ? 'update' : 'publish'} "${postEntry.title}"`);
+      console.log(`[Blog] Published "${postEntry.title}" as ${slug} (${cat})`);
 
       return NextResponse.json({ success: true, post: postEntry });
     }

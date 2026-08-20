@@ -7,6 +7,54 @@ import { APP_ID_REGEX, STUDIO_REPO } from '@/lib/studio-apps';
 
 const GITHUB_API = 'https://api.github.com';
 
+async function getToken(): Promise<string> {
+  const botToken = await getRepoBotToken(STUDIO_REPO.owner, STUDIO_REPO.repo);
+  if (botToken) return botToken;
+  return process.env.GITHUB_TOKEN || '';
+}
+
+// GET /api/studio-apps/issues?issueNumber=123
+// Returns the issue status (open/closed) so the UI can show "solved".
+export async function GET(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.general);
+  if (!rl.success) return rl.response!;
+
+  const issueNumber = Number(req.nextUrl.searchParams.get('issueNumber'));
+  if (!issueNumber) {
+    return NextResponse.json({ error: 'issueNumber required' }, { status: 400 });
+  }
+
+  const token = await getToken();
+  if (!token) {
+    return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
+  }
+
+  try {
+    const res = await fetch(
+      `${GITHUB_API}/repos/${STUDIO_REPO.owner}/${STUDIO_REPO.repo}/issues/${issueNumber}`,
+      {
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
+        cache: 'no-store',
+      }
+    );
+    if (!res.ok) {
+      return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
+    }
+    const issue = await res.json();
+    return NextResponse.json({
+      ok: true,
+      number: issue.number,
+      state: issue.state, // 'open' or 'closed'
+      solved: issue.state === 'closed',
+      title: issue.title,
+      htmlUrl: issue.html_url,
+      closedAt: issue.closed_at,
+    });
+  } catch {
+    return NextResponse.json({ error: 'Failed to check issue status' }, { status: 500 });
+  }
+}
+
 // POST /api/studio-apps/issues
 // Body: { id, title?, description }
 //

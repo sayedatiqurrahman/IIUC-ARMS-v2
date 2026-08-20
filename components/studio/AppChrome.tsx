@@ -37,13 +37,25 @@ export default function AppChrome({
   const [reportDesc, setReportDesc] = useState('');
   const [reporting, setReporting] = useState(false);
   const [reportError, setReportError] = useState('');
-  const [reported, setReported] = useState<{ issueUrl: string; issueNumber: number } | null>(null);
+  const [reported, setReported] = useState<{ issueUrl: string; issueNumber: number; solved?: boolean } | null>(null);
+  const [issueStatus, setIssueStatus] = useState<'open' | 'solved' | null>(null);
 
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFsChange);
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
+
+  // Check issue status after reporting
+  useEffect(() => {
+    if (!reported?.issueNumber) return;
+    const ctrl = new AbortController();
+    fetch(`/api/studio-apps/issues?issueNumber=${reported.issueNumber}`, { signal: ctrl.signal })
+      .then(r => r.json())
+      .then(data => { if (data.solved !== undefined) setIssueStatus(data.solved ? 'solved' : 'open'); })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [reported?.issueNumber]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -73,7 +85,15 @@ export default function AppChrome({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (data.existingIssueUrl) setReported({ issueUrl: data.existingIssueUrl, issueNumber: data.issueNumber || 0 });
+        if (data.existingIssueUrl) {
+          setReported({ issueUrl: data.existingIssueUrl, issueNumber: data.issueNumber || 0 });
+          if (data.issueNumber) {
+            fetch(`/api/studio-apps/issues?issueNumber=${data.issueNumber}`)
+              .then(r => r.json())
+              .then(d => { if (d.solved !== undefined) setIssueStatus(d.solved ? 'solved' : 'open'); })
+              .catch(() => {});
+          }
+        }
         else setReportError(data.error || 'Could not report the issue.');
         setReporting(false);
         return;
@@ -174,14 +194,36 @@ export default function AppChrome({
           <div className="w-full max-w-md rounded-2xl border border-dark-border bg-dark-bg2 p-6" onClick={(e) => e.stopPropagation()}>
             {reported ? (
               <div className="text-center py-4">
-                <div className="h-14 w-14 mx-auto rounded-2xl bg-emerald-500/15 flex items-center justify-center mb-4">
-                  <span className="material-symbols-outlined text-emerald-400 text-3xl">verified</span>
+                <div className={`h-14 w-14 mx-auto rounded-2xl ${issueStatus === 'solved' ? 'bg-emerald-500/15' : 'bg-emerald-500/15'} flex items-center justify-center mb-4`}>
+                  <span className={`material-symbols-outlined ${issueStatus === 'solved' ? 'text-emerald-400' : 'text-emerald-400'} text-3xl`}>
+                    {issueStatus === 'solved' ? 'check_circle' : 'verified'}
+                  </span>
                 </div>
-                <h3 className="text-lg font-bold text-dark-text mb-1">Issue reported</h3>
-                <p className="text-[0.78rem] text-dark-text2 mb-5">The author has been notified on GitHub.</p>
-                <a href={reported.issueUrl} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-qsis px-4 py-2 text-[0.78rem] font-semibold text-white no-underline hover:brightness-110">
-                  View issue #{reported.issueNumber}
-                </a>
+                <h3 className="text-lg font-bold text-dark-text mb-1">
+                  {issueStatus === 'solved' ? 'Issue solved!' : 'Issue reported'}
+                </h3>
+                <p className="text-[0.78rem] text-dark-text2 mb-2">
+                  {issueStatus === 'solved'
+                    ? 'This issue has been resolved.'
+                    : 'The author has been notified on GitHub.'}
+                </p>
+                {issueStatus === 'solved' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-[0.72rem] font-semibold mb-3">
+                    <span className="material-symbols-outlined text-[0.9rem]">check_circle</span>
+                    Solved
+                  </span>
+                )}
+                {issueStatus === 'open' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-400 text-[0.72rem] font-semibold mb-3">
+                    <span className="material-symbols-outlined text-[0.9rem]">pending</span>
+                    Open — awaiting fix
+                  </span>
+                )}
+                <div className="mt-3">
+                  <a href={reported.issueUrl} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-qsis px-4 py-2 text-[0.78rem] font-semibold text-white no-underline hover:brightness-110">
+                    View issue #{reported.issueNumber}
+                  </a>
+                </div>
               </div>
             ) : (
               <>

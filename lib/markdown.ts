@@ -67,6 +67,11 @@ renderer.code = function (token: any) {
 marked.use({ renderer });
 
 export function renderMarkdown(src: string): string {
-  const raw = marked.parse(src) as string;
-  return sanitize(raw);
+  try {
+    if (!src || !src.trim()) return '';
+    const raw = marked.parse(src) as string;
+    return sanitize(raw);
+  } catch {
+    return `<p>${src.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`;
+  }
 }
