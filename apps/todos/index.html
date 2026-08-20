@@ -336,6 +336,7 @@
   function complete(t) {
     t.running = false; t.lastTick = 0; t.done = true;
     if (activeId === t.id) activeId = null;
+    if (capsuleId === t.id) { capsuleId = null; closeFloat(); }
     beep(); save(); render();
   }
 
@@ -570,7 +571,7 @@
       return;
     }
     const t = find(capsuleId);
-    if (!t) { c.classList.remove('show'); setCapExpanded(false); return; }
+    if (!t || t.done) { c.classList.remove('show'); setCapExpanded(false); if (t && t.done) capsuleId = null; return; }
     c.classList.add('show');
     c.classList.toggle('running', !!t.running);
     c.classList.toggle('done', !!t.done);
