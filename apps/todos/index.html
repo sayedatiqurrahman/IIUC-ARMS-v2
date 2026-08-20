@@ -56,16 +56,17 @@
 
   .list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
   .todo {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+    display: flex; flex-direction: column; gap: 6px;
     background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px;
     transition: border-color .2s, box-shadow .2s;
   }
   .todo.running { border-color: rgba(34,197,94,.45); box-shadow: 0 0 0 1px rgba(34,197,94,.15); }
   .todo.done { opacity: .55; }
+  .todo .row1 { display: flex; align-items: flex-start; gap: 10px; }
   .todo .check {
     width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--text3); cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center; color: #06210f;
-    flex: none; transition: background .15s, transform .1s;
+    flex: none; transition: background .15s, transform .1s; margin-top: 1px;
   }
   .check:active { transform: scale(.88); }
   .todo.done .check { background: var(--green); border-color: var(--green); }
@@ -74,7 +75,8 @@
   .todo.done .text { text-decoration: line-through; color: var(--text3); }
   .todo .time { font-size: 12px; color: var(--text2); margin-top: 2px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .todo.running .time { color: var(--green); font-weight: 600; }
-  .todo .act { display: flex; gap: 6px; flex: none; align-items: center; flex-wrap: wrap; }
+  .todo .row2 { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding-left: 32px; }
+  .todo .row2 .btn.icon { width: 34px; height: 34px; }
   .todo .dur {
     background: var(--bg); color: var(--text2); border: 1px solid var(--border);
     border-radius: 8px; padding: 4px 5px; font-size: 11px; outline: none; cursor: pointer;
@@ -150,7 +152,7 @@
   .deadline.overdue { background: rgba(244,63,94,.15); color: #f43f5e; }
   .deadline.ok { background: rgba(34,197,94,.1); color: #22c55e; }
   .deadline .mi { font-size: 12px; }
-  .subnotes { width: 100%; padding-left: 32px; margin-top: 4px; }
+  .subnotes { padding-left: 32px; margin-top: 4px; }
   .subnote { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
   .subnote .sn-check { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--text3); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; transition: background .15s, transform .1s; background: transparent; }
   .subnote .sn-check:active { transform: scale(.85); }
@@ -176,11 +178,8 @@
     .add { flex-wrap: wrap; }
     .add input[type=text] { flex: 1 1 100%; min-width: 0; }
     .add select, .add input[type=number], .add .btn.primary { flex: 1; min-width: 0; }
-    .todo .body { flex: 1 1 100%; min-width: 0; order: 1; }
-    .todo .check { order: 0; }
-    .todo .act { flex: 1 1 100%; order: 2; width: 100%; justify-content: flex-end; padding-top: 6px; border-top: 1px solid var(--border); margin-top: 2px; }
-    .todo .act .btn.icon { width: 34px; height: 34px; }
-    .todo .act .dur { min-width: 0; }
+    .todo .row2 { padding-left: 0; }
+    .todo .row2 .btn.icon { width: 32px; height: 32px; }
     .subnotes { padding-left: 0; }
   }
 </style>
@@ -753,9 +752,11 @@
       }
 
       row.innerHTML =
-        '<span class="check">' + (t.done ? '<span class="mi" style="font-size:14px;color:#06210f">check</span>' : '') + '</span>' +
-        '<div class="body"><div class="text"></div><div class="time">' + timeHtml + '</div></div>' +
-        '<div class="act">' +
+        '<div class="row1">' +
+          '<span class="check">' + (t.done ? '<span class="mi" style="font-size:14px;color:#06210f">check</span>' : '') + '</span>' +
+          '<div class="body"><div class="text"></div><div class="time">' + timeHtml + '</div></div>' +
+        '</div>' +
+        '<div class="row2">' +
           (isNote ? '' : '<button class="btn icon" data-act="popup" title="Open timer popup"><span class="mi">timer</span></button>') +
           (isNote ? '' : '<button class="btn icon" data-act="play" title="Start / Pause"><span class="mi">' + (t.running ? 'pause' : 'play_arrow') + '</span></button>') +
           '<button class="btn icon toggle-dl" data-act="deadline" title="Set deadline"><span class="mi">calendar_today</span></button>' +
@@ -802,7 +803,7 @@
         dlInput.addEventListener('keydown', (e) => {
           if (e.key === 'Escape') render();
         });
-        const actDiv = row.querySelector('.act');
+        const actDiv = row.querySelector('.row2');
         const dlBtn = row.querySelector('[data-act="deadline"]');
         dlBtn.replaceWith(dlInput);
         dlInput.focus();
@@ -879,16 +880,16 @@
           subDiv.appendChild(addBtn);
         }
 
-        row.querySelector('.body').appendChild(subDiv);
+        row.appendChild(subDiv);
       } else {
         const addBtnWrap = document.createElement('div');
-        addBtnWrap.style.cssText = 'width:100%;padding-left:32px;';
+        addBtnWrap.style.cssText = 'padding-left:32px;';
         const addBtn = document.createElement('button');
         addBtn.className = 'add-note-btn';
         addBtn.innerHTML = '<span class="mi">add</span> Note';
         addBtn.addEventListener('click', () => { addingNoteId = t.id; render(); });
         addBtnWrap.appendChild(addBtn);
-        row.querySelector('.body').appendChild(addBtnWrap);
+        row.appendChild(addBtnWrap);
       }
 
       list.appendChild(row);
