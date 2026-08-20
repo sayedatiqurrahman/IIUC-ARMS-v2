@@ -237,7 +237,7 @@ export async function GET() {
       }
     }
 
-    // Process PRs — track PR authors and count PRs as contributions
+    // Process PRs — track PR authors and count (PRs are display-only, not scored)
     for (const pr of [...v2Prs, ...dataPrs]) {
       const u = pr.user;
       if (!u?.login || isBot(u.login, u.type)) continue;
@@ -245,10 +245,6 @@ export async function GET() {
       const isData = dataPrs.includes(pr);
       const c = ensure(u.login, u.avatar_url, u.html_url, String(u.id));
       c.prCount += 1;
-      // Count each merged PR as a contribution to that repo
-      if (isV2) c.v2Contributions += 1;
-      if (isData) c.dataContributions += 1;
-      c.contributions += 1;
       // Update role based on PR repos
       if (c.role !== 'Founder & Lead') {
         if (isV2 && isData) {
