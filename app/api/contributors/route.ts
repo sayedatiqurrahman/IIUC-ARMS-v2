@@ -377,9 +377,9 @@ export async function GET() {
         // 1. Founder always first
         if (a.role === 'Founder & Lead') return -1;
         if (b.role === 'Founder & Lead') return 1;
-        // 2. Rank by combined total: commits + PRs from both repos + designs + issues
-        const aTotal = a.v2Contributions + a.dataContributions + a.prCount + a.designContributions + a.issueContributions;
-        const bTotal = b.v2Contributions + b.dataContributions + b.prCount + b.designContributions + b.issueContributions;
+        // 2. Rank by combined total: commits + designs + issues (PRs excluded — already counted inside code/data)
+        const aTotal = a.v2Contributions + a.dataContributions + a.designContributions + a.issueContributions;
+        const bTotal = b.v2Contributions + b.dataContributions + b.designContributions + b.issueContributions;
         if (settings.sortBy === 'name') return a.name.localeCompare(b.name);
         if (settings.sortBy === 'commits') return (b.v2Contributions + b.dataContributions) - (a.v2Contributions + a.dataContributions);
         if (settings.sortBy === 'prs') return b.prCount - a.prCount;
