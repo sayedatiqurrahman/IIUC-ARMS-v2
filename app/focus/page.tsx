@@ -11,7 +11,7 @@ export default function FocusPage() {
       {/* Full-viewport iframe — same native look as AppChrome */}
       <div className="fixed top-[59px] left-0 right-0 bottom-[60px] md:bottom-0 z-[50]">
         <iframe
-          src="/api/studio-apps/serve/todos/index.html"
+          src="/focus/todos/index.html"
           title="Focus"
           className="w-full h-full border-0"
           allow="clipboard-write; fullscreen; document-picture-in-picture; popups"
