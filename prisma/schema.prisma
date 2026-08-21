@@ -137,6 +137,7 @@ model SiteSettings {
   blockedTelegramChats     Json? @default("[]")
   blockedTelegramUsernames Json? @default("[]")
   customRoles              Json? @default("[]")
+  broadcastTargets         Json? @default("[]")
 }
 
 model SemesterCourse {

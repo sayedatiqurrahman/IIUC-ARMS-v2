@@ -8,6 +8,7 @@ import DepartmentNotification from './telegram/DepartmentNotification';
 import ChannelBroadcast from './telegram/ChannelBroadcast';
 import ExamRoutineNotification from './telegram/ExamRoutineNotification';
 import NotificationHistory from './telegram/NotificationHistory';
+import BroadcastTargets from './telegram/BroadcastTargets';
 
 export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boolean; effectiveRole?: string }) {
   const [botStatus, setBotStatus] = useState<'loading' | 'ok' | 'error'>('loading');
@@ -72,6 +73,8 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
       <BotCommands />
 
       {isOwner && <ChannelBroadcast />}
+
+      {(isOwner || effectiveRole === 'admin') && <BroadcastTargets />}
 
       {(isOwner || effectiveRole === 'admin') && (
         <ExamRoutineNotification allDepts={allDepts} onNotifySent={handleNotifySent} />

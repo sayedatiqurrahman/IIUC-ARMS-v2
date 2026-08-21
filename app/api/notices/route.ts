@@ -188,14 +188,22 @@ async function getToken(email: string): Promise<string> {
   return process.env.GITHUB_TOKEN || '';
 }
 
-async function broadcastNotice(notice: Notice, targets?: ('channel' | 'group' | 'personal')[]) {
+async function broadcastNotice(notice: Notice, targetTypes?: ('channel' | 'group' | 'personal')[]) {
   try {
     const { sendMessage, sendDocument, CHANNEL_ID, GROUP_ID, SITE_URL } = await import('@/lib/telegram/api');
 
-    // Determine which targets to send to (default: all if not specified)
-    const sendToChannel = !targets || targets.includes('channel');
-    const sendToGroup = !targets || targets.includes('group');
-    const sendToPersonal = !targets || targets.includes('personal');
+    // Determine which target types to send to (default: all if not specified)
+    const sendToChannel = !targetTypes || targetTypes.includes('channel');
+    const sendToGroup = !targetTypes || targetTypes.includes('group');
+    const sendToPersonal = !targetTypes || targetTypes.includes('personal');
+
+    // Load dynamic broadcast targets from DB
+    let dynamicTargets: { chatId: string; type: string; enabled: boolean }[] = [];
+    try {
+      const { prisma } = await import('@/lib/prisma');
+      const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
+      dynamicTargets = ((settings?.broadcastTargets as unknown as any[]) || []).filter((t: any) => t?.enabled);
+    } catch {}
 
     const catLabel = notice.category === 'academic-calendar' ? 'Academic Calendar'
       : notice.category === 'bus-schedule' ? 'Bus Schedule' : 'Notice';
@@ -214,8 +222,8 @@ async function broadcastNotice(notice: Notice, targets?: ('channel' | 'group' | 
       `📅 ${notice.date || new Date().toISOString().split('T')[0]}`,
       '',
       '🔗 <b>Follow us:</b>',
-      sendToChannel ? `• 📢 Telegram Channel: <a href="https://t.me/iiuc_arms">t.me/iiuc_arms</a>` : '',
-      sendToGroup ? `• 💬 Telegram Group: <a href="https://t.me/iiuc_arms_chat">t.me/iiuc_arms_chat</a>` : '',
+      `• 📢 Telegram Channel: <a href="https://t.me/iiuc_arms">t.me/iiuc_arms</a>`,
+      `• 💬 Telegram Group: <a href="https://t.me/iiuc_arms_chat">t.me/iiuc_arms_chat</a>`,
       `• 🤖 Talk to Bot: <a href="https://t.me/${process.env.TELEGRAM_BOT_USERNAME || 'iiuc_arms_bot'}">@${process.env.TELEGRAM_BOT_USERNAME || 'iiuc_arms_bot'}</a>`,
       `• 🌐 Open App: <a href="${SITE_URL}">IIUC-ARMS</a>`,
       '',
@@ -234,8 +242,33 @@ async function broadcastNotice(notice: Notice, targets?: ('channel' | 'group' | 
 
     const fullText = body + footer;
 
-    // --- Send to Channel ---
-    if (sendToChannel && CHANNEL_ID) {
+    // --- Send to dynamic targets (DB-configured) ---
+    const sentChatIds = new Set<string>();
+
+    for (const target of dynamicTargets) {
+      if (target.type === 'channel' && !sendToChannel) continue;
+      if (target.type === 'group' && !sendToGroup) continue;
+      if (target.type === 'personal' && !sendToPersonal) continue;
+      if (!target.chatId) continue;
+
+      try {
+        if (target.type === 'personal') {
+          // Skip individual DMs in dynamic targets — handled below
+          continue;
+        }
+        if (hasAttachment && (isImage || isPdf)) {
+          await sendDocument(target.chatId, notice.attachmentUrl!, fullText);
+        } else {
+          await sendMessage(target.chatId, fullText, { disable_web_page_preview: !hasAttachment });
+        }
+        sentChatIds.add(target.chatId);
+        console.log(`[TG] Broadcast to ${target.type} ${target.chatId} OK`);
+      } catch (e) { console.error(`[TG] Broadcast to ${target.type} ${target.chatId} failed:`, e); }
+    }
+
+    // --- Fallback: send to env-var targets if not already sent via dynamic targets ---
+    // Channel fallback
+    if (sendToChannel && CHANNEL_ID && !sentChatIds.has(CHANNEL_ID)) {
       try {
         if (hasAttachment && (isImage || isPdf)) {
           await sendDocument(CHANNEL_ID, notice.attachmentUrl!, fullText);
@@ -245,8 +278,8 @@ async function broadcastNotice(notice: Notice, targets?: ('channel' | 'group' | 
       } catch (e) { console.error('[TG] Channel send failed:', e); }
     }
 
-    // --- Send to Group ---
-    if (sendToGroup && GROUP_ID) {
+    // Group fallback
+    if (sendToGroup && GROUP_ID && !sentChatIds.has(GROUP_ID)) {
       try {
         if (hasAttachment && (isImage || isPdf)) {
           await sendDocument(GROUP_ID, notice.attachmentUrl!, fullText);
@@ -258,10 +291,14 @@ async function broadcastNotice(notice: Notice, targets?: ('channel' | 'group' | 
 
     // --- Send to individual users (bot DM) ---
     if (sendToPersonal) {
-      const { sendDepartmentNotifications } = await import('@/lib/telegram/notifications');
-      await sendDepartmentNotifications(['ALL'], fullText, {
-        type: 'notice', title: `${catLabel}: ${notice.title}`,
-      }).catch(() => {});
+      const hasPersonalTargets = dynamicTargets.some(t => t.type === 'personal');
+      if (!hasPersonalTargets) {
+        // Fallback to department notifications
+        const { sendDepartmentNotifications } = await import('@/lib/telegram/notifications');
+        await sendDepartmentNotifications(['ALL'], fullText, {
+          type: 'notice', title: `${catLabel}: ${notice.title}`,
+        }).catch(() => {});
+      }
     }
   } catch (e) { console.error('[TG] broadcastNotice failed:', e); }
 }
