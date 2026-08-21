@@ -99,117 +99,122 @@ export default function UserRow({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className={`bg-dark-bg2 border rounded-xl p-4 transition-all hover:border-qsis/30 ${u.isBanned ? 'border-red-500/30 opacity-60' : 'border-dark-border'}`}>
-      <div className="flex items-start gap-3">
-        {/* Avatar */}
+    <div className={`bg-dark-bg2 border rounded-xl p-3 sm:p-4 transition-all hover:border-qsis/30 ${u.isBanned ? 'border-red-500/30 opacity-60' : 'border-dark-border'}`}>
+      {/* Row 1: Avatar + Name + Badges + Expand */}
+      <div className="flex items-center gap-2.5">
         <div className="relative flex-shrink-0">
-          <img src={u.githubAvatar || u.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email)}&background=6366f1&color=fff&bold=true&size=48`} alt="" className="w-11 h-11 rounded-full border-2 border-dark-border object-cover" />
+          <img src={u.githubAvatar || u.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email)}&background=6366f1&color=fff&bold=true&size=48`} alt="" className="w-10 h-10 sm:w-11 sm:h-11 rounded-full border-2 border-dark-border object-cover" />
           {u.isBanned && <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center"><i className="fas fa-ban text-white text-[0.45rem]"></i></div>}
         </div>
-        {/* Info */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-            <span className="text-[0.85rem] font-semibold text-dark-text truncate">{u.name || u.email.split('@')[0]}</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[0.82rem] sm:text-[0.85rem] font-semibold text-dark-text truncate">{u.name || u.email.split('@')[0]}</span>
             {getRoleBadge(u.role, customRoles)}
             {u.isCR && <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 text-[0.6rem] font-bold">CR</span>}
             {u.isACR && <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 text-[0.6rem] font-bold">ACR</span>}
             {isOwnerUser && <span className="px-1.5 py-0.5 rounded-md bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-bold"><i className="fas fa-star mr-0.5"></i>Owner</span>}
-            {u.githubLogin && <a href={`https://github.com/${u.githubLogin}`} target="_blank" rel="noopener noreferrer" className="text-dark-text3 hover:text-dark-text"><i className="fab fa-github text-[0.7rem]"></i></a>}
+            {u.githubLogin && <a href={`https://github.com/${u.githubLogin}`} target="_blank" rel="noopener noreferrer" className="text-dark-text3 hover:text-dark-text hidden sm:inline"><i className="fab fa-github text-[0.7rem]"></i></a>}
+            {(isAdmin || isManager) && (
+              <button onClick={() => setExpanded(!expanded)} className="ml-auto px-1.5 py-0.5 rounded-lg text-[0.6rem] font-semibold cursor-pointer border bg-dark-bg3 text-dark-text2 border-dark-border hover:text-qsis hover:border-qsis/30 transition-all" title="View profile details">
+                <i className={`fas fa-chevron-${expanded ? 'up' : 'down'}`}></i>
+              </button>
+            )}
           </div>
-          <p className="text-[0.72rem] text-dark-text3 truncate">{u.email}{u.universityId ? ` (${u.universityId})` : ''}{u.semester ? ` — ${u.semester}` : ''}</p>
-          {u.isBanned && u.banReason && (
-            <div className="mt-1.5 p-1.5 rounded bg-red-500/10 border border-red-500/20">
-              <p className="text-[0.62rem] text-red-400"><i className="fas fa-info-circle mr-1"></i>{u.banReason}</p>
-              {u.bannedBy && <p className="text-[0.58rem] text-dark-text3 mt-0.5">Banned by: {u.bannedBy}</p>}
-            </div>
-          )}
-          {u.lastSignIn && <p className="text-[0.62rem] text-dark-text3 mt-0.5"><i className="fas fa-clock mr-0.5"></i>{formatDate(u.lastSignIn)}</p>}
         </div>
-        {/* Actions */}
-        <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
-          {(isAdmin || isManager) && (
-            <button onClick={() => setExpanded(!expanded)} className="px-2 py-1 rounded-lg text-[0.65rem] font-semibold cursor-pointer border bg-dark-bg3 text-dark-text2 border-dark-border hover:text-qsis hover:border-qsis/30 transition-all" title="View profile details">
-              <i className={`fas fa-chevron-${expanded ? 'up' : 'down'}`}></i>
+      </div>
+
+      {/* Row 2: Email + Meta */}
+      <div className="mt-1.5 ml-[50px] sm:ml-[54px]">
+        <p className="text-[0.7rem] sm:text-[0.72rem] text-dark-text3 truncate">{u.email}{u.universityId ? ` (${u.universityId})` : ''}{u.semester ? ` — ${u.semester}` : ''}</p>
+        {u.isBanned && u.banReason && (
+          <div className="mt-1.5 p-1.5 rounded bg-red-500/10 border border-red-500/20">
+            <p className="text-[0.62rem] text-red-400"><i className="fas fa-info-circle mr-1"></i>{u.banReason}</p>
+            {u.bannedBy && <p className="text-[0.58rem] text-dark-text3 mt-0.5">Banned by: {u.bannedBy}</p>}
+          </div>
+        )}
+        {u.lastSignIn && <p className="text-[0.6rem] sm:text-[0.62rem] text-dark-text3 mt-0.5"><i className="fas fa-clock mr-0.5"></i>{formatDate(u.lastSignIn)}</p>}
+      </div>
+
+      {/* Row 3: Actions */}
+      <div className="mt-2 ml-[50px] sm:ml-[54px] flex items-center gap-1.5 flex-wrap">
+        {u.githubLogin && <a href={`https://github.com/${u.githubLogin}`} target="_blank" rel="noopener noreferrer" className="sm:hidden text-dark-text3 hover:text-dark-text px-1"><i className="fab fa-github text-[0.7rem]"></i></a>}
+        {canToggleCR && (
+          <button onClick={() => handleToggleCR(u.email, !!u.isCR)} disabled={actionLoading === u.email + 'cr'}
+            className={`px-2 py-1 rounded-lg text-[0.63rem] sm:text-[0.65rem] font-semibold cursor-pointer border transition-all disabled:opacity-50 ${
+              u.isCR ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-purple-400 hover:border-purple-500/30'
+            }`} title={u.isCR ? 'Remove CR' : 'Make CR'}>
+            {actionLoading === u.email + 'cr' ? <i className="fas fa-spinner fa-spin"></i> : 'CR'}
+          </button>
+        )}
+        {canToggleACR && (
+          <button onClick={() => handleToggleACR(u.email, !!u.isACR)} disabled={actionLoading === u.email + 'acr'}
+            className={`px-2 py-1 rounded-lg text-[0.63rem] sm:text-[0.65rem] font-semibold cursor-pointer border transition-all disabled:opacity-50 ${
+              u.isACR ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-indigo-400 hover:border-indigo-500/30'
+            }`} title={u.isACR ? 'Remove ACR' : 'Make ACR'}>
+            {actionLoading === u.email + 'acr' ? <i className="fas fa-spinner fa-spin"></i> : 'ACR'}
+          </button>
+        )}
+        {canEditRole && (
+          <CustomSelect
+            value={uRole}
+            onChange={(val) => handleSetRole(u.email, val)}
+            options={[
+              { value: 'student', label: 'Student', icon: 'fa-user-graduate' },
+              { value: 'teacher', label: 'Teacher', icon: 'fa-chalkboard-teacher' },
+              ...(isAdmin ? [{ value: 'manager', label: 'Manager', icon: 'fa-user-shield' }] : []),
+              ...(isSuperAdmin ? [{ value: 'admin', label: 'Admin', icon: 'fa-crown' }] : []),
+              ...(isAdmin ? customRoles.map(r => ({ value: r.key, label: r.label, icon: r.icon })) : []),
+            ]}
+            className="min-w-[90px] sm:min-w-[120px]"
+          />
+        )}
+        {canPromoteManager && (
+          <button onClick={() => handleToggleManager(u.email, uRole)} disabled={actionLoading === u.email + 'manager'}
+            className={`px-2 py-1 rounded-lg text-[0.63rem] sm:text-[0.65rem] font-semibold cursor-pointer border transition-all disabled:opacity-50 ${
+              uRole === 'manager' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-orange-400 hover:border-orange-500/30'
+            }`} title={uRole === 'manager' ? 'Remove Manager' : 'Make Manager'}>
+            {actionLoading === u.email + 'manager' ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-user-shield"></i>}
+          </button>
+        )}
+        {canBan && (
+          u.isBanned ? (
+            <button onClick={() => handleBan(u.email, true)} disabled={actionLoading === u.email + 'unban'}
+              className="px-2 sm:px-2.5 py-1 rounded-lg bg-green-500/15 text-green-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-green-500/25 border border-green-500/20 disabled:opacity-50">
+              {actionLoading === u.email + 'unban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i><span className="hidden xs:inline">Un</span>Unban</>}
             </button>
-          )}
-          {canToggleCR && (
-            <button onClick={() => handleToggleCR(u.email, !!u.isCR)} disabled={actionLoading === u.email + 'cr'}
-              className={`px-2 py-1 rounded-lg text-[0.65rem] font-semibold cursor-pointer border transition-all disabled:opacity-50 ${
-                u.isCR ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-purple-400 hover:border-purple-500/30'
-              }`} title={u.isCR ? 'Remove CR' : 'Make CR'}>
-              {actionLoading === u.email + 'cr' ? <i className="fas fa-spinner fa-spin"></i> : 'CR'}
+          ) : (
+            <button onClick={() => handleBan(u.email, false)} disabled={actionLoading === u.email + 'ban'}
+              className="px-2 sm:px-2.5 py-1 rounded-lg bg-red-500/15 text-red-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/25 border border-red-500/20 disabled:opacity-50">
+              {actionLoading === u.email + 'ban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-ban mr-0.5"></i>Ban</>}
             </button>
-          )}
-          {canToggleACR && (
-            <button onClick={() => handleToggleACR(u.email, !!u.isACR)} disabled={actionLoading === u.email + 'acr'}
-              className={`px-2 py-1 rounded-lg text-[0.65rem] font-semibold cursor-pointer border transition-all disabled:opacity-50 ${
-                u.isACR ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-indigo-400 hover:border-indigo-500/30'
-              }`} title={u.isACR ? 'Remove ACR' : 'Make ACR'}>
-              {actionLoading === u.email + 'acr' ? <i className="fas fa-spinner fa-spin"></i> : 'ACR'}
-            </button>
-          )}
-          {canEditRole && (
-            <CustomSelect
-              value={uRole}
-              onChange={(val) => handleSetRole(u.email, val)}
-              options={[
-                { value: 'student', label: 'Student', icon: 'fa-user-graduate' },
-                { value: 'teacher', label: 'Teacher', icon: 'fa-chalkboard-teacher' },
-                ...(isAdmin ? [{ value: 'manager', label: 'Manager', icon: 'fa-user-shield' }] : []),
-                ...(isSuperAdmin ? [{ value: 'admin', label: 'Admin', icon: 'fa-crown' }] : []),
-                ...(isAdmin ? customRoles.map(r => ({ value: r.key, label: r.label, icon: r.icon })) : []),
-              ]}
-              className="min-w-[100px] sm:min-w-[120px]"
-            />
-          )}
-          {canPromoteManager && (
-            <button onClick={() => handleToggleManager(u.email, uRole)} disabled={actionLoading === u.email + 'manager'}
-              className={`px-2 py-1 rounded-lg text-[0.65rem] font-semibold cursor-pointer border transition-all disabled:opacity-50 ${
-                uRole === 'manager' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' : 'bg-dark-bg3 text-dark-text2 border-dark-border hover:text-orange-400 hover:border-orange-500/30'
-              }`} title={uRole === 'manager' ? 'Remove Manager' : 'Make Manager'}>
-              {actionLoading === u.email + 'manager' ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-user-shield"></i>}
-            </button>
-          )}
-          {canBan && (
-            u.isBanned ? (
-              <button onClick={() => handleBan(u.email, true)} disabled={actionLoading === u.email + 'unban'}
-                className="px-2.5 py-1 rounded-lg bg-green-500/15 text-green-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-green-500/25 border border-green-500/20 disabled:opacity-50">
-                {actionLoading === u.email + 'unban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Unban</>}
-              </button>
-            ) : (
-              <button onClick={() => handleBan(u.email, false)} disabled={actionLoading === u.email + 'ban'}
-                className="px-2.5 py-1 rounded-lg bg-red-500/15 text-red-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/25 border border-red-500/20 disabled:opacity-50">
-                {actionLoading === u.email + 'ban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-ban mr-0.5"></i>Ban</>}
-              </button>
-            )
-          )}
-          {isPendingRow && handleApprove && (
-            <button onClick={() => handleApprove(u.email)} disabled={actionLoading === u.email + 'approve'}
-              className="px-2.5 py-1 rounded-lg bg-green-500/15 text-green-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-green-500/25 border border-green-500/20 disabled:opacity-50">
-              {actionLoading === u.email + 'approve' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Approve</>}
-            </button>
-          )}
-          {isPendingRow && handleReject && (
-            <button onClick={() => handleReject(u.email)} disabled={actionLoading === u.email + 'reject'}
-              className="px-2.5 py-1 rounded-lg bg-red-500/15 text-red-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/25 border border-red-500/20 disabled:opacity-50">
-              {actionLoading === u.email + 'reject' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-times mr-0.5"></i>Reject</>}
-            </button>
-          )}
-          {canSendToPending && handleSendToPending && (
-            <button onClick={() => handleSendToPending(u.email)} disabled={actionLoading === u.email + 'pending'}
-              className="px-2.5 py-1 rounded-lg bg-yellow-500/15 text-yellow-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-yellow-500/25 border border-yellow-500/20 disabled:opacity-50"
-              title="Remove access — moves this external account back to pending approval">
-              {actionLoading === u.email + 'pending' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-clock mr-0.5"></i>Move to Pending</>}
-            </button>
-          )}
-          {isAdmin && !isSelf && !isOwnerUser && handleDeleteUser && (
-            <button onClick={() => handleDeleteUser(u.email)} disabled={actionLoading === u.email + 'delete'}
-              className="px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/20 border border-red-500/20 disabled:opacity-50"
-              title="Delete user from Firebase and database">
-              {actionLoading === u.email + 'delete' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-trash mr-0.5"></i>Delete</>}
-            </button>
-          )}
-        </div>
+          )
+        )}
+        {isPendingRow && handleApprove && (
+          <button onClick={() => handleApprove(u.email)} disabled={actionLoading === u.email + 'approve'}
+            className="px-2 sm:px-2.5 py-1 rounded-lg bg-green-500/15 text-green-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-green-500/25 border border-green-500/20 disabled:opacity-50">
+            {actionLoading === u.email + 'approve' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Approve</>}
+          </button>
+        )}
+        {isPendingRow && handleReject && (
+          <button onClick={() => handleReject(u.email)} disabled={actionLoading === u.email + 'reject'}
+            className="px-2 sm:px-2.5 py-1 rounded-lg bg-red-500/15 text-red-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/25 border border-red-500/20 disabled:opacity-50">
+            {actionLoading === u.email + 'reject' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-times mr-0.5"></i>Reject</>}
+          </button>
+        )}
+        {canSendToPending && handleSendToPending && (
+          <button onClick={() => handleSendToPending(u.email)} disabled={actionLoading === u.email + 'pending'}
+            className="px-2 sm:px-2.5 py-1 rounded-lg bg-yellow-500/15 text-yellow-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-yellow-500/25 border border-yellow-500/20 disabled:opacity-50"
+            title="Remove access — moves this external account back to pending approval">
+            {actionLoading === u.email + 'pending' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-clock mr-0.5"></i>Pending</>}
+          </button>
+        )}
+        {isAdmin && !isSelf && !isOwnerUser && handleDeleteUser && (
+          <button onClick={() => handleDeleteUser(u.email)} disabled={actionLoading === u.email + 'delete'}
+            className="px-2 sm:px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/20 border border-red-500/20 disabled:opacity-50"
+            title="Delete user from Firebase and database">
+            {actionLoading === u.email + 'delete' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-trash mr-0.5"></i>Delete</>}
+          </button>
+        )}
       </div>
       {/* Expanded Profile Details */}
       {(isAdmin || isManager) && expanded && (

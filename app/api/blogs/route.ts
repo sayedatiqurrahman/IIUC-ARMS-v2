@@ -101,9 +101,9 @@ export async function POST(req: NextRequest) {
 
     // ─── PUBLISH (create or update published post) ───
     if (action === 'publish' || action === 'create' || action === 'update') {
-      const { slug: clientSlug, title, category, excerpt, content, tags, thumbnailUrl } = body as {
+      const { slug: clientSlug, title, category, excerpt, content, tags, thumbnailUrl, videoUrl } = body as {
         slug?: string; title: string; category?: BlogCategory;
-        excerpt?: string; content?: string; tags?: string[]; thumbnailUrl?: string;
+        excerpt?: string; content?: string; tags?: string[]; thumbnailUrl?: string; videoUrl?: string;
       };
       if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 });
 
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
       const postEntry: BlogPostListItem = {
         id: existingIdx >= 0 ? existingPosts[existingIdx].id : generateId(),
         slug, folderName: slug, title: title.trim(), category: cat,
-        excerpt: (excerpt || '').trim(), thumbnailUrl,
+        excerpt: (excerpt || '').trim(), thumbnailUrl, videoUrl: videoUrl || undefined,
         authorLogin: (session.user as any).login || '', authorName: userName,
         authorAvatar: (session.user as any).image || '', authorEmail: userEmail,
         publishedAt: existingIdx >= 0 ? existingPosts[existingIdx].publishedAt : now,
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
       await writeBlogPostMeta(cat, slug, {
         slug, folderName: slug, title: postEntry.title, category: cat,
         excerpt: postEntry.excerpt, tags: postEntry.tags, status: 'published',
-        thumbnailUrl, authorLogin: postEntry.authorLogin, authorName: userName,
+        thumbnailUrl, videoUrl: videoUrl || undefined, authorLogin: postEntry.authorLogin, authorName: userName,
         authorAvatar: postEntry.authorAvatar, authorEmail: userEmail,
         publishedAt: postEntry.publishedAt, updatedAt: now,
       }, token);

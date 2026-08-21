@@ -6,6 +6,16 @@ import { renderMarkdown, renderMarkdownAsync } from '@/lib/markdown';
 import type { BlogPostListItem } from '@/lib/blog';
 import { getDraft, getDraftContent } from '@/lib/blog-drafts';
 
+function getVideoEmbed(url: string): { type: 'youtube' | 'vimeo' | 'direct'; src: string } | null {
+  if (!url) return null;
+  const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s]+)/);
+  if (ytMatch) return { type: 'youtube', src: `https://www.youtube.com/embed/${ytMatch[1]}` };
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeoMatch) return { type: 'vimeo', src: `https://player.vimeo.com/video/${vimeoMatch[1]}` };
+  if (/\.(mp4|webm|ogg)$/i.test(url)) return { type: 'direct', src: url };
+  return null;
+}
+
 export default function BlogDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const [post, setPost] = useState<BlogPostListItem | null>(null);
@@ -74,7 +84,7 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
 
   if (loading) {
     return (
-      <div className="min-h-[70vh] max-w-5xl mx-auto px-4 py-8">
+      <div className="min-h-[70vh] w-full max-w-5xl mx-auto px-[5%] sm:px-4 py-8">
         <div className="animate-pulse space-y-4">
           <div className="h-6 w-1/4 bg-dark-bg3 rounded"></div>
           <div className="h-8 w-2/3 bg-dark-bg3 rounded"></div>
@@ -88,7 +98,7 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
 
   if (!post) {
     return (
-      <div className="min-h-[70vh] max-w-4xl mx-auto px-4 py-8 flex flex-col items-center justify-center">
+      <div className="min-h-[70vh] w-full max-w-4xl mx-auto px-[5%] sm:px-4 py-8 flex flex-col items-center justify-center">
         <i className="fas fa-exclamation-triangle text-4xl text-amber-400 mb-3"></i>
         <h2 className="text-lg font-bold text-dark-text mb-2">Post Not Found</h2>
         <p className="text-[0.82rem] text-dark-text2 mb-4">This blog post may have been removed or does not exist.</p>
@@ -134,7 +144,7 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
   );
 
   return (
-    <div className="min-h-[80vh] max-w-4xl mx-auto px-4 py-6">
+    <div className="min-h-[80vh] w-full max-w-4xl mx-auto px-[5%] sm:px-4 py-6">
       <Link href="/blog" className="inline-flex items-center gap-1.5 text-[0.78rem] text-dark-text2 hover:text-qsis transition mb-5">
         <i className="fas fa-arrow-left"></i> Back to Blog
       </Link>
@@ -156,11 +166,31 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
           </div>
         )}
 
-        {post.thumbnailUrl && (
+        {post.videoUrl ? (() => {
+          const embed = getVideoEmbed(post.videoUrl);
+          if (embed) {
+            return (
+              <div className="border-b border-dark-border">
+                {embed.type === 'direct' ? (
+                  <video src={embed.src} controls poster={post.thumbnailUrl} className="w-full max-h-[480px] bg-black" />
+                ) : (
+                  <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                    <iframe src={embed.src} className="absolute inset-0 w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                  </div>
+                )}
+              </div>
+            );
+          }
+          return post.thumbnailUrl ? (
+            <div className="border-b border-dark-border">
+              <img src={post.thumbnailUrl} alt={post.title} className="w-full max-h-[360px] object-cover" />
+            </div>
+          ) : null;
+        })() : post.thumbnailUrl ? (
           <div className="border-b border-dark-border">
             <img src={post.thumbnailUrl} alt={post.title} className="w-full max-h-[360px] object-cover" />
           </div>
-        )}
+        ) : null}
 
         <div className="p-5 sm:p-6">
           <h1 className="text-xl sm:text-2xl font-bold text-dark-text leading-snug mb-4">{post.title}</h1>

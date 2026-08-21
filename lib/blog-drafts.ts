@@ -164,7 +164,7 @@ export function buildDraftSlug(title: string): string {
 
 export function createDraftListItem(opts: {
   slug: string; title: string; category: BlogCategory;
-  excerpt?: string; tags?: string[]; thumbnailUrl?: string;
+  excerpt?: string; tags?: string[]; thumbnailUrl?: string; videoUrl?: string;
   authorLogin: string; authorName: string; authorAvatar: string; authorEmail: string;
   id?: string; existingDraft?: BlogPostListItem;
 }): BlogPostListItem {
@@ -177,6 +177,7 @@ export function createDraftListItem(opts: {
     category: opts.category,
     excerpt: opts.excerpt || '',
     thumbnailUrl: opts.thumbnailUrl,
+    videoUrl: opts.videoUrl,
     authorLogin: opts.authorLogin,
     authorName: opts.authorName,
     authorAvatar: opts.authorAvatar,

@@ -41,6 +41,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
   const [excerpt, setExcerpt] = useState('');
   const [content, setContent] = useState('');
   const [tags, setTags] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [showPreview, setShowPreview] = useState(false);
 
   const [thumbnailPreview, setThumbnailPreview] = useState(''); // blob URL
@@ -89,6 +90,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
       setCategory(editingPost.category);
       setExcerpt(editingPost.excerpt);
       setTags(editingPost.tags.join(', '));
+      setVideoUrl(editingPost.videoUrl || '');
       setShowPreview(false);
       setPastedPreviews(new Map());
 
@@ -124,6 +126,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
       setExcerpt('');
       updateContent('');
       setTags('');
+      setVideoUrl('');
       setThumbnailPreview('');
       setThumbnailRemoteUrl('');
       setShowPreview(false);
@@ -161,6 +164,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
         slug, title: title.trim(), category,
         excerpt: excerpt.trim(), tags: tags.split(',').map(t => t.trim()).filter(Boolean),
         thumbnailUrl: thumbnailRemoteUrl || undefined,
+        videoUrl: videoUrl.trim() || undefined,
         authorLogin: draftAuthor.login || '', authorName: draftAuthor.name || '',
         authorAvatar: draftAuthor.image || '', authorEmail: draftAuthor.email || '',
         existingDraft,
@@ -247,6 +251,7 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
           content: contentRef.current,
           tags: tags.split(',').map(t => t.trim()).filter(Boolean),
           thumbnailUrl: thumbUrl || undefined,
+          videoUrl: videoUrl.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -471,6 +476,19 @@ export default function BlogEditorModal({ open, onClose, onSaved, editingPost, c
               </div>
             )}
           </div>
+
+          {/* Video URL (tutorials) */}
+          {category === 'tutorial' && (
+            <div>
+              <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">
+                <i className="fab fa-youtube text-red-400 mr-1"></i>Video URL (optional)
+              </label>
+              <input type="url" value={videoUrl} onChange={e => setVideoUrl(e.target.value)}
+                placeholder="YouTube, Vimeo, or direct video link (mp4, webm)..."
+                className="w-full px-3 py-2 rounded-xl bg-dark-bg3 border border-dark-border text-[0.85rem] text-dark-text focus:border-qsis outline-none" />
+              <p className="text-[0.65rem] text-dark-text3 mt-1">If set, the video will show at the top of the detail page instead of the thumbnail.</p>
+            </div>
+          )}
 
           {/* Thumbnail — local preview only */}
           <div>

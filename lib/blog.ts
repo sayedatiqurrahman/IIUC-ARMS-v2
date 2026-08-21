@@ -14,6 +14,7 @@ export interface BlogPostListItem {
   category: BlogCategory;
   excerpt: string;
   thumbnailUrl?: string;
+  videoUrl?: string;
   authorLogin: string;
   authorName: string;
   authorAvatar: string;
@@ -33,6 +34,7 @@ export interface BlogPostMeta {
   tags: string[];
   status: 'published' | 'draft';
   thumbnailUrl?: string;
+  videoUrl?: string;
   authorLogin: string;
   authorName: string;
   authorAvatar: string;
