@@ -13,7 +13,6 @@ import GridCard from './GridCard';
 import HistoryModal from './HistoryModal';
 import ContributorDetailModal from './ContributorDetailModal';
 import ContributorDetailListModal from './ContributorDetailListModal';
-import ContributorMoreModal from './ContributorMoreModal';
 
 export default function ContributorsView() {
   const router = useRouter();
@@ -29,7 +28,6 @@ export default function ContributorsView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [historyFor, setHistoryFor] = useState<any>(null);
   const [detailFor, setDetailFor] = useState<any>(null);
-  const [moreFor, setMoreFor] = useState<any>(null);
 
   useEffect(() => {
     if (contributors.length === 0 && !contributorsLoading) loadContributors();
@@ -143,7 +141,7 @@ export default function ContributorsView() {
       ) : (
         <div>
           {/* Founder */}
-          {founder && <FounderCard c={founder} onShowHistory={setHistoryFor} onShowMore={setMoreFor} />}
+          {founder && <FounderCard c={founder} onShowHistory={setHistoryFor} />}
 
           {/* Stats Bar */}
           <div className="mb-5">
@@ -300,7 +298,7 @@ export default function ContributorsView() {
               ) : (
                 <div className="space-y-2">
                   {tabList.map((c: any, idx: number) => (
-                    <RankedCard key={c.id} c={c} rank={idx + 1} settings={settings} onShowHistory={setHistoryFor} onShowMore={setMoreFor} />
+                    <RankedCard key={c.id} c={c} rank={idx + 1} settings={settings} onShowHistory={setHistoryFor} />
                   ))}
                 </div>
               )}
@@ -313,7 +311,7 @@ export default function ContributorsView() {
               ) : (
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {tabList.map((c: any) => (
-                    <GridCard key={c.id} c={c} settings={settings} onShowHistory={setHistoryFor} onShowMore={setMoreFor} />
+                    <GridCard key={c.id} c={c} settings={settings} onShowHistory={setHistoryFor} />
                   ))}
                 </div>
               )}
@@ -324,14 +322,12 @@ export default function ContributorsView() {
 
       {/* Contribution history modal */}
       {historyFor && <HistoryModal c={historyFor} onClose={() => setHistoryFor(null)} />}
-      {moreFor && <ContributorMoreModal c={moreFor} onClose={() => setMoreFor(null)} />}
       {detailFor && (
         <ContributorDetailListModal
           title={detailFor.title}
           list={detailFor.list}
           onClose={() => setDetailFor(null)}
           onShowHistory={(c) => { setDetailFor(null); setHistoryFor(c); }}
-          onShowMore={(c) => { setDetailFor(null); setMoreFor(c); }}
         />
       )}
 

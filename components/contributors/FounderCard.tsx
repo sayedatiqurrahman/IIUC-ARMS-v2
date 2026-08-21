@@ -10,14 +10,14 @@ const DATA_TIP = 'Files you uploaded to the Academic Files data repo.';
 const BUG_TIP = 'Issues you opened on the IIUC-ARMS-v2 repo.';
 const TOTAL_TIP = 'Code + Data + Issues combined.';
 
-export default function FounderCard({ c, onShowHistory, onShowMore }: { c: any; onShowHistory?: (c: any) => void; onShowMore?: (c: any) => void }) {
+export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistory?: (c: any) => void }) {
   return (
     <div className="bg-gradient-to-br from-qsis/10 to-accent/10 border-2 border-qsis/40 rounded-2xl p-4 sm:p-5 mb-5 ring-1 ring-qsis/20">
       {/* Mobile */}
       <div className="sm:hidden text-center">
-        <div className="relative inline-block mb-3 group/avatar">
+        <div className="relative inline-block mb-3">
           <Image src={c.avatar_url} alt={c.login} width={72} height={72} className="w-[72px] h-[72px] rounded-full border-[3px] border-qsis shadow-[0_0_24px_rgba(34,197,94,0.4)] object-cover" />
-          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2 cursor-help" title="Founder & Lead">
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2" title="Founder & Lead">
             <i className="fas fa-crown text-white text-[0.6rem]"></i>
           </div>
         </div>
@@ -30,18 +30,18 @@ export default function FounderCard({ c, onShowHistory, onShowMore }: { c: any; 
           {c.departmentShortName && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
           {c.semester && !c.hideSemester && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
           {c.universityId && !c.hideUniversityId && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
+          {c.section && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-users mr-0.5 text-purple-400"></i>{c.section}</span>}
+          {c.company && !c.hideCompany && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-briefcase mr-0.5 text-purple-400"></i>{c.company}</span>}
         </div>
         <div className="flex items-center justify-center gap-2 mb-2">
           <SocialIcons c={c} />
-          <button onClick={() => onShowHistory?.(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
-            <i className="fas fa-circle-info text-[0.7rem]"></i>
-          </button>
-          <button onClick={() => onShowMore?.(c)} className="h-7 px-2 rounded-lg bg-qsis/10 border border-qsis/30 flex items-center gap-1 text-qsis hover:bg-qsis/20 transition-all cursor-pointer" title="More info">
-            <i className="fas fa-ellipsis text-[0.6rem]"></i>
-            <span className="text-[0.6rem] font-semibold">More</span>
-          </button>
+          {onShowHistory && (
+            <button onClick={() => onShowHistory(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
+              <i className="fas fa-circle-info text-[0.7rem]"></i>
+            </button>
+          )}
         </div>
-        <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
+        <div className="flex items-center justify-center gap-1 flex-wrap mb-1">
           <span className="px-2 py-0.5 rounded-full bg-qsis/25 text-qsis text-[0.6rem] font-bold ring-1 ring-qsis/40">
             <i className="fas fa-crown mr-1"></i>Founder & Lead
           </span>
@@ -80,15 +80,16 @@ export default function FounderCard({ c, onShowHistory, onShowMore }: { c: any; 
             {c.departmentShortName && <span className="text-[0.68rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
             {c.semester && !c.hideSemester && <span className="text-[0.68rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
             {c.universityId && !c.hideUniversityId && <span className="text-[0.68rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
+            {c.section && <span className="text-[0.68rem] text-dark-text3"><i className="fas fa-users mr-0.5 text-purple-400"></i>{c.section}</span>}
+            {c.company && !c.hideCompany && <span className="text-[0.68rem] text-dark-text3"><i className="fas fa-briefcase mr-0.5 text-purple-400"></i>{c.company}</span>}
           </div>
           <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
             <SocialIcons c={c} />
-            <button onClick={() => onShowHistory?.(c)} className="w-6 h-6 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
-              <i className="fas fa-circle-info text-[0.65rem]"></i>
-            </button>
-            <button onClick={() => onShowMore?.(c)} className="h-6 px-2 rounded-lg bg-qsis/10 border border-qsis/30 flex items-center gap-1 text-qsis hover:bg-qsis/20 transition-all cursor-pointer text-[0.6rem] font-semibold" title="More info">
-              <i className="fas fa-ellipsis text-[0.55rem]"></i>More
-            </button>
+            {onShowHistory && (
+              <button onClick={() => onShowHistory(c)} className="w-6 h-6 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
+                <i className="fas fa-circle-info text-[0.65rem]"></i>
+              </button>
+            )}
             <div className="w-px h-4 bg-dark-border"></div>
             <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full" title={CODE_TIP}>
               <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions} Code

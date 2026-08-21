@@ -12,7 +12,7 @@ const DESIGN_TIP = 'Designs you published on the Creative Hub.';
 const BUG_TIP = 'Issues you opened on the IIUC-ARMS-v2 repo.';
 const TOTAL_TIP = 'Code + Data + Design + Issues combined.';
 
-export default function RankedCard({ c, rank, settings, onShowHistory, onShowMore }: { c: any; rank: number; settings: Settings; onShowHistory?: (c: any) => void; onShowMore?: (c: any) => void }) {
+export default function RankedCard({ c, rank, settings, onShowHistory }: { c: any; rank: number; settings: Settings; onShowHistory?: (c: any) => void }) {
   const rankColors: Record<number, string> = { 1: 'bg-yellow-500 text-white', 2: 'bg-gray-400 text-white', 3: 'bg-orange-600 text-white' };
   const isFounder = c.role === 'Founder & Lead';
   const isDev = c.v2Contributions > 0;
@@ -27,7 +27,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory, onShowMor
     }`}>
       {/* ─── Desktop ─── */}
       <div className="hidden sm:block p-3">
-        {/* Row 1: Rank + Avatar + Name/Badges + Stats + Actions */}
+        {/* Row 1: Rank + Avatar + Name/Badges + Stats + History */}
         <div className="flex items-center gap-3">
           {settings.showRanks && (
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-[0.8rem] ${isFounder ? 'bg-qsis text-white' : rankColors[rank] || 'bg-dark-bg3 text-dark-text2'}`}>
@@ -57,17 +57,13 @@ export default function RankedCard({ c, rank, settings, onShowHistory, onShowMor
               </div>
             </div>
           )}
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={() => onShowHistory?.(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
+          {onShowHistory && (
+            <button onClick={() => onShowHistory(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0" title="History">
               <i className="fas fa-circle-info text-[0.65rem]"></i>
             </button>
-            <button onClick={() => onShowMore?.(c)} className="h-7 px-2 rounded-lg bg-qsis/10 border border-qsis/30 flex items-center gap-1 text-qsis hover:bg-qsis/20 transition-all cursor-pointer" title="More info">
-              <i className="fas fa-ellipsis text-[0.65rem]"></i>
-              <span className="text-[0.6rem] font-semibold hidden lg:inline">More</span>
-            </button>
-          </div>
+          )}
         </div>
-        {/* Row 2: GitHub + Dept + Semester + ID | Social */}
+        {/* Row 2: GitHub + Dept + Semester + ID + Social + Contacts */}
         <div className="flex items-center gap-2 mt-1.5 ml-[4.25rem] flex-wrap">
           <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
             <i className="fab fa-github mr-0.5"></i>@{c.login}
@@ -75,8 +71,10 @@ export default function RankedCard({ c, rank, settings, onShowHistory, onShowMor
           {c.departmentShortName && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
           {c.semester && !c.hideSemester && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
           {c.universityId && !c.hideUniversityId && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
+          {c.section && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-users mr-0.5 text-purple-400"></i>{c.section}</span>}
           <div className="w-px h-3 bg-dark-border"></div>
           <SocialIcons c={c} />
+          {c.company && !c.hideCompany && <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-briefcase mr-0.5 text-purple-400"></i>{c.company}</span>}
         </div>
       </div>
 
@@ -95,16 +93,13 @@ export default function RankedCard({ c, rank, settings, onShowHistory, onShowMor
               <i className="fab fa-github mr-0.5"></i>@{c.login}
             </a>
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={() => onShowHistory?.(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
+          {onShowHistory && (
+            <button onClick={() => onShowHistory(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0" title="History">
               <i className="fas fa-circle-info text-[0.6rem]"></i>
             </button>
-            <button onClick={() => onShowMore?.(c)} className="w-7 h-7 rounded-lg bg-qsis/10 border border-qsis/30 flex items-center justify-center text-qsis hover:bg-qsis/20 transition-all cursor-pointer" title="More info">
-              <i className="fas fa-ellipsis text-[0.6rem]"></i>
-            </button>
-          </div>
+          )}
         </div>
-        {/* Badges + Dept + Semester + ID */}
+        {/* Badges + Info */}
         <div className="flex flex-wrap items-center gap-1 mb-1.5">
           {isFounder && <span className="px-1.5 py-0.5 rounded-md bg-qsis/20 text-qsis text-[0.5rem] font-bold"><i className="fas fa-crown mr-0.5"></i>Founder</span>}
           {isDev && <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.5rem] font-bold"><i className="fas fa-laptop-code mr-0.5"></i>Dev</span>}
@@ -114,6 +109,8 @@ export default function RankedCard({ c, rank, settings, onShowHistory, onShowMor
           {c.departmentShortName && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
           {c.semester && !c.hideSemester && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
           {c.universityId && !c.hideUniversityId && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
+          {c.section && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-users mr-0.5 text-purple-400"></i>{c.section}</span>}
+          {c.company && !c.hideCompany && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-briefcase mr-0.5 text-purple-400"></i>{c.company}</span>}
         </div>
         <SocialIcons c={c} />
         {settings.showStats && (

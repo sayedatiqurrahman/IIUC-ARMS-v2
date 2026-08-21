@@ -5,7 +5,7 @@ import { Settings } from './types';
 import SystemRoleBadge from './SystemRoleBadge';
 import SocialIcons from './SocialIcons';
 
-export default function GridCard({ c, settings, onShowHistory, onShowMore }: { c: any; settings: Settings; onShowHistory?: (c: any) => void; onShowMore?: (c: any) => void }) {
+export default function GridCard({ c, settings, onShowHistory }: { c: any; settings: Settings; onShowHistory?: (c: any) => void }) {
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
   const isDesigner = (c.designContributions || 0) > 0;
@@ -40,19 +40,19 @@ export default function GridCard({ c, settings, onShowHistory, onShowMore }: { c
 
       <div className="h-px bg-gradient-to-r from-transparent via-qsis/30 to-transparent mx-4"></div>
 
-      {/* Info — dept / semester / ID + social */}
+      {/* Info: dept / semester / ID / section / company + social icons */}
       <div className="px-4 pb-2 pt-2 flex-1">
         <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
           {c.departmentShortName && <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-building text-teal-400 mr-0.5"></i>{c.departmentShortName}</span>}
           {c.semester && !c.hideSemester && <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-graduation-cap text-accent mr-0.5"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
           {c.universityId && !c.hideUniversityId && <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-id-card text-qsis mr-0.5"></i>{c.universityId}</span>}
+          {c.section && <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-users text-purple-400 mr-0.5"></i>{c.section}</span>}
+          {c.company && !c.hideCompany && <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-briefcase text-purple-400 mr-0.5"></i>{c.company}</span>}
         </div>
-        <div className="flex items-center gap-1">
-          <SocialIcons c={c} />
-        </div>
+        <SocialIcons c={c} />
       </div>
 
-      {/* Footer — stats + actions */}
+      {/* Footer: stats + history */}
       <div className="px-4 py-2 border-t border-dark-border bg-dark-bg3/50 rounded-b-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
@@ -61,14 +61,13 @@ export default function GridCard({ c, settings, onShowHistory, onShowMore }: { c
             <span className="text-[0.55rem] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded"><i className="fas fa-palette mr-0.5"></i>{c.designContributions || 0}</span>
             <span className="text-[0.55rem] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded"><i className="fas fa-bug mr-0.5"></i>{c.issueContributions || 0}</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <span className="text-[0.6rem] font-bold text-yellow-500">{total}</span>
-            <button onClick={() => onShowHistory?.(c)} className="w-5 h-5 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
-              <i className="fas fa-circle-info text-[0.6rem]"></i>
-            </button>
-            <button onClick={() => onShowMore?.(c)} className="h-5 px-1.5 rounded bg-qsis/10 border border-qsis/30 flex items-center justify-center text-qsis hover:bg-qsis/20 transition-all cursor-pointer" title="More info">
-              <i className="fas fa-ellipsis text-[0.5rem]"></i>
-            </button>
+            {onShowHistory && (
+              <button onClick={() => onShowHistory(c)} className="w-5 h-5 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
+                <i className="fas fa-circle-info text-[0.6rem]"></i>
+              </button>
+            )}
           </div>
         </div>
       </div>
