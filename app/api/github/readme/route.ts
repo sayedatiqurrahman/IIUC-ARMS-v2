@@ -101,12 +101,11 @@ export async function POST(req: NextRequest) {
     const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const effectiveRole = config.getEffectiveRole(email);
-    const isOwner = config.ownerEmails.includes(email.toLowerCase());
-
     const { prisma } = await import('@/lib/prisma');
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
     const isCR = profile?.isCR || false;
+    const effectiveRole = config.getEffectiveRole(email, profile?.role);
+    const isOwner = config.ownerEmails.includes(email.toLowerCase());
 
     const hasUserGrant = await hasPermission('editLinks', effectiveRole, isCR, email);
     if (!hasUserGrant && !isOwner) {
