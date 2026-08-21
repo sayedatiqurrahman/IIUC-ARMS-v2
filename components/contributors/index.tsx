@@ -11,6 +11,8 @@ import PageLoader from '@/components/PageLoader';
 import RankedCard from './RankedCard';
 import GridCard from './GridCard';
 import HistoryModal from './HistoryModal';
+import ContributorDetailModal from './ContributorDetailModal';
+import ContributorDetailListModal from './ContributorDetailListModal';
 
 export default function ContributorsView() {
   const router = useRouter();
@@ -25,6 +27,7 @@ export default function ContributorsView() {
   const [deptFilter, setDeptFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [historyFor, setHistoryFor] = useState<any>(null);
+  const [detailFor, setDetailFor] = useState<any>(null);
 
   useEffect(() => {
     if (contributors.length === 0 && !contributorsLoading) loadContributors();
@@ -163,24 +166,24 @@ export default function ContributorsView() {
                 <span><i className="fas fa-palette mr-1"></i>{designers.length} designers</span>
               </div>
             </div>
-            {/* Category breakdown — equal-width chips */}
+            {/* Category breakdown — clickable chips */}
             <div className="grid grid-cols-4 gap-2">
-              <div className="bg-dark-bg2 border border-rose-500/20 rounded-xl p-2 sm:p-3 text-center">
+              <button onClick={() => { setActiveTab('all'); setDetailFor({ title: 'Issue Contributors', list: issueContributors }); }} className="bg-dark-bg2 border border-rose-500/20 rounded-xl p-2 sm:p-3 text-center cursor-pointer hover:border-rose-500/40 hover:bg-rose-500/5 transition-all">
                 <div className="text-[1rem] sm:text-[1.2rem] font-bold text-rose-400">{issueContributors.length}</div>
                 <div className="text-[0.6rem] sm:text-[0.68rem] text-dark-text2 font-medium"><i className="fas fa-bug mr-0.5"></i>Issues</div>
-              </div>
-              <div className="bg-dark-bg2 border border-blue-500/20 rounded-xl p-2 sm:p-3 text-center">
+              </button>
+              <button onClick={() => { setActiveTab('developers'); setDetailFor({ title: 'Developers', list: developers }); }} className="bg-dark-bg2 border border-blue-500/20 rounded-xl p-2 sm:p-3 text-center cursor-pointer hover:border-blue-500/40 hover:bg-blue-500/5 transition-all">
                 <div className="text-[1rem] sm:text-[1.2rem] font-bold text-blue-400">{developers.length}</div>
                 <div className="text-[0.6rem] sm:text-[0.68rem] text-dark-text2 font-medium"><i className="fas fa-laptop-code mr-0.5"></i>Devs</div>
-              </div>
-              <div className="bg-dark-bg2 border border-orange-500/20 rounded-xl p-2 sm:p-3 text-center">
+              </button>
+              <button onClick={() => { setActiveTab('resources'); setDetailFor({ title: 'Resource Providers', list: resources }); }} className="bg-dark-bg2 border border-orange-500/20 rounded-xl p-2 sm:p-3 text-center cursor-pointer hover:border-orange-500/40 hover:bg-orange-500/5 transition-all">
                 <div className="text-[1rem] sm:text-[1.2rem] font-bold text-orange-400">{resources.length}</div>
                 <div className="text-[0.6rem] sm:text-[0.68rem] text-dark-text2 font-medium truncate"><i className="fas fa-book-open mr-0.5"></i>Resources</div>
-              </div>
-              <div className="bg-dark-bg2 border border-emerald-500/20 rounded-xl p-2 sm:p-3 text-center">
+              </button>
+              <button onClick={() => { setActiveTab('designers'); setDetailFor({ title: 'Designers', list: designers }); }} className="bg-dark-bg2 border border-emerald-500/20 rounded-xl p-2 sm:p-3 text-center cursor-pointer hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-all">
                 <div className="text-[1rem] sm:text-[1.2rem] font-bold text-emerald-400">{designers.length}</div>
                 <div className="text-[0.6rem] sm:text-[0.68rem] text-dark-text2 font-medium truncate"><i className="fas fa-palette mr-0.5"></i>Designers</div>
-              </div>
+              </button>
             </div>
           </div>
 
@@ -319,6 +322,14 @@ export default function ContributorsView() {
 
       {/* Contribution history modal */}
       {historyFor && <HistoryModal c={historyFor} onClose={() => setHistoryFor(null)} />}
+      {detailFor && (
+        <ContributorDetailListModal
+          title={detailFor.title}
+          list={detailFor.list}
+          onClose={() => setDetailFor(null)}
+          onShowHistory={(c) => { setDetailFor(null); setHistoryFor(c); }}
+        />
+      )}
 
       {/* How to Become a Contributor */}
       {!contributorsLoading && contributors.length > 0 && (

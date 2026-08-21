@@ -253,48 +253,13 @@ export async function GET() {
     const customRoles = await getCustomRoles();
     const customRoleByKey = new Map(customRoles.map(r => [r.key.toLowerCase(), r.label]));
 
-    // Build case-insensitive lookup maps for matching DB profiles to GitHub contributors
-    const lowerLoginMap = new Map<string, Contributor>();
-    const emailMap = new Map<string, Contributor>();       // email local-part → contributor
-    const nameMap = new Map<string, Contributor>();         // lowercase name → contributor
-    for (const c of Array.from(map.values())) {
-      lowerLoginMap.set(c.login.toLowerCase(), c);
-      if (c.email) emailMap.set(c.email.toLowerCase(), c);
-      if (c.name && c.name !== c.login) nameMap.set(c.name.toLowerCase(), c);
-    }
-
-    // Merge DB profiles into GitHub contributors
+    // Merge DB profiles
     for (const p of dbProfiles) {
-      // ── Matching strategies (case-insensitive) ──
       let matchedContributor: Contributor | undefined;
-
-      // 1. Direct githubLogin match
-      if (p.githubLogin) {
-        matchedContributor = lowerLoginMap.get(p.githubLogin.toLowerCase());
-      }
-      // 2. Email local-part match (student@ → student)
+      if (p.githubLogin) matchedContributor = map.get(p.githubLogin);
       if (!matchedContributor && p.email) {
-        const localPart = p.email.split('@')[0].toLowerCase();
-        matchedContributor = lowerLoginMap.get(localPart);
+        matchedContributor = map.get(p.email.split('@')[0]);
       }
-      // 3. publicEmail match
-      if (!matchedContributor && p.publicEmail) {
-        const localPart = p.publicEmail.split('@')[0].toLowerCase();
-        matchedContributor = lowerLoginMap.get(localPart);
-      }
-      // 4. Full email match against any contributor's stored email
-      if (!matchedContributor && p.email) {
-        matchedContributor = emailMap.get(p.email.toLowerCase());
-      }
-      // 5. Name match (case-insensitive)
-      if (!matchedContributor && p.name) {
-        matchedContributor = nameMap.get(p.name.toLowerCase());
-      }
-      // 6. githubLogin as name (profile name matches a GitHub login)
-      if (!matchedContributor && p.githubLogin) {
-        matchedContributor = nameMap.get(p.githubLogin.toLowerCase());
-      }
-
       if (matchedContributor) {
         // Skip contributors who opted out
         if (p.showInContributors === false) {
