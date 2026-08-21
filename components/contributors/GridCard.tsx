@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { Settings } from './types';
 import SystemRoleBadge from './SystemRoleBadge';
 import SocialIcons from './SocialIcons';
+import ContactSection from './ContactSection';
 
 export default function GridCard({ c, settings, onShowHistory }: { c: any; settings: Settings; onShowHistory?: (c: any) => void }) {
   const isDev = c.v2Contributions > 0;
@@ -47,7 +48,7 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
 
       <div className="h-px bg-gradient-to-r from-transparent via-qsis/30 to-transparent mx-4"></div>
 
-      {/* Info section - compact */}
+      {/* Info section — dept / semester / ID directly visible */}
       <div className="px-4 pb-2.5 pt-2 flex-1">
         <div className="flex items-center gap-2 flex-wrap mb-1.5">
           {c.departmentShortName && (
@@ -60,22 +61,11 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
             <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-id-card text-qsis mr-0.5"></i>{c.universityId}</span>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-wrap mb-1.5">
-          {c.whatsapp && !c.hideWhatsapp && (
-            <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.58rem] text-green-400 hover:text-green-300 no-underline">
-              <i className="fab fa-whatsapp mr-0.5"></i>WhatsApp
-            </a>
-          )}
-          {(c.publicEmail || c.email) && !c.hideEmail && (
-            <a href={`mailto:${c.publicEmail || c.email}`} className="text-[0.58rem] text-amber-400 hover:text-amber-300 no-underline">
-              <i className="fas fa-envelope mr-0.5"></i>{c.publicEmail || c.email}
-            </a>
-          )}
-          {c.company && !c.hideCompany && (
-            <span className="text-[0.58rem] text-dark-text3"><i className="fas fa-briefcase mr-0.5 text-purple-400"></i>{c.company}</span>
-          )}
+        {/* Social media icons + contacts button */}
+        <div className="flex items-center gap-1.5">
+          <SocialIcons c={c} />
+          <ContactSection c={c} />
         </div>
-        <SocialIcons c={c} />
       </div>
 
       {/* Stats footer */}
