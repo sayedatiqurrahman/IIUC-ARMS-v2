@@ -4,35 +4,25 @@ import Image from 'next/image';
 import { config } from '@/lib/config';
 import StatTip from './StatTip';
 import SocialIcons from './SocialIcons';
-import ContactSection from './ContactSection';
 
-const CODE_TIP = 'Commits to the IIUC-ARMS-v2 source-code repo. Every commit you push there counts as 1.';
-const DATA_TIP = 'Files you uploaded to the Academic Files data repo. Every file you upload is committed to that repo and counts as 1.';
-const BUG_TIP = 'Issues (bug reports, feature requests) you opened on the IIUC-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.';
-const TOTAL_TIP = 'Code + Data + Issues added together.';
+const CODE_TIP = 'Commits to the IIUC-ARMS-v2 source-code repo.';
+const DATA_TIP = 'Files you uploaded to the Academic Files data repo.';
+const BUG_TIP = 'Issues you opened on the IIUC-ARMS-v2 repo.';
+const TOTAL_TIP = 'Code + Data + Issues combined.';
 
-export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistory?: (c: any) => void }) {
+export default function FounderCard({ c, onShowHistory, onShowMore }: { c: any; onShowHistory?: (c: any) => void; onShowMore?: (c: any) => void }) {
   return (
     <div className="bg-gradient-to-br from-qsis/10 to-accent/10 border-2 border-qsis/40 rounded-2xl p-4 sm:p-5 mb-5 ring-1 ring-qsis/20">
-      {/* Mobile: vertical centered layout */}
+      {/* Mobile */}
       <div className="sm:hidden text-center">
         <div className="relative inline-block mb-3 group/avatar">
           <Image src={c.avatar_url} alt={c.login} width={72} height={72} className="w-[72px] h-[72px] rounded-full border-[3px] border-qsis shadow-[0_0_24px_rgba(34,197,94,0.4)] object-cover" />
           <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2 cursor-help" title="Founder & Lead">
             <i className="fas fa-crown text-white text-[0.6rem]"></i>
           </div>
-          <span className="pointer-events-none absolute bottom-8 right-0 z-50 w-48 sm:w-60 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left opacity-0 translate-y-1 transition-all duration-150 group-hover/avatar:opacity-100 group-hover/avatar:translate-y-0 shadow-xl">
-            <span className="block text-[0.7rem] font-bold text-qsis mb-0.5">
-              <i className="fas fa-crown mr-1"></i>Founder
-            </span>
-            <span className="block text-[0.65rem] leading-snug text-neutral-300">
-              This crown marks the founder who created this platform. It isn&apos;t an earned badge — it belongs only to the founding account.
-            </span>
-          </span>
         </div>
         <h3 className="text-[1rem] font-bold text-dark-text">{c.name || c.login}</h3>
         <p className="text-[0.75rem] text-qsis font-medium mb-1">{config.founderName}</p>
-        {/* GitHub + Dept + Semester + ID */}
         <div className="flex items-center justify-center gap-2 mb-1.5 flex-wrap">
           <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
             <i className="fab fa-github mr-1"></i>@{c.login}
@@ -41,12 +31,14 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
           {c.semester && !c.hideSemester && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
           {c.universityId && !c.hideUniversityId && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
         </div>
-        {/* Social + Contacts + History */}
         <div className="flex items-center justify-center gap-2 mb-2">
           <SocialIcons c={c} />
-          <ContactSection c={c} size="md" />
-          <button onClick={() => onShowHistory?.(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="Contribution history">
+          <button onClick={() => onShowHistory?.(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
             <i className="fas fa-circle-info text-[0.7rem]"></i>
+          </button>
+          <button onClick={() => onShowMore?.(c)} className="h-7 px-2 rounded-lg bg-qsis/10 border border-qsis/30 flex items-center gap-1 text-qsis hover:bg-qsis/20 transition-all cursor-pointer" title="More info">
+            <i className="fas fa-ellipsis text-[0.6rem]"></i>
+            <span className="text-[0.6rem] font-semibold">More</span>
           </button>
         </div>
         <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
@@ -65,21 +57,13 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
         </div>
       </div>
 
-      {/* Desktop: horizontal layout */}
+      {/* Desktop */}
       <div className="hidden sm:flex items-center gap-4">
-        <div className="relative flex-shrink-0 group/avatar">
+        <div className="relative flex-shrink-0">
           <Image src={c.avatar_url} alt={c.login} width={80} height={80} className="w-20 h-20 rounded-full border-[3px] border-qsis shadow-[0_0_24px_rgba(34,197,94,0.4)] object-cover" />
-          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2 cursor-help" title="Founder & Lead">
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2" title="Founder & Lead">
             <i className="fas fa-crown text-white text-[0.6rem]"></i>
           </div>
-          <span className="pointer-events-none absolute bottom-8 right-0 z-50 w-48 sm:w-60 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left opacity-0 translate-y-1 transition-all duration-150 group-hover/avatar:opacity-100 group-hover/avatar:translate-y-0 shadow-xl">
-            <span className="block text-[0.7rem] font-bold text-qsis mb-0.5">
-              <i className="fas fa-crown mr-1"></i>Founder
-            </span>
-            <span className="block text-[0.65rem] leading-snug text-neutral-300">
-              This crown marks the founder who created this platform. It isn&apos;t an earned badge — it belongs only to the founding account.
-            </span>
-          </span>
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -89,7 +73,6 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
             </span>
           </div>
           <p className="text-[0.82rem] text-qsis font-medium">{config.founderName}</p>
-          {/* GitHub + Dept + Semester + ID */}
           <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
             <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.72rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
               <i className="fab fa-github mr-1"></i>@{c.login}
@@ -98,13 +81,15 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
             {c.semester && !c.hideSemester && <span className="text-[0.68rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
             {c.universityId && !c.hideUniversityId && <span className="text-[0.68rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
           </div>
-          {/* Social + Contacts + History + Stats */}
           <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
             <SocialIcons c={c} />
-            <ContactSection c={c} size="md" />
             <button onClick={() => onShowHistory?.(c)} className="w-6 h-6 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
               <i className="fas fa-circle-info text-[0.65rem]"></i>
             </button>
+            <button onClick={() => onShowMore?.(c)} className="h-6 px-2 rounded-lg bg-qsis/10 border border-qsis/30 flex items-center gap-1 text-qsis hover:bg-qsis/20 transition-all cursor-pointer text-[0.6rem] font-semibold" title="More info">
+              <i className="fas fa-ellipsis text-[0.55rem]"></i>More
+            </button>
+            <div className="w-px h-4 bg-dark-border"></div>
             <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full" title={CODE_TIP}>
               <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions} Code
             </span>

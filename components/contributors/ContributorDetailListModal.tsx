@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Modal from '@/components/ui/Modal';
 import SocialIcons from './SocialIcons';
 
-export default function ContributorDetailListModal({ title, list, onClose, onShowHistory, isOpen = true }: { title: string; list: any[]; onClose: () => void; onShowHistory?: (c: any) => void; isOpen?: boolean }) {
+export default function ContributorDetailListModal({ title, list, onClose, onShowHistory, onShowMore, isOpen = true }: { title: string; list: any[]; onClose: () => void; onShowHistory?: (c: any) => void; onShowMore?: (c: any) => void; isOpen?: boolean }) {
   const sorted = [...list].sort((a: any, b: any) => {
     const aTotal = a.v2Contributions + a.dataContributions + (a.designContributions || 0) + (a.issueContributions || 0);
     const bTotal = b.v2Contributions + b.dataContributions + (b.designContributions || 0) + (b.issueContributions || 0);
@@ -39,8 +39,6 @@ export default function ContributorDetailListModal({ title, list, onClose, onSho
                     {c.departmentShortName && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
                     {c.semester && !c.hideSemester && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
                     {c.universityId && !c.hideUniversityId && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
-                    {c.whatsapp && !c.hideWhatsapp && <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.55rem] text-green-400 no-underline"><i className="fab fa-whatsapp mr-0.5"></i>WhatsApp</a>}
-                    {(c.publicEmail || c.email) && !c.hideEmail && <a href={`mailto:${c.publicEmail || c.email}`} className="text-[0.55rem] text-amber-400 no-underline"><i className="fas fa-envelope mr-0.5"></i>Email</a>}
                     <SocialIcons c={c} />
                   </div>
                 </div>
@@ -51,11 +49,18 @@ export default function ContributorDetailListModal({ title, list, onClose, onSho
                   {(c.issueContributions || 0) > 0 && <span className="text-[0.55rem] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded"><i className="fas fa-bug mr-0.5"></i>{c.issueContributions}</span>}
                 </div>
                 <span className="text-[0.65rem] font-bold text-yellow-500 flex-shrink-0">{total}</span>
-                {onShowHistory && (
-                  <button onClick={() => onShowHistory(c)} className="w-6 h-6 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0" title="History">
-                    <i className="fas fa-circle-info text-[0.6rem]"></i>
-                  </button>
-                )}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {onShowHistory && (
+                    <button onClick={() => onShowHistory(c)} className="w-6 h-6 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
+                      <i className="fas fa-circle-info text-[0.6rem]"></i>
+                    </button>
+                  )}
+                  {onShowMore && (
+                    <button onClick={() => onShowMore(c)} className="h-6 px-1.5 rounded bg-qsis/10 border border-qsis/30 flex items-center justify-center text-qsis hover:bg-qsis/20 transition-all cursor-pointer" title="More info">
+                      <i className="fas fa-ellipsis text-[0.5rem]"></i>
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

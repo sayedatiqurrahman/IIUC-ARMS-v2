@@ -250,6 +250,8 @@ export async function commitUpload(ctx: UploadContext, files: FileToCommit[], me
 }
 
 // Log a file_upload activity row (best effort).
+// Also auto-save the uploader's GitHub login if their profile is missing it,
+// so future contributor merges can match their DB profile to their GitHub identity.
 export async function logUploadActivity(userEmail: string, files: string[], prUrl: string | null): Promise<void> {
   try {
     const { prisma } = await import('@/lib/prisma');
@@ -262,5 +264,27 @@ export async function logUploadActivity(userEmail: string, files: string[], prUr
         details: JSON.stringify({ files, count: files.length, prUrl }),
       },
     });
+
+    // Auto-save githubLogin if profile doesn't have one yet
+    if (profile && !profile.githubLogin && userEmail) {
+      try {
+        const token = process.env.GITHUB_TOKEN || '';
+        if (token) {
+          const res = await fetch(`https://api.github.com/search/users?q=${encodeURIComponent(userEmail)}+in:email`, {
+            headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const ghUser = data.items?.[0];
+            if (ghUser?.login) {
+              await prisma.profile.update({
+                where: { userId: userEmail },
+                data: { githubLogin: ghUser.login },
+              });
+            }
+          }
+        }
+      } catch {}
+    }
   } catch {}
 }

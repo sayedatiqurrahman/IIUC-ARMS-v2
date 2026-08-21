@@ -4,13 +4,13 @@ import Image from 'next/image';
 import { Settings } from './types';
 import SystemRoleBadge from './SystemRoleBadge';
 import SocialIcons from './SocialIcons';
-import ContactSection from './ContactSection';
 
-export default function GridCard({ c, settings, onShowHistory }: { c: any; settings: Settings; onShowHistory?: (c: any) => void }) {
+export default function GridCard({ c, settings, onShowHistory, onShowMore }: { c: any; settings: Settings; onShowHistory?: (c: any) => void; onShowMore?: (c: any) => void }) {
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
   const isDesigner = (c.designContributions || 0) > 0;
   const isFounder = c.role === 'Founder & Lead';
+  const total = c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0);
 
   return (
     <div className={`bg-dark-bg2 border rounded-xl transition-all group flex flex-col ${
@@ -18,20 +18,12 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
     }`}>
       {/* Header */}
       <div className={`relative px-4 pt-4 pb-2.5 text-center rounded-t-xl ${isFounder ? 'bg-gradient-to-b from-qsis/15 to-transparent' : 'bg-gradient-to-b from-qsis/5 to-transparent'}`}>
-        <div className="relative inline-block mb-2 group/avatar">
+        <div className="relative inline-block mb-2">
           <Image src={c.avatar_url} alt={c.login} width={56} height={56} className={`w-14 h-14 rounded-full object-cover border-2 transition-colors ${
             isFounder ? 'border-qsis shadow-[0_0_16px_rgba(34,197,94,0.3)]' : 'border-dark-border group-hover:border-qsis/50'
           }`} />
-          {isFounder && (
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2">
-              <i className="fas fa-crown text-white text-[0.45rem]"></i>
-            </div>
-          )}
-          {!isFounder && c.profileComplete && (
-            <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-sky-500 flex items-center justify-center shadow ring-2 ring-dark-bg2">
-              <i className="fas fa-check text-white text-[0.4rem]"></i>
-            </div>
-          )}
+          {isFounder && <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2"><i className="fas fa-crown text-white text-[0.45rem]"></i></div>}
+          {!isFounder && c.profileComplete && <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-sky-500 flex items-center justify-center shadow ring-2 ring-dark-bg2"><i className="fas fa-check text-white text-[0.4rem]"></i></div>}
         </div>
         <h4 className="text-[0.82rem] font-bold text-dark-text leading-tight truncate">{c.name || c.login}</h4>
         <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
@@ -48,53 +40,35 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
 
       <div className="h-px bg-gradient-to-r from-transparent via-qsis/30 to-transparent mx-4"></div>
 
-      {/* Info section — dept / semester / ID directly visible */}
-      <div className="px-4 pb-2.5 pt-2 flex-1">
-        <div className="flex items-center gap-2 flex-wrap mb-1.5">
-          {c.departmentShortName && (
-            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-building text-teal-400 mr-0.5"></i>{c.departmentShortName}</span>
-          )}
-          {c.semester && !c.hideSemester && (
-            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-graduation-cap text-accent mr-0.5"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>
-          )}
-          {c.universityId && !c.hideUniversityId && (
-            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-id-card text-qsis mr-0.5"></i>{c.universityId}</span>
-          )}
+      {/* Info — dept / semester / ID + social */}
+      <div className="px-4 pb-2 pt-2 flex-1">
+        <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+          {c.departmentShortName && <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-building text-teal-400 mr-0.5"></i>{c.departmentShortName}</span>}
+          {c.semester && !c.hideSemester && <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-graduation-cap text-accent mr-0.5"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
+          {c.universityId && !c.hideUniversityId && <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-id-card text-qsis mr-0.5"></i>{c.universityId}</span>}
         </div>
-        {/* Social media icons + contacts button */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <SocialIcons c={c} />
-          <ContactSection c={c} />
         </div>
       </div>
 
-      {/* Stats footer */}
+      {/* Footer — stats + actions */}
       <div className="px-4 py-2 border-t border-dark-border bg-dark-bg3/50 rounded-b-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <span className="text-[0.55rem] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded" title="Commits to IIUC-ARMS-v2 source-code repo">
-              <i className="fas fa-laptop-code mr-0.5"></i>{c.v2Contributions}
-            </span>
-            <span className="text-[0.55rem] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded" title="Files uploaded to Academic Files data repo">
-              <i className="fas fa-book-open mr-0.5"></i>{c.dataContributions}
-            </span>
-            <span className="text-[0.55rem] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Designs published on Creative Hub">
-              <i className="fas fa-palette mr-0.5"></i>{c.designContributions || 0}
-            </span>
-            <span className="text-[0.55rem] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded" title="Issues opened on IIUC-ARMS-v2 repo">
-              <i className="fas fa-bug mr-0.5"></i>{c.issueContributions || 0}
-            </span>
+            <span className="text-[0.55rem] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded"><i className="fas fa-laptop-code mr-0.5"></i>{c.v2Contributions}</span>
+            <span className="text-[0.55rem] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded"><i className="fas fa-book-open mr-0.5"></i>{c.dataContributions}</span>
+            <span className="text-[0.55rem] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded"><i className="fas fa-palette mr-0.5"></i>{c.designContributions || 0}</span>
+            <span className="text-[0.55rem] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded"><i className="fas fa-bug mr-0.5"></i>{c.issueContributions || 0}</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[0.6rem] font-bold text-yellow-500" title="Total contributions">
-              {c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0)}
-            </span>
+            <span className="text-[0.6rem] font-bold text-yellow-500">{total}</span>
             <button onClick={() => onShowHistory?.(c)} className="w-5 h-5 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
               <i className="fas fa-circle-info text-[0.6rem]"></i>
             </button>
-            <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-5 h-5 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="GitHub">
-              <i className="fab fa-github text-[0.6rem]"></i>
-            </a>
+            <button onClick={() => onShowMore?.(c)} className="h-5 px-1.5 rounded bg-qsis/10 border border-qsis/30 flex items-center justify-center text-qsis hover:bg-qsis/20 transition-all cursor-pointer" title="More info">
+              <i className="fas fa-ellipsis text-[0.5rem]"></i>
+            </button>
           </div>
         </div>
       </div>
