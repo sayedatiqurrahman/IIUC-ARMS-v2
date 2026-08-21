@@ -21,8 +21,8 @@ async function saveTargets(targets: BroadcastTarget[]) {
   const { prisma } = await import('@/lib/prisma');
   await prisma.siteSettings.upsert({
     where: { id: 'site-settings' },
-    update: { broadcastTargets: targets },
-    create: { id: 'site-settings', broadcastTargets: targets, permissions: {} },
+    update: { broadcastTargets: targets as any },
+    create: { id: 'site-settings', broadcastTargets: targets as any, permissions: {} },
   });
 }
 

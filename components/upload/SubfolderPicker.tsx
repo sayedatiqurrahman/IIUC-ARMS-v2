@@ -15,6 +15,7 @@ interface SubfolderPickerProps {
   value: string;
   onChange: (subfolder: string) => void;
   disabled?: boolean;
+  canCreateFolder?: boolean;
 }
 
 /**
@@ -59,6 +60,7 @@ export default function SubfolderPicker({
   value,
   onChange,
   disabled,
+  canCreateFolder = true,
 }: SubfolderPickerProps) {
   const tree = useAppStore(s => s.tree);
   const treeLength = useAppStore(s => s.tree.length);
@@ -185,8 +187,9 @@ export default function SubfolderPicker({
           )}
 
           {/* Create new */}
-          <div className="border-t border-dark-border">
-            {!creating ? (
+          {canCreateFolder && (
+            <div className="border-t border-dark-border">
+              {!creating ? (
               <button
                 type="button"
                 onClick={() => setCreating(true)}
@@ -219,6 +222,7 @@ export default function SubfolderPicker({
               </div>
             )}
           </div>
+          )}
         </div>
       )}
     </div>

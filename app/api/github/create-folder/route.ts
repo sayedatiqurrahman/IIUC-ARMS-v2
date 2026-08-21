@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { hasPermission } from '@/lib/permissions';
+import { getRepoBotToken } from '@/lib/github-app';
+import { getInstallationAccessToken, getAppInstallations } from '@/lib/github-app';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
+import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { decrypt, isEncrypted } from '@/lib/crypto';
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -13,15 +19,69 @@ function ghHeaders(token: string) {
   };
 }
 
-export async function POST(req: NextRequest) {
+async function resolveToken(req: NextRequest): Promise<string> {
+  let token = '';
+
   try {
-    const email = await getUserEmail();
+    const email = await getUserEmail(req);
+    if (email) {
+      const { prisma } = await import('@/lib/prisma');
+      const profile = await prisma.profile.findUnique({ where: { userId: email } });
+      if (profile?.githubToken) {
+        const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
+        if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) {
+          token = decrypted;
+        }
+      }
+      if (!token && profile?.githubInstallationId) {
+        try { token = await getInstallationAccessToken(Number(profile.githubInstallationId)); } catch {}
+      }
+    }
+  } catch {}
+
+  if (!token) {
+    try {
+      const session = await getServerSession(authOptions);
+      if (session?.accessToken) token = session.accessToken;
+    } catch {}
+  }
+
+  if (!token && process.env.GITHUB_TOKEN) token = process.env.GITHUB_TOKEN;
+
+  if (!token) {
+    try {
+      const installations = await getAppInstallations();
+      if (Array.isArray(installations) && installations.length > 0) {
+        const botToken = await getInstallationAccessToken(installations[0].id);
+        if (botToken) token = botToken;
+      }
+    } catch {}
+  }
+
+  if (!token) {
+    const botToken = await getRepoBotToken(config.owner, config.repo);
+    if (botToken) token = botToken;
+  }
+
+  return token;
+}
+
+export async function POST(req: NextRequest) {
+  const rl = rateLimit(req, RATE_LIMITS.admin);
+  if (!rl.success) return rl.response!;
+
+  try {
+    const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const role = config.detectRole(email);
-    const perms = await import('@/lib/permission-defaults').then(m => m.DEFAULT_PERMISSIONS);
-    if (!hasPermission('createFolder', role, false, email)) {
-      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findUnique({ where: { userId: email } });
+    const role = profile?.role || 'user';
+    const isCR = profile?.isCR || false;
+    const effectiveRole = config.getEffectiveRole(email, role);
+
+    if (!(await hasPermission('createFolder', effectiveRole, isCR, email))) {
+      return NextResponse.json({ error: 'Permission denied. Ask admin to enable "Create Folders" in Settings > Permissions.' }, { status: 403 });
     }
 
     const { folderPath } = await req.json();
@@ -29,8 +89,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'folderPath required' }, { status: 400 });
     }
 
-    const token = process.env.GITHUB_TOKEN || '';
-    if (!token) return NextResponse.json({ error: 'No GitHub token configured' }, { status: 500 });
+    const token = await resolveToken(req);
+    if (!token) return NextResponse.json({ error: 'No GitHub token available' }, { status: 401 });
+
     const cleanPath = folderPath.replace(/^\/+|\/+$/g, '');
 
     const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
@@ -56,7 +117,7 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: ghHeaders(token),
       body: JSON.stringify({
-        message: `Create folder: ${cleanPath}`,
+        message: `Create folder: ${cleanPath} (by ${email})`,
         tree: treeData.sha,
         parents: [baseCommitSha],
       }),

@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Modal from '@/components/ui/Modal';
 import SocialIcons from './SocialIcons';
 
-export default function ContributorDetailListModal({ title, list, onClose, onShowHistory }: { title: string; list: any[]; onClose: () => void; onShowHistory?: (c: any) => void }) {
+export default function ContributorDetailListModal({ title, list, onClose, onShowHistory, isOpen = true }: { title: string; list: any[]; onClose: () => void; onShowHistory?: (c: any) => void; isOpen?: boolean }) {
   const sorted = [...list].sort((a: any, b: any) => {
     const aTotal = a.v2Contributions + a.dataContributions + (a.designContributions || 0) + (a.issueContributions || 0);
     const bTotal = b.v2Contributions + b.dataContributions + (b.designContributions || 0) + (b.issueContributions || 0);
@@ -12,7 +12,7 @@ export default function ContributorDetailListModal({ title, list, onClose, onSho
   });
 
   return (
-    <Modal onClose={onClose}>
+    <Modal isOpen={isOpen} onClose={onClose}>
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
         <div className="px-5 pt-4 pb-3 border-b border-dark-border flex items-center justify-between">
           <div>

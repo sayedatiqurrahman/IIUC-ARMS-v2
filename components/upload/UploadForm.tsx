@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { config } from '@/lib/config';
 import { FACULTIES, getFacultyIdForDepartment, isShariahDepartmentId } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
@@ -112,6 +112,10 @@ export default function UploadForm({
 
   const effectiveRole = config.getEffectiveRole(email, profile.role);
   const canUploadAnyDept = effectiveRole === 'admin';
+  const canCreateFolder = useMemo(() => {
+    const role = profile.isCR ? 'cr' : profile.role;
+    return ['admin', 'manager', 'teacher', 'cr', 'student', 'user'].includes(role);
+  }, [profile.role, profile.isCR]);
   const isExamCategory = category === config.categories.notes.folder || category === config.categories.questions.folder;
 
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
@@ -492,6 +496,7 @@ export default function UploadForm({
                 midFinal={course.midFinal}
                 value={course.customFolder}
                 onChange={v => updateCourse(course.id, { customFolder: v })}
+                canCreateFolder={canCreateFolder}
               />
             </div>
           )}

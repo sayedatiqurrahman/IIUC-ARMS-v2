@@ -5,7 +5,7 @@ import { config } from '@/lib/config';
 import Modal from '@/components/ui/Modal';
 import SocialIcons from './SocialIcons';
 
-export default function ContributorDetailModal({ c, onClose }: { c: any; onClose: () => void }) {
+export default function ContributorDetailModal({ c, onClose, isOpen = true }: { c: any; onClose: () => void; isOpen?: boolean }) {
   const isFounder = c.role === 'Founder & Lead';
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
@@ -14,7 +14,7 @@ export default function ContributorDetailModal({ c, onClose }: { c: any; onClose
   const e = c.publicEmail || c.email;
 
   return (
-    <Modal onClose={onClose}>
+    <Modal isOpen={isOpen} onClose={onClose}>
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl w-full max-w-md mx-4 overflow-hidden">
         {/* Header */}
         <div className={`relative px-5 pt-6 pb-4 text-center ${isFounder ? 'bg-gradient-to-b from-qsis/15 to-transparent' : 'bg-gradient-to-b from-qsis/5 to-transparent'}`}>
