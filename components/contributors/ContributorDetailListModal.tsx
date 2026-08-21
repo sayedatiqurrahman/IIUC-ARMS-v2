@@ -37,6 +37,10 @@ export default function ContributorDetailListModal({ title, list, onClose, onSho
                       <i className="fab fa-github mr-0.5"></i>@{c.login}
                     </a>
                     {c.departmentShortName && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
+                    {c.semester && !c.hideSemester && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
+                    {c.universityId && !c.hideUniversityId && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
+                    {c.whatsapp && !c.hideWhatsapp && <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.55rem] text-green-400 no-underline"><i className="fab fa-whatsapp mr-0.5"></i>WhatsApp</a>}
+                    {(c.publicEmail || c.email) && !c.hideEmail && <a href={`mailto:${c.publicEmail || c.email}`} className="text-[0.55rem] text-amber-400 no-underline"><i className="fas fa-envelope mr-0.5"></i>Email</a>}
                     <SocialIcons c={c} />
                   </div>
                 </div>

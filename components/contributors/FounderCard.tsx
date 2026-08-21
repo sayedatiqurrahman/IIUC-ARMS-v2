@@ -31,10 +31,15 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
         </div>
         <h3 className="text-[1rem] font-bold text-dark-text">{c.name || c.login}</h3>
         <p className="text-[0.75rem] text-qsis font-medium mb-1">{config.founderName}</p>
-        <div className="flex items-center justify-center gap-2 mb-2">
+        <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
           <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
             <i className="fab fa-github mr-1"></i>@{c.login}
           </a>
+          {c.departmentShortName && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
+          {c.semester && !c.hideSemester && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
+          {c.universityId && !c.hideUniversityId && <span className="text-[0.65rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
+          {c.whatsapp && !c.hideWhatsapp && <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-green-400 hover:text-green-300 no-underline"><i className="fab fa-whatsapp mr-0.5"></i>WhatsApp</a>}
+          {(c.publicEmail || c.email) && !c.hideEmail && <a href={`mailto:${c.publicEmail || c.email}`} className="text-[0.65rem] text-amber-400 hover:text-amber-300 no-underline"><i className="fas fa-envelope mr-0.5"></i>Email</a>}
           <SocialIcons c={c} />
         </div>
         <div className="flex items-center justify-center mb-1">
@@ -86,6 +91,11 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
             <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.72rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
               <i className="fab fa-github mr-1"></i>@{c.login}
             </a>
+            {c.departmentShortName && <span className="text-[0.68rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
+            {c.semester && !c.hideSemester && <span className="text-[0.68rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
+            {c.universityId && !c.hideUniversityId && <span className="text-[0.68rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
+            {c.whatsapp && !c.hideWhatsapp && <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-green-400 hover:text-green-300 no-underline"><i className="fab fa-whatsapp mr-0.5"></i>WhatsApp</a>}
+            {(c.publicEmail || c.email) && !c.hideEmail && <a href={`mailto:${c.publicEmail || c.email}`} className="text-[0.68rem] text-amber-400 hover:text-amber-300 no-underline"><i className="fas fa-envelope mr-0.5"></i>Email</a>}
             <SocialIcons c={c} />
             <button onClick={() => onShowHistory?.(c)} className="w-6 h-6 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
               <i className="fas fa-circle-info text-[0.65rem]"></i>

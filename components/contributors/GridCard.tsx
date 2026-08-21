@@ -53,11 +53,26 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
           {c.departmentShortName && (
             <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-building text-teal-400 mr-0.5"></i>{c.departmentShortName}</span>
           )}
+          {c.semester && !c.hideSemester && (
+            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-graduation-cap text-accent mr-0.5"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>
+          )}
           {c.universityId && !c.hideUniversityId && (
             <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-id-card text-qsis mr-0.5"></i>{c.universityId}</span>
           )}
-          {c.semester && !c.hideSemester && (
-            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-graduation-cap text-accent mr-0.5"></i>{c.semester === 'graduated' ? '🎓 Grad' : c.semester}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap mb-1.5">
+          {c.whatsapp && !c.hideWhatsapp && (
+            <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.58rem] text-green-400 hover:text-green-300 no-underline">
+              <i className="fab fa-whatsapp mr-0.5"></i>WhatsApp
+            </a>
+          )}
+          {(c.publicEmail || c.email) && !c.hideEmail && (
+            <a href={`mailto:${c.publicEmail || c.email}`} className="text-[0.58rem] text-amber-400 hover:text-amber-300 no-underline">
+              <i className="fas fa-envelope mr-0.5"></i>{c.publicEmail || c.email}
+            </a>
+          )}
+          {c.company && !c.hideCompany && (
+            <span className="text-[0.58rem] text-dark-text3"><i className="fas fa-briefcase mr-0.5 text-purple-400"></i>{c.company}</span>
           )}
         </div>
         <SocialIcons c={c} />

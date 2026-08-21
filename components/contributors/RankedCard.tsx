@@ -49,11 +49,15 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
             {c.profileComplete && <span className="px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-400 text-[0.55rem] font-bold"><i className="fas fa-check-circle mr-0.5"></i>Complete</span>}
             <SystemRoleBadge roleKey={c.systemRoleKey} label={c.systemRole} size="sm" />
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
               <i className="fab fa-github mr-0.5"></i>@{c.login}
             </a>
             {c.departmentShortName && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
+            {c.semester && !c.hideSemester && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
+            {c.universityId && !c.hideUniversityId && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
+            {c.whatsapp && !c.hideWhatsapp && <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.62rem] text-green-400 hover:text-green-300 no-underline"><i className="fab fa-whatsapp mr-0.5"></i>{c.whatsapp}</a>}
+            {(c.publicEmail || c.email) && !c.hideEmail && <a href={`mailto:${c.publicEmail || c.email}`} className="text-[0.62rem] text-amber-400 hover:text-amber-300 no-underline"><i className="fas fa-envelope mr-0.5"></i>{c.publicEmail || c.email}</a>}
             <SocialIcons c={c} />
           </div>
         </div>
@@ -90,11 +94,15 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           <Image src={c.avatar_url} alt={c.login} width={36} height={36} className={`w-9 h-9 rounded-full object-cover flex-shrink-0 ${isFounder ? 'border-2 border-qsis' : 'border-2 border-dark-border'}`} />
           <div className="flex-1 min-w-0">
             <div className="font-bold text-[0.8rem] text-dark-text truncate">{c.name || c.login}</div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.6rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
                 <i className="fab fa-github mr-0.5"></i>@{c.login}
               </a>
               {c.departmentShortName && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
+              {c.semester && !c.hideSemester && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
+              {c.universityId && !c.hideUniversityId && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{c.universityId}</span>}
+              {c.whatsapp && !c.hideWhatsapp && <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.55rem] text-green-400 hover:text-green-300 no-underline"><i className="fab fa-whatsapp mr-0.5"></i>WhatsApp</a>}
+              {(c.publicEmail || c.email) && !c.hideEmail && <a href={`mailto:${c.publicEmail || c.email}`} className="text-[0.55rem] text-amber-400 hover:text-amber-300 no-underline"><i className="fas fa-envelope mr-0.5"></i>Email</a>}
             </div>
           </div>
           <button onClick={() => onShowHistory?.(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0" title="History">
