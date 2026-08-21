@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { config } from '@/lib/config';
 import StatTip from './StatTip';
+import SocialIcons from './SocialIcons';
 
 const CODE_TIP = 'Commits to the IIUC-ARMS-v2 source-code repo. Every commit you push there counts as 1.';
 const DATA_TIP = 'Files you uploaded to the Academic Files data repo. Every file you upload is committed to that repo and counts as 1.';
@@ -24,24 +25,20 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
               <i className="fas fa-crown mr-1"></i>Founder
             </span>
             <span className="block text-[0.65rem] leading-snug text-neutral-300">
-              This crown marks the founder who created this platform. It isn't an earned badge —
-              it belongs only to the founding account. Top contributors rise through the
-              contributors leaderboard instead.
+              This crown marks the founder who created this platform. It isn&apos;t an earned badge — it belongs only to the founding account.
             </span>
           </span>
         </div>
         <h3 className="text-[1rem] font-bold text-dark-text">{c.name || c.login}</h3>
         <p className="text-[0.75rem] text-qsis font-medium mb-1">{config.founderName}</p>
-        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors no-underline inline-block mb-2.5">
-          <i className="fab fa-github mr-1"></i>@{c.login}
-        </a>
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
+            <i className="fab fa-github mr-1"></i>@{c.login}
+          </a>
+          <SocialIcons c={c} />
+        </div>
         <div className="flex items-center justify-center mb-1">
-          <button
-            onClick={() => onShowHistory?.(c)}
-            className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all"
-            title="Contribution history"
-            aria-label="Contribution history"
-          >
+          <button onClick={() => onShowHistory?.(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="Contribution history">
             <i className="fas fa-circle-info text-[0.7rem]"></i>
           </button>
         </div>
@@ -73,9 +70,7 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
               <i className="fas fa-crown mr-1"></i>Founder
             </span>
             <span className="block text-[0.65rem] leading-snug text-neutral-300">
-              This crown marks the founder who created this platform. It isn't an earned badge —
-              it belongs only to the founding account. Top contributors rise through the
-              contributors leaderboard instead.
+              This crown marks the founder who created this platform. It isn&apos;t an earned badge — it belongs only to the founding account.
             </span>
           </span>
         </div>
@@ -87,16 +82,12 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
             </span>
           </div>
           <p className="text-[0.82rem] text-qsis font-medium">{config.founderName}</p>
-          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-            <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.75rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
+          <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
+            <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.72rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
               <i className="fab fa-github mr-1"></i>@{c.login}
             </a>
-            <button
-              onClick={() => onShowHistory?.(c)}
-              className="w-6 h-6 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all"
-              title="Contribution history"
-              aria-label="Contribution history"
-            >
+            <SocialIcons c={c} />
+            <button onClick={() => onShowHistory?.(c)} className="w-6 h-6 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
               <i className="fas fa-circle-info text-[0.65rem]"></i>
             </button>
             <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full" title={CODE_TIP}>

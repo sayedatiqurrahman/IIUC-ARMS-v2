@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
       'profileType',
       'facebook', 'twitter', 'linkedin', 'website', 'company', 'companyUrl', 'publicEmail',
       'hideWhatsapp', 'hideUniversityId', 'hideSemester', 'hideEmail', 'hideCompany',
+      'hideFacebook', 'hideTwitter', 'hideLinkedin', 'hideWebsite',
       'showInContributors',
       'githubLogin', 'githubToken', 'githubInstallationId', 'githubAvatar',
     ];

@@ -231,6 +231,11 @@ export default function UserRow({
             {u.batchId && <InfoField label="Batch ID" value={String(u.batchId)} />}
             {u.githubLogin && <InfoField label="GitHub" value={u.githubLogin} icon="fab fa-github" link={`https://github.com/${u.githubLogin}`} />}
             {u.email && <InfoField label="Email" value={u.email} icon="fa-envelope" />}
+            {u.website && <InfoField label="Website" value={u.website} icon="fas fa-globe" link={u.website} />}
+            {u.facebook && <InfoField label="Facebook" value={u.facebook} icon="fab fa-facebook" link={u.facebook} />}
+            {u.twitter && <InfoField label="Twitter / X" value={u.twitter} icon="fab fa-twitter" link={u.twitter} />}
+            {u.linkedin && <InfoField label="LinkedIn" value={u.linkedin} icon="fab fa-linkedin" link={u.linkedin} />}
+            {u.company && <InfoField label="Company" value={u.company} icon="fas fa-briefcase" link={u.companyUrl || undefined} />}
             {u.lastSignIn && <InfoField label="Last Sign In" value={formatDate(u.lastSignIn)} icon="fa-clock" />}
             {u.createdAt && <InfoField label="Created" value={formatDate(u.createdAt)} icon="fa-calendar" />}
             {u.customPermissions && Object.keys(u.customPermissions).length > 0 && (

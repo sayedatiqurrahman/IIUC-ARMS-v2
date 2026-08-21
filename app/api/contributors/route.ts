@@ -36,6 +36,10 @@ interface Contributor {
   hideSemester: boolean;
   hideEmail: boolean;
   hideCompany: boolean;
+  hideFacebook: boolean;
+  hideTwitter: boolean;
+  hideLinkedin: boolean;
+  hideWebsite: boolean;
   profileComplete: boolean;
   source: 'github' | 'db' | 'both';
   systemRoleKey?: string;
@@ -199,6 +203,7 @@ export async function GET() {
         facebook: '', twitter: '', linkedin: '', website: '',
         company: '', companyUrl: '', publicEmail: '',
         hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false,
+        hideFacebook: false, hideTwitter: false, hideLinkedin: false, hideWebsite: false,
         profileComplete: false, source: 'github',
         systemRoleKey: '', systemRole: '',
       };
@@ -282,6 +287,10 @@ export async function GET() {
         matchedContributor.hideSemester = !!p.hideSemester;
         matchedContributor.hideEmail = !!p.hideEmail;
         matchedContributor.hideCompany = !!(p as any).hideCompany;
+        matchedContributor.hideFacebook = !!(p as any).hideFacebook;
+        matchedContributor.hideTwitter = !!(p as any).hideTwitter;
+        matchedContributor.hideLinkedin = !!(p as any).hideLinkedin;
+        matchedContributor.hideWebsite = !!(p as any).hideWebsite;
         matchedContributor.profileComplete = profileComplete;
         matchedContributor.source = 'both';
 

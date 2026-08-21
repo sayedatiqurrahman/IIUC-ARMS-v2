@@ -128,6 +128,7 @@ export async function GET(req: NextRequest) {
           section: true, createdAt: true, customPermissions: true,
           phone: true, telegramId: true, telegramChatId: true, batchId: true,
           accountStatus: true,
+          facebook: true, twitter: true, linkedin: true, website: true, company: true, companyUrl: true,
         },
       });
     } catch (e: any) {
@@ -186,6 +187,12 @@ export async function GET(req: NextRequest) {
         providers: fu.providerData?.map((p: any) => p.providerId) || [],
         customPermissions: profile?.customPermissions || {},
         accountStatus: profile?.accountStatus || 'active',
+        facebook: profile?.facebook || null,
+        twitter: profile?.twitter || null,
+        linkedin: profile?.linkedin || null,
+        website: profile?.website || null,
+        company: profile?.company || null,
+        companyUrl: profile?.companyUrl || null,
       });
     }
 
@@ -219,6 +226,12 @@ export async function GET(req: NextRequest) {
           providers: [],
           customPermissions: profile.customPermissions || {},
           accountStatus: profile.accountStatus || 'active',
+          facebook: profile.facebook || null,
+          twitter: profile.twitter || null,
+          linkedin: profile.linkedin || null,
+          website: profile.website || null,
+          company: profile.company || null,
+          companyUrl: profile.companyUrl || null,
         });
       }
     });

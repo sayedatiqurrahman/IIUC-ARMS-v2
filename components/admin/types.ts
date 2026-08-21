@@ -26,6 +26,12 @@ export interface UserRecord {
   customPermissions?: Record<string, boolean>;
   createdAt?: string;
   accountStatus?: string;
+  facebook?: string;
+  twitter?: string;
+  linkedin?: string;
+  website?: string;
+  company?: string;
+  companyUrl?: string;
 }
 
 export interface ActivityLog {

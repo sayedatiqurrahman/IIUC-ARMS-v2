@@ -44,6 +44,10 @@ model Profile {
   section              String?
   totpMethods          String[] @default(["email"])
   hideCompany          Boolean? @default(false)
+  hideFacebook         Boolean? @default(false)
+  hideTwitter          Boolean? @default(false)
+  hideLinkedin         Boolean? @default(false)
+  hideWebsite          Boolean? @default(false)
   banReason            String?
   bannedBy             String?
   customPermissions    Json?    @default("{}")

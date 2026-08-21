@@ -1,9 +1,9 @@
 'use client';
 
 import Image from 'next/image';
-import { config } from '@/lib/config';
 import { Settings } from './types';
 import SystemRoleBadge from './SystemRoleBadge';
+import SocialIcons from './SocialIcons';
 
 export default function GridCard({ c, settings, onShowHistory }: { c: any; settings: Settings; onShowHistory?: (c: any) => void }) {
   const isDev = c.v2Contributions > 0;
@@ -12,173 +12,83 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
   const isFounder = c.role === 'Founder & Lead';
 
   return (
-    <div className={`bg-dark-bg2 border rounded-2xl transition-all group flex flex-col ${
+    <div className={`bg-dark-bg2 border rounded-xl transition-all group flex flex-col ${
       isFounder ? 'border-qsis/40 ring-1 ring-qsis/20' : 'border-dark-border hover:border-qsis/50 hover:shadow-[0_4px_20px_rgba(34,197,94,0.12)]'
     }`}>
       {/* Header */}
-      <div className={`relative px-4 pt-5 pb-3 text-center rounded-t-2xl ${isFounder ? 'bg-gradient-to-b from-qsis/15 to-transparent' : 'bg-gradient-to-b from-qsis/5 to-transparent'}`}>
-        <div className="relative inline-block mb-2.5 group/avatar">
-          <Image src={c.avatar_url} alt={c.login} width={64} height={64} className={`w-16 h-16 rounded-full object-cover border-2 transition-colors ${
+      <div className={`relative px-4 pt-4 pb-2.5 text-center rounded-t-xl ${isFounder ? 'bg-gradient-to-b from-qsis/15 to-transparent' : 'bg-gradient-to-b from-qsis/5 to-transparent'}`}>
+        <div className="relative inline-block mb-2 group/avatar">
+          <Image src={c.avatar_url} alt={c.login} width={56} height={56} className={`w-14 h-14 rounded-full object-cover border-2 transition-colors ${
             isFounder ? 'border-qsis shadow-[0_0_16px_rgba(34,197,94,0.3)]' : 'border-dark-border group-hover:border-qsis/50'
           }`} />
           {isFounder && (
-            <>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2 cursor-help" title="Founder & Lead">
-                <i className="fas fa-crown text-white text-[0.55rem]"></i>
-              </div>
-              <span className="pointer-events-none absolute bottom-7 right-0 z-50 w-56 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left opacity-0 translate-y-1 transition-all duration-150 group-hover/avatar:opacity-100 group-hover/avatar:translate-y-0 shadow-xl">
-                <span className="block text-[0.7rem] font-bold text-qsis mb-0.5">
-                  <i className="fas fa-crown mr-1"></i>Founder
-                </span>
-                <span className="block text-[0.65rem] leading-snug text-neutral-300">
-                  This crown marks the founder who created this platform. It isn't an earned
-                  badge — it belongs only to the founding account. Top contributors rise through
-                  the contributors leaderboard instead.
-                </span>
-              </span>
-            </>
-          )}
-          {!isFounder && c.profileComplete && (
-            <div className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-sky-500 flex items-center justify-center shadow ring-2 ring-dark-bg2" title="Verified">
-              <i className="fas fa-check text-white text-[0.45rem]"></i>
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2">
+              <i className="fas fa-crown text-white text-[0.45rem]"></i>
             </div>
           )}
-          {!isFounder && isDev && isResource && (
-            <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-qsis flex items-center justify-center" title="Developer & Resource Provider">
-              <i className="fas fa-star text-white text-[0.45rem]"></i>
+          {!isFounder && c.profileComplete && (
+            <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-sky-500 flex items-center justify-center shadow ring-2 ring-dark-bg2">
+              <i className="fas fa-check text-white text-[0.4rem]"></i>
             </div>
           )}
         </div>
-        <h4 className="text-[0.88rem] font-bold text-dark-text leading-tight truncate">{c.name || c.login}</h4>
-        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
+        <h4 className="text-[0.82rem] font-bold text-dark-text leading-tight truncate">{c.name || c.login}</h4>
+        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
           @{c.login}
         </a>
-        <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
-          {isFounder && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-bold bg-qsis/20 text-qsis ring-1 ring-qsis/30">
-              <i className="fas fa-crown text-[0.45rem]"></i>Founder
-            </span>
-          )}
-          {isDev && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-semibold bg-blue-500/15 text-blue-400">
-              <i className="fas fa-laptop-code text-[0.5rem]"></i>Developer
-            </span>
-          )}
-          {isResource && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-semibold bg-orange-500/15 text-orange-400">
-              <i className="fas fa-book-open text-[0.5rem]"></i>Resource
-            </span>
-          )}
-          {isDesigner && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-semibold bg-emerald-500/15 text-emerald-400">
-              <i className="fas fa-palette text-[0.5rem]"></i>Designer
-            </span>
-          )}
+        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
+          {isFounder && <span className="px-1.5 py-0.5 rounded-full text-[0.55rem] font-bold bg-qsis/20 text-qsis ring-1 ring-qsis/30"><i className="fas fa-crown text-[0.4rem] mr-0.5"></i>Founder</span>}
+          {isDev && <span className="px-1.5 py-0.5 rounded-full text-[0.55rem] font-semibold bg-blue-500/15 text-blue-400"><i className="fas fa-laptop-code text-[0.45rem] mr-0.5"></i>Dev</span>}
+          {isResource && <span className="px-1.5 py-0.5 rounded-full text-[0.55rem] font-semibold bg-orange-500/15 text-orange-400"><i className="fas fa-book-open text-[0.45rem] mr-0.5"></i>Data</span>}
+          {isDesigner && <span className="px-1.5 py-0.5 rounded-full text-[0.55rem] font-semibold bg-emerald-500/15 text-emerald-400"><i className="fas fa-palette text-[0.45rem] mr-0.5"></i>Design</span>}
           <SystemRoleBadge roleKey={c.systemRoleKey} label={c.systemRole} />
         </div>
       </div>
 
-      {/* Green separator line */}
-      <div className="h-px bg-gradient-to-r from-transparent via-qsis/40 to-transparent mx-4"></div>
+      <div className="h-px bg-gradient-to-r from-transparent via-qsis/30 to-transparent mx-4"></div>
 
-      {/* Info section with labels */}
-      <div className="px-4 pb-3 flex-1 mt-3">
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-          {(c as any).departmentShortName && (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <i className="fas fa-building text-teal-400 text-[0.55rem] w-3 text-center flex-shrink-0"></i>
-              <div className="min-w-0">
-                <span className="text-[0.55rem] text-dark-text3 block leading-none">Dept</span>
-                <span className="text-[0.65rem] text-dark-text2 font-medium truncate block">{(c as any).departmentShortName}</span>
-              </div>
-            </div>
+      {/* Info section - compact */}
+      <div className="px-4 pb-2.5 pt-2 flex-1">
+        <div className="flex items-center gap-2 flex-wrap mb-1.5">
+          {c.departmentShortName && (
+            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-building text-teal-400 mr-0.5"></i>{c.departmentShortName}</span>
           )}
           {c.universityId && !c.hideUniversityId && (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <i className="fas fa-id-card text-qsis text-[0.55rem] w-3 text-center flex-shrink-0"></i>
-              <div className="min-w-0">
-                <span className="text-[0.55rem] text-dark-text3 block leading-none">ID</span>
-                <span className="text-[0.65rem] text-dark-text2 font-medium truncate block">{c.universityId}</span>
-              </div>
-            </div>
+            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-id-card text-qsis mr-0.5"></i>{c.universityId}</span>
           )}
           {c.semester && !c.hideSemester && (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <i className="fas fa-graduation-cap text-accent text-[0.55rem] w-3 text-center flex-shrink-0"></i>
-              <div className="min-w-0">
-                <span className="text-[0.55rem] text-dark-text3 block leading-none">Semester</span>
-                <span className="text-[0.65rem] text-dark-text2 font-medium truncate block">{c.semester === 'graduated' ? '🎓 Graduated' : config.semesters.find((s: any) => s.id === c.semester)?.label || c.semester}</span>
-              </div>
-            </div>
-          )}
-          {(() => {
-            const displayEmail = c.publicEmail || c.email;
-            if (displayEmail && !c.hideEmail) return (
-              <div className="flex items-center gap-1.5 min-w-0">
-                <i className="fas fa-envelope text-blue-400 text-[0.55rem] w-3 text-center flex-shrink-0"></i>
-                <div className="min-w-0">
-                  <span className="text-[0.55rem] text-dark-text3 block leading-none">Email</span>
-                  <a href={`mailto:${displayEmail}`} className="text-[0.65rem] text-dark-text2 font-medium truncate block hover:text-qsis no-underline transition-colors">{displayEmail}</a>
-                </div>
-              </div>
-            );
-          })()}
-          {c.whatsapp && !c.hideWhatsapp && (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <i className="fab fa-whatsapp text-green-400 text-[0.55rem] w-3 text-center flex-shrink-0"></i>
-              <div className="min-w-0">
-                <span className="text-[0.55rem] text-dark-text3 block leading-none">WhatsApp</span>
-                <a href={`https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-dark-text2 font-medium truncate block hover:text-qsis no-underline transition-colors">{c.whatsapp}</a>
-              </div>
-            </div>
-          )}
-          {c.company && !c.hideCompany && (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <i className="fas fa-briefcase text-purple-400 text-[0.55rem] w-3 text-center flex-shrink-0"></i>
-              <div className="min-w-0">
-                <span className="text-[0.55rem] text-dark-text3 block leading-none">Company</span>
-                {c.companyUrl ? (
-                  <a href={c.companyUrl} target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-dark-text2 font-medium truncate block hover:text-qsis no-underline transition-colors">{c.company}</a>
-                ) : (
-                  <span className="text-[0.65rem] text-dark-text2 font-medium truncate block">{c.company}</span>
-                )}
-              </div>
-            </div>
+            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-graduation-cap text-accent mr-0.5"></i>{c.semester === 'graduated' ? '🎓 Grad' : c.semester}</span>
           )}
         </div>
+        <SocialIcons c={c} />
       </div>
 
       {/* Stats footer */}
-      <div className="px-4 py-2.5 border-t border-dark-border bg-dark-bg3/50 rounded-b-2xl">
+      <div className="px-4 py-2 border-t border-dark-border bg-dark-bg3/50 rounded-b-xl">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[0.6rem] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded" title="Commits to the IIUC-ARMS-v2 source-code repo — every commit counts as 1.">
+          <div className="flex items-center gap-1">
+            <span className="text-[0.55rem] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded" title="Commits to IIUC-ARMS-v2 source-code repo">
               <i className="fas fa-laptop-code mr-0.5"></i>{c.v2Contributions}
             </span>
-            <span className="text-[0.6rem] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded" title="Files uploaded to the Academic Files data repo — every file you upload counts as 1.">
+            <span className="text-[0.55rem] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded" title="Files uploaded to Academic Files data repo">
               <i className="fas fa-book-open mr-0.5"></i>{c.dataContributions}
             </span>
-            <span className="text-[0.6rem] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Designs you published on the Creative Hub — each published design/theme counts as 1.">
+            <span className="text-[0.55rem] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Designs published on Creative Hub">
               <i className="fas fa-palette mr-0.5"></i>{c.designContributions || 0}
             </span>
-            <span className="text-[0.6rem] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded" title="Issues (bug reports, feature requests) you opened on the IIUC-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.">
+            <span className="text-[0.55rem] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded" title="Issues opened on IIUC-ARMS-v2 repo">
               <i className="fas fa-bug mr-0.5"></i>{c.issueContributions || 0}
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[0.65rem] font-bold text-yellow-500" title="Code + Data + Design + Issues added together (pull requests are already included inside Code and Data).">
+          <div className="flex items-center gap-1">
+            <span className="text-[0.6rem] font-bold text-yellow-500" title="Total contributions">
               {c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0)}
             </span>
-            <button
-              onClick={() => onShowHistory?.(c)}
-              className="w-6 h-6 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all"
-              title="Contribution history"
-              aria-label="Contribution history"
-            >
-              <i className="fas fa-circle-info text-[0.7rem]"></i>
+            <button onClick={() => onShowHistory?.(c)} className="w-5 h-5 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
+              <i className="fas fa-circle-info text-[0.6rem]"></i>
             </button>
-            <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-6 h-6 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="GitHub Profile">
-              <i className="fab fa-github text-[0.7rem]"></i>
+            <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-5 h-5 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="GitHub">
+              <i className="fab fa-github text-[0.6rem]"></i>
             </a>
           </div>
         </div>
