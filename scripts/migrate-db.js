@@ -8,21 +8,23 @@
  *   SOURCE_DATABASE_URL=<trial> DATABASE_URL=<new basic> node scripts/migrate-db.js
  */
 require('dotenv/config');
-const { PrismaPg } = require('@prisma/adapter-pg');
+const { PrismaLibSql } = require('@prisma/adapter-libsql');
 const { PrismaClient } = require('@prisma/client');
 
 const BATCH = 500;
 
 async function main() {
   const srcUrl = process.env.SOURCE_DATABASE_URL;
-  const dstUrl = process.env.DATABASE_URL;
+  const srcToken = process.env.SOURCE_TURSO_AUTH_TOKEN;
+  const dstUrl = process.env.TURSO_DATABASE_URL;
+  const dstToken = process.env.TURSO_AUTH_TOKEN;
   if (!srcUrl || !dstUrl) {
-    console.error('Need both SOURCE_DATABASE_URL (trial) and DATABASE_URL (new cluster).');
+    console.error('Need both SOURCE_DATABASE_URL and TURSO_DATABASE_URL.');
     process.exit(1);
   }
 
-  const src = new PrismaClient({ adapter: new PrismaPg({ connectionString: srcUrl }) });
-  const dst = new PrismaClient({ adapter: new PrismaPg({ connectionString: dstUrl }) });
+  const src = new PrismaClient({ adapter: new PrismaLibSql({ url: srcUrl, authToken: srcToken }) });
+  const dst = new PrismaClient({ adapter: new PrismaLibSql({ url: dstUrl, authToken: dstToken }) });
 
   // UploadChunk is intentionally omitted: it holds transient upload staging
   // bytes that are deleted right after each git commit; stale chunks are junk.

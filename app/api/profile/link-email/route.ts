@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     }
 
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
-    const currentLinked = (profile?.linkedEmails as string[]) || [];
+    const currentLinked: string[] = (() => { try { return JSON.parse(profile?.linkedEmails as string || '[]'); } catch { return []; } })();
 
     if (currentLinked.includes(normalizedEmail)) {
       return NextResponse.json({ error: 'Email already linked' }, { status: 400 });
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     await prisma.profile.update({
       where: { userId: email },
-      data: { linkedEmails: [...currentLinked, normalizedEmail] },
+      data: { linkedEmails: JSON.stringify([...currentLinked, normalizedEmail]) },
     });
 
     return NextResponse.json({ success: true, linkedEmails: [...currentLinked, normalizedEmail] });
@@ -67,12 +67,12 @@ export async function DELETE(req: NextRequest) {
     }
 
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
-    const currentLinked = (profile?.linkedEmails as string[]) || [];
+    const currentLinked: string[] = (() => { try { return JSON.parse(profile?.linkedEmails as string || '[]'); } catch { return []; } })();
     const updated = currentLinked.filter(e => e.toLowerCase() !== unlinkEmail.toLowerCase());
 
     await prisma.profile.update({
       where: { userId: email },
-      data: { linkedEmails: updated },
+      data: { linkedEmails: JSON.stringify(updated) },
     });
 
     return NextResponse.json({ success: true, linkedEmails: updated });

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
 
     const totpEnabled = profile?.totpEnabled || false;
-    const totpMethods = (profile?.totpMethods as string[]) || ['email'];
+    const totpMethods = (() => { try { return JSON.parse(profile?.totpMethods as string || '["email"]'); } catch { return ['email']; } })();
 
     let totpRequired = totpEnabled;
     if (totpEnabled && method) {

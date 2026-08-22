@@ -27,6 +27,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    if (profile) {
+      try { (profile as any).totpMethods = JSON.parse(profile.totpMethods as string); } catch { (profile as any).totpMethods = ['email']; }
+      try { (profile as any).linkedEmails = JSON.parse(profile.linkedEmails as string); } catch { (profile as any).linkedEmails = []; }
+    }
+
     return NextResponse.json(profile || { userId, email });
   } catch (err: any) {
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });

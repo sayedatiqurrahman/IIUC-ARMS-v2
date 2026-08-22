@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "cockroachdb"
+  provider = "sqlite"
 }
 
 model Profile {
@@ -42,7 +42,7 @@ model Profile {
   isCR                 Boolean?  @default(false)
   isACR                Boolean   @default(false)
   section              String?
-  totpMethods          String[]  @default(["email"])
+  totpMethods          String    @default("[\"email\"]")
   hideCompany          Boolean?  @default(false)
   hideFacebook         Boolean?  @default(false)
   hideTwitter          Boolean?  @default(false)
@@ -60,7 +60,7 @@ model Profile {
   telegramOtp          String?
   telegramOtpExpiresAt DateTime?
   telegramConnectState String?
-  linkedEmails         String[]  @default([])
+  linkedEmails         String    @default("[]")
   showInContributors   Boolean?  @default(true)
   accountStatus        String?   @default("active")
   profileType          String?   @default("")
@@ -83,7 +83,7 @@ model ActivityLog {
 }
 
 model FacultyMember {
-  id         String   @id @default(dbgenerated("gen_random_uuid()"))
+  id         String   @id @default(cuid())
   department String
   name       String
   title      String?
@@ -93,20 +93,20 @@ model FacultyMember {
   memberType String   @default("faculty")
   isCR       Boolean  @default(false)
   sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
   isVisible  Boolean  @default(false)
 }
 
 model Course {
-  id         String   @id @default(dbgenerated("gen_random_uuid()"))
+  id         String   @id @default(cuid())
   department String
   semester   String
   code       String
   title      String
   addedBy    String?
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
 
   @@unique([department, semester, code])
   @@index([department])
@@ -134,7 +134,7 @@ model UploadChunk {
 model SiteSettings {
   id                       String   @id @default("site-settings")
   permissions              Json     @default("{}")
-  updatedAt                DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  updatedAt                DateTime @default(now()) @updatedAt
   extraDepartments         Json?    @default("{}")
   customFaculties          Json?    @default("[]")
   contributorSettings      Json?
@@ -190,7 +190,7 @@ model PublishedRoutine {
 }
 
 model FacultyRequest {
-  id          String    @id @default(dbgenerated("gen_random_uuid()"))
+  id          String    @id @default(cuid())
   requesterId String
   department  String
   name        String
@@ -202,8 +202,8 @@ model FacultyRequest {
   notes       String?
   status      String    @default("pending")
   reviewedBy  String?
-  reviewedAt  DateTime? @db.Timestamptz(6)
-  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
 
   @@index([requesterId])
   @@index([status])
@@ -211,7 +211,7 @@ model FacultyRequest {
 }
 
 model PublishedExamRoutine {
-  id               String    @id @default(dbgenerated("gen_random_uuid()"))
+  id               String    @id @default(cuid())
   examId           String
   semester         String
   session          String?
@@ -222,8 +222,8 @@ model PublishedExamRoutine {
   slots            Json
   publishedBy      String?
   publishedByEmail String?
-  publishedAt      DateTime  @default(now()) @db.Timestamptz(6)
-  expiresAt        DateTime  @db.Timestamptz(6)
+  publishedAt      DateTime  @default(now())
+  expiresAt        DateTime
   status           String    @default("published")
   scheduledAt      DateTime?
 

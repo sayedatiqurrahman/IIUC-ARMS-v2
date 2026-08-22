@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     await prisma.profile.update({
       where: { userId: email },
-      data: { totpMethods: filtered },
+      data: { totpMethods: JSON.stringify(filtered) },
     });
 
     return NextResponse.json({ success: true, totpMethods: filtered });
