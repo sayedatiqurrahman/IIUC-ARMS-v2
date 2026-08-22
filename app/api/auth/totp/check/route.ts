@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       totpSetupRequired: !!(profile?.totpSecret && !profile?.totpEnabled),
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('[totp/check] error:', err?.message || err);
+    return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 500 });
   }
 }

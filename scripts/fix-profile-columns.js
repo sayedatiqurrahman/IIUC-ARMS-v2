@@ -26,6 +26,19 @@ async function main() {
     { name: 'bannedBy', type: 'TEXT' },
     { name: 'accountStatus', type: "STRING DEFAULT 'active'" },
     { name: 'profileType', type: 'TEXT' },
+    { name: 'hideWhatsapp', type: 'BOOL' },
+    { name: 'hideUniversityId', type: 'BOOL' },
+    { name: 'hideSemester', type: 'BOOL' },
+    { name: 'hideEmail', type: 'BOOL' },
+    { name: 'hideCompany', type: 'BOOL' },
+    { name: 'hideFacebook', type: 'BOOL' },
+    { name: 'hideTwitter', type: 'BOOL' },
+    { name: 'hideLinkedin', type: 'BOOL' },
+    { name: 'hideWebsite', type: 'BOOL' },
+    { name: 'showInContributors', type: 'BOOL' },
+    { name: 'totpEnabled', type: 'BOOL' },
+    { name: 'totpMethods', type: "JSONB DEFAULT '[\"email\"]'" },
+    { name: 'totpSecret', type: 'TEXT' },
   ];
 
   for (const col of columns) {
@@ -42,6 +55,7 @@ async function main() {
     { name: 'blockedTelegramChats', table: 'SiteSettings', type: "JSONB DEFAULT '[]'" },
     { name: 'blockedTelegramUsernames', table: 'SiteSettings', type: "JSONB DEFAULT '[]'" },
     { name: 'customRoles', table: 'SiteSettings', type: "JSONB DEFAULT '[]'" },
+    { name: 'broadcastTargets', table: 'SiteSettings', type: "JSONB DEFAULT '[]'" },
   ];
 
   for (const col of settingsColumns) {

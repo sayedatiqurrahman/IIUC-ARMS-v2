@@ -2,19 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { encrypt, decrypt, isEncrypted } from '@/lib/crypto';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { withDbRetry } from '@/lib/prisma';
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.profile);
   if (!rl.success) return rl.response!;
   try {
-    const { prisma } = await import('@/lib/prisma');
     const email = await getUserEmail(req);
     if (!email) {
       return NextResponse.json({ error: 'Unauthorized — not signed in' }, { status: 401 });
     }
 
     const userId = email;
-    const profile = await prisma.profile.findUnique({ where: { userId } });
+    const profile = await withDbRetry(async () => {
+      const { prisma } = await import('@/lib/prisma');
+      return prisma.profile.findUnique({ where: { userId } });
+    });
 
     if (profile?.githubToken && isEncrypted(profile.githubToken)) {
       try {
@@ -88,10 +91,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const profile = await prisma.profile.upsert({
-      where: { userId },
-      update: updateData,
-      create: createData as any,
+    const profile = await withDbRetry(async () => {
+      const { prisma } = await import('@/lib/prisma');
+      return prisma.profile.upsert({
+        where: { userId },
+        update: updateData,
+        create: createData as any,
+      });
     });
 
     return NextResponse.json(profile);
