@@ -7,63 +7,63 @@ datasource db {
 }
 
 model Profile {
-  id                   String   @id @default(cuid())
-  userId               String   @unique
+  id                   String    @id @default(cuid())
+  userId               String    @unique
   email                String?
   name                 String?
   universityId         String?
   whatsapp             String?
   semester             String?
   image                String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
   facebook             String?
   githubLogin          String?
-  hideUniversityId     Boolean  @default(false)
-  hideWhatsapp         Boolean  @default(false)
+  hideUniversityId     Boolean   @default(false)
+  hideWhatsapp         Boolean   @default(false)
   linkedin             String?
   twitter              String?
   website              String?
   githubToken          String?
   company              String?
   companyUrl           String?
-  hideEmail            Boolean  @default(false)
-  hideSemester         Boolean  @default(false)
+  hideEmail            Boolean   @default(false)
+  hideSemester         Boolean   @default(false)
   publicEmail          String?
   githubInstallationId String?
   githubAvatar         String?
-  role                 String?  @default("user")
-  totpEnabled          Boolean  @default(false)
+  role                 String?   @default("user")
+  totpEnabled          Boolean   @default(false)
   totpSecret           String?
   title                String?
-  isBanned             Boolean? @default(false)
+  isBanned             Boolean?  @default(false)
   shortForm            String?
   department           String?
-  isCR                 Boolean? @default(false)
-  isACR                Boolean  @default(false)
+  isCR                 Boolean?  @default(false)
+  isACR                Boolean   @default(false)
   section              String?
-  totpMethods          String[] @default(["email"])
-  hideCompany          Boolean? @default(false)
-  hideFacebook         Boolean? @default(false)
-  hideTwitter          Boolean? @default(false)
-  hideLinkedin         Boolean? @default(false)
-  hideWebsite          Boolean? @default(false)
+  totpMethods          String[]  @default(["email"])
+  hideCompany          Boolean?  @default(false)
+  hideFacebook         Boolean?  @default(false)
+  hideTwitter          Boolean?  @default(false)
+  hideLinkedin         Boolean?  @default(false)
+  hideWebsite          Boolean?  @default(false)
   banReason            String?
   bannedBy             String?
-  customPermissions    Json?    @default("{}")
+  customPermissions    Json?     @default("{}")
   phone                String?
-   telegramId           String?
+  telegramId           String?
   batchId              String?
   telegramChatId       String?
   session              String?
-   telegramVerified     Boolean? @default(false)
-   telegramOtp          String?
-   telegramOtpExpiresAt DateTime?
-   telegramConnectState String?
-   linkedEmails         String[] @default([])
-  showInContributors   Boolean? @default(true)
-  accountStatus        String?  @default("active")
-  profileType          String?  @default("")
+  telegramVerified     Boolean?  @default(false)
+  telegramOtp          String?
+  telegramOtpExpiresAt DateTime?
+  telegramConnectState String?
+  linkedEmails         String[]  @default([])
+  showInContributors   Boolean?  @default(true)
+  accountStatus        String?   @default("active")
+  profileType          String?   @default("")
 
   @@index([githubLogin])
   @@index([email])
@@ -132,16 +132,16 @@ model UploadChunk {
 }
 
 model SiteSettings {
-  id                 String   @id @default("site-settings")
-  permissions        Json     @default("{}")
-  updatedAt          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-  extraDepartments   Json?    @default("{}")
-  customFaculties    Json?    @default("[]")
-  contributorSettings Json?
-  blockedTelegramChats     Json? @default("[]")
-  blockedTelegramUsernames Json? @default("[]")
-  customRoles              Json? @default("[]")
-  broadcastTargets         Json? @default("[]")
+  id                       String   @id @default("site-settings")
+  permissions              Json     @default("{}")
+  updatedAt                DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  extraDepartments         Json?    @default("{}")
+  customFaculties          Json?    @default("[]")
+  contributorSettings      Json?
+  blockedTelegramChats     Json?    @default("[]")
+  blockedTelegramUsernames Json?    @default("[]")
+  customRoles              Json?    @default("[]")
+  broadcastTargets         Json?    @default("[]")
 }
 
 model SemesterCourse {
@@ -159,7 +159,7 @@ model SemesterCourse {
 }
 
 model PublishedRoutine {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   routineId     String
   semester      String
   session       String?
@@ -178,9 +178,9 @@ model PublishedRoutine {
   maleSlots     Json?
   femaleSlots   Json?
   publishedBy   String?
-  publishedAt   DateTime @default(now())
+  publishedAt   DateTime  @default(now())
   expiresAt     DateTime
-  status        String   @default("published")
+  status        String    @default("published")
   scheduledAt   DateTime?
 
   @@index([routineId])
@@ -211,7 +211,7 @@ model FacultyRequest {
 }
 
 model PublishedExamRoutine {
-  id               String   @id @default(dbgenerated("gen_random_uuid()"))
+  id               String    @id @default(dbgenerated("gen_random_uuid()"))
   examId           String
   semester         String
   session          String?
@@ -222,9 +222,9 @@ model PublishedExamRoutine {
   slots            Json
   publishedBy      String?
   publishedByEmail String?
-  publishedAt      DateTime @default(now()) @db.Timestamptz(6)
-  expiresAt        DateTime @db.Timestamptz(6)
-  status           String   @default("published")
+  publishedAt      DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt        DateTime  @db.Timestamptz(6)
+  status           String    @default("published")
   scheduledAt      DateTime?
 
   @@index([examId])
@@ -268,13 +268,13 @@ model Batch {
 }
 
 model BatchStudent {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   batchId       String
   email         String
   universityId  String
   originalId    String?
   name          String?
-  isReAdmission Boolean  @default(false)
+  isReAdmission Boolean @default(false)
 
   @@unique([batchId, universityId])
   @@index([batchId])
