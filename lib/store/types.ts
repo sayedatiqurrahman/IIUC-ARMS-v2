@@ -41,7 +41,6 @@ export interface Profile {
   isACR: boolean;
   email: string;
   whatsapp: string;
-  phone: string;
   telegramId: string;
   telegramChatId: string;
   semester: string;
@@ -73,7 +72,7 @@ export interface Profile {
 }
 
 export const defaultProfile: Profile = {
-  universityId: '', name: '', title: '', shortForm: '', department: '', section: '', isCR: false, isACR: false, email: '', whatsapp: '', phone: '', telegramId: '', telegramChatId: '', semester: '', image: '',
+  universityId: '', name: '', title: '', shortForm: '', department: '', section: '', isCR: false, isACR: false, email: '', whatsapp: '', telegramId: '', telegramChatId: '', semester: '', image: '',
   role: 'user',
   isBanned: false,
   githubLogin: '', githubToken: '', githubInstallationId: '', githubAvatar: '',

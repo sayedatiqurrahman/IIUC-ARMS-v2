@@ -10,7 +10,8 @@ export default function BatchesTab({ effectiveRole, profile }: { effectiveRole: 
   const [dept, setDept] = useState('qsis');
   const [batchName, setBatchName] = useState('');
   const [session, setSession] = useState('');
-  const [startSem, setStartSem] = useState('1st-semister');
+  const [startSem, setStartSem] = useState('');
+  const [idRange, setIdRange] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
@@ -54,9 +55,9 @@ export default function BatchesTab({ effectiveRole, profile }: { effectiveRole: 
     if (!batchName.trim() || !session.trim()) { setError('Enter batch name and session'); return; }
     setError(''); setSuccess('');
     try {
-      const res = await fetch('/api/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createBatch', department: dept, name: batchName.trim(), session: session.trim(), startSemester: startSem }) });
+      const res = await fetch('/api/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createBatch', department: dept, name: batchName.trim(), session: session.trim(), startSemester: startSem || undefined, idRange: idRange.trim() || undefined }) });
       const data = await res.json();
-      if (data.success) { setSuccess('Batch created'); setBatchName(''); setSession(''); loadBatches(); setTimeout(() => setSuccess(''), 2000); }
+      if (data.success) { setSuccess('Batch created'); setBatchName(''); setSession(''); setIdRange(''); loadBatches(); setTimeout(() => setSuccess(''), 2000); }
       else setError(data.error || 'Failed');
     } catch { setError('Network error'); }
   };
@@ -118,15 +119,19 @@ export default function BatchesTab({ effectiveRole, profile }: { effectiveRole: 
             </div>
             <div>
               <label className="text-[0.68rem] text-dark-text3 mb-0.5 block">Batch Name *</label>
-              <input value={batchName} onChange={e => setBatchName(e.target.value)} placeholder="e.g. Q23" className="w-full px-2.5 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
+              <input value={batchName} onChange={e => setBatchName(e.target.value)} placeholder="e.g. Batch-56" className="w-full px-2.5 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
             </div>
             <div>
               <label className="text-[0.68rem] text-dark-text3 mb-0.5 block">Session *</label>
               <input value={session} onChange={e => setSession(e.target.value)} placeholder="e.g. 2023-24" className="w-full px-2.5 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
             </div>
             <div>
+              <label className="text-[0.68rem] text-dark-text3 mb-0.5 block">ID Range</label>
+              <input value={idRange} onChange={e => setIdRange(e.target.value)} placeholder="e.g. Q233020-Q233100" className="w-full px-2.5 py-1.5 rounded border border-dark-border bg-dark-bg text-dark-text text-[0.78rem] outline-none focus:border-qsis" />
+            </div>
+            <div>
               <label className="text-[0.68rem] text-dark-text3 mb-0.5 block">Start Semester</label>
-              <CustomSelect value={startSem} onChange={setStartSem} options={config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }))} className="w-full" />
+              <CustomSelect value={startSem} onChange={setStartSem} options={[{ value: '', label: 'Not assigned', icon: 'fa-calendar' }, ...config.semesters.map(s => ({ value: s.id, label: s.label, icon: 'fa-calendar' }))]} className="w-full" />
             </div>
           </div>
           <button onClick={createBatch} className="routine-btn routine-btn-primary text-[0.72rem]"><i className="fas fa-plus mr-1"></i>Create Batch</button>

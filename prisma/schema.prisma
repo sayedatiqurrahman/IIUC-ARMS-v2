@@ -51,7 +51,6 @@ model Profile {
   banReason            String?
   bannedBy             String?
   customPermissions    Json?     @default("{}")
-  phone                String?
   telegramId           String?
   batchId              String?
   telegramChatId       String?
@@ -256,8 +255,10 @@ model Batch {
   department      String
   name            String
   session         String
+  idRange         String?
   startSemester   String   @default("1st-semister")
   currentSemester String   @default("1st-semister")
+  isGraduated     Boolean  @default(false)
   startDate       DateTime @default(now())
   targetEndDate   DateTime
   isActive        Boolean  @default(true)

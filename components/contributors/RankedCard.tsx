@@ -42,7 +42,14 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
               {isFounder ? <i className="fas fa-crown text-[0.65rem]"></i> : `#${rank}`}
             </div>
           )}
-          <Image src={c.avatar_url} alt={c.login} width={40} height={40} className={`w-10 h-10 rounded-full object-cover flex-shrink-0 ${isFounder ? 'border-2 border-qsis' : 'border-2 border-dark-border'}`} />
+          <div className="relative flex-shrink-0">
+            <Image src={c.avatar_url} alt={c.login} width={40} height={40} className={`w-10 h-10 rounded-full object-cover ${isFounder ? 'border-2 border-qsis' : 'border-2 border-dark-border'}`} />
+            {c.profileComplete && (
+              <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-sky-500 flex items-center justify-center shadow ring-2 ring-dark-bg2" title="Profile Completed & Verified">
+                <i className="fas fa-check text-white text-[0.4rem]"></i>
+              </div>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[0.82rem] font-bold text-dark-text truncate max-w-[200px]">{c.name || c.login}</span>
@@ -50,7 +57,6 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
               {isDev && <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.55rem] font-bold"><i className="fas fa-laptop-code mr-0.5"></i>Dev</span>}
               {isResource && <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.55rem] font-bold"><i className="fas fa-book-open mr-0.5"></i>Data</span>}
               {isDesigner && <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[0.55rem] font-bold"><i className="fas fa-palette mr-0.5"></i>Design</span>}
-              {c.profileComplete && <span className="px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-400 text-[0.55rem] font-bold"><i className="fas fa-check-circle mr-0.5"></i>Complete</span>}
               <SystemRoleBadge roleKey={c.systemRoleKey} label={c.systemRole} size="sm" />
             </div>
           </div>
@@ -93,7 +99,14 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
               {isFounder ? <i className="fas fa-crown text-[0.5rem]"></i> : `#${rank}`}
             </div>
           )}
-          <Image src={c.avatar_url} alt={c.login} width={36} height={36} className={`w-9 h-9 rounded-full object-cover flex-shrink-0 ${isFounder ? 'border-2 border-qsis' : 'border-2 border-dark-border'}`} />
+          <div className="relative flex-shrink-0">
+            <Image src={c.avatar_url} alt={c.login} width={36} height={36} className={`w-9 h-9 rounded-full object-cover ${isFounder ? 'border-2 border-qsis' : 'border-2 border-dark-border'}`} />
+            {c.profileComplete && (
+              <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-sky-500 flex items-center justify-center shadow ring-2 ring-dark-bg2" title="Profile Completed & Verified">
+                <i className="fas fa-check text-white text-[0.35rem]"></i>
+              </div>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="font-bold text-[0.8rem] text-dark-text truncate">{c.name || c.login}</div>
           </div>

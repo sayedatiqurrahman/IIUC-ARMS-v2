@@ -29,7 +29,7 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
             </div>
           )}
           {!isFounder && c.profileComplete && (
-            <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-sky-500 flex items-center justify-center shadow ring-2 ring-dark-bg2">
+            <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-sky-500 flex items-center justify-center shadow ring-2 ring-dark-bg2" title="Profile Completed & Verified">
               <i className="fas fa-check text-white text-[0.4rem]"></i>
             </div>
           )}

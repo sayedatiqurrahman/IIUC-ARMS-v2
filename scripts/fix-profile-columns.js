@@ -66,7 +66,7 @@ async function main() {
     "hideWebsite" INTEGER DEFAULT 0,
     "banReason" TEXT, "bannedBy" TEXT,
     "customPermissions" TEXT NOT NULL DEFAULT '{}',
-    "phone" TEXT, "telegramId" TEXT, "batchId" TEXT,
+    "telegramId" TEXT, "batchId" TEXT,
     "telegramChatId" TEXT, "session" TEXT,
     "telegramVerified" INTEGER DEFAULT 0,
     "telegramOtp" TEXT, "telegramOtpExpiresAt" DATETIME,
@@ -208,8 +208,10 @@ async function main() {
   await safeExec(`CREATE TABLE IF NOT EXISTS "Batch" (
     "id" TEXT NOT NULL PRIMARY KEY, "department" TEXT NOT NULL,
     "name" TEXT NOT NULL, "session" TEXT NOT NULL,
+    "idRange" TEXT,
     "startSemester" TEXT NOT NULL DEFAULT '1st-semister',
     "currentSemester" TEXT NOT NULL DEFAULT '1st-semister',
+    "isGraduated" INTEGER NOT NULL DEFAULT 0,
     "startDate" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "targetEndDate" DATETIME NOT NULL,
     "isActive" INTEGER NOT NULL DEFAULT 1,
@@ -217,6 +219,8 @@ async function main() {
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`, 'Batch');
   await safeExec(`CREATE INDEX IF NOT EXISTS "Batch_department_idx" ON "Batch"("department")`, 'Batch.department idx');
+  await safeExec(`ALTER TABLE "Batch" ADD COLUMN "idRange" TEXT`, 'Batch.idRange col', true);
+  await safeExec(`ALTER TABLE "Batch" ADD COLUMN "isGraduated" INTEGER NOT NULL DEFAULT 0`, 'Batch.isGraduated col', true);
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "BatchStudent" (
     "id" TEXT NOT NULL PRIMARY KEY, "batchId" TEXT NOT NULL,

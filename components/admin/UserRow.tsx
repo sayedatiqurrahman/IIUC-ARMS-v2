@@ -225,7 +225,6 @@ export default function UserRow({
             {u.semester && <InfoField label="Semester" value={u.semester} />}
             {u.department && <InfoField label="Department" value={u.department} />}
             {u.batch && <InfoField label="Batch" value={u.batch} />}
-            {u.phone && <InfoField label="WhatsApp" value={u.phone} icon="fab fa-whatsapp" />}
             {u.telegramId && <InfoField label="Telegram" value={u.telegramId} icon="fab fa-telegram" />}
             {u.telegramChatId && <InfoField label="Telegram Chat" value={u.telegramChatId} icon="fa-comments" />}
             {u.batchId && <InfoField label="Batch ID" value={String(u.batchId)} />}

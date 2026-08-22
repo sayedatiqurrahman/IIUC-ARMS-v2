@@ -17,7 +17,6 @@ export interface UserRecord {
   lastSignIn?: string;
   department?: string;
   batch?: string;
-  phone?: string;
   telegramId?: string;
   telegramChatId?: string;
   batchId?: number;

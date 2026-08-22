@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     const { action } = body;
 
     if (action === 'createBatch') {
-      const { department, name, session, startSemester } = body;
+      const { department, name, session, startSemester, idRange } = body;
       if (!department || !name || !session) {
         return NextResponse.json({ error: 'department, name, session required' }, { status: 400 });
       }
@@ -54,19 +54,21 @@ export async function POST(req: NextRequest) {
       targetEndDate.setFullYear(targetEndDate.getFullYear() + 4);
       targetEndDate.setMonth(targetEndDate.getMonth() + 6);
       const batch = await prisma.batch.create({
-        data: { department, name, session, startSemester: startSemester || '1st-semister', currentSemester: startSemester || '1st-semister', targetEndDate },
+        data: { department, name, session, idRange: idRange || null, startSemester: startSemester || '1st-semister', currentSemester: startSemester || '1st-semister', targetEndDate },
       });
       return NextResponse.json({ success: true, batch });
     }
 
     if (action === 'updateBatch') {
-      const { batchId, name, session, currentSemester, isActive } = body;
+      const { batchId, name, session, currentSemester, isActive, isGraduated, idRange } = body;
       if (!batchId) return NextResponse.json({ error: 'batchId required' }, { status: 400 });
       const data: any = {};
       if (name !== undefined) data.name = name;
       if (session !== undefined) data.session = session;
       if (currentSemester !== undefined) data.currentSemester = currentSemester;
       if (isActive !== undefined) data.isActive = isActive;
+      if (isGraduated !== undefined) { data.isGraduated = isGraduated; if (isGraduated) data.isActive = false; }
+      if (idRange !== undefined) data.idRange = idRange || null;
       const batch = await prisma.batch.update({ where: { id: batchId }, data });
       return NextResponse.json({ success: true, batch });
     }

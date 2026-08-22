@@ -283,73 +283,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ─── Helper: connect via shared phone number (for users without username) ──
-async function handleSharedContact(chatId: number, phoneNumber: string, telegramUsername: string | null) {
-  const { prisma } = await import('@/lib/prisma');
-  const digits = (phoneNumber || '').replace(/\D/g, '');
-  const last8 = digits.slice(-8);
-
-  if (!last8) {
-    await sendMessage(chatId,
-      `❌ Could not read your phone number.\n\n` +
-      `Please use <code>/connect yourmail@ugrad.iiuc.ac.bd</code> instead.`,
-      { parse_mode: 'HTML' }
-    );
-    return;
-  }
-
-  const profiles = await prisma.profile.findMany({
-    where: { phone: { not: null } },
-    select: { userId: true, phone: true, name: true, telegramChatId: true, telegramVerified: true },
-  });
-
-  const matches = profiles.filter(p => (p.phone || '').replace(/\D/g, '').slice(-8) === last8);
-
-  if (matches.length === 0) {
-    await sendMessage(chatId,
-      `❌ <b>No account found</b>\n\n` +
-      `No IIUC-ARMS account is registered with phone number <code>${esc(phoneNumber)}</code>.\n\n` +
-      `Make sure your phone number is saved in your profile (Dashboard → Profile), or use\n` +
-      `<code>/connect yourmail@ugrad.iiuc.ac.bd</code>`,
-      { parse_mode: 'HTML' }
-    );
-    return;
-  }
-
-  for (const profile of matches.slice(0, 3)) {
-    await prisma.profile.update({
-      where: { userId: profile.userId },
-      data: {
-        telegramChatId: String(chatId),
-        telegramVerified: false,
-        telegramConnectState: null,
-        telegramOtp: null,
-        telegramOtpExpiresAt: null,
-        // Take both when available: username (if set) + shared phone number
-        ...(telegramUsername ? { telegramId: telegramUsername } : {}),
-        ...(profile.phone ? {} : { phone: phoneNumber }),
-      },
-    });
-  }
-
-  await sendMessage(chatId,
-    `✅ <b>Phone number linked!</b>\n\n` +
-    `📱 ${esc(phoneNumber)}` +
-    (telegramUsername ? `\n👤 Username: ${esc(telegramUsername)}` : '') +
-    `\n👤 ${matches.map(m => m.name).filter(Boolean).join(', ') || matches[0].userId}\n\n` +
-    `Now open <b>IIUC-ARMS web app → Dashboard → Connections → Telegram</b>,\n` +
-    `click <b>Send OTP</b>, then enter the 6-digit OTP from this chat to verify.`,
-    { parse_mode: 'HTML' }
-  );
-  console.log(`[TG] Phone ${phoneNumber} -> chat_id ${chatId} (linked ${matches.length} account(s), pending verification)`);
-}
-
-const CONTACT_KEYBOARD = {
-  keyboard: [[{ text: '📱 Connect by Phone Number', request_contact: true }]],
-  resize_keyboard: true,
-  one_time_keyboard: true,
-};
-
 // ─── Anti-spam: flood guard + stranger silence ────────────────────
 const FLOOD_WINDOW_MS = 60 * 1000;
 const FLOOD_MAX = 15;
@@ -457,13 +390,6 @@ async function handleMessage(msg: any) {
 
   await sendChatAction(chatId);
 
-  // ─── Shared contact (phone number connect) ───
-  if (msg.contact && msg.contact.phone_number) {
-    const telegramUsername = msg.from?.username ? `@${msg.from.username}` : null;
-    await handleSharedContact(chatId, msg.contact.phone_number, telegramUsername);
-    return;
-  }
-
   if (isGroup) {
     const isCommand = msg.entities?.some((e: any) => e.type === 'bot_command' && e.offset === 0);
     const isMention = msg.entities?.some((e: any) => e.type === 'mention' && e.offset === 0);
@@ -525,7 +451,6 @@ async function handleMessage(msg: any) {
               { text: '📖 Help', callback_data: 'start_help' },
             ],
           ],
-          ...CONTACT_KEYBOARD,
         },
       });
       return;
@@ -574,10 +499,9 @@ async function handleMessage(msg: any) {
       if (!email || !email.includes('@')) {
         await sendMessage(chatId,
           `🔗 <b>Connect your Telegram</b>\n\n` +
-          `Option 1 (recommended): <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\n` +
-          `Option 2: Tap <b>📱 Connect by Phone Number</b> below to link with the number saved in your profile.\n\n` +
+          `Send <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n\n` +
           `Then open the web app → Dashboard → Connections → Telegram → Send OTP.`,
-          { parse_mode: 'HTML', ...CONTACT_KEYBOARD }
+          { parse_mode: 'HTML' }
         );
         return;
       }

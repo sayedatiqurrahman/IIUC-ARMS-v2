@@ -125,7 +125,7 @@ async function getDbProfiles(): Promise<any[]> {
         semester: true, department: true, section: true, githubLogin: true,
         facebook: true, twitter: true, linkedin: true, website: true,
         company: true, companyUrl: true, publicEmail: true, title: true,
-        phone: true, isCR: true, isACR: true, shortForm: true, batchId: true,
+        isCR: true, isACR: true, shortForm: true, batchId: true,
         hideWhatsapp: true, hideUniversityId: true, hideSemester: true, hideEmail: true,
         hideCompany: true, hideFacebook: true, hideTwitter: true, hideLinkedin: true, hideWebsite: true,
         role: true, showInContributors: true,
