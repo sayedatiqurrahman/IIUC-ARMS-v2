@@ -9,7 +9,6 @@ import { Settings, DEFAULT_SETTINGS } from './types';
 import FounderCard from './FounderCard';
 import PageLoader from '@/components/PageLoader';
 import RankedCard from './RankedCard';
-import GridCard from './GridCard';
 import HistoryModal from './HistoryModal';
 import ContributorDetailModal from './ContributorDetailModal';
 import ContributorDetailListModal from './ContributorDetailListModal';
@@ -22,7 +21,6 @@ export default function ContributorsView() {
   const loadContributors = useAppStore(s => s.loadContributors);
 
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const [userView, setUserView] = useState<'sectioned' | 'grid'>('sectioned');
   const [activeTab, setActiveTab] = useState<'all' | 'developers' | 'resources' | 'designers'>('all');
   const [deptFilter, setDeptFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,9 +37,7 @@ export default function ContributorsView() {
       .then(r => r.json())
       .then(d => {
         if (d && !d.error) {
-          const s = { ...DEFAULT_SETTINGS, ...d };
-          setSettings(s);
-          setUserView(s.viewMode);
+          setSettings({ ...DEFAULT_SETTINGS, ...d });
         }
       })
       .catch(() => {});
@@ -94,8 +90,6 @@ export default function ContributorsView() {
     }
     return filtered;
   };
-
-  const effectiveView = settings.allowUserToggle ? userView : settings.viewMode;
 
   // Tab-filtered lists with per-tab sorting
   const tabList = useMemo(() => {
@@ -190,31 +184,8 @@ export default function ContributorsView() {
           {/* Controls Row */}
           <div className="mb-4 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
-              {/* View Toggle (user) */}
-              {settings.allowUserToggle && (
-                <div className="flex gap-1 p-1 bg-dark-bg2 border border-dark-border rounded-xl shrink-0">
-                  <button
-                    onClick={() => setUserView('sectioned')}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
-                      userView === 'sectioned' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text'
-                    }`}
-                  >
-                    <i className="fas fa-layer-group mr-1"></i>Sections
-                  </button>
-                  <button
-                    onClick={() => setUserView('grid')}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all ${
-                      userView === 'grid' ? 'bg-qsis text-white' : 'bg-transparent text-dark-text2 hover:text-dark-text'
-                    }`}
-                  >
-                    <i className="fas fa-th-large mr-1"></i>Grid
-                  </button>
-                </div>
-              )}
-
               {/* Sectioned Tabs — scrollable on mobile */}
-              {effectiveView === 'sectioned' && (
-                <div className="flex gap-1 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto no-scrollbar">
+              <div className="flex gap-1 p-1 bg-dark-bg2 border border-dark-border rounded-xl overflow-x-auto no-scrollbar">
                   <button
                     onClick={() => { setActiveTab('all'); setDeptFilter('all'); setSearchQuery(''); }}
                     className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border-none transition-all whitespace-nowrap shrink-0 ${
@@ -255,8 +226,7 @@ export default function ContributorsView() {
                     <i className="fas fa-palette mr-1"></i>Designers
                     <span className="ml-1 text-[0.6rem] opacity-70">({designers.length})</span>
                   </button>
-                </div>
-              )}
+              </div>
             </div>
 
             {/* Search + Dept Filter */}
@@ -291,32 +261,17 @@ export default function ContributorsView() {
           </div>
 
           {/* ═══ SECTIONED VIEW ═══ */}
-          {effectiveView === 'sectioned' ? (
-            <div>
-              {tabList.length === 0 ? (
-                <div className="text-center py-6 text-dark-text2 text-[0.8rem]">No contributors found.</div>
-              ) : (
-                <div className="space-y-2">
-                  {tabList.map((c: any, idx: number) => (
-                    <RankedCard key={c.id} c={c} rank={idx + 1} settings={settings} onShowHistory={setHistoryFor} />
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* ═══ GRID VIEW ═══ */
-            <div>
-              {tabList.length === 0 ? (
-                <div className="text-center py-6 text-dark-text2 text-[0.8rem]">No contributors found.</div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {tabList.map((c: any) => (
-                    <GridCard key={c.id} c={c} settings={settings} onShowHistory={setHistoryFor} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          <div>
+            {tabList.length === 0 ? (
+              <div className="text-center py-6 text-dark-text2 text-[0.8rem]">No contributors found.</div>
+            ) : (
+              <div className="space-y-2">
+                {tabList.map((c: any, idx: number) => (
+                  <RankedCard key={c.id} c={c} rank={idx + 1} settings={settings} onShowHistory={setHistoryFor} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
