@@ -57,7 +57,6 @@ export function dismissOnboarding(): void {
 
 export function setOnboardingData(data: OnboardingData) {
   localStorage.setItem(ONBOARDING_KEY, JSON.stringify(data));
-  localStorage.removeItem(DISMISSED_KEY);
 }
 
 export function clearOnboardingData() {

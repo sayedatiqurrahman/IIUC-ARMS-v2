@@ -1126,6 +1126,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           initialSemester={profile.semester ? (config.semesters.find(s => s.id === profile.semester)?.label || profile.semester) : undefined}
           onComplete={(data) => {
             setStoreOnboarding(data);
+            dismissOnboarding();
             setShowOnboarding(false);
             setOnboardingDone(true);
             // Bidirectional sync: save department + semester to server profile

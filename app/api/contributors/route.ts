@@ -119,9 +119,21 @@ function getFacultyName(deptId: string): string {
 async function getDbProfiles(): Promise<any[]> {
   try {
     const { prisma } = await import('@/lib/prisma');
-    const profiles = await prisma.profile.findMany();
+    const profiles = await prisma.profile.findMany({
+      select: {
+        userId: true, email: true, name: true, universityId: true, whatsapp: true,
+        semester: true, department: true, section: true, githubLogin: true,
+        facebook: true, twitter: true, linkedin: true, website: true,
+        company: true, companyUrl: true, publicEmail: true, title: true,
+        phone: true, isCR: true, isACR: true, shortForm: true, batchId: true,
+        hideWhatsapp: true, hideUniversityId: true, hideSemester: true, hideEmail: true,
+        hideCompany: true, hideFacebook: true, hideTwitter: true, hideLinkedin: true, hideWebsite: true,
+        role: true, showInContributors: true,
+      }
+    });
     return profiles || [];
-  } catch {
+  } catch (e: any) {
+    console.error('[contributors] getDbProfiles failed:', e?.message || e);
     return [];
   }
 }
