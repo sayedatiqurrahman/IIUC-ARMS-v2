@@ -3,15 +3,11 @@
 export default function SocialIcons({ c }: { c: any }) {
   const links: { icon: string; href?: string; label: string; color: string }[] = [];
 
-  if (c.html_url) links.push({ icon: 'fab fa-github', href: c.html_url, label: 'GitHub', color: 'text-dark-text2 hover:text-dark-text' });
+  if (c.html_url) links.push({ icon: 'fab fa-github', href: c.html_url, label: `@${c.login}`, color: 'text-dark-text2 hover:text-dark-text' });
   if (c.website && !c.hideWebsite) links.push({ icon: 'fas fa-globe', href: c.website, label: 'Website', color: 'text-cyan-400 hover:text-cyan-300' });
   if (c.linkedin && !c.hideLinkedin) links.push({ icon: 'fab fa-linkedin-in', href: c.linkedin, label: 'LinkedIn', color: 'text-blue-400 hover:text-blue-300' });
   if (c.facebook && !c.hideFacebook) links.push({ icon: 'fab fa-facebook-f', href: c.facebook, label: 'Facebook', color: 'text-blue-500 hover:text-blue-400' });
   if (c.twitter && !c.hideTwitter) links.push({ icon: 'fab fa-x-twitter', href: c.twitter, label: 'X / Twitter', color: 'text-dark-text2 hover:text-dark-text' });
-  if (c.whatsapp && !c.hideWhatsapp) links.push({ icon: 'fab fa-whatsapp', href: `https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`, label: 'WhatsApp', color: 'text-green-400 hover:text-green-300' });
-
-  const e = c.publicEmail || c.email;
-  if (e && !c.hideEmail) links.push({ icon: 'fas fa-envelope', href: `mailto:${e}`, label: 'Email', color: 'text-amber-400 hover:text-amber-300' });
 
   if (links.length === 0) return null;
 

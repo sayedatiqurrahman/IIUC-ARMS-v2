@@ -5,11 +5,12 @@ import { Settings } from './types';
 import StatTip from './StatTip';
 import SystemRoleBadge from './SystemRoleBadge';
 import SocialIcons from './SocialIcons';
+import ContactButton from './ContactButton';
 
-const CODE_TIP = 'Commits to the IIUC-ARMS-v2 source-code repo. Every commit you push there counts as 1.';
-const DATA_TIP = 'Files you uploaded to the Academic Files data repo. Every file you upload is committed to that repo and counts as 1.';
-const DESIGN_TIP = 'Designs you published on the Creative Hub. Each design/theme you publish counts as 1.';
-const BUG_TIP = 'Issues (bug reports, feature requests) you opened on the IIUC-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.';
+const CODE_TIP = 'Commits to the IIUC-ARMS-v2 source-code repo.';
+const DATA_TIP = 'Files you uploaded to the Academic Files data repo.';
+const DESIGN_TIP = 'Designs you published on the Creative Hub.';
+const BUG_TIP = 'Issues you opened on the IIUC-ARMS-v2 repo.';
 const TOTAL_TIP = 'Code + Data + Design + Issues added together.';
 
 export default function RankedCard({ c, rank, settings, onShowHistory }: { c: any; rank: number; settings: Settings; onShowHistory?: (c: any) => void }) {
@@ -23,6 +24,8 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
   const isDesigner = (c.designContributions || 0) > 0;
+
+  const total = c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0);
 
   return (
     <div className={`rounded-xl border transition-all hover:border-qsis/40 hover:shadow-[0_2px_12px_rgba(34,197,94,0.1)] ${
@@ -41,7 +44,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
         <Image src={c.avatar_url} alt={c.login} width={40} height={40} className={`w-10 h-10 rounded-full object-cover flex-shrink-0 ${isFounder ? 'border-2 border-qsis' : 'border-2 border-dark-border'}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[0.82rem] font-bold text-dark-text truncate">{c.name || c.login}</span>
+            <span className="text-[0.82rem] font-bold text-dark-text truncate max-w-[200px]">{c.name || c.login}</span>
             {isFounder && <span className="px-1.5 py-0.5 rounded-md bg-qsis/20 text-qsis text-[0.55rem] font-bold"><i className="fas fa-crown mr-0.5"></i>Founder</span>}
             {isDev && <span className="px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 text-[0.55rem] font-bold"><i className="fas fa-laptop-code mr-0.5"></i>Dev</span>}
             {isResource && <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.55rem] font-bold"><i className="fas fa-book-open mr-0.5"></i>Data</span>}
@@ -50,11 +53,9 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
             <SystemRoleBadge roleKey={c.systemRoleKey} label={c.systemRole} size="sm" />
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.68rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
-              <i className="fab fa-github mr-0.5"></i>@{c.login}
-            </a>
-            {c.departmentShortName && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
-            <SocialIcons c={c} />
+            {c.departmentShortName && <span className="text-[0.62rem] text-dark-text3 truncate"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
+            {c.semester && !c.hideSemester && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
+            {c.section && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-users mr-0.5 text-purple-400"></i>{c.section}</span>}
           </div>
         </div>
         {settings.showStats && (
@@ -64,17 +65,21 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
             <StatTip icon="fa-palette" color="text-emerald-400" value={c.designContributions || 0} label="Design" tip={DESIGN_TIP} />
             <StatTip icon="fa-bug" color="text-rose-400" value={c.issueContributions || 0} label="Issues" tip={BUG_TIP} />
             <div className="border-l border-dark-border pl-2 ml-0.5">
-              <StatTip icon="fa-star" color="text-yellow-500" value={c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0)} label="Total" tip={TOTAL_TIP} />
+              <StatTip icon="fa-star" color="text-yellow-500" value={total} label="Total" tip={TOTAL_TIP} />
             </div>
           </div>
         )}
-        <button
-          onClick={() => onShowHistory?.(c)}
-          className="w-8 h-8 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0"
-          title="Contribution history"
-        >
-          <i className="fas fa-circle-info text-[0.7rem]"></i>
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <SocialIcons c={c} />
+          <ContactButton c={c} />
+          <button
+            onClick={() => onShowHistory?.(c)}
+            className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all"
+            title="Contribution history"
+          >
+            <i className="fas fa-circle-info text-[0.7rem]"></i>
+          </button>
+        </div>
       </div>
 
       {/* ─── Mobile: vertical card layout ─── */}
@@ -91,10 +96,8 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           <div className="flex-1 min-w-0">
             <div className="font-bold text-[0.8rem] text-dark-text truncate">{c.name || c.login}</div>
             <div className="flex items-center gap-1.5">
-              <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.6rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
-                <i className="fab fa-github mr-0.5"></i>@{c.login}
-              </a>
-              {c.departmentShortName && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
+              {c.departmentShortName && <span className="text-[0.55rem] text-dark-text3 truncate"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
+              {c.semester && !c.hideSemester && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
             </div>
           </div>
           <button onClick={() => onShowHistory?.(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0" title="History">
@@ -107,7 +110,10 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           {isResource && <span className="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 text-[0.5rem] font-bold"><i className="fas fa-book-open mr-0.5"></i>Data</span>}
           {isDesigner && <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[0.5rem] font-bold"><i className="fas fa-palette mr-0.5"></i>Design</span>}
           <SystemRoleBadge roleKey={c.systemRoleKey} label={c.systemRole} size="sm" />
+        </div>
+        <div className="flex items-center gap-1 mb-2">
           <SocialIcons c={c} />
+          <ContactButton c={c} />
         </div>
         {settings.showStats && (
           <div className="flex items-center gap-1.5 bg-dark-bg3/50 rounded-lg px-2 py-1.5">
@@ -119,7 +125,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
             <div className="w-px h-5 bg-dark-border"></div>
             <StatTip size="sm" icon="fa-bug" color="text-rose-400" value={c.issueContributions || 0} label="Issues" tip={BUG_TIP} />
             <div className="w-px h-5 bg-dark-border"></div>
-            <StatTip size="sm" icon="fa-star" color="text-yellow-500" value={c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0)} label="Total" tip={TOTAL_TIP} />
+            <StatTip size="sm" icon="fa-star" color="text-yellow-500" value={total} label="Total" tip={TOTAL_TIP} />
           </div>
         )}
       </div>

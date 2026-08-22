@@ -4,12 +4,14 @@ import Image from 'next/image';
 import { Settings } from './types';
 import SystemRoleBadge from './SystemRoleBadge';
 import SocialIcons from './SocialIcons';
+import ContactButton from './ContactButton';
 
 export default function GridCard({ c, settings, onShowHistory }: { c: any; settings: Settings; onShowHistory?: (c: any) => void }) {
   const isDev = c.v2Contributions > 0;
   const isResource = c.dataContributions > 0;
   const isDesigner = (c.designContributions || 0) > 0;
   const isFounder = c.role === 'Founder & Lead';
+  const total = c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0);
 
   return (
     <div className={`bg-dark-bg2 border rounded-xl transition-all group flex flex-col ${
@@ -33,9 +35,6 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
           )}
         </div>
         <h4 className="text-[0.82rem] font-bold text-dark-text leading-tight truncate">{c.name || c.login}</h4>
-        <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.65rem] text-dark-text3 hover:text-qsis transition-colors no-underline">
-          @{c.login}
-        </a>
         <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
           {isFounder && <span className="px-1.5 py-0.5 rounded-full text-[0.55rem] font-bold bg-qsis/20 text-qsis ring-1 ring-qsis/30"><i className="fas fa-crown text-[0.4rem] mr-0.5"></i>Founder</span>}
           {isDev && <span className="px-1.5 py-0.5 rounded-full text-[0.55rem] font-semibold bg-blue-500/15 text-blue-400"><i className="fas fa-laptop-code text-[0.45rem] mr-0.5"></i>Dev</span>}
@@ -47,20 +46,39 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
 
       <div className="h-px bg-gradient-to-r from-transparent via-qsis/30 to-transparent mx-4"></div>
 
-      {/* Info section - compact */}
-      <div className="px-4 pb-2.5 pt-2 flex-1">
-        <div className="flex items-center gap-2 flex-wrap mb-1.5">
+      {/* Info section — all info shown by default */}
+      <div className="px-4 pb-2.5 pt-2 flex-1 space-y-1.5">
+        {/* Academic info */}
+        <div className="flex items-center gap-2 flex-wrap">
           {c.departmentShortName && (
-            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-building text-teal-400 mr-0.5"></i>{c.departmentShortName}</span>
+            <span className="text-[0.6rem] text-dark-text3 truncate"><i className="fas fa-building text-teal-400 mr-0.5"></i>{c.departmentShortName}</span>
           )}
+          {c.semester && !c.hideSemester && (
+            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-graduation-cap text-accent mr-0.5"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>
+          )}
+          {c.section && (
+            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-users text-purple-400 mr-0.5"></i>{c.section}</span>
+          )}
+        </div>
+        {/* IDs & info */}
+        <div className="flex items-center gap-2 flex-wrap">
           {c.universityId && !c.hideUniversityId && (
             <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-id-card text-qsis mr-0.5"></i>{c.universityId}</span>
           )}
-          {c.semester && !c.hideSemester && (
-            <span className="text-[0.6rem] text-dark-text3"><i className="fas fa-graduation-cap text-accent mr-0.5"></i>{c.semester === 'graduated' ? '🎓 Grad' : c.semester}</span>
+          {c.title && (
+            <span className="text-[0.6rem] text-dark-text3 truncate max-w-[150px]"><i className="fas fa-briefcase text-amber-400 mr-0.5"></i>{c.title}</span>
+          )}
+          {c.company && !c.hideCompany && (
+            <a href={c.companyUrl || undefined} target={c.companyUrl ? '_blank' : undefined} rel="noopener noreferrer" className="text-[0.6rem] text-dark-text3 truncate max-w-[120px] hover:text-qsis transition-colors no-underline">
+              <i className="fas fa-building text-rose-400 mr-0.5"></i>{c.company}
+            </a>
           )}
         </div>
-        <SocialIcons c={c} />
+        {/* Social + Contact */}
+        <div className="flex items-center gap-1.5">
+          <SocialIcons c={c} />
+          <ContactButton c={c} />
+        </div>
       </div>
 
       {/* Stats footer */}
@@ -82,7 +100,7 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
           </div>
           <div className="flex items-center gap-1">
             <span className="text-[0.6rem] font-bold text-yellow-500" title="Total contributions">
-              {c.v2Contributions + c.dataContributions + (c.designContributions || 0) + (c.issueContributions || 0)}
+              {total}
             </span>
             <button onClick={() => onShowHistory?.(c)} className="w-5 h-5 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
               <i className="fas fa-circle-info text-[0.6rem]"></i>

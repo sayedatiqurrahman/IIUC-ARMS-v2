@@ -32,9 +32,6 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
         <h3 className="text-[1rem] font-bold text-dark-text">{c.name || c.login}</h3>
         <p className="text-[0.75rem] text-qsis font-medium mb-1">{config.founderName}</p>
         <div className="flex items-center justify-center gap-2 mb-2">
-          <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
-            <i className="fab fa-github mr-1"></i>@{c.login}
-          </a>
           <SocialIcons c={c} />
         </div>
         <div className="flex items-center justify-center mb-1">
@@ -83,9 +80,6 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
           </div>
           <p className="text-[0.82rem] text-qsis font-medium">{config.founderName}</p>
           <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
-            <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="text-[0.72rem] text-dark-text2 hover:text-qsis transition-colors no-underline">
-              <i className="fab fa-github mr-1"></i>@{c.login}
-            </a>
             <SocialIcons c={c} />
             <button onClick={() => onShowHistory?.(c)} className="w-6 h-6 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
               <i className="fas fa-circle-info text-[0.65rem]"></i>
