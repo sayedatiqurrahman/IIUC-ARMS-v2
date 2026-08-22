@@ -1,3 +1,4 @@
+import 'server-only';
 import { PrismaClient } from '@prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
 import 'dotenv/config';

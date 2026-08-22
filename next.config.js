@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['tesseract.js', '@jsquash/jpeg'],
+  serverExternalPackages: ['@libsql/client', '@libsql/hrana-client', '@libsql/isomorphic-fetch', '@libsql/isomorphic-ws'],
   experimental: {
     cpus: 1,
     staticGenerationMaxConcurrency: 1,
