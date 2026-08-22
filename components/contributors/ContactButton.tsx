@@ -13,6 +13,7 @@ interface Item {
   icon: string;
   href: string;
   label: string;
+  value?: string;
   color?: string;
   bg?: string;
 }
@@ -25,13 +26,10 @@ export default function ContactButton({ c, size = 'sm' }: ContactButtonProps) {
 
   const email = c.publicEmail || c.email;
   if (email && !c.hideEmail) {
-    contacts.push({ icon: 'fas fa-envelope', href: `mailto:${email}`, label: 'Email', color: 'text-amber-400', bg: 'bg-amber-500/15' });
+    contacts.push({ icon: 'fas fa-envelope', href: `mailto:${email}`, label: 'Email', value: email, color: 'text-amber-400', bg: 'bg-amber-500/15' });
   }
   if (c.whatsapp && !c.hideWhatsapp) {
-    contacts.push({ icon: 'fab fa-whatsapp', href: `https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`, label: 'WhatsApp', color: 'text-green-400', bg: 'bg-green-500/15' });
-  }
-  if (c.phone) {
-    contacts.push({ icon: 'fas fa-phone', href: `tel:${c.phone}`, label: 'Phone', color: 'text-blue-400', bg: 'bg-blue-500/15' });
+    contacts.push({ icon: 'fab fa-whatsapp', href: `https://wa.me/${c.whatsapp.replace(/[^0-9]/g, '')}`, label: 'WhatsApp', value: c.whatsapp, color: 'text-green-400', bg: 'bg-green-500/15' });
   }
   if (c.html_url) {
     socials.push({ icon: 'fab fa-github', href: c.html_url, label: 'GitHub', color: 'text-dark-text', bg: 'bg-dark-bg3' });
@@ -51,16 +49,17 @@ export default function ContactButton({ c, size = 'sm' }: ContactButtonProps) {
 
   if (contacts.length === 0 && socials.length === 0) return null;
 
-  const btnSize = size === 'sm' ? 'w-5 h-5 text-[0.5rem]' : 'w-6 h-6 text-[0.55rem]';
+  const btnSize = size === 'sm' ? 'h-5 text-[0.5rem]' : 'h-6 text-[0.55rem]';
 
   return (
     <>
       <button
-        className={`${btnSize} rounded bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all cursor-pointer border-none`}
+        className={`${btnSize} rounded bg-dark-bg3 flex items-center gap-1 px-1.5 text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all cursor-pointer border-none`}
         title="Contact & social"
         onClick={() => setOpen(true)}
       >
         <i className="fas fa-address-card"></i>
+        <span className="font-semibold">Contacts</span>
       </button>
 
       {open && (
@@ -89,7 +88,7 @@ export default function ContactButton({ c, size = 'sm' }: ContactButtonProps) {
                   <a
                     key={i}
                     href={item.href}
-                    target={item.href.startsWith('mailto:') || item.href.startsWith('tel:') ? undefined : '_blank'}
+                    target={item.href.startsWith('mailto:') ? undefined : '_blank'}
                     rel="noopener noreferrer"
                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-dark-bg3 transition-colors no-underline group/item"
                     onClick={() => setOpen(false)}
@@ -98,7 +97,8 @@ export default function ContactButton({ c, size = 'sm' }: ContactButtonProps) {
                       <i className={`${item.icon} text-[0.85rem]`}></i>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="text-[0.8rem] text-dark-text font-medium group-hover/item:text-qsis transition-colors">{item.label}</span>
+                      <div className="text-[0.65rem] text-dark-text3 font-medium">{item.label}</div>
+                      {item.value && <div className="text-[0.8rem] text-dark-text font-medium truncate group-hover/item:text-qsis transition-colors">{item.value}</div>}
                     </div>
                     <i className="fas fa-arrow-right text-[0.6rem] text-dark-text3 opacity-0 group-hover/item:opacity-100 group-hover/item:text-qsis transition-opacity flex-shrink-0"></i>
                   </a>

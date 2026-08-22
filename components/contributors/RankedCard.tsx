@@ -4,7 +4,6 @@ import Image from 'next/image';
 import { Settings } from './types';
 import StatTip from './StatTip';
 import SystemRoleBadge from './SystemRoleBadge';
-import SocialIcons from './SocialIcons';
 import ContactButton from './ContactButton';
 
 const CODE_TIP = 'Commits to the IIUC-ARMS-v2 source-code repo.';
@@ -82,11 +81,6 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           {c.section && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-users mr-0.5 text-purple-400"></i>{c.section}</span>}
           <ContactButton c={c} size="md" />
         </div>
-
-        {/* Row 3: Social icons */}
-        <div className="flex items-center gap-1 mt-1 ml-[52px]">
-          <SocialIcons c={c} />
-        </div>
       </div>
 
       {/* ─── Mobile ─── */}
@@ -121,10 +115,6 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           {c.semester && !c.hideSemester && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
           {c.section && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-users mr-0.5 text-purple-400"></i>{c.section}</span>}
           <ContactButton c={c} />
-        </div>
-        {/* Social icons */}
-        <div className="flex items-center gap-1 mb-2 ml-[46px]">
-          <SocialIcons c={c} />
         </div>
         {settings.showStats && (
           <div className="flex items-center gap-1.5 bg-dark-bg3/50 rounded-lg px-2 py-1.5">
