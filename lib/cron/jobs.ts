@@ -184,6 +184,40 @@ async function runScheduledNotices() {
   return { success: true, message: `Auto-published ${scheduled.length} notice(s)`, details: scheduled.map(n => n.title).join(', ') };
 }
 
+// ─── GitHub Profile Sync ─────────────────────────────────────────
+
+async function runGithubProfileSync() {
+  const { prisma } = await import('@/lib/prisma');
+  const profiles = await prisma.profile.findMany({
+    where: { githubToken: { not: null }, githubLogin: { not: null } },
+    select: { userId: true, githubToken: true, githubLogin: true, name: true },
+  });
+  if (profiles.length === 0) return { success: true, message: 'No connected GitHub profiles to sync', details: 'All clear' };
+
+  let synced = 0;
+  let failed = 0;
+  for (const p of profiles) {
+    try {
+      const token = p.githubToken!;
+      const res = await fetch('https://api.github.com/user', {
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
+      });
+      if (!res.ok) { failed++; continue; }
+      const gh = await res.json();
+      const updateData: Record<string, any> = {};
+      if (gh.login) updateData.githubLogin = gh.login;
+      if (gh.avatar_url) updateData.githubAvatar = gh.avatar_url;
+      if (gh.name && !p.name) updateData.name = gh.name;
+      if (Object.keys(updateData).length > 0) {
+        await prisma.profile.update({ where: { userId: p.userId }, data: updateData });
+      }
+      synced++;
+      await new Promise(r => setTimeout(r, 500));
+    } catch { failed++; }
+  }
+  return { success: true, message: `Synced ${synced} / ${profiles.length} GitHub profile(s)`, details: failed > 0 ? `${failed} failed (token expired?)` : undefined };
+}
+
 // ─── Job registry ────────────────────────────────────────────────
 
 const RUN_MAP: Record<string, () => Promise<{ success: boolean; message: string; details?: string }>> = {
@@ -197,6 +231,7 @@ const RUN_MAP: Record<string, () => Promise<{ success: boolean; message: string;
   'publish-exam-routines': runScheduledExamRoutines,
   'publish-seat-plans': runScheduledSeatPlans,
   'publish-notices': runScheduledNotices,
+  'github-profile-sync': runGithubProfileSync,
 };
 
 export const CRON_JOBS: CronJob[] = CRON_JOBS_META.map(meta => ({

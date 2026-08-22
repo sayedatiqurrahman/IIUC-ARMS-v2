@@ -104,4 +104,13 @@ export const CRON_JOBS_META: CronJobMeta[] = [
     schedule: 'Every 5 min (client poll)',
     group: 'scheduled-publish',
   },
+  {
+    id: 'github-profile-sync',
+    label: 'GitHub Profile Sync',
+    description: 'Re-sync GitHub profile data (name, avatar) for all connected users to keep contributor cards up to date.',
+    icon: 'fab fa-github',
+    color: 'text-gray-400',
+    schedule: 'Weekly (Sundays at 5:00 AM)',
+    group: 'maintenance',
+  },
 ];

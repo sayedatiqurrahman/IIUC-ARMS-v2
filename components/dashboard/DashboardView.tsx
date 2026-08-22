@@ -179,6 +179,7 @@ export default function DashboardView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ githubLogin: ghLogin, githubToken: ghToken, githubInstallationId: ghInstall || '' }),
       }).catch(() => {});
+      fetch('/api/github/sync-profile', { method: 'POST' }).catch(() => {});
       showToast(`Connected as @${ghLogin}!`, 'success');
       window.history.replaceState({}, '', window.location.pathname);
     } else if (ghError) {
@@ -189,6 +190,7 @@ export default function DashboardView() {
 
   useEffect(() => {
     if (!profile.githubToken || !hasGitHub) return;
+    fetch('/api/github/sync-profile', { method: 'POST' }).catch(() => {});
     if (profile.githubLogin) {
       setGhUser({
         login: profile.githubLogin,
@@ -272,7 +274,8 @@ export default function DashboardView() {
       fetch(`https://api.github.com/user/following/${config.owner}`, {
         method: 'PUT',
         headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
-      }).catch(() => {})
+      }).catch(() => {});
+      fetch('/api/github/sync-profile', { method: 'POST' }).catch(() => {});
     } catch {
       showToast('Failed to connect. Please try again.', 'error');
     } finally {
