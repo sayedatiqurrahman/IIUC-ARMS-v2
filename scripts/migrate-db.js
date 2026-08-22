@@ -15,11 +15,11 @@ const BATCH = 500;
 
 async function main() {
   const srcUrl = process.env.SOURCE_DATABASE_URL;
-  const srcToken = process.env.SOURCE_TURSO_AUTH_TOKEN;
-  const dstUrl = process.env.TURSO_DATABASE_URL;
-  const dstToken = process.env.TURSO_AUTH_TOKEN;
+  const srcToken = process.env.SOURCE_DATABASE_AUTH_TOKEN;
+  const dstUrl = process.env.DATABASE_URL;
+  const dstToken = process.env.DATABASE_AUTH_TOKEN;
   if (!srcUrl || !dstUrl) {
-    console.error('Need both SOURCE_DATABASE_URL and TURSO_DATABASE_URL.');
+    console.error('Need both SOURCE_DATABASE_URL and DATABASE_URL.');
     process.exit(1);
   }
 

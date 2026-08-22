@@ -6,15 +6,15 @@
  */
 require('dotenv/config');
 async function main() {
-  if (!process.env.TURSO_DATABASE_URL) {
-    console.log('⚠ No TURSO_DATABASE_URL — skipping (local build only).');
+  if (!process.env.DATABASE_URL) {
+    console.log('⚠ No DATABASE_URL — skipping (local build only).');
     return;
   }
   const { PrismaLibSql } = require('@prisma/adapter-libsql');
   const { PrismaClient } = require('@prisma/client');
   const adapter = new PrismaLibSql({
-    url: process.env.TURSO_DATABASE_URL,
-    authToken: process.env.TURSO_AUTH_TOKEN,
+    url: process.env.DATABASE_URL,
+    authToken: process.env.DATABASE_AUTH_TOKEN,
   });
   const prisma = new PrismaClient({ adapter });
 
