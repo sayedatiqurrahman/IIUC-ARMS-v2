@@ -2,9 +2,15 @@
 
 import Image from 'next/image';
 import { Settings } from './types';
+import { config } from '@/lib/config';
 import StatTip from './StatTip';
 import SystemRoleBadge from './SystemRoleBadge';
 import ContactButton from './ContactButton';
+
+function semesterLabel(id: string) {
+  if (id === 'graduated') return 'Grad';
+  return config.semesters.find(s => s.id === id)?.label || id;
+}
 
 const CODE_TIP = 'Commits to the IIUC-ARMS-v2 source-code repo.';
 const DATA_TIP = 'Files you uploaded to the Academic Files data repo.';
@@ -83,7 +89,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
         {/* Row 2: Dept + Semester + Section + Contact */}
         <div className="flex items-center gap-2 mt-1 ml-[52px]">
           {c.departmentShortName && <span className="text-[0.62rem] text-dark-text3 truncate"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
-          {c.semester && !c.hideSemester && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
+          {c.semester && !c.hideSemester && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{semesterLabel(c.semester)}</span>}
           {c.section && <span className="text-[0.62rem] text-dark-text3"><i className="fas fa-users mr-0.5 text-purple-400"></i>{c.section}</span>}
           <ContactButton c={c} size="md" />
         </div>
@@ -125,7 +131,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
         {/* Dept + Semester + Contact */}
         <div className="flex items-center gap-2 mb-1.5 ml-[46px]">
           {c.departmentShortName && <span className="text-[0.55rem] text-dark-text3 truncate"><i className="fas fa-building mr-0.5 text-teal-400"></i>{c.departmentShortName}</span>}
-          {c.semester && !c.hideSemester && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{c.semester === 'graduated' ? 'Grad' : c.semester}</span>}
+          {c.semester && !c.hideSemester && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-graduation-cap mr-0.5 text-accent"></i>{semesterLabel(c.semester)}</span>}
           {c.section && <span className="text-[0.55rem] text-dark-text3"><i className="fas fa-users mr-0.5 text-purple-400"></i>{c.section}</span>}
           <ContactButton c={c} />
         </div>
