@@ -6,11 +6,48 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 
   const staticPages: MetadataRoute.Sitemap = [
-    { url: siteUrl, lastModified: now, changeFrequency: 'daily', priority: 1.0 },
-    { url: `${siteUrl}/contributors`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${siteUrl}/faculty`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${siteUrl}/routine`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
-    { url: `${siteUrl}/history`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
+    {
+      url: siteUrl,
+      lastModified: now,
+      changeFrequency: 'daily',
+      priority: 1.0,
+    },
+    {
+      url: `${siteUrl}/contributors`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
+      url: `${siteUrl}/faculty`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.7,
+    },
+    {
+      url: `${siteUrl}/notices`,
+      lastModified: now,
+      changeFrequency: 'daily',
+      priority: 0.9,
+    },
+    {
+      url: `${siteUrl}/routine`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.6,
+    },
+    {
+      url: `${siteUrl}/blog`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.7,
+    },
+    {
+      url: `${siteUrl}/history`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.3,
+    },
   ];
 
   return staticPages;

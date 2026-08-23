@@ -3,11 +3,12 @@ import NoticeBoardView from '@/components/notices/NoticeBoard';
 
 export const metadata: Metadata = {
   title: 'Notice Board — IIUC-ARMS',
-  description: 'Academic notices, calendar updates, and bus schedules for IIUC QSIS department.',
+  description: 'IIUC notice board — academic notices, calendar updates, exam schedules, and bus schedules for IIUC QSIS department. Stay updated with IIUC-ARMS.',
+  keywords: ['IIUC notice', 'IIUC academic notice', 'IIUC calendar', 'IIUC exam schedule', 'QSIS notice board', 'IIUC-ARMS'],
   openGraph: {
     title: 'IIUC-ARMS Notice Board',
-    description: 'Academic notices, calendar updates, and bus schedules.',
-    images: [{ url: 'https://iiuc-arms.eu.cc/arms-logo-icon.png', width: 1200, height: 630, alt: 'IIUC-ARMS' }],
+    description: 'Academic notices, calendar updates, and bus schedules for IIUC QSIS department.',
+    images: [{ url: 'https://iiuc-arms.eu.cc/arms-logo-icon.png', width: 1200, height: 630, alt: 'IIUC-ARMS Notice Board' }],
   },
   twitter: { card: 'summary_large_image', images: ['https://iiuc-arms.eu.cc/arms-logo-icon.png'] },
 };
