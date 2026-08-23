@@ -96,8 +96,12 @@ async function main() {
     "isCR" INTEGER NOT NULL DEFAULT 0, "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "isVisible" INTEGER NOT NULL DEFAULT 0
+    "isVisible" INTEGER NOT NULL DEFAULT 0,
+    "claimedBy" TEXT
   )`, 'FacultyMember');
+
+  // Add claimedBy column to existing FacultyMember tables
+  await safeExec(`ALTER TABLE "FacultyMember" ADD COLUMN "claimedBy" TEXT`, 'FacultyMember_claimedBy');
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "Course" (
     "id" TEXT NOT NULL PRIMARY KEY, "department" TEXT NOT NULL,
