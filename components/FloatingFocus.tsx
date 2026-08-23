@@ -221,6 +221,7 @@ export default function FloatingFocus() {
       } else if (cmd === 'close') {
         t.running = false;
         t.lastTick = 0;
+        t.done = false;
       }
 
       writeTodos(current);
@@ -309,9 +310,7 @@ export default function FloatingFocus() {
               <span className={`text-xs font-bold tabular-nums ${isActive ? 'text-green-400' : 'text-amber-400'}`}>
                 {fmt(display.remaining)}
               </span>
-              <span className={`text-[0.5rem] font-bold uppercase tracking-wider ${isActive ? 'text-green-400' : 'text-amber-400'}`}>
-                {isActive ? 'Focus' : 'Done'}
-              </span>
+              <i className={`fas ${isActive ? 'fa-bolt text-green-400' : 'fa-check text-amber-400'} text-[0.5rem]`}></i>
             </div>
             <div className="mt-0.5 h-[2px] w-full bg-dark-border rounded-full overflow-hidden">
               <div className={`h-full rounded-full transition-all duration-1000 ${isActive ? 'bg-green-500/60' : 'bg-amber-400/60'}`} style={{ width: `${Math.min(100, progress)}%` }} />
@@ -325,25 +324,26 @@ export default function FloatingFocus() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between text-[0.6rem] text-dark-text3 px-1">
-              <span>{fmt(display.duration - display.remaining)} elapsed</span>
-              <span>{fmt(display.duration)} total</span>
+              <span title="Elapsed">{fmt(display.duration - display.remaining)}</span>
+              <span title="Total">{fmt(display.duration)}</span>
             </div>
 
             <div className="flex gap-2">
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => sendCommand('play')}
-                className="flex-1 h-9 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.7rem] font-semibold cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1.5"
+                title={isActive ? 'Pause' : 'Resume'}
+                className="flex-1 h-9 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.8rem] cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center"
               >
-                <i className={`fas ${isActive ? 'fa-pause' : 'fa-play'} text-[0.6rem]`}></i>
-                {isActive ? 'Pause' : 'Resume'}
+                <i className={`fas ${isActive ? 'fa-pause' : 'fa-play'}`}></i>
               </button>
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => sendCommand('+5')}
-                className="h-9 px-3 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.7rem] font-semibold cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1"
+                title="Add 5 minutes"
+                className="h-9 px-3 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text text-[0.8rem] cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center"
               >
-                <i className="fas fa-plus text-[0.55rem]"></i> 5m
+                <i className="fas fa-plus"></i>
               </button>
             </div>
 
@@ -351,16 +351,18 @@ export default function FloatingFocus() {
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => sendCommand('reset')}
-                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.65rem] font-medium cursor-pointer hover:border-amber-500 hover:text-amber-400 transition flex items-center justify-center gap-1.5"
+                title="Reset"
+                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.7rem] cursor-pointer hover:border-amber-500 hover:text-amber-400 transition flex items-center justify-center"
               >
-                <i className="fas fa-rotate-left text-[0.55rem]"></i> Reset
+                <i className="fas fa-rotate-left"></i>
               </button>
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => sendCommand('done')}
-                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.65rem] font-medium cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center gap-1.5"
+                title="Done"
+                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.7rem] cursor-pointer hover:border-green-500 hover:text-green-400 transition flex items-center justify-center"
               >
-                <i className="fas fa-check text-[0.55rem]"></i> Done
+                <i className="fas fa-check"></i>
               </button>
             </div>
 
@@ -368,17 +370,18 @@ export default function FloatingFocus() {
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={resetPosition}
-                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.65rem] font-medium cursor-pointer hover:border-blue-500 hover:text-blue-400 transition flex items-center justify-center gap-1.5"
-                title="Reset position"
+                title="Reposition"
+                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.7rem] cursor-pointer hover:border-blue-500 hover:text-blue-400 transition flex items-center justify-center"
               >
-                <i className="fas fa-crosshairs text-[0.55rem]"></i> Reposition
+                <i className="fas fa-crosshairs"></i>
               </button>
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => sendCommand('close')}
-                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.65rem] font-medium cursor-pointer hover:border-rose-500 hover:text-rose-400 transition flex items-center justify-center gap-1.5"
+                title="Hide"
+                className="flex-1 h-8 rounded-xl border border-dark-border bg-dark-bg3 text-dark-text2 text-[0.7rem] cursor-pointer hover:border-rose-500 hover:text-rose-400 transition flex items-center justify-center"
               >
-                <i className="fas fa-times text-[0.55rem]"></i> Hide
+                <i className="fas fa-times"></i>
               </button>
             </div>
           </div>
