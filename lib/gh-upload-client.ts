@@ -605,7 +605,7 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
       let content = '';
 
       if (f.file) {
-        if (fileBytes > GITHUB_MAX_BYTES && fileBytes <= LFS_MAX_BYTES) {
+        if (fileBytes > LFS_THRESHOLD_BYTES && fileBytes <= LFS_MAX_BYTES) {
           // ── Large file: upload via Git LFS ────────────────────────────────
           await assertPdfIntact(f.file);
           const mb = (fileBytes / 1024 / 1024).toFixed(0);
