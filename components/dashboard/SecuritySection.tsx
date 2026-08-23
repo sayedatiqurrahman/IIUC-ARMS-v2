@@ -57,11 +57,15 @@ export default function SecuritySection({
       setPasswordLoading(true);
       try {
         await setInitialPassword('', newPassword);
-        setPasswordMsg('Password set successfully! You can now sign in with email and password.');
+        setPasswordMsg('Password set successfully!');
         setPasswordMode('none');
         setNewPassword('');
         setConfirmPassword('');
         setHasPassword(true);
+        setTimeout(() => {
+          setTotpSetupMode(true);
+          handleTotpSetup();
+        }, 500);
       } catch (e: any) {
         setPasswordErr(e.message || 'Failed to set password');
       } finally {

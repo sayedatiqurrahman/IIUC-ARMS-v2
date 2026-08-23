@@ -159,15 +159,31 @@ export async function reauthenticateAndSetPassword(currentPassword: string, newP
 }
 
 export async function hasPasswordProvider(): Promise<boolean> {
-  const user = getFirebaseAuth().currentUser;
-  if (!user) return false;
-  await user.reload();
-  return user.providerData.some(p => p.providerId === 'password');
+  try {
+    const user = await waitForCurrentUser(3000);
+    await user.reload();
+    return user.providerData.some(p => p.providerId === 'password');
+  } catch {
+    return false;
+  }
+}
+
+function waitForCurrentUser(timeoutMs = 5000): Promise<User> {
+  return new Promise((resolve, reject) => {
+    const auth = getFirebaseAuth();
+    const user = auth.currentUser;
+    if (user) return resolve(user);
+    const unsub = auth.onAuthStateChanged((u) => {
+      unsub();
+      if (u) resolve(u);
+      else reject(new Error('Not logged in'));
+    });
+    setTimeout(() => { unsub(); reject(new Error('Not logged in')); }, timeoutMs);
+  });
 }
 
 export async function setInitialPassword(email: string, newPassword: string) {
-  const user = getFirebaseAuth().currentUser;
-  if (!user) throw new Error('Not logged in');
+  const user = await waitForCurrentUser();
   const { updatePassword } = await import('firebase/auth');
   await updatePassword(user, newPassword);
 }
