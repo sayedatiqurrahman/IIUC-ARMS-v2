@@ -8,6 +8,8 @@ export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
   try {
+    const email = await getUserEmail(req);
+    if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { prisma } = await import('@/lib/prisma');
     const dept = req.nextUrl.searchParams.get('department');
     const where: any = {};

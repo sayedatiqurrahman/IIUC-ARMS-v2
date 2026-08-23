@@ -16,16 +16,22 @@ export async function GET(req: NextRequest) {
     const userId = email;
     const profile = await withDbRetry(async () => {
       const { prisma } = await import('@/lib/prisma');
-      return prisma.profile.findUnique({ where: { userId } });
+      return prisma.profile.findUnique({
+        where: { userId },
+        select: {
+          userId: true, email: true, name: true, title: true, shortForm: true, image: true,
+          department: true, semester: true, section: true, session: true, batchId: true,
+          universityId: true, whatsapp: true, telegramId: true, isCR: true, isACR: true,
+          facebook: true, twitter: true, linkedin: true, website: true,
+          company: true, companyUrl: true, publicEmail: true, profileType: true,
+          hideWhatsapp: true, hideUniversityId: true, hideSemester: true, hideEmail: true, hideCompany: true,
+          hideFacebook: true, hideTwitter: true, hideLinkedin: true, hideWebsite: true,
+          showInContributors: true, role: true,
+          githubLogin: true, githubAvatar: true, githubInstallationId: true,
+          totpMethods: true, linkedEmails: true, isBanned: true,
+        }
+      });
     });
-
-    if (profile?.githubToken && isEncrypted(profile.githubToken)) {
-      try {
-        profile.githubToken = decrypt(profile.githubToken);
-      } catch {
-        // Failed to decrypt token — leave as-is
-      }
-    }
 
     if (profile) {
       try { (profile as any).totpMethods = JSON.parse(profile.totpMethods as string); } catch { (profile as any).totpMethods = ['email']; }
@@ -96,16 +102,28 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const profile = await withDbRetry(async () => {
+    const saved = await withDbRetry(async () => {
       const { prisma } = await import('@/lib/prisma');
       return prisma.profile.upsert({
         where: { userId },
         update: updateData,
         create: createData as any,
+        select: {
+          userId: true, email: true, name: true, title: true, shortForm: true, image: true,
+          department: true, semester: true, section: true, session: true, batchId: true,
+          universityId: true, whatsapp: true, telegramId: true, isCR: true, isACR: true,
+          facebook: true, twitter: true, linkedin: true, website: true,
+          company: true, companyUrl: true, publicEmail: true, profileType: true,
+          hideWhatsapp: true, hideUniversityId: true, hideSemester: true, hideEmail: true, hideCompany: true,
+          hideFacebook: true, hideTwitter: true, hideLinkedin: true, hideWebsite: true,
+          showInContributors: true, role: true,
+          githubLogin: true, githubAvatar: true, githubInstallationId: true,
+          totpMethods: true, linkedEmails: true, isBanned: true,
+        }
       });
     });
 
-    return NextResponse.json(profile);
+    return NextResponse.json(saved);
   } catch (err: any) {
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
   }

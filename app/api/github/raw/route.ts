@@ -115,8 +115,9 @@ export async function GET(req: NextRequest) {
     headers: {
       'Content-Type': ct,
       'Content-Length': String(buf.byteLength),
-      'Content-Disposition': `inline; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fname)}`,
+      'Content-Disposition': ext === 'svg' ? `attachment; filename="${asciiName}"` : `inline; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fname)}`,
       'Cache-Control': 'public, max-age=300, s-maxage=300',
+      ...(ext === 'svg' ? { 'X-Content-Type-Options': 'nosniff' } : {}),
     },
   });
 }
