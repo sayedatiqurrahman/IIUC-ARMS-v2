@@ -14,8 +14,16 @@ export async function GET(req: NextRequest) {
     const search = url.searchParams.get('search') || '';
     const memberType = url.searchParams.get('memberType') || url.searchParams.get('role');
     const title = url.searchParams.get('title') || '';
+    const myClaim = url.searchParams.get('myClaim');
 
     const { prisma } = await import('@/lib/prisma');
+
+    if (myClaim) {
+      const email = await getUserEmail(req);
+      if (!email) return NextResponse.json({ members: [] });
+      const claimed = await prisma.facultyMember.findFirst({ where: { claimedBy: email } });
+      return NextResponse.json({ members: claimed ? [claimed] : [] });
+    }
 
     const where: any = {};
     if (department) {
@@ -113,7 +121,7 @@ export async function PUT(req: NextRequest) {
     const target = await prisma.facultyMember.findUnique({ where: { id } });
     if (!target) return NextResponse.json({ error: 'Faculty member not found' }, { status: 404 });
 
-    if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, target.department))) {
+    if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, target.department)) && target.claimedBy !== callerEmail) {
       return NextResponse.json({ error: 'You do not have permission to edit this faculty member' }, { status: 403 });
     }
 
