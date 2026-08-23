@@ -342,4 +342,4 @@ If you discover a vulnerability, please report it responsibly. Never commit secr
 Developed with ❤ by **[Sayed Atiqur Rahman](https://atiq.is-a.dev)** — QSIS, IIUC
 
 ## Presented by
-**Programming Light**
+**[Programming Light](https://programming-light.eu.cc/)**
