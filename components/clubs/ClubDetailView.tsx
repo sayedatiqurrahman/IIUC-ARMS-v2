@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { useUserAccess } from '@/lib/useUserAccess';
 import Link from 'next/link';
-import { CLUB_ROLES, getRoleGroupMembers } from '@/lib/club-data';
-import type { ClubDataMember } from '@/lib/club-data';
+import { CLUB_ROLES, getRoleGroupMembers } from '@/lib/club-roles';
+import type { ClubDataMember } from '@/lib/club-roles';
 import { downloadCertPDF, generateBulkCertPDF } from '@/lib/club-cert-pdf';
 import type { CertPDFData } from '@/lib/club-cert-pdf';
 
