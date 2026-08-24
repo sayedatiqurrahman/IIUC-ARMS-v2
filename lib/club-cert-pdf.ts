@@ -12,6 +12,7 @@ export interface CertPDFData {
   servicePeriod?: string;
   clubName: string;
   clubLogoUrl?: string;
+  iiucLogoUrl?: string;
   issuedBy: string;
   issuedAt: string;
   siteUrl?: string;
@@ -84,7 +85,7 @@ function drawBorder(pdf: any, t: CertTheme) {
   }
 }
 
-function drawHeader(pdf: any, t: CertTheme, departmentName: string, clubName: string) {
+function drawHeader(pdf: any, t: CertTheme, departmentName: string, clubName: string, logos: { iiuc?: string; club?: string }) {
   const cx = PAGE_W / 2;
 
   if (t.header.style === 'banner' || t.header.style === 'regal') {
@@ -103,6 +104,14 @@ function drawHeader(pdf: any, t: CertTheme, departmentName: string, clubName: st
     }
 
     const uniY = t.header.style === 'regal' ? 27 : 24;
+
+    if (logos.iiuc) {
+      try { pdf.addImage(logos.iiuc, 'PNG', 18, 15.5, 14, 14); } catch {}
+    }
+    if (logos.club) {
+      try { pdf.addImage(logos.club, 'PNG', PAGE_W - 32, 15.5, 14, 14); } catch {}
+    }
+
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(13);
     pdf.setTextColor(...t.colors.headerText);
@@ -125,6 +134,13 @@ function drawHeader(pdf: any, t: CertTheme, departmentName: string, clubName: st
       pdf.text('Chittagong, Bangladesh', cx, uniY + 11, { align: 'center' });
     }
   } else {
+    if (logos.iiuc) {
+      try { pdf.addImage(logos.iiuc, 'PNG', 18, 13, 14, 14); } catch {}
+    }
+    if (logos.club) {
+      try { pdf.addImage(logos.club, 'PNG', PAGE_W - 32, 13, 14, 14); } catch {}
+    }
+
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(13);
     pdf.setTextColor(...t.colors.primary);
@@ -396,6 +412,21 @@ function drawStampArea(pdf: any, t: CertTheme) {
   pdf.text('Official Seal', 35, PAGE_H - 24, { align: 'center' });
 }
 
+async function loadImageAsDataUrl(url: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return undefined;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 async function renderCertificate(pdf: any, data: CertPDFData, isFirstPage: boolean) {
   if (!isFirstPage) pdf.addPage();
 
@@ -404,8 +435,18 @@ async function renderCertificate(pdf: any, data: CertPDFData, isFirstPage: boole
   pdf.setFillColor(...t.colors.background);
   pdf.rect(0, 0, PAGE_W, PAGE_H, 'F');
 
+  const logoUrls: { iiuc?: string; club?: string } = {};
+  const fetches: Promise<void>[] = [];
+  if (data.iiucLogoUrl) {
+    fetches.push(loadImageAsDataUrl(data.iiucLogoUrl).then(u => { if (u) logoUrls.iiuc = u; }));
+  }
+  if (data.clubLogoUrl) {
+    fetches.push(loadImageAsDataUrl(data.clubLogoUrl).then(u => { if (u) logoUrls.club = u; }));
+  }
+  if (fetches.length > 0) await Promise.all(fetches);
+
   drawBorder(pdf, t);
-  drawHeader(pdf, t, data.department, data.clubName);
+  drawHeader(pdf, t, data.department, data.clubName, logoUrls);
   drawTitle(pdf, t);
   drawBody(pdf, t, data);
   drawSignatures(pdf, t, data.signatories || []);

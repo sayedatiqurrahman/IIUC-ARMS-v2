@@ -45,6 +45,10 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
         setClub(clubData.club);
         if (themesData.themes) setThemes(themesData.themes);
 
+        if (clubData.club?.department) {
+          setRows(prev => prev.map((r, idx) => idx === 0 && !r.department ? { ...r, department: clubData.club.department } : r));
+        }
+
         try {
           const themeRes = await fetch(`/api/clubs/${p.slug}/theme`);
           const themeData = await themeRes.json();
@@ -60,7 +64,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
   }
 
   function addRow() {
-    setRows(prev => [...prev, { memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '' }]);
+    setRows(prev => [...prev, { memberName: '', universityId: '', department: club?.department || '', session: '', post: '', eventName: '', servicePeriod: '' }]);
   }
 
   function removeRow(i: number) {
@@ -128,6 +132,8 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
       eventName: cert.eventName || '',
       servicePeriod: cert.servicePeriod || '',
       clubName: club?.name || slug,
+      clubLogoUrl: club?.logoUrl || undefined,
+      iiucLogoUrl: '/iiuc-logo.png',
       issuedBy: club?.name || slug,
       issuedAt: cert.issuedAt || new Date().toISOString(),
       signatories: signatories.filter(s => s.name.trim()),

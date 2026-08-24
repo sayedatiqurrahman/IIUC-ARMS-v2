@@ -323,12 +323,14 @@ model Club {
 }
 
 model ClubMember {
-  id         String   @id @default(cuid())
-  clubId     String
-  userId     String
-  role       String   @default("member") // gs, ags, ogs, office_secretary, member
-  assignedBy String?
-  createdAt  DateTime @default(now())
+  id                   String   @id @default(cuid())
+  clubId               String
+  userId               String
+  role                 String   @default("member") // gs, ags, ogs, office_secretary, member
+  assignedBy           String?
+  previousRole         String?  // e.g. "gs" — the role they held before being replaced
+  previousRoleSession  String?  // e.g. "Autumn 2023" — session during which they held the previous role
+  createdAt            DateTime @default(now())
 
   club       Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
 

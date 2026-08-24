@@ -4,6 +4,8 @@ import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { config } from '@/lib/config';
 import { hasPermission } from '@/lib/permissions';
 
+const SINGLETON_ROLES = ['president', 'vice_president', 'advisor', 'gs', 'ags', 'ogs', 'treasurer', 'finance', 'it_media', 'cultural', 'publication', 'office_secretary'];
+
 async function getClubAndRole(email: string, slug: string) {
   const { prisma } = await import('@/lib/prisma');
   const club = await prisma.club.findUnique({ where: { slug } });
@@ -73,6 +75,70 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     return NextResponse.json({ success: true, member });
   } catch {
     return NextResponse.json({ error: 'Failed to add member' }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  const rl = rateLimit(req, RATE_LIMITS.faculty);
+  if (!rl.success) return rl.response!;
+  try {
+    const email = await getUserEmail(req);
+    if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { slug } = await params;
+    const { club, memberRole, isAdmin, isManager, hasPerm } = await getClubAndRole(email, slug);
+    if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+
+    const canManage = isAdmin || isManager || hasPerm || memberRole === 'gs';
+    if (!canManage) {
+      return NextResponse.json({ error: 'Not authorized to change roles' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { userId, role: newRole, session } = body;
+    if (!userId || !newRole) return NextResponse.json({ error: 'userId and role required' }, { status: 400 });
+
+    const allValidRoles = [...SINGLETON_ROLES, 'member'];
+    if (!allValidRoles.includes(newRole)) {
+      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+    }
+
+    const isOfficerRole = SINGLETON_ROLES.includes(newRole);
+    const canAssignOfficer = isAdmin || isManager || hasPerm || memberRole === 'gs';
+    if (isOfficerRole && !canAssignOfficer) {
+      return NextResponse.json({ error: 'Only GS, admin, or manager can assign officer roles' }, { status: 403 });
+    }
+
+    const { prisma } = await import('@/lib/prisma');
+
+    const sessionLabel = session || `Session ${new Date().getFullYear()}`;
+
+    if (SINGLETON_ROLES.includes(newRole)) {
+      const existing = await prisma.clubMember.findFirst({
+        where: { clubId: club.id, role: newRole, NOT: { userId } },
+      });
+      if (existing) {
+        await prisma.clubMember.update({
+          where: { id: existing.id },
+          data: {
+            role: 'member',
+            previousRole: newRole,
+            previousRoleSession: sessionLabel,
+            assignedBy: email,
+          },
+        });
+      }
+    }
+
+    const member = await prisma.clubMember.upsert({
+      where: { clubId_userId: { clubId: club.id, userId } },
+      update: { role: newRole, assignedBy: email },
+      create: { clubId: club.id, userId, role: newRole, assignedBy: email },
+    });
+
+    return NextResponse.json({ success: true, member });
+  } catch {
+    return NextResponse.json({ error: 'Failed to update role' }, { status: 500 });
   }
 }
 

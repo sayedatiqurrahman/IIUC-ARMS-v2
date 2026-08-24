@@ -73,6 +73,12 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   const [certSearch, setCertSearch] = useState('');
   const [certResults, setCertResults] = useState<any[]>([]);
 
+  const [logoUploading, setLogoUploading] = useState(false);
+
+  const [editingMember, setEditingMember] = useState<string | null>(null);
+  const [editRole, setEditRole] = useState('');
+  const [editSession, setEditSession] = useState('');
+
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [claimRole, setClaimRole] = useState('member');
   const [claimMsg, setClaimMsg] = useState('');
@@ -162,6 +168,55 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
       a.remove();
       URL.revokeObjectURL(url);
     } catch {}
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('Please select an image file'); return; }
+    if (file.size > 5 * 1024 * 1024) { alert('Image must be under 5MB'); return; }
+    setLogoUploading(true);
+    try {
+      const reader = new FileReader();
+      const dataUri = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`/api/clubs/${slug}/logo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUri }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setClub((prev: any) => ({ ...prev, logoUrl: data.logoUrl }));
+      } else {
+        alert(data.error || 'Failed to upload logo');
+      }
+    } catch { alert('Network error'); }
+    setLogoUploading(false);
+    e.target.value = '';
+  }
+
+  async function handleChangeRole() {
+    if (!editingMember || !editRole) return;
+    try {
+      const res = await fetch(`/api/clubs/${slug}/members`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: editingMember, role: editRole, session: editSession.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingMember(null);
+        setEditRole('');
+        setEditSession('');
+        loadClub(slug);
+      } else {
+        alert(data.error || 'Failed');
+      }
+    } catch { alert('Network error'); }
   }
 
   async function handleAddEvent() {
@@ -484,13 +539,24 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                     <span className={`inline-flex items-center gap-1 text-[0.62rem] px-2 py-0.5 rounded-full border font-semibold mt-0.5 ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
                                       <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {ri?.label || m.role}
                                     </span>
+                                    {m.previousRole && (
+                                      <p className="text-[0.58rem] text-dark-text3 mt-0.5">
+                                        <i className="fas fa-history mr-0.5"></i>Ex {CLUB_ROLES[m.previousRole]?.label || m.previousRole} {m.previousRoleSession ? `(${m.previousRoleSession})` : ''}
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
                                 {canManage && m.userId !== profile.email && (
-                                  <button onClick={() => handleRemoveMember(m.userId)} title="Remove member"
-                                    className="text-red-400 hover:text-red-300 text-xs p-1 shrink-0">
-                                    <i className="fas fa-user-minus"></i>
-                                  </button>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button onClick={() => { setEditingMember(m.userId); setEditRole(m.role); setEditSession(''); }}
+                                      title="Change role" className="text-qsis hover:text-qsis/80 text-xs p-1">
+                                      <i className="fas fa-pen"></i>
+                                    </button>
+                                    <button onClick={() => handleRemoveMember(m.userId)} title="Remove member"
+                                      className="text-red-400 hover:text-red-300 text-xs p-1">
+                                      <i className="fas fa-user-minus"></i>
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             );
@@ -688,6 +754,26 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {section === 'settings' && (
               <div className="max-w-2xl space-y-4">
                 <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5">
+                  <h3 className="text-sm font-bold text-dark-text mb-4"><i className="fas fa-camera text-qsis mr-1"></i> Club Logo</h3>
+                  <div className="flex items-center gap-4">
+                    {club.logoUrl ? (
+                      <img src={club.logoUrl} alt={club.name} className="w-20 h-20 rounded-xl object-cover border-2 border-dark-border" />
+                    ) : (
+                      <div className="w-20 h-20 rounded-xl bg-qsis/20 flex items-center justify-center">
+                        <i className="fas fa-users text-qsis text-2xl"></i>
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-xs text-dark-text2 mb-2">Upload a club logo (PNG/JPG, max 5MB). This will appear on certificates.</p>
+                      <label className="inline-flex items-center gap-2 px-4 py-2 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition cursor-pointer">
+                        {logoUploading ? <><i className="fas fa-spinner fa-spin"></i> Uploading...</> : <><i className="fas fa-upload mr-1"></i> Choose Logo</>}
+                        <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" disabled={logoUploading} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-dark-bg2 border border-dark-border rounded-xl p-5">
                   <h3 className="text-sm font-bold text-dark-text mb-4"><i className="fas fa-info-circle text-qsis mr-1"></i> Basic Info</h3>
                   <div className="space-y-3">
                     <div>
@@ -831,6 +917,40 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
               <button onClick={handleSubmitClaim} disabled={submittingClaim}
                 className="flex-1 px-3 py-2 rounded-lg bg-qsis text-white text-sm font-semibold disabled:opacity-50 hover:opacity-90 transition">
                 {submittingClaim ? <i className="fas fa-spinner fa-spin"></i> : 'Submit Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingMember && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setEditingMember(null)}>
+          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-dark-text mb-4"><i className="fas fa-user-edit text-qsis mr-2"></i>Change Role</h3>
+            <p className="text-xs text-dark-text2 mb-3">
+              <i className="fas fa-info-circle mr-1"></i>If this role is already held by someone else, they will be automatically demoted to Member with an &ldquo;Ex {CLUB_ROLES[editRole]?.label || editRole}&rdquo; badge.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-dark-text2 font-semibold mb-1 block">New Role</label>
+                <select value={editRole} onChange={e => setEditRole(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis">
+                  {SORTED_ROLES.map(([key, r]) => <option key={key} value={key}>{r.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-dark-text2 font-semibold mb-1 block">Session (for Ex-role badge)</label>
+                <input type="text" value={editSession} onChange={e => setEditSession(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis"
+                  placeholder="e.g. Autumn 2023 (optional)" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setEditingMember(null)}
+                className="flex-1 px-3 py-2 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-white/5 transition">Cancel</button>
+              <button onClick={handleChangeRole}
+                className="flex-1 px-3 py-2 rounded-lg bg-qsis text-white text-sm font-semibold hover:opacity-90 transition">
+                Update Role
               </button>
             </div>
           </div>

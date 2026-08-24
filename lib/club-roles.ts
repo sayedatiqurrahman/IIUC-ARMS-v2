@@ -6,6 +6,8 @@ export interface ClubDataMember {
   session?: string;
   joinedAt: string;
   assignedBy?: string;
+  previousRole?: string;
+  previousRoleSession?: string;
 }
 
 export const CLUB_ROLES: Record<string, { label: string; group: string; color: string; icon: string; order: number }> = {
