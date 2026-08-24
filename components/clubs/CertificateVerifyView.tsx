@@ -112,10 +112,30 @@ export default function CertificateVerifyView({ params }: { params: Promise<{ ce
                 <span className="text-dark-text2">Event</span>
                 <span className="text-dark-text">{cert.eventName}</span>
               </div>}
+              {cert.servicePeriod && <div className="flex justify-between text-sm">
+                <span className="text-dark-text2">Service Period</span>
+                <span className="text-dark-text">{cert.servicePeriod}</span>
+              </div>}
               <div className="flex justify-between text-sm">
                 <span className="text-dark-text2">Issued</span>
                 <span className="text-dark-text">{new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
               </div>
+              {Array.isArray(cert.signatories) && cert.signatories.length > 0 && (
+                <div className="border-t border-dark-border pt-3 mt-3">
+                  <p className="text-[0.7rem] text-dark-text3 mb-2 font-semibold">SIGNATORIES</p>
+                  <div className="space-y-2">
+                    {cert.signatories.map((sig: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <div className="w-1 h-1 rounded-full bg-qsis"></div>
+                        <span className="text-dark-text font-semibold">{sig.name}</span>
+                        <span className="text-dark-text3">—</span>
+                        <span className="text-dark-text2">{sig.title}</span>
+                        {sig.designation && <span className="text-dark-text3">({sig.designation})</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-dark-text2">Issued By</span>
                 <span className="text-dark-text">{cert.issuedBy}</span>

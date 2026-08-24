@@ -365,6 +365,8 @@ model ClubCertificate {
   session       String?
   post          String?
   eventName     String?
+  servicePeriod String?
+  signatories   String?  // JSON: [{name, designation, title}]
   issuedBy      String
   issuedAt      DateTime @default(now())
 

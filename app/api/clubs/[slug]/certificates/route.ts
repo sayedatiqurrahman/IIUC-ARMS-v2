@@ -75,7 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
 
     const created = [];
     for (const cert of certificates) {
-      const { memberName, universityId, department, session, post, eventName } = cert;
+      const { memberName, universityId, department, session, post, eventName, servicePeriod, signatories } = cert;
       if (!memberName?.trim() || !universityId?.trim() || !department?.trim()) continue;
       const certificateId = generateCertId();
       const c = await prisma.clubCertificate.create({
@@ -89,6 +89,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
           session: session || null,
           post: post || null,
           eventName: eventName || null,
+          servicePeriod: servicePeriod || null,
+          signatories: signatories ? JSON.stringify(signatories) : null,
           issuedBy: email,
         },
       });

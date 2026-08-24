@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { downloadCertPDF, generateBulkCertPDF, CertPDFData } from '@/lib/club-cert-pdf';
+import { CertSignatory, CertTheme, DEFAULT_THEME, THEME_PRESETS } from '@/lib/cert-theme';
 
 interface CertRow {
   memberName: string;
@@ -11,31 +12,45 @@ interface CertRow {
   session: string;
   post: string;
   eventName: string;
+  servicePeriod: string;
 }
+
+const defaultSignatories: CertSignatory[] = [
+  { name: '', designation: '', title: 'President' },
+  { name: '', designation: '', title: 'Faculty Advisor' },
+  { name: '', designation: '', title: 'Chairman' },
+];
 
 export default function IssueCertView({ params }: { params: Promise<{ slug: string }> }) {
   const [slug, setSlug] = useState('');
   const [club, setClub] = useState<any>(null);
-  const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<CertRow[]>([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '' }]);
+  const [rows, setRows] = useState<CertRow[]>([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '' }]);
+  const [signatories, setSignatories] = useState<CertSignatory[]>(defaultSignatories);
+  const [themes, setThemes] = useState<CertTheme[]>(THEME_PRESETS);
+  const [selectedTheme, setSelectedTheme] = useState<CertTheme>(DEFAULT_THEME);
   const [issuing, setIssuing] = useState(false);
   const [issued, setIssued] = useState<any[]>([]);
-  const [qrUrls, setQrUrls] = useState<Record<string, string>>({});
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   useEffect(() => {
     params.then(async p => {
       setSlug(p.slug);
       try {
-        const [clubRes, eventsRes] = await Promise.all([
+        const [clubRes, themesRes] = await Promise.all([
           fetch(`/api/clubs/${p.slug}`),
-          fetch(`/api/clubs/${p.slug}/events`),
+          fetch('/api/clubs/themes'),
         ]);
         const clubData = await clubRes.json();
-        const eventsData = await eventsRes.json();
+        const themesData = await themesRes.json();
         setClub(clubData.club);
-        setEvents(eventsData.events || []);
+        if (themesData.themes) setThemes(themesData.themes);
+
+        try {
+          const themeRes = await fetch(`/api/clubs/${p.slug}/theme`);
+          const themeData = await themeRes.json();
+          if (themeData.theme) setSelectedTheme(themeData.theme);
+        } catch {}
       } catch {}
       setLoading(false);
     });
@@ -46,7 +61,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
   }
 
   function addRow() {
-    setRows(prev => [...prev, { memberName: '', universityId: '', department: '', session: '', post: '', eventName: '' }]);
+    setRows(prev => [...prev, { memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '' }]);
   }
 
   function removeRow(i: number) {
@@ -54,14 +69,33 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
     setRows(prev => prev.filter((_, idx) => idx !== i));
   }
 
+  function updateSignatory(i: number, field: keyof CertSignatory, value: string) {
+    setSignatories(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s));
+  }
+
+  function addSignatory() {
+    setSignatories(prev => [...prev, { name: '', designation: '', title: '' }]);
+  }
+
+  function removeSignatory(i: number) {
+    if (signatories.length <= 1) return;
+    setSignatories(prev => prev.filter((_, idx) => idx !== i));
+  }
+
   async function handleIssue() {
     const valid = rows.filter(r => r.memberName.trim() && r.universityId.trim() && r.department.trim());
     if (valid.length === 0) return;
     setIssuing(true);
     try {
+      const cleanedSigs = signatories.filter(s => s.name.trim());
       const res = await fetch(`/api/clubs/${slug}/certificates`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ certificates: valid }),
+        body: JSON.stringify({
+          certificates: valid.map(r => ({
+            ...r,
+            signatories: cleanedSigs.length > 0 ? cleanedSigs : undefined,
+          })),
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -74,13 +108,15 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
           );
         }
         setQrUrls(urls);
-        setRows([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '' }]);
+        setRows([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '' }]);
       } else {
         alert(data.error || 'Failed to issue');
       }
     } catch { alert('Network error'); }
     setIssuing(false);
   }
+
+  const [qrUrls, setQrUrls] = useState<Record<string, string>>({});
 
   function toCertPDFData(cert: any): CertPDFData {
     return {
@@ -91,9 +127,12 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
       session: cert.session || '',
       post: cert.post || '',
       eventName: cert.eventName || '',
+      servicePeriod: cert.servicePeriod || '',
       clubName: club?.name || slug,
       issuedBy: club?.name || slug,
       issuedAt: cert.issuedAt || new Date().toISOString(),
+      signatories: signatories.filter(s => s.name.trim()),
+      theme: selectedTheme,
     };
   }
 
@@ -102,7 +141,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
     setGeneratingPdf(true);
     try {
       await generateBulkCertPDF(issued.map(toCertPDFData));
-    } catch (e) { alert('PDF generation failed'); }
+    } catch { alert('PDF generation failed'); }
     setGeneratingPdf(false);
   }
 
@@ -124,13 +163,71 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
         </div>
 
         {issued.length === 0 ? (
-          <div>
+          <div className="space-y-4">
+            <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
+              <h3 className="text-sm font-bold text-dark-text mb-3"><i className="fas fa-palette text-qsis mr-2"></i>Certificate Theme</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {themes.map(theme => (
+                  <button key={theme.name} onClick={() => setSelectedTheme(theme)}
+                    className={`p-3 rounded-xl border text-left transition-all text-xs ${
+                      selectedTheme.name === theme.name
+                        ? 'border-qsis bg-qsis/10 text-qsis'
+                        : 'border-dark-border bg-dark-bg text-dark-text2 hover:border-qsis/40'
+                    }`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: `rgb(${theme.colors.primary.join(',')})` }}></div>
+                      <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: `rgb(${theme.colors.secondary.join(',')})` }}></div>
+                      <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: `rgb(${theme.colors.background.join(',')})` }}></div>
+                    </div>
+                    <span className="font-semibold block">{theme.displayName}</span>
+                    {theme.publishedBy && theme.publishedBy !== 'system' && (
+                      <span className="text-[0.6rem] text-dark-text3">by {theme.publishedBy}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-dark-text"><i className="fas fa-signature text-qsis mr-2"></i>Signatories</h3>
+                <button onClick={addSignatory} className="text-qsis text-xs font-semibold hover:underline"><i className="fas fa-plus mr-1"></i>Add</button>
+              </div>
+              <div className="space-y-3">
+                {signatories.map((sig, i) => (
+                  <div key={i} className="bg-dark-bg border border-dark-border rounded-xl p-3 flex items-start gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-1">
+                      <div>
+                        <label className="text-[0.65rem] text-dark-text2 mb-1 block">Name</label>
+                        <input type="text" value={sig.name} onChange={e => updateSignatory(i, 'name', e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-xs outline-none focus:border-qsis"
+                          placeholder="Dr. Mohammed Rahman" />
+                      </div>
+                      <div>
+                        <label className="text-[0.65rem] text-dark-text2 mb-1 block">Title</label>
+                        <input type="text" value={sig.title} onChange={e => updateSignatory(i, 'title', e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-xs outline-none focus:border-qsis"
+                          placeholder="President" />
+                      </div>
+                      <div>
+                        <label className="text-[0.65rem] text-dark-text2 mb-1 block">Designation</label>
+                        <input type="text" value={sig.designation} onChange={e => updateSignatory(i, 'designation', e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-xs outline-none focus:border-qsis"
+                          placeholder="Dept. of CSE, IIUC" />
+                      </div>
+                    </div>
+                    {signatories.length > 1 && (
+                      <button onClick={() => removeSignatory(i)} className="text-red-400 hover:text-red-300 text-xs mt-5"><i className="fas fa-trash"></i></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-bold text-dark-text">Certificate Details</h3>
-                <button onClick={addRow} className="text-qsis text-xs font-semibold hover:underline">
-                  <i className="fas fa-plus mr-1"></i>Add More
-                </button>
+                <h3 className="text-sm font-bold text-dark-text"><i className="fas fa-users text-qsis mr-2"></i>Certificate Recipients</h3>
+                <button onClick={addRow} className="text-qsis text-xs font-semibold hover:underline"><i className="fas fa-plus mr-1"></i>Add More</button>
               </div>
               <div className="space-y-4">
                 {rows.map((row, i) => (
@@ -152,7 +249,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
                         <label className="text-[0.68rem] text-dark-text2 mb-1 block">University ID *</label>
                         <input type="text" value={row.universityId} onChange={e => updateRow(i, 'universityId', e.target.value)}
                           className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis"
-                          placeholder="2024-101-001" />
+                          placeholder="Q233099" />
                       </div>
                       <div>
                         <label className="text-[0.68rem] text-dark-text2 mb-1 block">Department *</label>
@@ -161,19 +258,25 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
                           placeholder="CSE" />
                       </div>
                       <div>
-                        <label className="text-[0.68rem] text-dark-text2 mb-1 block">Session</label>
-                        <input type="text" value={row.session} onChange={e => updateRow(i, 'session', e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis"
-                          placeholder="2022-23" />
-                      </div>
-                      <div>
-                        <label className="text-[0.68rem] text-dark-text2 mb-1 block">Post / Designation</label>
+                        <label className="text-[0.68rem] text-dark-text2 mb-1 block">Post / Role *</label>
                         <input type="text" value={row.post} onChange={e => updateRow(i, 'post', e.target.value)}
                           className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis"
                           placeholder="General Secretary" />
                       </div>
                       <div>
-                        <label className="text-[0.68rem] text-dark-text2 mb-1 block">Event Name</label>
+                        <label className="text-[0.68rem] text-dark-text2 mb-1 block">Service Period</label>
+                        <input type="text" value={row.servicePeriod} onChange={e => updateRow(i, 'servicePeriod', e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis"
+                          placeholder="2024-2025" />
+                      </div>
+                      <div>
+                        <label className="text-[0.68rem] text-dark-text2 mb-1 block">Session</label>
+                        <input type="text" value={row.session} onChange={e => updateRow(i, 'session', e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis"
+                          placeholder="2022-23" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="text-[0.68rem] text-dark-text2 mb-1 block">Event Name (optional)</label>
                         <input type="text" value={row.eventName} onChange={e => updateRow(i, 'eventName', e.target.value)}
                           className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis"
                           placeholder="Programming Contest 2025" />
@@ -223,24 +326,15 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
                         <div><span className="text-dark-text2">UID:</span> <span className="text-dark-text">{cert.universityId}</span></div>
                         <div><span className="text-dark-text2">Dept:</span> <span className="text-dark-text">{cert.department}</span></div>
                         {cert.post && <div><span className="text-dark-text2">Post:</span> <span className="text-qsis">{cert.post}</span></div>}
-                        {cert.eventName && <div className="col-span-2"><span className="text-dark-text2">Event:</span> <span className="text-dark-text">{cert.eventName}</span></div>}
                       </div>
                       <div className="mt-3 flex gap-2 flex-wrap">
                         <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
                           className="px-3 py-1.5 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition no-underline">
-                          <i className="fas fa-external-link-alt mr-1"></i>Verify Link
+                          <i className="fas fa-external-link-alt mr-1"></i>Verify
                         </a>
                         <button onClick={() => downloadCertPDF(toCertPDFData(cert))}
                           className="px-3 py-1.5 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
-                          <i className="fas fa-file-pdf mr-1"></i>Download PDF
-                        </button>
-                        <button onClick={() => {
-                          const link = document.createElement('a');
-                          link.href = qrUrls[cert.certificateId];
-                          link.download = `cert-${cert.certificateId}.png`;
-                          link.click();
-                        }} className="px-3 py-1.5 bg-dark-bg border border-dark-border rounded-lg text-xs font-semibold text-dark-text2 hover:border-qsis transition">
-                          <i className="fas fa-download mr-1"></i>QR Code
+                          <i className="fas fa-file-pdf mr-1"></i>PDF
                         </button>
                       </div>
                     </div>

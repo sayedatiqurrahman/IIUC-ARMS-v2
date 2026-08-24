@@ -22,6 +22,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cer
         session: cert.session,
         post: cert.post,
         eventName: cert.eventName,
+        servicePeriod: cert.servicePeriod,
+        signatories: cert.signatories ? JSON.parse(cert.signatories) : [],
         issuedAt: cert.issuedAt,
         club: cert.club,
         issuedBy: cert.issuedBy,

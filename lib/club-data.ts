@@ -1,4 +1,5 @@
 import { config } from './config';
+import { CertTheme, DEFAULT_THEME } from './cert-theme';
 
 const CLUBS_FOLDER = 'clubs';
 
@@ -253,4 +254,86 @@ export function getRoleGroupMembers(members: ClubDataMember[]): Record<string, C
     });
   }
   return groups;
+}
+
+export async function readClubTheme(slug: string): Promise<CertTheme | null> {
+  return readClubFile<CertTheme>(slug, 'theme/config.json');
+}
+
+export async function writeClubTheme(slug: string, theme: CertTheme): Promise<boolean> {
+  return writeClubFile(slug, 'theme/config.json', theme, `Update club theme: ${slug}`);
+}
+
+const SHARED_THEMES_FOLDER = `${CLUBS_FOLDER}/_themes`;
+
+export async function listPublishedThemes(): Promise<CertTheme[]> {
+  try {
+    const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${SHARED_THEMES_FOLDER}?ref=${config.branch}`;
+    const res = await fetch(url, { headers: headers() });
+    if (!res.ok) return [];
+    const items = await res.json();
+    if (!Array.isArray(items)) return [];
+    const themes: CertTheme[] = [];
+    for (const item of items) {
+      if (item.type !== 'dir') continue;
+      const theme = await readSharedTheme(item.name);
+      if (theme && theme.published) themes.push(theme);
+    }
+    return themes;
+  } catch {
+    return [];
+  }
+}
+
+export async function readSharedTheme(themeName: string): Promise<CertTheme | null> {
+  try {
+    const path = `${SHARED_THEMES_FOLDER}/${themeName}/config.json`;
+    const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}?ref=${config.branch}`;
+    const res = await fetch(url, { headers: headers() });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.content) return null;
+    const decoded = atob(data.content.replace(/\n/g, ''));
+    return JSON.parse(decoded) as CertTheme;
+  } catch {
+    return null;
+  }
+}
+
+export async function publishClubTheme(slug: string, theme: CertTheme): Promise<boolean> {
+  const publishedTheme = { ...theme, published: true, publishedBy: slug };
+  const ok = await writeClubTheme(slug, publishedTheme);
+  if (!ok) return false;
+  const themeName = theme.name || slug;
+  return writeClubFile(`_themes/${themeName}`, 'config.json', publishedTheme, `Publish theme: ${themeName}`);
+}
+
+export async function unpublishClubTheme(slug: string): Promise<boolean> {
+  const theme = await readClubTheme(slug);
+  if (!theme) return false;
+  const updated = { ...theme, published: false };
+  await writeClubTheme(slug, updated);
+  const themeName = theme.name || slug;
+  try {
+    const path = `${SHARED_THEMES_FOLDER}/${themeName}/config.json`;
+    const getUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}?ref=${config.branch}`;
+    const getRes = await fetch(getUrl, { headers: headers() });
+    if (!getRes.ok) return true;
+    const fileData = await getRes.json();
+    const delUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`;
+    await fetch(delUrl, {
+      method: 'DELETE',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `Unpublish theme: ${themeName}`, sha: fileData.sha, branch: config.branch }),
+    });
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export async function getClubEffectiveTheme(slug: string): Promise<CertTheme> {
+  const custom = await readClubTheme(slug);
+  if (custom) return custom;
+  return DEFAULT_THEME;
 }
