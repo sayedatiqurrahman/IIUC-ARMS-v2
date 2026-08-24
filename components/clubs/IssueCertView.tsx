@@ -17,7 +17,6 @@ interface CertRow {
 
 const defaultSignatories: CertSignatory[] = [
   { name: '', designation: '', title: 'President' },
-  { name: '', designation: '', title: 'Faculty Advisor' },
   { name: '', designation: '', title: 'Chairman' },
 ];
 

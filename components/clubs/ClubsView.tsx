@@ -4,22 +4,17 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAppStore } from '@/lib/store';
 import { useUserAccess } from '@/lib/useUserAccess';
+import { FACULTIES } from '@/lib/departments';
+import CustomSelect from '@/components/CustomSelect';
 
-const ROLE_LABELS: Record<string, string> = {
-  gs: 'General Secretary',
-  ags: 'Assistant GS',
-  ogs: 'Office GS',
-  office_secretary: 'Office Secretary',
-  member: 'Member',
-};
-
-const ROLE_COLORS: Record<string, string> = {
-  gs: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  ags: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  ogs: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  office_secretary: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
-  member: 'bg-dark-border/50 text-dark-text2 border-dark-border',
-};
+const deptOptions = FACULTIES.flatMap(f =>
+  f.departments.map(d => ({
+    value: d.name,
+    label: `${d.shortName} — ${d.name}`,
+    icon: d.icon || 'fa-building',
+    group: f.shortName,
+  }))
+);
 
 export default function ClubsView() {
   const profile = useAppStore(s => s.profile);
@@ -36,18 +31,11 @@ export default function ClubsView() {
   const canCreate = access.has('createClub') || profile.role === 'admin' || profile.role === 'manager';
   const isTeacherOnly = profile.role === 'teacher' && !access.has('manageAllClubs');
 
-  const allDepartments = [
-    "Qur'anic Sciences and Islamic Studies", "Da'wah and Islamic Studies", "Science of Hadith and Islamic Studies",
-    'Computer Science and Engineering', 'Computer and Communication Engineering',
-    'Electrical and Electronic Engineering', 'Electronic and Telecommunication Engineering',
-    'Civil Engineering', 'Pharmacy', 'Business Administration',
-    'Department of Finance', 'Department of Management',
-  ];
-  const departments = isTeacherOnly ? allDepartments.filter(d => d.toLowerCase() === (profile.department || '').toLowerCase()) : allDepartments;
+  const filteredDeptOptions = isTeacherOnly
+    ? deptOptions.filter(o => o.value.toLowerCase() === (profile.department || '').toLowerCase())
+    : deptOptions;
 
-  useEffect(() => {
-    fetchClubs();
-  }, []);
+  useEffect(() => { fetchClubs(); }, [filterDept]);
 
   async function fetchClubs() {
     setLoading(true);
@@ -59,8 +47,6 @@ export default function ClubsView() {
     } catch {}
     setLoading(false);
   }
-
-  useEffect(() => { fetchClubs(); }, [filterDept]);
 
   useEffect(() => {
     if (isTeacherOnly && profile.department) {
@@ -92,7 +78,7 @@ export default function ClubsView() {
   return (
     <div className="min-h-screen bg-dark-bg py-8 px-4">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-dark-text flex items-center gap-2">
               <i className="fas fa-users text-qsis"></i> IIUC Department Clubs
@@ -109,22 +95,14 @@ export default function ClubsView() {
           )}
         </div>
 
-        <div className="mb-6 flex flex-wrap gap-2">
-          <button
-            onClick={() => setFilterDept('')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${!filterDept ? 'bg-qsis text-white' : 'bg-dark-bg2 text-dark-text2 border border-dark-border hover:border-qsis'}`}
-          >
-            All Departments
-          </button>
-          {departments.map(d => (
-            <button
-              key={d}
-              onClick={() => setFilterDept(d)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${filterDept === d ? 'bg-qsis text-white' : 'bg-dark-bg2 text-dark-text2 border border-dark-border hover:border-qsis'}`}
-            >
-              {d.length > 25 ? d.substring(0, 25) + '…' : d}
-            </button>
-          ))}
+        <div className="mb-6">
+          <CustomSelect
+            value={filterDept}
+            onChange={setFilterDept}
+            options={filteredDeptOptions}
+            placeholder="All Departments"
+            searchable
+          />
         </div>
 
         {loading ? (
@@ -135,6 +113,11 @@ export default function ClubsView() {
           <div className="text-center py-20 bg-dark-bg2 rounded-2xl border border-dark-border">
             <i className="fas fa-users text-dark-text2 text-4xl mb-4 block"></i>
             <p className="text-dark-text2">No clubs found</p>
+            {filterDept && (
+              <button onClick={() => setFilterDept('')} className="text-qsis text-xs mt-2 hover:underline">
+                <i className="fas fa-times mr-1"></i>Clear filter
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -188,14 +171,13 @@ export default function ClubsView() {
                 </div>
                 <div>
                   <label className="text-xs text-dark-text2 font-semibold mb-1 block">Department *</label>
-                  <select
-                    value={newDept} onChange={e => setNewDept(e.target.value)}
-                    disabled={isTeacherOnly}
-                    className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis disabled:opacity-60"
-                  >
-                    <option value="">Select department</option>
-                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={newDept}
+                    onChange={setNewDept}
+                    options={filteredDeptOptions}
+                    placeholder="Select department..."
+                    searchable
+                  />
                   {isTeacherOnly && (
                     <p className="text-[0.65rem] text-dark-text3 mt-1">Teachers can only create clubs in their own department</p>
                   )}
