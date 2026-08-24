@@ -26,6 +26,11 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   viewExternalUsers: ['admin', 'manager'],
   publishTutorial: ['admin', 'manager', 'teacher'],
   publishBlog: ['admin', 'manager', 'teacher', 'cr'],
+  createClub: ['admin', 'manager', 'teacher'],
+  manageAllClubs: ['admin', 'manager'],
+  manageClubMembers: ['admin', 'manager', 'teacher'],
+  manageClubEvents: ['admin', 'manager', 'teacher'],
+  issueCertificates: ['admin', 'manager', 'teacher'],
 };
 
 export { DEFAULT_PERMISSIONS };

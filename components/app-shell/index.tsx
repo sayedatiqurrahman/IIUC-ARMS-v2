@@ -158,11 +158,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const updateProfile = useAppStore(s => s.updateProfile);
 
   // ─── GitHub connect prompt (shown before opening upload panel when not connected) ───
-  const githubToken = useAppStore(s => s.githubToken);
-  const patToken = githubToken || profile.githubToken || '';
   // "Connected" = any GitHub connection (PAT, GitHub App install, login, or session token).
-  // App-install tokens are ghs_ and may lack a saved installationId, so any marker counts.
-  const isGithubConnected = patToken.startsWith('ghp_') || patToken.startsWith('github_pat_') || !!profile.githubInstallationId || !!profile.githubLogin || !!(session as any)?.accessToken;
+  const isGithubConnected = !!profile.hasGithubToken || !!profile.githubInstallationId || !!profile.githubLogin || !!(session as any)?.accessToken;
   const [patPromptOpen, setPatPromptOpen] = useState(false);
   const [patPromptWarn, setPatPromptWarn] = useState(false);
   const [patInputToken, setPatInputToken] = useState('');
@@ -205,14 +202,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (!patInputToken.trim()) return;
     setPatSaving(true);
     try {
+      const ghRes = await fetch('https://api.github.com/user', {
+        headers: { Authorization: `token ${patInputToken.trim()}`, Accept: 'application/vnd.github.v3+json' },
+      });
+      if (!ghRes.ok) {
+        const { showToast } = await import('@/lib/utils');
+        showToast('Invalid token. Please check and try again.', 'error');
+        setPatSaving(false);
+        return;
+      }
+      const ghUser = await ghRes.json();
       const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ githubToken: patInputToken.trim() }),
+        body: JSON.stringify({ githubLogin: ghUser.login, githubToken: patInputToken.trim(), githubAvatar: ghUser.avatar_url }),
       });
       const data = await res.json();
       if (data.success || res.ok) {
-        useAppStore.getState().setGithubToken(patInputToken.trim());
+        useAppStore.setState(s => ({
+          profile: { ...s.profile, githubLogin: ghUser.login, hasGithubToken: true, githubAvatar: ghUser.avatar_url },
+        }));
         loadProfile();
         setPatPromptOpen(false);
         setUploadOpen(true);
@@ -493,6 +502,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <Link href="/faculty" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
                     <i className="fas fa-chalkboard-teacher w-4 text-center text-green-400"></i><span>Faculty</span>
                   </Link>
+                  <Link href="/clubs" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
+                    <i className="fas fa-users w-4 text-center text-blue-400"></i><span>Clubs</span>
+                  </Link>
                   <Link href="/history" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
                     <i className="fas fa-history w-4 text-center text-orange-400"></i><span>History</span>
                   </Link>
@@ -557,6 +569,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <Link href="/blog" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-pen-nib w-4 text-center text-emerald-400"></i><span>Blog</span></Link>
                     <Link href="/contributors" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-users w-4 text-center"></i><span>Contributors</span></Link>
                     <Link href="/faculty" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-chalkboard-teacher w-4 text-center"></i><span>Faculty</span></Link>
+                    <Link href="/clubs" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-users w-4 text-center text-blue-400"></i><span>Clubs</span></Link>
                     <Link href="/studio" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-tools w-4 text-center"></i><span>Studio</span></Link>
                     <Link href="/settings" onClick={() => setMoreOpen(false)} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[0.8rem] hover:text-qsis hover:bg-white/5 transition-colors"><i className="fas fa-cog w-4 text-center"></i><span>Settings</span></Link>
                     <div className="my-1 h-px bg-dark-border" />
@@ -898,6 +911,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link href="/blog" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-pen-nib mr-2 text-emerald-400"></i>Blog</Link>
                 <Link href="/contributors" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2"></i>Contributors</Link>
                 <Link href="/faculty" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-chalkboard-teacher mr-2"></i>Faculty</Link>
+                <Link href="/clubs" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-users mr-2 text-blue-400"></i>Clubs</Link>
                <Link href="/studio" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-tools mr-2"></i>Studio</Link>
                <Link href="/settings" className="text-[0.8rem] text-dark-text2 hover:text-qsis no-underline transition-colors"><i className="fas fa-cog mr-2"></i>Settings</Link>
               </div>

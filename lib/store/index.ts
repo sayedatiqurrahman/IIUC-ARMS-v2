@@ -195,11 +195,10 @@ export const useAppStore = create<AppState>((set, get) => {
           const emailRole = email ? config.detectRole(email) : 'user';
           const role = data.role && data.role !== 'user' ? data.role : emailRole;
           const updates: Record<string, any> = { profile: { ...defaultProfile, ...data, role }, profileLoaded: true };
-          if (data.githubToken) updates.githubToken = data.githubToken;
           if (data.githubInstallationId) updates.githubInstallationId = data.githubInstallationId;
           if (data.githubLogin) updates.githubLogin = data.githubLogin;
           if (data.githubAvatar) updates.githubAvatar = data.githubAvatar;
-          writeProfileCache(updates.profile, data.githubToken || '');
+          writeProfileCache(updates.profile, '');
           set(updates);
         } else {
           const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -228,7 +227,7 @@ export const useAppStore = create<AppState>((set, get) => {
         if (res.ok) {
           const data = await res.json();
           const merged = { ...defaultProfile, ...data };
-          writeProfileCache(merged, data.githubToken || '');
+          writeProfileCache(merged, '');
           set({ profile: merged, profileLoaded: true });
         } else {
           const err = await res.json().catch(() => ({ error: res.statusText }));

@@ -1,0 +1,388 @@
+import QRCode from 'qrcode';
+
+export interface CertPDFData {
+  certificateId: string;
+  memberName: string;
+  universityId: string;
+  department: string;
+  session?: string;
+  post?: string;
+  eventName?: string;
+  clubName: string;
+  clubLogoUrl?: string;
+  issuedBy: string;
+  issuedAt: string;
+  siteUrl?: string;
+}
+
+const PAGE_W = 297;
+const PAGE_H = 210;
+
+export async function generateCertificatePDF(data: CertPDFData): Promise<string> {
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  const primary: [number, number, number] = [34, 197, 94];
+  const gold: [number, number, number] = [234, 179, 8];
+  const dark: [number, number, number] = [15, 23, 42];
+  const muted: [number, number, number] = [100, 116, 139];
+
+  const cx = PAGE_W / 2;
+
+  pdf.setFillColor(...dark);
+  pdf.rect(0, 0, PAGE_W, PAGE_H, 'F');
+
+  pdf.setDrawColor(...gold);
+  pdf.setLineWidth(0.8);
+  pdf.rect(6, 6, PAGE_W - 12, PAGE_H - 12);
+  pdf.setLineWidth(0.3);
+  pdf.rect(9, 9, PAGE_W - 18, PAGE_H - 18);
+
+  pdf.setDrawColor(...primary);
+  pdf.setLineWidth(0.15);
+  for (let i = 0; i < 4; i++) {
+    pdf.circle(cx, PAGE_H / 2, 60 + 12 + i * 1.5, 'S');
+  }
+
+  pdf.setFillColor(...primary);
+  pdf.circle(cx, 30, 1.5, 'F');
+  pdf.setFillColor(...gold);
+  pdf.circle(cx - 3, 30, 0.8, 'F');
+  pdf.circle(cx + 3, 30, 0.8, 'F');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.setTextColor(...gold);
+  pdf.text('INTERNATIONAL ISLAMIC UNIVERSITY CHITTAGONG', cx, 18, { align: 'center' });
+
+  pdf.setFontSize(8);
+  pdf.setTextColor(...muted);
+  pdf.text('IIUC — Academic Resource Management System', cx, 24, { align: 'center' });
+
+  pdf.setFontSize(22);
+  pdf.setTextColor(...primary);
+  pdf.text('CERTIFICATE', cx, 42, { align: 'center' });
+
+  pdf.setFontSize(9);
+  pdf.setTextColor(...gold);
+  pdf.text('─  ●  ─', cx, 48, { align: 'center' });
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(...muted);
+  pdf.text('This is to certify that', cx, 56, { align: 'center' });
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(18);
+  pdf.setTextColor(255, 255, 255);
+  pdf.text(data.memberName, cx, 68, { align: 'center' });
+
+  const nameWidth = pdf.getTextWidth(data.memberName);
+  pdf.setDrawColor(...primary);
+  pdf.setLineWidth(0.3);
+  pdf.line(cx - nameWidth / 2 - 10, 72, cx + nameWidth / 2 + 10, 72);
+
+  let descLine = '';
+  if (data.post && data.clubName) {
+    descLine = `served as ${data.post} of ${data.clubName}`;
+  } else if (data.clubName) {
+    descLine = `has been an active member of ${data.clubName}`;
+  } else {
+    descLine = 'has been an active member';
+  }
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(10);
+  pdf.setTextColor(...muted);
+  pdf.text(descLine, cx, 80, { align: 'center' });
+
+  if (data.eventName) {
+    pdf.setFontSize(9);
+    pdf.text(`for the event: ${data.eventName}`, cx, 87, { align: 'center' });
+  }
+
+  const detailsY = data.eventName ? 96 : 92;
+  const leftX = 35;
+  const rightX = PAGE_W - 35;
+
+  pdf.setFontSize(8);
+
+  if (data.department) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(...muted);
+    pdf.text('Department', leftX, detailsY);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(data.department, leftX, detailsY + 5);
+  }
+
+  if (data.universityId) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(...muted);
+    pdf.text('University ID', rightX, detailsY);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(data.universityId, rightX, detailsY + 5);
+  }
+
+  if (data.session) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(...muted);
+    pdf.text('Session', leftX, detailsY + 14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(data.session, leftX, detailsY + 19);
+  }
+
+  if (data.issuedAt) {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(...muted);
+    pdf.text('Date of Issue', rightX, detailsY + 14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(255, 255, 255);
+    const d = new Date(data.issuedAt);
+    pdf.text(d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), rightX, detailsY + 19);
+  }
+
+  const qrUrl = `${data.siteUrl || 'https://iiuc-arms.eu.cc'}/clubs/verify/${data.certificateId}`;
+  const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 200, margin: 1 });
+  pdf.addImage(qrDataUrl, 'PNG', cx - 15, PAGE_H - 45, 30, 30);
+
+  pdf.setFontSize(6);
+  pdf.setTextColor(...muted);
+  pdf.text(`Certificate ID: ${data.certificateId}`, cx, PAGE_H - 12, { align: 'center' });
+  pdf.text(`Verify at: ${qrUrl}`, cx, PAGE_H - 9, { align: 'center' });
+
+  pdf.setFontSize(6);
+  pdf.setTextColor(...primary);
+  pdf.text('Generated by IIUC-ARMS', cx, PAGE_H - 6, { align: 'center' });
+
+  return pdf.output('dataurlstring');
+}
+
+export async function downloadCertPDF(data: CertPDFData, filename?: string): Promise<void> {
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  const primary: [number, number, number] = [34, 197, 94];
+  const gold: [number, number, number] = [234, 179, 8];
+  const dark: [number, number, number] = [15, 23, 42];
+  const muted: [number, number, number] = [100, 116, 139];
+  const cx = PAGE_W / 2;
+
+  pdf.setFillColor(...dark);
+  pdf.rect(0, 0, PAGE_W, PAGE_H, 'F');
+
+  pdf.setDrawColor(...gold);
+  pdf.setLineWidth(0.8);
+  pdf.rect(6, 6, PAGE_W - 12, PAGE_H - 12);
+  pdf.setLineWidth(0.3);
+  pdf.rect(9, 9, PAGE_W - 18, PAGE_H - 18);
+
+  pdf.setDrawColor(...primary);
+  pdf.setLineWidth(0.15);
+  for (let i = 0; i < 4; i++) {
+    pdf.circle(cx, PAGE_H / 2, 60 + 12 + i * 1.5, 'S');
+  }
+
+  pdf.setFillColor(...primary);
+  pdf.circle(cx, 30, 1.5, 'F');
+  pdf.setFillColor(...gold);
+  pdf.circle(cx - 3, 30, 0.8, 'F');
+  pdf.circle(cx + 3, 30, 0.8, 'F');
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.setTextColor(...gold);
+  pdf.text('INTERNATIONAL ISLAMIC UNIVERSITY CHITTAGONG', cx, 18, { align: 'center' });
+  pdf.setFontSize(8);
+  pdf.setTextColor(...muted);
+  pdf.text('IIUC — Academic Resource Management System', cx, 24, { align: 'center' });
+
+  pdf.setFontSize(22);
+  pdf.setTextColor(...primary);
+  pdf.text('CERTIFICATE', cx, 42, { align: 'center' });
+  pdf.setFontSize(9);
+  pdf.setTextColor(...gold);
+  pdf.text('─  ●  ─', cx, 48, { align: 'center' });
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(...muted);
+  pdf.text('This is to certify that', cx, 56, { align: 'center' });
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(18);
+  pdf.setTextColor(255, 255, 255);
+  pdf.text(data.memberName, cx, 68, { align: 'center' });
+  const nameWidth = pdf.getTextWidth(data.memberName);
+  pdf.setDrawColor(...primary);
+  pdf.setLineWidth(0.3);
+  pdf.line(cx - nameWidth / 2 - 10, 72, cx + nameWidth / 2 + 10, 72);
+
+  let descLine = data.post && data.clubName
+    ? `served as ${data.post} of ${data.clubName}`
+    : data.clubName
+      ? `has been an active member of ${data.clubName}`
+      : 'has been an active member';
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(10);
+  pdf.setTextColor(...muted);
+  pdf.text(descLine, cx, 80, { align: 'center' });
+  if (data.eventName) {
+    pdf.setFontSize(9);
+    pdf.text(`for the event: ${data.eventName}`, cx, 87, { align: 'center' });
+  }
+
+  const detailsY = data.eventName ? 96 : 92;
+  const leftX = 35;
+  const rightX = PAGE_W - 35;
+  pdf.setFontSize(8);
+
+  if (data.department) {
+    pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...muted);
+    pdf.text('Department', leftX, detailsY);
+    pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 255, 255);
+    pdf.text(data.department, leftX, detailsY + 5);
+  }
+  if (data.universityId) {
+    pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...muted);
+    pdf.text('University ID', rightX, detailsY);
+    pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 255, 255);
+    pdf.text(data.universityId, rightX, detailsY + 5);
+  }
+  if (data.session) {
+    pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...muted);
+    pdf.text('Session', leftX, detailsY + 14);
+    pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 255, 255);
+    pdf.text(data.session, leftX, detailsY + 19);
+  }
+  if (data.issuedAt) {
+    pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...muted);
+    pdf.text('Date of Issue', rightX, detailsY + 14);
+    pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 255, 255);
+    const d = new Date(data.issuedAt);
+    pdf.text(d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), rightX, detailsY + 19);
+  }
+
+  const qrUrl = `${data.siteUrl || 'https://iiuc-arms.eu.cc'}/clubs/verify/${data.certificateId}`;
+  const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 200, margin: 1 });
+  pdf.addImage(qrDataUrl, 'PNG', cx - 15, PAGE_H - 45, 30, 30);
+
+  pdf.setFontSize(6);
+  pdf.setTextColor(...muted);
+  pdf.text(`Certificate ID: ${data.certificateId}`, cx, PAGE_H - 12, { align: 'center' });
+  pdf.text(`Verify at: ${qrUrl}`, cx, PAGE_H - 9, { align: 'center' });
+  pdf.setFontSize(6);
+  pdf.setTextColor(...primary);
+  pdf.text('Generated by IIUC-ARMS', cx, PAGE_H - 6, { align: 'center' });
+
+  pdf.save(filename || `certificate-${data.certificateId}.pdf`);
+}
+
+export async function generateBulkCertPDF(certs: CertPDFData[]): Promise<void> {
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  const primary: [number, number, number] = [34, 197, 94];
+  const gold: [number, number, number] = [234, 179, 8];
+  const dark: [number, number, number] = [15, 23, 42];
+  const muted: [number, number, number] = [100, 116, 139];
+
+  for (let i = 0; i < certs.length; i++) {
+    const data = certs[i];
+    if (i > 0) pdf.addPage();
+    const cx = PAGE_W / 2;
+
+    pdf.setFillColor(...dark);
+    pdf.rect(0, 0, PAGE_W, PAGE_H, 'F');
+
+    pdf.setDrawColor(...gold);
+    pdf.setLineWidth(0.8);
+    pdf.rect(6, 6, PAGE_W - 12, PAGE_H - 12);
+    pdf.setLineWidth(0.3);
+    pdf.rect(9, 9, PAGE_W - 18, PAGE_H - 18);
+
+    pdf.setDrawColor(...primary);
+    pdf.setLineWidth(0.15);
+    for (let j = 0; j < 4; j++) {
+      pdf.circle(cx, PAGE_H / 2, 60 + 12 + j * 1.5, 'S');
+    }
+
+    pdf.setFillColor(...primary);
+    pdf.circle(cx, 30, 1.5, 'F');
+    pdf.setFillColor(...gold);
+    pdf.circle(cx - 3, 30, 0.8, 'F');
+    pdf.circle(cx + 3, 30, 0.8, 'F');
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10); pdf.setTextColor(...gold);
+    pdf.text('INTERNATIONAL ISLAMIC UNIVERSITY CHITTAGONG', cx, 18, { align: 'center' });
+    pdf.setFontSize(8); pdf.setTextColor(...muted);
+    pdf.text('IIUC — Academic Resource Management System', cx, 24, { align: 'center' });
+
+    pdf.setFontSize(22); pdf.setTextColor(...primary);
+    pdf.text('CERTIFICATE', cx, 42, { align: 'center' });
+    pdf.setFontSize(9); pdf.setTextColor(...gold);
+    pdf.text('─  ●  ─', cx, 48, { align: 'center' });
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9); pdf.setTextColor(...muted);
+    pdf.text('This is to certify that', cx, 56, { align: 'center' });
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(18); pdf.setTextColor(255, 255, 255);
+    pdf.text(data.memberName, cx, 68, { align: 'center' });
+    const nameWidth = pdf.getTextWidth(data.memberName);
+    pdf.setDrawColor(...primary); pdf.setLineWidth(0.3);
+    pdf.line(cx - nameWidth / 2 - 10, 72, cx + nameWidth / 2 + 10, 72);
+
+    let descLine = data.post && data.clubName
+      ? `served as ${data.post} of ${data.clubName}`
+      : data.clubName ? `has been an active member of ${data.clubName}` : 'has been an active member';
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(10); pdf.setTextColor(...muted);
+    pdf.text(descLine, cx, 80, { align: 'center' });
+    if (data.eventName) {
+      pdf.setFontSize(9);
+      pdf.text(`for the event: ${data.eventName}`, cx, 87, { align: 'center' });
+    }
+
+    const detailsY = data.eventName ? 96 : 92;
+    const leftX = 35; const rightX = PAGE_W - 35;
+    pdf.setFontSize(8);
+
+    if (data.department) {
+      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...muted); pdf.text('Department', leftX, detailsY);
+      pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 255, 255); pdf.text(data.department, leftX, detailsY + 5);
+    }
+    if (data.universityId) {
+      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...muted); pdf.text('University ID', rightX, detailsY);
+      pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 255, 255); pdf.text(data.universityId, rightX, detailsY + 5);
+    }
+    if (data.session) {
+      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...muted); pdf.text('Session', leftX, detailsY + 14);
+      pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 255, 255); pdf.text(data.session, leftX, detailsY + 19);
+    }
+    if (data.issuedAt) {
+      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...muted); pdf.text('Date of Issue', rightX, detailsY + 14);
+      pdf.setFont('helvetica', 'bold'); pdf.setTextColor(255, 255, 255);
+      const d = new Date(data.issuedAt);
+      pdf.text(d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), rightX, detailsY + 19);
+    }
+
+    const qrUrl = `${data.siteUrl || 'https://iiuc-arms.eu.cc'}/clubs/verify/${data.certificateId}`;
+    const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 200, margin: 1 });
+    pdf.addImage(qrDataUrl, 'PNG', cx - 15, PAGE_H - 45, 30, 30);
+
+    pdf.setFontSize(6); pdf.setTextColor(...muted);
+    pdf.text(`Certificate ID: ${data.certificateId}`, cx, PAGE_H - 12, { align: 'center' });
+    pdf.text(`Verify at: ${qrUrl}`, cx, PAGE_H - 9, { align: 'center' });
+    pdf.setFontSize(6); pdf.setTextColor(...primary);
+    pdf.text('Generated by IIUC-ARMS', cx, PAGE_H - 6, { align: 'center' });
+  }
+
+  pdf.save(`certificates-batch-${Date.now()}.pdf`);
+}

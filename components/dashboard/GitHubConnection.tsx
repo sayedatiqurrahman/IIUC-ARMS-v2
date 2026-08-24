@@ -84,7 +84,7 @@ export default function GitHubConnection({
             </div>
           )}
 
-          {(!profile.githubToken?.startsWith('ghp_') && !profile.githubToken?.startsWith('github_pat_')) ? (
+          {!profile.hasGithubToken ? (
             <div className="bg-qsis/5 border border-qsis/20 rounded-xl p-3 mb-3">
               <p className="text-[0.78rem] text-qsis font-semibold mb-1"><i className="fas fa-star mr-1"></i>Appear in Contributors List</p>
               <p className="text-[0.72rem] text-dark-text2 mb-2">Add a Personal Access Token to show your name in our Contributors page.</p>

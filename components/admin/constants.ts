@@ -93,6 +93,19 @@ export const PERMISSION_GROUPS = [
       { key: 'publishTutorial', label: 'Publish Tutorials', desc: 'Create tutorials with attachments & videos', icon: 'fa-graduation-cap', color: 'text-blue-400' },
     ],
   },
+  {
+    key: 'clubs',
+    label: 'Clubs & Activities',
+    icon: 'fa-users',
+    color: 'text-blue-400',
+    actions: [
+      { key: 'createClub', label: 'Create Club', desc: 'Create departmental clubs (teachers: own dept only)', icon: 'fa-plus-circle', color: 'text-blue-400' },
+      { key: 'manageAllClubs', label: 'Manage All Clubs', desc: 'Edit/delete any club across all departments', icon: 'fa-cogs', color: 'text-orange-400' },
+      { key: 'manageClubMembers', label: 'Manage Club Members', desc: 'Add/remove club members & assign officer roles', icon: 'fa-user-plus', color: 'text-green-400' },
+      { key: 'manageClubEvents', label: 'Manage Club Events', desc: 'Create & manage club events', icon: 'fa-calendar-plus', color: 'text-purple-400' },
+      { key: 'issueCertificates', label: 'Issue Certificates', desc: 'Generate verifiable certificates for club members', icon: 'fa-certificate', color: 'text-amber-400' },
+    ],
+  },
 ];
 
 export const ALL_PERMISSION_ACTIONS = PERMISSION_GROUPS.flatMap(g => g.actions);

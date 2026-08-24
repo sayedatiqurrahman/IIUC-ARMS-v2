@@ -297,3 +297,99 @@ model TelegramNotification {
   @@index([department])
   @@index([sentAt])
 }
+
+// ─── Club System ─────────────────────────────────────────────────────────────
+
+model Club {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  department  String
+  description String?
+  logoUrl     String?
+  coverUrl    String?
+  createdBy   String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     ClubMember[]
+  events      ClubEvent[]
+  certificates ClubCertificate[]
+  claims      ClubClaim[]
+
+  @@index([department])
+  @@index([slug])
+}
+
+model ClubMember {
+  id         String   @id @default(cuid())
+  clubId     String
+  userId     String
+  role       String   @default("member") // gs, ags, ogs, office_secretary, member
+  assignedBy String?
+  createdAt  DateTime @default(now())
+
+  club       Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@index([clubId])
+  @@index([userId])
+}
+
+model ClubEvent {
+  id          String   @id @default(cuid())
+  clubId      String
+  title       String
+  description String?
+  eventDate   DateTime?
+  venue       String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  club        Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@index([eventDate])
+}
+
+model ClubCertificate {
+  id            String   @id @default(cuid())
+  certificateId String   @unique
+  clubId        String
+  eventId       String?
+  memberName    String
+  universityId  String
+  department    String
+  session       String?
+  post          String?
+  eventName     String?
+  issuedBy      String
+  issuedAt      DateTime @default(now())
+
+  club          Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@index([certificateId])
+  @@index([universityId])
+}
+
+model ClubClaim {
+  id          String   @id @default(cuid())
+  clubId      String
+  userId      String
+  requestedRole String  @default("member")
+  message     String?
+  status      String   @default("pending") // pending | approved | rejected
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  club        Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@index([clubId])
+  @@index([userId])
+  @@index([status])
+}

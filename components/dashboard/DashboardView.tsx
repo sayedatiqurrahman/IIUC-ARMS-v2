@@ -71,7 +71,7 @@ export default function DashboardView() {
   const [sectionPeers, setSectionPeers] = useState<any[]>([]);
   const [fetchingPeers, setFetchingPeers] = useState(false);
 
-  const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!profile.githubToken;
+  const hasGitHub = !!(session as any)?.accessToken || !!profile.githubLogin || !!profile.hasGithubToken;
   const email = (session as any)?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
   const isVersityEmail = /@(?:ugrad\.)?iiuc\.ac\.bd$/i.test(email);
@@ -132,15 +132,12 @@ export default function DashboardView() {
   useEffect(() => { loadProfile(); }, []);
 
   useEffect(() => {
-    const token = profile.githubToken;
-    if (!token || !token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
+    if (!profile.hasGithubToken) {
       setPatValid(null);
       return;
     }
-    fetch('https://api.github.com/user', {
-      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
-    }).then(r => setPatValid(r.ok)).catch(() => setPatValid(false));
-  }, [profile.githubToken]);
+    fetch('/api/github/user-info').then(r => r.json()).then(d => setPatValid(!!d.user)).catch(() => setPatValid(false));
+  }, [profile.hasGithubToken]);
 
   useEffect(() => {
     const user = (session as any)?.user;
@@ -171,7 +168,7 @@ export default function DashboardView() {
     const ghError = params.get('error');
     if (ghToken && ghLogin) {
       useAppStore.setState(s => ({
-        profile: { ...s.profile, githubLogin: ghLogin, githubToken: ghToken, githubInstallationId: ghInstall || '' },
+        profile: { ...s.profile, githubLogin: ghLogin, githubToken: ghToken, githubInstallationId: ghInstall || '', hasGithubToken: true },
         githubToken: ghToken,
       }));
       fetch('/api/profile', {
@@ -189,7 +186,7 @@ export default function DashboardView() {
   }, []);
 
   useEffect(() => {
-    if (!profile.githubToken || !hasGitHub) return;
+    if (!hasGitHub) return;
     fetch('/api/github/sync-profile', { method: 'POST' }).catch(() => {});
     if (profile.githubLogin) {
       setGhUser({
@@ -198,19 +195,16 @@ export default function DashboardView() {
         avatar_url: profile.githubAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.githubLogin)}&background=333&color=fff&bold=true&size=80`,
       });
     }
-    const ghHeaders = { Authorization: `token ${profile.githubToken}`, Accept: 'application/vnd.github.v3+json' };
-    fetch('https://api.github.com/user', { headers: ghHeaders })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data) {
-          setGhUser((prev: any) => ({ ...prev, name: data.name || prev?.name || profile.githubLogin, avatar_url: data.avatar_url || prev?.avatar_url }));
-          return fetch(`https://api.github.com/users/${data.login}`, { headers: ghHeaders });
+    fetch('/api/github/user-info')
+      .then(r => r.json())
+      .then(d => {
+        if (d.user) {
+          setGhUser({ login: d.user.login, name: d.user.name || d.user.login, avatar_url: d.user.avatar_url, bio: d.user.bio });
+          setGhStats(d.user);
         }
       })
-      .then(r => r?.json())
-      .then(data => { if (data) setGhStats(data); })
       .catch(() => {});
-  }, [profile.githubToken, profile.githubLogin, profile.githubAvatar, hasGitHub]);
+  }, [profile.githubLogin, profile.githubAvatar, hasGitHub]);
 
   async function handleDisconnect() {
     if (!await confirm({ message: 'Disconnect this GitHub account? You can reconnect later.', danger: true, title: 'Disconnect GitHub' })) return;
@@ -222,7 +216,7 @@ export default function DashboardView() {
       });
       if (!res.ok) throw new Error('Failed to save');
       useAppStore.setState(s => ({
-        profile: { ...s.profile, githubLogin: '', githubToken: '', githubInstallationId: '', githubAvatar: '' },
+        profile: { ...s.profile, githubLogin: '', githubToken: '', githubInstallationId: '', githubAvatar: '', hasGithubToken: false },
         githubToken: '',
       }));
       setGhUser(null);
@@ -256,7 +250,7 @@ export default function DashboardView() {
         body: JSON.stringify({ githubLogin: ghUser.login, githubToken: token, githubAvatar: ghUser.avatar_url }),
       });
       useAppStore.setState(s => ({
-        profile: { ...s.profile, githubLogin: ghUser.login, githubToken: token, githubAvatar: ghUser.avatar_url },
+        profile: { ...s.profile, githubLogin: ghUser.login, githubToken: token, githubAvatar: ghUser.avatar_url, hasGithubToken: true },
         githubToken: token,
       }));
       setPatValid(true);

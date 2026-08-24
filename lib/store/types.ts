@@ -49,6 +49,7 @@ export interface Profile {
   isBanned: boolean;
   githubLogin: string;
   githubToken: string;
+  hasGithubToken: boolean;
   githubInstallationId: string;
   githubAvatar: string;
   facebook: string;
@@ -69,13 +70,14 @@ export interface Profile {
   linkedEmails: string[];
   showInContributors: boolean;
   profileType: string;
+  clubMemberships: { clubName: string; clubSlug: string; department: string; logoUrl: string; role: string; joinedAt: string }[];
 }
 
 export const defaultProfile: Profile = {
   universityId: '', name: '', title: '', shortForm: '', department: '', section: '', isCR: false, isACR: false, email: '', whatsapp: '', telegramId: '', telegramChatId: '', semester: '', image: '',
   role: 'user',
   isBanned: false,
-  githubLogin: '', githubToken: '', githubInstallationId: '', githubAvatar: '',
+  githubLogin: '', githubToken: '', hasGithubToken: false, githubInstallationId: '', githubAvatar: '',
   facebook: '', twitter: '', linkedin: '', website: '',
   company: '', companyUrl: '', publicEmail: '',
   batchId: '',
@@ -85,6 +87,7 @@ export const defaultProfile: Profile = {
   showInContributors: true,
   profileType: '',
   hideWhatsapp: false, hideUniversityId: false, hideSemester: false, hideEmail: false, hideCompany: false,
+  clubMemberships: [],
 };
 
 export interface AppState {

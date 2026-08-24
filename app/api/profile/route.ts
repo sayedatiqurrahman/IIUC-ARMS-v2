@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
           hideWhatsapp: true, hideUniversityId: true, hideSemester: true, hideEmail: true, hideCompany: true,
           hideFacebook: true, hideTwitter: true, hideLinkedin: true, hideWebsite: true,
           showInContributors: true, role: true,
-          githubLogin: true, githubAvatar: true, githubInstallationId: true,
+          githubLogin: true, githubToken: true, githubAvatar: true, githubInstallationId: true,
           totpMethods: true, linkedEmails: true, isBanned: true,
         }
       });
@@ -38,7 +38,31 @@ export async function GET(req: NextRequest) {
       try { (profile as any).linkedEmails = JSON.parse(profile.linkedEmails as string); } catch { (profile as any).linkedEmails = []; }
     }
 
-    return NextResponse.json(profile || { userId, email });
+    // Compute hasGithubToken from the raw DB value, then strip the actual token
+    const hasGithubToken = !!(profile as any)?.githubToken;
+    const { githubToken: _tok, ...safeProfile } = (profile || { userId, email }) as any;
+
+    // Fetch club memberships
+    let clubMemberships: any[] = [];
+    try {
+      const { prisma } = await import('@/lib/prisma');
+      const memberships = await prisma.clubMember.findMany({
+        where: { userId },
+        include: { club: { select: { name: true, slug: true, department: true, logoUrl: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
+      clubMemberships = memberships.map(m => ({
+        clubName: m.club.name,
+        clubSlug: m.club.slug,
+        department: m.club.department,
+        logoUrl: m.club.logoUrl,
+        role: m.role,
+        joinedAt: m.createdAt,
+      }));
+    } catch {}
+
+    const result = { ...safeProfile, hasGithubToken, clubMemberships };
+    return NextResponse.json(result);
   } catch (err: any) {
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
   }
@@ -117,13 +141,16 @@ export async function POST(req: NextRequest) {
           hideWhatsapp: true, hideUniversityId: true, hideSemester: true, hideEmail: true, hideCompany: true,
           hideFacebook: true, hideTwitter: true, hideLinkedin: true, hideWebsite: true,
           showInContributors: true, role: true,
-          githubLogin: true, githubAvatar: true, githubInstallationId: true,
+          githubLogin: true, githubAvatar: true, githubInstallationId: true, githubToken: true,
           totpMethods: true, linkedEmails: true, isBanned: true,
         }
       });
     });
 
-    return NextResponse.json(saved);
+    // Strip the actual token, return hasGithubToken boolean instead
+    const hasGithubToken = !!(saved as any).githubToken;
+    const { githubToken: _tok, ...safe } = saved as any;
+    return NextResponse.json({ ...safe, hasGithubToken });
   } catch (err: any) {
     return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
   }

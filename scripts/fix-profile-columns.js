@@ -246,6 +246,61 @@ async function main() {
   await safeExec(`CREATE INDEX IF NOT EXISTS "TelegramNotification_department_idx" ON "TelegramNotification"("department")`, 'TN.department idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "TelegramNotification_sentAt_idx" ON "TelegramNotification"("sentAt")`, 'TN.sentAt idx');
 
+  // ── Club System ──
+  await safeExec(`CREATE TABLE IF NOT EXISTS "Club" (
+    "id" TEXT NOT NULL PRIMARY KEY, "name" TEXT NOT NULL, "slug" TEXT NOT NULL,
+    "department" TEXT NOT NULL, "description" TEXT, "logoUrl" TEXT, "coverUrl" TEXT,
+    "createdBy" TEXT NOT NULL, "isActive" INTEGER NOT NULL DEFAULT 1,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'Club');
+  await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "Club_slug_idx" ON "Club"("slug")`, 'Club slug idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "Club_department_idx" ON "Club"("department")`, 'Club department idx');
+
+  await safeExec(`CREATE TABLE IF NOT EXISTS "ClubMember" (
+    "id" TEXT NOT NULL PRIMARY KEY, "clubId" TEXT NOT NULL, "userId" TEXT NOT NULL,
+    "role" TEXT NOT NULL DEFAULT 'member', "assignedBy" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'ClubMember');
+  await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "ClubMember_clubId_userId_idx" ON "ClubMember"("clubId", "userId")`, 'ClubMember unique idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ClubMember_clubId_idx" ON "ClubMember"("clubId")`, 'ClubMember clubId idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ClubMember_userId_idx" ON "ClubMember"("userId")`, 'ClubMember userId idx');
+
+  await safeExec(`CREATE TABLE IF NOT EXISTS "ClubEvent" (
+    "id" TEXT NOT NULL PRIMARY KEY, "clubId" TEXT NOT NULL, "title" TEXT NOT NULL,
+    "description" TEXT, "eventDate" DATETIME, "venue" TEXT, "createdBy" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'ClubEvent');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ClubEvent_clubId_idx" ON "ClubEvent"("clubId")`, 'ClubEvent clubId idx');
+
+  await safeExec(`CREATE TABLE IF NOT EXISTS "ClubCertificate" (
+    "id" TEXT NOT NULL PRIMARY KEY, "certificateId" TEXT NOT NULL,
+    "clubId" TEXT NOT NULL, "eventId" TEXT, "memberName" TEXT NOT NULL,
+    "universityId" TEXT NOT NULL, "department" TEXT NOT NULL, "session" TEXT,
+    "post" TEXT, "eventName" TEXT, "issuedBy" TEXT NOT NULL,
+    "issuedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'ClubCertificate');
+  await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "ClubCertificate_certificateId_idx" ON "ClubCertificate"("certificateId")`, 'ClubCertificate certId idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ClubCertificate_clubId_idx" ON "ClubCertificate"("clubId")`, 'ClubCertificate clubId idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ClubCertificate_universityId_idx" ON "ClubCertificate"("universityId")`, 'ClubCertificate uniId idx');
+
+  await safeExec(`CREATE TABLE IF NOT EXISTS "ClubClaim" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "clubId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "requestedRole" TEXT NOT NULL DEFAULT 'member',
+    "message" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "reviewedBy" TEXT,
+    "reviewedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'ClubClaim');
+  await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "ClubClaim_clubId_userId_idx" ON "ClubClaim"("clubId", "userId")`, 'ClubClaim unique idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ClubClaim_clubId_idx" ON "ClubClaim"("clubId")`, 'ClubClaim clubId idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ClubClaim_userId_idx" ON "ClubClaim"("userId")`, 'ClubClaim userId idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ClubClaim_status_idx" ON "ClubClaim"("status")`, 'ClubClaim status idx');
+
   // ── Ensure default SiteSettings row ──
   await safeExec(`INSERT OR IGNORE INTO "SiteSettings" ("id", "permissions") VALUES ('site-settings', '{}')`, 'SiteSettings default row');
 

@@ -157,7 +157,7 @@ export default function ContributeModal({
       const tokenRes = await fetch('/api/studio-apps/publish-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ githubToken: profile?.githubToken || '' }),
+        body: JSON.stringify({}),
       });
       const tokenData = await tokenRes.json().catch(() => ({}));
       if (!tokenRes.ok) {

@@ -198,7 +198,7 @@ export default function CoursesTab({ effectiveRole, profile }: { effectiveRole: 
       await loadTree();
       const { refreshTreeUntilVisible } = await import('@/lib/tree-refresh');
       const expectedFolder = `${getDepartmentFolder(selectedDept)}/${selectedSem}/${finalCode} - ${finalTitle}`;
-      await refreshTreeUntilVisible(expectedFolder, (profile as any)?.githubToken || '');
+      await refreshTreeUntilVisible(expectedFolder, useAppStore.getState().githubToken || '');
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e.message || 'Failed to create course' };

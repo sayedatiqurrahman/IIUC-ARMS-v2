@@ -439,6 +439,31 @@ export default function ProfileCard({
             setEditingSocials={setEditingSocials}
             updateProfile={updateProfile}
           />
+
+          {/* Club Memberships */}
+          {Array.isArray((profile as any).clubMemberships) && (profile as any).clubMemberships.length > 0 && (
+            <div className="mt-3 p-3 rounded-lg bg-dark-bg3 border border-dark-border">
+              <p className="text-[0.72rem] text-dark-text2 mb-2"><i className="fas fa-users mr-1 text-qsis"></i>Club Memberships</p>
+              <div className="space-y-2">
+                {(profile as any).clubMemberships.map((m: any, i: number) => (
+                  <a key={i} href={`/clubs/${m.clubSlug}`} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border hover:border-qsis/40 transition-colors group">
+                    {m.logoUrl ? (
+                      <img src={m.logoUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-qsis/15 flex items-center justify-center">
+                        <i className="fas fa-users text-[0.55rem] text-qsis"></i>
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[0.78rem] font-semibold truncate group-hover:text-qsis transition-colors">{m.clubName}</p>
+                      <p className="text-[0.62rem] text-dark-text3 capitalize">{m.role.replace(/_/g, ' ')}</p>
+                    </div>
+                    <i className="fas fa-chevron-right text-[0.55rem] text-dark-text3 group-hover:text-qsis transition-colors"></i>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

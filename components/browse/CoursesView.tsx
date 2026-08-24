@@ -36,7 +36,7 @@ export default function CoursesView({
   const storeGithubToken = useAppStore(s => s.githubToken);
   const profile = useAppStore(s => s.profile);
 
-  const personalToken = storeGithubToken || (profile as any)?.githubToken || '';
+  const personalToken = storeGithubToken || '';
 
   const myEmail = userEmail.toLowerCase();
 

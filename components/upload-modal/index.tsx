@@ -255,17 +255,29 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     if (!patInputToken.trim()) return;
     setPatSaving(true);
     try {
+      const ghRes = await fetch('https://api.github.com/user', {
+        headers: { Authorization: `token ${patInputToken.trim()}`, Accept: 'application/vnd.github.v3+json' },
+      });
+      if (!ghRes.ok) {
+        showToast('Invalid token. Please check and try again.', 'error');
+        setPatSaving(false);
+        return;
+      }
+      const ghUser = await ghRes.json();
       const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ githubToken: patInputToken.trim() }),
+        body: JSON.stringify({ githubLogin: ghUser.login, githubToken: patInputToken.trim(), githubAvatar: ghUser.avatar_url }),
       });
       const data = await res.json();
       if (data.success || res.ok) {
-        showToast('GitHub connected!', 'success');
+        useAppStore.setState(s => ({
+          profile: { ...s.profile, githubLogin: ghUser.login, hasGithubToken: true, githubAvatar: ghUser.avatar_url },
+        }));
+        showToast(`Connected as @${ghUser.login}!`, 'success');
         window.location.reload();
       } else {
-        showToast(data.error || 'Invalid token', 'error');
+        showToast(data.error || 'Failed to save', 'error');
       }
     } catch { showToast('Network error', 'error'); }
     finally { setPatSaving(false); }
@@ -567,7 +579,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   }
 
   async function doUpload(tokenOverride?: string) {
-    const token = tokenOverride || githubToken || profile.githubToken || (session as any)?.accessToken || '';
+    const token = tokenOverride || githubToken || (session as any)?.accessToken || '';
     const validCourses = courses.filter(c => c.selectedCourseCode && (c.files.length > 0 || c.links.length > 0));
 
     setUploadBg({ active: true, result: null, progress: null, compressing: null, steps: [] });
