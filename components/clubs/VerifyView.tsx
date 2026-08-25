@@ -108,19 +108,19 @@ export default function VerifyView() {
                 </div>
               </div>
 
-              {/* Club Info */}
-              {cert.club && (
+              {/* Organization Info */}
+              {(cert.club || cert.organization) && (
                 <div className="px-6 py-4 border-b border-[#3a3b3c] flex items-center gap-3">
-                  {cert.club.logoUrl ? (
-                    <img src={cert.club.logoUrl} alt="" className="w-12 h-12 rounded-xl object-cover border border-[#3a3b3c]" />
+                  {(cert.club?.logoUrl || cert.organizationLogo) ? (
+                    <img src={cert.club?.logoUrl || cert.organizationLogo} alt="" className="w-12 h-12 rounded-xl object-cover border border-[#3a3b3c]" />
                   ) : (
                     <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                      <i className="fas fa-users text-blue-400"></i>
+                      <i className={`fas ${cert.source === 'studio' ? 'fa-certificate' : 'fa-users'} text-blue-400`}></i>
                     </div>
                   )}
                   <div>
-                    <p className="text-sm font-bold text-white">{cert.club.name}</p>
-                    <p className="text-xs text-gray-500">{cert.club.department}</p>
+                    <p className="text-sm font-bold text-white">{cert.club?.name || cert.organization}</p>
+                    <p className="text-xs text-gray-500">{cert.club?.department || (cert.organizationType ? `Organization \u00B7 ${cert.organizationType}` : '')}</p>
                   </div>
                 </div>
               )}

@@ -62,12 +62,22 @@ export const RESERVED_APP_IDS = new Set([
   'whiteboard',
   'creative-hub',
   'creativehub',
+  'certificate-studio',
 ]);
 
 export const APP_ID_REGEX = /^[a-z0-9][a-z0-9-]{1,29}$/;
 export const MATERIAL_ICON_REGEX = /^[a-z0-9_]{2,40}$/;
 
 export const BUILTIN_APPS: StudioApp[] = [
+  {
+    id: 'certificate-studio',
+    title: 'Certificate Studio',
+    subtitle: 'Issue verifiable certificates under your organization, batch, or society.',
+    description: 'Create organizations and generate professional certificates with unique IDs, QR codes, and PDF export. All certificates are publicly verifiable.',
+    icon: 'workspace_premium',
+    source: 'builtin',
+    path: '/studio/certificates',
+  },
   {
     id: 'compressor',
     title: 'File Compressor',

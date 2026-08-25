@@ -96,48 +96,77 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
     }
 
     const body = await req.json();
-    const { userId, role: newRole, session } = body;
-    if (!userId || !newRole) return NextResponse.json({ error: 'userId and role required' }, { status: 400 });
-
-    const allValidRoles = [...SINGLETON_ROLES, 'member'];
-    if (!allValidRoles.includes(newRole)) {
-      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
-    }
-
-    const isOfficerRole = SINGLETON_ROLES.includes(newRole);
-    const canAssignOfficer = isAdmin || isManager || hasPerm || memberRole === 'gs' || (isTeacher && !!memberRole) || isClubAdmin;
-    if (isOfficerRole && !canAssignOfficer) {
-      return NextResponse.json({ error: 'Only GS, admin, manager, or teacher members can assign officer roles' }, { status: 403 });
-    }
+    const { userId, role: newRole, session, clubRoles } = body;
+    if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
 
     const { prisma } = await import('@/lib/prisma');
+    const validRoleKeys = ['club_admin', 'club_maintainer', 'club_event_manager', 'club_cert_issuer', 'club_content_manager'];
 
-    const sessionLabel = session || `Session ${new Date().getFullYear()}`;
-
-    if (SINGLETON_ROLES.includes(newRole)) {
-      const existing = await prisma.clubMember.findFirst({
-        where: { clubId: club.id, role: newRole, NOT: { userId } },
+    // Self-role update: members can update their own clubRoles only (no position change)
+    const isSelfUpdate = userId === email;
+    if (clubRoles !== undefined && isSelfUpdate && !newRole) {
+      const filtered = Array.isArray(clubRoles) ? clubRoles.filter((r: string) => validRoleKeys.includes(r)) : [];
+      const member = await prisma.clubMember.upsert({
+        where: { clubId_userId: { clubId: club.id, userId } },
+        update: { clubRoles: JSON.stringify(filtered) },
+        create: { clubId: club.id, userId, role: 'member', assignedBy: email, clubRoles: JSON.stringify(filtered) },
       });
-      if (existing) {
-        await prisma.clubMember.update({
-          where: { id: existing.id },
-          data: {
-            role: 'member',
-            previousRole: newRole,
-            previousRoleSession: sessionLabel,
-            assignedBy: email,
-          },
-        });
-      }
+      return NextResponse.json({ success: true, member });
     }
 
-    const member = await prisma.clubMember.upsert({
-      where: { clubId_userId: { clubId: club.id, userId } },
-      update: { role: newRole, assignedBy: email, previousRole: null, previousRoleSession: null },
-      create: { clubId: club.id, userId, role: newRole, assignedBy: email },
-    });
+    // Manager/admin editing another member: can update role, clubRoles, or both
+    if (!newRole && clubRoles === undefined) return NextResponse.json({ error: 'role or clubRoles required' }, { status: 400 });
 
-    return NextResponse.json({ success: true, member });
+    // Only clubRoles (admin editing someone else)
+    if (!newRole && clubRoles !== undefined) {
+      const filtered = Array.isArray(clubRoles) ? clubRoles.filter((r: string) => validRoleKeys.includes(r)) : [];
+      const member = await prisma.clubMember.upsert({
+        where: { clubId_userId: { clubId: club.id, userId } },
+        update: { clubRoles: JSON.stringify(filtered) },
+        create: { clubId: club.id, userId, role: 'member', assignedBy: email, clubRoles: JSON.stringify(filtered) },
+      });
+      return NextResponse.json({ success: true, member });
+    }
+
+    if (newRole) {
+      const allValidRoles = [...SINGLETON_ROLES, 'member'];
+      if (!allValidRoles.includes(newRole)) {
+        return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+      }
+
+      const isOfficerRole = SINGLETON_ROLES.includes(newRole);
+      const canAssignOfficer = isAdmin || isManager || hasPerm || memberRole === 'gs' || (isTeacher && !!memberRole) || isClubAdmin;
+      if (isOfficerRole && !canAssignOfficer) {
+        return NextResponse.json({ error: 'Only GS, admin, manager, or teacher members can assign officer roles' }, { status: 403 });
+      }
+
+      const sessionLabel = session || `Session ${new Date().getFullYear()}`;
+
+      if (SINGLETON_ROLES.includes(newRole)) {
+        const existing = await prisma.clubMember.findFirst({
+          where: { clubId: club.id, role: newRole, NOT: { userId } },
+        });
+        if (existing) {
+          await prisma.clubMember.update({
+            where: { id: existing.id },
+            data: { role: 'member', previousRole: newRole, previousRoleSession: sessionLabel, assignedBy: email },
+          });
+        }
+      }
+
+      const updateData: any = { role: newRole, assignedBy: email, previousRole: null, previousRoleSession: null };
+      if (clubRoles !== undefined) {
+        updateData.clubRoles = JSON.stringify(Array.isArray(clubRoles) ? clubRoles.filter((r: string) => validRoleKeys.includes(r)) : []);
+      }
+
+      const member = await prisma.clubMember.upsert({
+        where: { clubId_userId: { clubId: club.id, userId } },
+        update: updateData,
+        create: { clubId: club.id, userId, role: newRole, assignedBy: email },
+      });
+
+      return NextResponse.json({ success: true, member });
+    }
   } catch {
     return NextResponse.json({ error: 'Failed to update role' }, { status: 500 });
   }

@@ -328,6 +328,7 @@ model ClubMember {
   clubId               String
   userId               String
   role                 String   @default("member") // gs, ags, ogs, office_secretary, member
+  clubRoles            String?  // JSON array: ["club_admin","club_maintainer","club_event_manager","club_cert_issuer"]
   isClubAdmin          Boolean  @default(false) // creator gets this; super-powers within the club
   assignedBy           String?
   previousRole         String?
@@ -398,4 +399,50 @@ model ClubClaim {
   @@index([clubId])
   @@index([userId])
   @@index([status])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Certificate Studio — standalone certificate generation under orgs
+// ═══════════════════════════════════════════════════════════════════════
+
+model StudioOrganization {
+  id          String   @id @default(cuid())
+  name        String                       // e.g. "CSE Batch 2024"
+  slug        String   @unique             // URL-safe: "cse-batch-2024"
+  type        String   @default("batch")   // batch | society | department | event | custom
+  logoUrl     String?
+  description String?
+  createdBy   String                       // email of creator
+  memberCount Int      @default(0)
+  certCount   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  certificates StudioCertificate[]
+
+  @@index([slug])
+  @@index([createdBy])
+}
+
+model StudioCertificate {
+  id            String   @id @default(cuid())
+  certificateId String   @unique          // e.g. "IIUC-XKMR-B572-ETGQ"
+  orgId         String
+  memberName    String
+  universityId  String
+  department    String
+  session       String?
+  post          String?                   // role / designation
+  eventName     String?                   // event name
+  servicePeriod String?                   // e.g. "2024-2025"
+  signatories   String?                   // JSON: [{name, designation, title}]
+  issuedBy      String                    // email of issuer
+  issuedAt      DateTime @default(now())
+
+  org           StudioOrganization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([certificateId])
+  @@index([universityId])
 }

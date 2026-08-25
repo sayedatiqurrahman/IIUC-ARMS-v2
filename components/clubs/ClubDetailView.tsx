@@ -6,6 +6,7 @@ import { useUserAccess } from '@/lib/useUserAccess';
 import Link from 'next/link';
 import { CLUB_ROLES, getRoleGroupMembers } from '@/lib/club-roles';
 import type { ClubDataMember } from '@/lib/club-roles';
+import { CLUB_MEMBER_ROLES, CLUB_MEMBER_ROLE_LIST, parseClubRoles } from '@/lib/club-member-roles';
 import { downloadCertPDF, generateBulkCertPDF } from '@/lib/club-cert-pdf';
 import type { CertPDFData } from '@/lib/club-cert-pdf';
 
@@ -90,6 +91,13 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   const [claimMsg, setClaimMsg] = useState('');
   const [submittingClaim, setSubmittingClaim] = useState(false);
 
+  const [creatorProfile, setCreatorProfile] = useState<any>(null);
+  const [showCreatorPopup, setShowCreatorPopup] = useState(false);
+  const [showSelfRoles, setShowSelfRoles] = useState(false);
+  const [savingSelfRoles, setSavingSelfRoles] = useState(false);
+  const [editClubRoles, setEditClubRoles] = useState<string[]>([]);
+  const [selfClubRoles, setSelfClubRoles] = useState<string[]>([]);
+
   useEffect(() => {
     const onScroll = () => {
       if (headerRef.current) {
@@ -128,6 +136,16 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   useEffect(() => {
     if (section === 'claims' && slug) loadClaims(claimFilter);
   }, [section, slug, claimFilter]);
+
+  // Fetch creator profile for name/avatar
+  useEffect(() => {
+    if (club?.createdBy && !creatorProfile) {
+      fetch(`/api/profile/${encodeURIComponent(club.createdBy)}`).then(r => r.json()).then(d => {
+        if (d.profile) setCreatorProfile(d.profile);
+      }).catch(() => {});
+    }
+  }, [club?.createdBy]);
+
   useEffect(() => {
     if ((section === 'certificates' || section === 'posts') && slug) handleCertSearch('');
   }, [section, slug]);
@@ -140,6 +158,13 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   const canManage = isAdmin || isOfficer || isClubAdmin;
   const isMember = !!myMember;
   const clubSettings = (() => { try { return JSON.parse(club?.settings || '{}'); } catch { return {}; } })();
+
+  // Sync self clubRoles state when myMember changes
+  useEffect(() => {
+    if (myMember) {
+      setSelfClubRoles(parseClubRoles(myMember.clubRoles));
+    }
+  }, [myMember?.clubRoles]);
 
   async function handleAddMember() {
     if (!addEmail.trim()) return;
@@ -168,16 +193,34 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   }
 
   async function handleChangeRole() {
-    if (!editingMember || !editRole) return;
+    if (!editingMember) return;
+    try {
+      const body: any = { userId: editingMember };
+      if (editRole) { body.role = editRole; body.session = editSession.trim() || undefined; }
+      body.clubRoles = editClubRoles;
+      const res = await fetch(`/api/clubs/${slug}/members`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) { setEditingMember(null); setEditRole(''); setEditSession(''); setEditClubRoles([]); loadClub(slug); }
+      else alert(data.error || 'Failed');
+    } catch { alert('Network error'); }
+  }
+
+  async function handleSaveSelfRoles() {
+    if (!myMember) return;
+    setSavingSelfRoles(true);
     try {
       const res = await fetch(`/api/clubs/${slug}/members`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: editingMember, role: editRole, session: editSession.trim() || undefined }),
+        body: JSON.stringify({ userId: myMember.userId, clubRoles: selfClubRoles }),
       });
       const data = await res.json();
-      if (data.success) { setEditingMember(null); setEditRole(''); setEditSession(''); loadClub(slug); }
+      if (data.success) { setShowSelfRoles(false); loadClub(slug); }
       else alert(data.error || 'Failed');
     } catch { alert('Network error'); }
+    setSavingSelfRoles(false);
   }
 
   function handleExportMembers() {
@@ -410,7 +453,10 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                <i className="fas fa-clock mr-1"></i>Created {timeAgo(club.createdAt)} by {club.createdBy?.split('@')[0]}
+                <i className="fas fa-clock mr-1"></i>Created {timeAgo(club.createdAt)} by{' '}
+                <button onClick={() => setShowCreatorPopup(true)} className="text-blue-400 hover:underline font-semibold">
+                  {creatorProfile?.name || club.createdBy?.split('@')[0]}
+                </button>
               </p>
             </div>
 
@@ -467,8 +513,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6">
         <div className="flex gap-6 flex-col lg:flex-row">
 
-          {/* ── LEFT SIDEBAR ── */}
-          <div className="lg:w-[360px] shrink-0 space-y-4">
+          {/* ── LEFT SIDEBAR ── (desktop only) */}
+          <div className="hidden lg:block lg:w-[360px] shrink-0 space-y-4">
             {/* About Card */}
             <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
               <div className="p-4">
@@ -490,7 +536,12 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                 </div>
                 <div className="px-4 py-3 flex items-center gap-3">
                   <i className="fas fa-user text-gray-400 w-5 text-center"></i>
-                  <div><p className="text-sm text-white">{club.createdBy}</p><p className="text-xs text-gray-500">Created by</p></div>
+                  <div>
+                    <button onClick={() => setShowCreatorPopup(true)} className="text-sm text-blue-400 hover:underline font-semibold text-left">
+                      {creatorProfile?.name || club.createdBy?.split('@')[0]}
+                    </button>
+                    <p className="text-xs text-gray-500">Created by</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -751,6 +802,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {/* ═══ ABOUT ═══ */}
             {section === 'about' && (
               <div className="space-y-4">
+                {/* Description */}
                 <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
                   <h3 className="text-lg font-bold text-white mb-3">About {club.name}</h3>
                   {club.description ? (
@@ -759,6 +811,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                     <p className="text-sm text-gray-500 italic">No description provided. Club admins can add one in Settings.</p>
                   )}
                 </div>
+
+                {/* Overview */}
                 <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
                   <h3 className="text-base font-bold text-white mb-4">Overview</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -776,6 +830,100 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                     </div>
                   </div>
                 </div>
+
+                {/* Info rows */}
+                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <i className="fas fa-building text-gray-400 w-5 text-center"></i>
+                    <div><p className="text-sm text-white">{club.department}</p><p className="text-xs text-gray-500">Department</p></div>
+                  </div>
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <i className="fas fa-clock text-gray-400 w-5 text-center"></i>
+                    <div><p className="text-sm text-white">Created {new Date(club.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p><p className="text-xs text-gray-500">Club established</p></div>
+                  </div>
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <i className="fas fa-user text-gray-400 w-5 text-center"></i>
+                    <div>
+                      <button onClick={() => setShowCreatorPopup(true)} className="text-sm text-blue-400 hover:underline font-semibold text-left">
+                        {creatorProfile?.name || club.createdBy?.split('@')[0]}
+                      </button>
+                      <p className="text-xs text-gray-500">Created by</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Certificates Quick */}
+                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-bold text-white"><i className="fas fa-award text-yellow-400 mr-2"></i>Certificates</h3>
+                      <span className="text-sm font-bold text-yellow-400">{certCount}</span>
+                    </div>
+                    {certCount > 0 ? (
+                      <>
+                        <p className="text-xs text-gray-400 mb-3">Official certificates issued by {club.name}. Scan the QR code on any certificate to verify.</p>
+                        <button onClick={() => setSection('certificates')} className="w-full px-3 py-2 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded-lg text-xs font-semibold hover:bg-yellow-500/20 transition mb-2">
+                          <i className="fas fa-award mr-1.5"></i>View All Certificates
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-500">No certificates issued yet.</p>
+                    )}
+                    <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline block">
+                      <button className="w-full px-3 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-semibold hover:bg-blue-600/20 transition">
+                        <i className="fas fa-plus mr-1.5"></i>Issue Certificate
+                      </button>
+                    </Link>
+                  </div>
+                  <div className="border-t border-[#3a3b3c]">
+                    <Link href="/verify" className="flex items-center gap-3 px-4 py-3 hover:bg-[#3a3b3c] transition no-underline">
+                      <div className="w-9 h-9 rounded-lg bg-green-500/15 flex items-center justify-center">
+                        <i className="fas fa-qrcode text-green-400"></i>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">Verify Certificate</p>
+                        <p className="text-xs text-gray-500">Scan QR or enter ID</p>
+                      </div>
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Members Quick */}
+                {recentMembers.length > 0 && (
+                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-base font-bold text-white"><i className="fas fa-user-group text-blue-400 mr-2"></i>Members</h3>
+                        <span className="text-sm font-bold text-blue-400">{memberCount}</span>
+                      </div>
+                      <div className="flex -space-x-2 mb-3">
+                        {recentMembers.slice(0, 10).map((m: ClubDataMember) => (
+                          <div key={m.userId} className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-[0.55rem] font-bold text-white ring-2 ring-[#242526]" title={dn(m)}>
+                            {ui(m)}
+                          </div>
+                        ))}
+                        {memberCount > 10 && (
+                          <div className="w-9 h-9 rounded-full bg-[#3a3b3c] flex items-center justify-center text-[0.55rem] font-bold text-gray-400 ring-2 ring-[#242526]">
+                            +{memberCount - 10}
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={() => setSection('members')} className="w-full px-3 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-semibold hover:bg-blue-600/20 transition">
+                        <i className="fas fa-user-group mr-1.5"></i>View All Members
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cover Photo */}
+                {club.coverUrl && (
+                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4">
+                    <h3 className="text-base font-bold text-white mb-3">Cover Photo</h3>
+                    <img src={club.coverUrl} alt="" className="w-full rounded-lg object-cover" />
+                  </div>
+                )}
+
+                {/* Leadership */}
                 {leadership.length > 0 && (
                   <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
                     <h3 className="text-base font-bold text-white mb-4">Key People</h3>
@@ -856,12 +1004,32 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                         <i className="fas fa-clock-rotate-left mr-0.5"></i>Ex {CLUB_ROLES[m.previousRole]?.label || m.previousRole}{m.previousRoleSession ? ` (${m.previousRoleSession})` : ''}
                                       </p>
                                     )}
+                                    {(() => {
+                                      const pRoles = parseClubRoles(m.clubRoles);
+                                      if (pRoles.length === 0) return null;
+                                      return (
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {pRoles.map((rk: string) => {
+                                            const r = CLUB_MEMBER_ROLES[rk];
+                                            if (!r) return null;
+                                            return <span key={rk} title={r.description} className={`inline-flex items-center gap-0.5 text-[0.55rem] px-1.5 py-0.5 rounded bg-[#3a3b3c] font-semibold ${r.color}`}><i className={`fas ${r.icon}`}></i> {r.label}</span>;
+                                          })}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
-                                {canManage && m.userId !== profile.email && (
+                                {(canManage || m.userId === profile.email) && (
                                   <div className="flex items-center gap-1 shrink-0">
-                                    <button onClick={() => { setEditingMember(m.userId); setEditRole(m.role); setEditSession(''); }} title="Change role" className="text-blue-400 hover:text-blue-300 text-xs p-1.5 rounded-lg hover:bg-blue-500/10 transition"><i className="fas fa-pen"></i></button>
-                                    <button onClick={() => handleRemoveMember(m.userId)} title="Remove" className="text-red-400 hover:text-red-300 text-xs p-1.5 rounded-lg hover:bg-red-500/10 transition"><i className="fas fa-user-minus"></i></button>
+                                    {m.userId === profile.email && (
+                                      <button onClick={() => { setShowSelfRoles(true); }} title="Edit my roles" className="text-green-400 hover:text-green-300 text-xs p-1.5 rounded-lg hover:bg-green-500/10 transition"><i className="fas fa-id-badge"></i></button>
+                                    )}
+                                    {canManage && m.userId !== profile.email && (
+                                      <>
+                                        <button onClick={() => { setEditingMember(m.userId); setEditRole(m.role); setEditSession(''); setEditClubRoles(parseClubRoles(m.clubRoles)); }} title="Change role" className="text-blue-400 hover:text-blue-300 text-xs p-1.5 rounded-lg hover:bg-blue-500/10 transition"><i className="fas fa-pen"></i></button>
+                                        <button onClick={() => handleRemoveMember(m.userId)} title="Remove" className="text-red-400 hover:text-red-300 text-xs p-1.5 rounded-lg hover:bg-red-500/10 transition"><i className="fas fa-user-minus"></i></button>
+                                      </>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -1094,7 +1262,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                     <div className="flex justify-between items-center py-2 border-b border-[#3a3b3c]"><span className="text-gray-400 font-semibold">Name</span><span className="text-white">{club.name}</span></div>
                     <div className="flex justify-between items-center py-2 border-b border-[#3a3b3c]"><span className="text-gray-400 font-semibold">Department</span><span className="text-white">{club.department}</span></div>
                     <div className="flex justify-between items-start py-2 border-b border-[#3a3b3c]"><span className="text-gray-400 font-semibold">Description</span><span className="text-white text-right max-w-[60%]">{club.description || '—'}</span></div>
-                    <div className="flex justify-between items-center py-2"><span className="text-gray-400 font-semibold">Created By</span><span className="text-white">{club.createdBy}</span></div>
+                    <div className="flex justify-between items-center py-2"><span className="text-gray-400 font-semibold">Created By</span><button onClick={() => setShowCreatorPopup(true)} className="text-blue-400 hover:underline">{creatorProfile?.name || club.createdBy}</button></div>
                   </div>
                 </div>
 
@@ -1202,11 +1370,11 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
       {editingMember && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setEditingMember(null)}>
           <div className="bg-[#242526] border border-[#3a3b3c] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-2"><i className="fas fa-user-pen text-blue-400 mr-2"></i>Change Role</h3>
-            <p className="text-xs text-gray-500 mb-4">If this role is held by someone else, they&apos;ll be auto-demoted to Member.</p>
+            <h3 className="text-lg font-bold text-white mb-1"><i className="fas fa-user-pen text-blue-400 mr-2"></i>Edit Member Roles</h3>
+            <p className="text-xs text-gray-500 mb-4">Position role and permission roles for this member.</p>
             <div className="space-y-3">
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-1 block">New Role</label>
+                <label className="text-sm text-gray-400 font-semibold mb-1 block">Position Role</label>
                 <select value={editRole} onChange={e => setEditRole(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition">
                   {SORTED_ROLES.map(([key, r]) => <option key={key} value={key}>{r.label}</option>)}
@@ -1218,10 +1386,32 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                   className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition"
                   placeholder="e.g. Autumn 2023 (optional)" />
               </div>
+              <div>
+                <label className="text-sm text-gray-400 font-semibold mb-2 block">Permission Roles</label>
+                <div className="space-y-2">
+                  {CLUB_MEMBER_ROLE_LIST.map(r => (
+                    <label key={r.key} className="flex items-center gap-3 p-2.5 rounded-lg bg-[#18191a] border border-[#3a3b3c] hover:border-blue-500/30 cursor-pointer transition">
+                      <input type="checkbox" checked={editClubRoles.includes(r.key)}
+                        onChange={e => {
+                          const next = e.target.checked ? [...editClubRoles, r.key] : editClubRoles.filter(k => k !== r.key);
+                          setEditClubRoles(next);
+                        }}
+                        className="accent-blue-500 w-4 h-4" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <i className={`${r.icon} ${r.color} text-sm`}></i>
+                          <span className="text-sm font-semibold text-white">{r.label}</span>
+                        </div>
+                        <p className="text-[0.7rem] text-gray-500">{r.description}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setEditingMember(null)} className="flex-1 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Cancel</button>
-              <button onClick={handleChangeRole} className="flex-1 px-3 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition">Update Role</button>
+              <button onClick={handleChangeRole} className="flex-1 px-3 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition">Update</button>
             </div>
           </div>
         </div>
@@ -1289,6 +1479,77 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
               <button onClick={() => setShowClaimModal(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Cancel</button>
               <button onClick={handleSubmitClaim} disabled={submittingClaim} className="flex-1 px-3 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold disabled:opacity-50 transition">
                 {submittingClaim ? <i className="fas fa-spinner fa-spin"></i> : 'Send Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreatorPopup && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowCreatorPopup(false)}>
+          <div className="bg-[#242526] border border-[#3a3b3c] rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex flex-col items-center text-center">
+              {creatorProfile?.image ? (
+                <img src={creatorProfile.image} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-[#3a3b3c] mb-3" />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl font-bold text-white mb-3">
+                  {(creatorProfile?.name || club.createdBy)?.charAt(0)?.toUpperCase()}
+                </div>
+              )}
+              <h3 className="text-lg font-bold text-white">{creatorProfile?.name || club.createdBy}</h3>
+              {creatorProfile?.title && <p className="text-sm text-gray-400">{creatorProfile.title}</p>}
+              <div className="mt-3 space-y-2 w-full text-sm">
+                <div className="flex items-center gap-2 text-gray-300">
+                  <i className="fas fa-envelope text-gray-500 w-5 text-center"></i>
+                  <span>{club.createdBy}</span>
+                </div>
+                {creatorProfile?.department && (
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <i className="fas fa-building text-gray-500 w-5 text-center"></i>
+                    <span>{creatorProfile.department}</span>
+                  </div>
+                )}
+                {creatorProfile?.whatsapp && (
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <i className="fab fa-whatsapp text-green-400 w-5 text-center"></i>
+                    <a href={`https://wa.me/${creatorProfile.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="hover:text-green-400 transition">{creatorProfile.whatsapp}</a>
+                  </div>
+                )}
+              </div>
+            </div>
+            <button onClick={() => setShowCreatorPopup(false)} className="w-full mt-4 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Close</button>
+          </div>
+        </div>
+      )}
+
+      {showSelfRoles && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowSelfRoles(false)}>
+          <div className="bg-[#242526] border border-[#3a3b3c] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-1"><i className="fas fa-id-badge text-blue-400 mr-2"></i>My Roles</h3>
+            <p className="text-xs text-gray-500 mb-4">Select the roles that apply to you in this club.</p>
+            <div className="space-y-2">
+              {CLUB_MEMBER_ROLE_LIST.map(r => (
+                <label key={r.key} className="flex items-center gap-3 p-3 rounded-lg bg-[#18191a] border border-[#3a3b3c] hover:border-blue-500/30 cursor-pointer transition">
+                  <input type="checkbox" checked={selfClubRoles.includes(r.key)}
+                    onChange={e => {
+                      const next = e.target.checked ? [...selfClubRoles, r.key] : selfClubRoles.filter(k => k !== r.key);
+                      setSelfClubRoles(next);
+                    }}
+                    className="accent-blue-500 w-4 h-4" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <i className={`${r.icon} ${r.color} text-sm`}></i>
+                      <span className="text-sm font-semibold text-white">{r.label}</span>
+                    </div>
+                    <p className="text-[0.7rem] text-gray-500 mt-0.5">{r.description}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setShowSelfRoles(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Cancel</button>
+              <button onClick={handleSaveSelfRoles} disabled={savingSelfRoles} className="flex-1 px-3 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold disabled:opacity-50 transition">
+                {savingSelfRoles ? <i className="fas fa-spinner fa-spin"></i> : 'Save Roles'}
               </button>
             </div>
           </div>

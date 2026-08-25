@@ -255,7 +255,7 @@ export default function BrowsePage() {
       : '';
     const parts = [deptFolder, s.currentSem, courseFolder, s.currentMidFinal, s.currentCat].filter(Boolean);
     const parentPath = parts.join('/');
-    const folderPath = `${parentPath}/${folderName}`;
+    const folderPath = `${config.uploadPath}/${parentPath}/${folderName}`;
     const res = await fetch('/api/github/create-folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

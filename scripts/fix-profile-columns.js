@@ -269,6 +269,7 @@ async function main() {
   await safeExec(`ALTER TABLE "ClubMember" ADD COLUMN "isClubAdmin" INTEGER NOT NULL DEFAULT 0`, 'ClubMember.isClubAdmin col');
   await safeExec(`ALTER TABLE "ClubMember" ADD COLUMN "previousRole" TEXT`, 'ClubMember.previousRole col');
   await safeExec(`ALTER TABLE "ClubMember" ADD COLUMN "previousRoleSession" TEXT`, 'ClubMember.previousRoleSession col');
+  await safeExec(`ALTER TABLE "ClubMember" ADD COLUMN "clubRoles" TEXT`, 'ClubMember.clubRoles col');
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "ClubEvent" (
     "id" TEXT NOT NULL PRIMARY KEY, "clubId" TEXT NOT NULL, "title" TEXT NOT NULL,
@@ -309,6 +310,33 @@ async function main() {
 
   // ── Ensure default SiteSettings row ──
   await safeExec(`INSERT OR IGNORE INTO "SiteSettings" ("id", "permissions") VALUES ('site-settings', '{}')`, 'SiteSettings default row');
+
+  // ── StudioOrganization table ──
+  await safeExec(`CREATE TABLE IF NOT EXISTS "StudioOrganization" (
+    "id" TEXT NOT NULL PRIMARY KEY, "name" TEXT NOT NULL, "slug" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'batch', "logoUrl" TEXT, "description" TEXT,
+    "createdBy" TEXT NOT NULL, "memberCount" INTEGER NOT NULL DEFAULT 0,
+    "certCount" INTEGER NOT NULL DEFAULT 0, "isActive" INTEGER NOT NULL DEFAULT 1,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'StudioOrganization table');
+  await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "StudioOrganization_slug_key" ON "StudioOrganization"("slug")`, 'StudioOrganization.slug unique');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "StudioOrganization_slug_idx" ON "StudioOrganization"("slug")`, 'StudioOrganization.slug idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "StudioOrganization_createdBy_idx" ON "StudioOrganization"("createdBy")`, 'StudioOrganization.createdBy idx');
+
+  // ── StudioCertificate table ──
+  await safeExec(`CREATE TABLE IF NOT EXISTS "StudioCertificate" (
+    "id" TEXT NOT NULL PRIMARY KEY, "certificateId" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL, "memberName" TEXT NOT NULL, "universityId" TEXT NOT NULL,
+    "department" TEXT NOT NULL, "session" TEXT, "post" TEXT, "eventName" TEXT,
+    "servicePeriod" TEXT, "signatories" TEXT, "issuedBy" TEXT NOT NULL,
+    "issuedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "StudioCertificate_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "StudioOrganization"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`, 'StudioCertificate table');
+  await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "StudioCertificate_certificateId_key" ON "StudioCertificate"("certificateId")`, 'StudioCertificate.certificateId unique');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "StudioCertificate_orgId_idx" ON "StudioCertificate"("orgId")`, 'StudioCertificate.orgId idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "StudioCertificate_certificateId_idx" ON "StudioCertificate"("certificateId")`, 'StudioCertificate.certificateId idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "StudioCertificate_universityId_idx" ON "StudioCertificate"("universityId")`, 'StudioCertificate.universityId idx');
 
   const count = await prisma.profile.count();
   console.log(`\nTotal profiles: ${count}`);

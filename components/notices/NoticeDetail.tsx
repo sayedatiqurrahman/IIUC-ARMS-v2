@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { noticeAttachmentUrl } from '@/lib/notice-proxy';
 import type { Notice } from '@/lib/notices';
 import { CATEGORY_META } from '@/lib/notices';
 import type { ViewerItem } from '@/lib/store/types';
@@ -30,7 +31,7 @@ function buildViewerItem(url: string, name: string): ViewerItem {
     path: `notices/attachments/${name}`,
     name,
     mimeType: isPdf(name) ? 'application/pdf' : isDocx(name) ? 'application/docx' : isImage(name) ? 'image' : 'application/octet-stream',
-    rawUrl: url,
+    rawUrl: noticeAttachmentUrl(url),
   };
 }
 
@@ -213,7 +214,7 @@ export default function NoticeDetail({ params }: { params: Promise<{ id: string 
                       </a>
                     </div>
                   </div>
-                  <img src={notice.attachmentUrl} alt={attName}
+                  <img src={noticeAttachmentUrl(notice.attachmentUrl!)} alt={attName}
                     className="w-full max-h-[70vh] object-contain bg-black/20 cursor-pointer hover:opacity-90 transition"
                     onClick={() => setViewerItem(buildViewerItem(notice.attachmentUrl!, attName))} />
                 </div>

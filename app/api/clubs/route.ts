@@ -84,7 +84,14 @@ export async function POST(req: NextRequest) {
     });
 
     await prisma.clubMember.create({
-      data: { clubId: club.id, userId: email, role: 'gs', assignedBy: email, isClubAdmin: true },
+      data: {
+        clubId: club.id,
+        userId: email,
+        role: 'gs',
+        assignedBy: email,
+        isClubAdmin: true,
+        clubRoles: JSON.stringify(['club_admin', 'club_maintainer', 'club_event_manager', 'club_cert_issuer', 'club_content_manager']),
+      },
     });
 
     const clubDataConfig = {

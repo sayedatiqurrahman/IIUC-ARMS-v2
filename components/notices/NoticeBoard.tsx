@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { config } from '@/lib/config';
+import { noticeAttachmentUrl } from '@/lib/notice-proxy';
 import type { Notice, NoticeCategory } from '@/lib/notices';
 import { CATEGORY_META } from '@/lib/notices';
 import NoticePublishModal, { type NoticePublishOptions } from './NoticePublishModal';
@@ -369,7 +370,6 @@ export default function NoticeBoardView() {
                 <Link href={`/notices/${n.id}`} className="block">
                   <h3 className="text-[0.9rem] font-bold text-dark-text mb-1.5 leading-snug hover:text-qsis transition">{n.title}</h3>
                 </Link>
-                {n.description && <p className="text-[0.78rem] text-dark-text2 leading-relaxed mb-3 whitespace-pre-line">{n.description}</p>}
                 {n.link && (
                   <a href={n.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[0.75rem] text-qsis hover:underline mb-3">
                     <i className="fas fa-link"></i>{n.link}
@@ -384,7 +384,7 @@ export default function NoticeBoardView() {
                       <Link href={`/notices/${n.id}`} className="block">
                         {isImage ? (
                           <div className="rounded-xl overflow-hidden border border-dark-border hover:border-qsis/40 transition">
-                            <img src={n.attachmentUrl} alt={n.attachmentName || 'Attachment'} className="w-full max-h-48 object-cover" loading="lazy" />
+                            <img src={noticeAttachmentUrl(n.attachmentUrl)} alt={n.attachmentName || 'Attachment'} className="w-full max-h-48 object-cover" loading="lazy" />
                           </div>
                         ) : isPdf ? (
                           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 transition">
@@ -433,7 +433,7 @@ export default function NoticeBoardView() {
               <div className="flex items-center gap-3 px-4 py-3">
                 {n.attachmentUrl && ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes((n.attachmentName || n.attachmentUrl).split('.').pop()?.toLowerCase() || '') ? (
                   <Link href={`/notices/${n.id}`} className="shrink-0">
-                    <img src={n.attachmentUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-dark-border" loading="lazy" />
+                    <img src={noticeAttachmentUrl(n.attachmentUrl)} alt="" className="w-10 h-10 rounded-lg object-cover border border-dark-border" loading="lazy" />
                   </Link>
                 ) : (
                   <span className={`w-8 h-8 rounded-lg ${meta.bg} flex items-center justify-center shrink-0`}>

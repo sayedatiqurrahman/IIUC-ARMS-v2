@@ -1,6 +1,7 @@
 export interface ClubDataMember {
   userId: string;
   role: string;
+  clubRoles?: string | null;
   name?: string;
   department?: string;
   session?: string;

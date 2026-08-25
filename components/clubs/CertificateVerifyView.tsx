@@ -75,9 +75,9 @@ export default function CertificateVerifyView({ params }: { params: Promise<{ ce
             </div>
             <h2 className="text-lg font-bold text-green-400 mb-4">Certificate Verified</h2>
             <div className="bg-dark-bg rounded-xl p-4 text-left space-y-3">
-              {cert.club?.logoUrl && (
+              {(cert.club?.logoUrl || cert.organizationLogo) && (
                 <div className="flex justify-center mb-2">
-                  <img src={cert.club.logoUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                  <img src={cert.club?.logoUrl || cert.organizationLogo} alt="" className="w-12 h-12 rounded-lg object-cover" />
                 </div>
               )}
               <div className="flex justify-between text-sm">
@@ -85,8 +85,8 @@ export default function CertificateVerifyView({ params }: { params: Promise<{ ce
                 <span className="font-mono font-bold text-dark-text">{cert.certificateId}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-dark-text2">Club</span>
-                <span className="font-semibold text-dark-text">{cert.club?.name}</span>
+                <span className="text-dark-text2">{cert.source === 'studio' ? 'Organization' : 'Club'}</span>
+                <span className="font-semibold text-dark-text">{cert.club?.name || cert.organization}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-dark-text2">Member Name</span>
