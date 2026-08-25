@@ -144,6 +144,8 @@ model SiteSettings {
   customRoles              Json?    @default("[]")
   broadcastTargets         Json?    @default("[]")
   customClubRoles          Json?    @default("[]")
+  supportConfig            Json?
+  postingChannels          Json?
 }
 
 model SemesterCourse {

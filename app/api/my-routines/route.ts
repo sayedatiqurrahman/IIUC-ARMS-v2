@@ -61,9 +61,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No routines provided' }, { status: 400 });
     }
 
-    // Upsert each routine (delete existing by routineId, then create)
+    // Full replace: delete all existing my-routines, then insert the new list
+    await prisma.publishedRoutine.deleteMany({ where: { routineId: { startsWith: 'my-' } } });
+
+    // Insert each routine
     for (const r of routines) {
-      await prisma.publishedRoutine.deleteMany({ where: { routineId: r.id } });
       await prisma.publishedRoutine.create({
         data: {
           routineId: r.id,

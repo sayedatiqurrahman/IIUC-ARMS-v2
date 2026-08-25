@@ -205,10 +205,13 @@ export default function RoutineView({ dept }: { dept: string }) {
     setScheduleTarget(routine);
   }, [canPublish]);
 
-  const handleUnpublish = useCallback((id: string) => {
+  const handleUnpublish = useCallback(async (id: string) => {
     const updated = publishedRoutines.filter(r => r.id !== id);
     setPublishedRoutines(updated);
     savePublishedRoutines(updated);
+    try {
+      await fetch(`/api/published-routines?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch {}
     showToast('Routine unpublished', 'success');
   }, [publishedRoutines]);
 

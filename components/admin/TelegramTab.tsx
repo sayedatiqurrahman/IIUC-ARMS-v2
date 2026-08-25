@@ -9,6 +9,7 @@ import ChannelBroadcast from './telegram/ChannelBroadcast';
 import ExamRoutineNotification from './telegram/ExamRoutineNotification';
 import NotificationHistory from './telegram/NotificationHistory';
 import BroadcastTargets from './telegram/BroadcastTargets';
+import SupportConfigTab from './telegram/SupportConfigTab';
 
 export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boolean; effectiveRole?: string }) {
   const [botStatus, setBotStatus] = useState<'loading' | 'ok' | 'error'>('loading');
@@ -17,6 +18,7 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
   const [deptCounts, setDeptCounts] = useState<Record<string, number>>({});
   const [faculties, setFaculties] = useState<{ id: string; name: string; shortName: string; departments: { id: string; name: string; shortName: string }[] }[]>([]);
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [subTab, setSubTab] = useState<'main' | 'support' | 'posting'>('main');
 
   const allDepts = faculties.flatMap(f => f.departments.map(d => d.shortName));
 
@@ -57,30 +59,55 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
     <div>
       <h3 className="text-sm font-semibold text-dark-text mb-3"><i className="fas fa-paper-plane text-cyan-400 mr-2"></i>Telegram Bot & Notifications</h3>
 
-      <BotStatus botStatus={botStatus} botInfo={botInfo} connectedCount={connectedCount} />
+      {/* Sub-tabs */}
+      <div className="flex gap-1 mb-5 p-1 bg-dark-bg3 rounded-xl">
+        {[
+          { key: 'main' as const, label: 'Bot & Notifications', icon: 'fa-robot' },
+          { key: 'support' as const, label: 'Support Groups', icon: 'fa-headset' },
+          { key: 'posting' as const, label: 'Content Posting', icon: 'fa-share-nodes' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setSubTab(tab.key)}
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition ${
+              subTab === tab.key ? 'bg-dark-bg2 text-dark-text shadow-sm' : 'text-dark-text2 hover:text-dark-text'
+            }`}
+          >
+            <i className={`fas ${tab.icon}`}></i>
+            <span className="hidden sm:inline">{tab.label}</span>
+          </button>
+        ))}
+      </div>
 
-      <ConnectedUsers allDepts={allDepts} deptCounts={deptCounts} />
-
-      {(isOwner || effectiveRole === 'admin') && (
-        <DepartmentNotification
-          allDepts={allDepts}
-          deptCounts={deptCounts}
-          connectedCount={connectedCount}
-          onNotifySent={handleNotifySent}
-        />
+      {subTab === 'main' && (
+        <>
+          <BotStatus botStatus={botStatus} botInfo={botInfo} connectedCount={connectedCount} />
+          <ConnectedUsers allDepts={allDepts} deptCounts={deptCounts} />
+          {(isOwner || effectiveRole === 'admin') && (
+            <DepartmentNotification
+              allDepts={allDepts}
+              deptCounts={deptCounts}
+              connectedCount={connectedCount}
+              onNotifySent={handleNotifySent}
+            />
+          )}
+          <BotCommands />
+          {isOwner && <ChannelBroadcast />}
+          {(isOwner || effectiveRole === 'admin') && <BroadcastTargets />}
+          {(isOwner || effectiveRole === 'admin') && (
+            <ExamRoutineNotification allDepts={allDepts} onNotifySent={handleNotifySent} />
+          )}
+          <NotificationHistory refreshTrigger={historyRefresh} />
+        </>
       )}
 
-      <BotCommands />
-
-      {isOwner && <ChannelBroadcast />}
-
-      {(isOwner || effectiveRole === 'admin') && <BroadcastTargets />}
-
-      {(isOwner || effectiveRole === 'admin') && (
-        <ExamRoutineNotification allDepts={allDepts} onNotifySent={handleNotifySent} />
+      {subTab === 'support' && (
+        <SupportConfigTab />
       )}
 
-      <NotificationHistory refreshTrigger={historyRefresh} />
+      {subTab === 'posting' && (
+        <SupportConfigTab />
+      )}
     </div>
   );
 }

@@ -508,6 +508,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <Link href="/history" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
                     <i className="fas fa-history w-4 text-center text-orange-400"></i><span>History</span>
                   </Link>
+                  <div className="border-t border-dark-border my-1"></div>
+                  <Link href="/support" onClick={() => setExploreOpen(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[0.78rem] hover:text-qsis hover:bg-white/5 transition-colors no-underline text-dark-text2">
+                    <i className="fas fa-headset w-4 text-center text-qsis"></i><span>Support</span>
+                  </Link>
                 </div>
               )}
             </div>
@@ -757,6 +761,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     ['team', '/contributors', 'fas fa-users', 'bg-pink-500/15', 'text-pink-400', 'Team', true, 'link'],
                     ['clubs', '/clubs', 'fas fa-shield-halved', 'bg-qsis/15', 'text-qsis', 'Clubs', true, 'link'],
                     ['faculty', '/faculty', 'fas fa-chalkboard-user', 'bg-teal-500/15', 'text-teal-400', 'Faculty', true, 'link'],
+                    ['support', '/support', 'fas fa-headset', 'bg-red-500/15', 'text-red-400', 'Support', true, 'link'],
                   ] as const).map(([key, href, icon, bg, color, label, isLink, kind]) => {
                     const cls = `flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-dark-bg3 border border-dark-border transition-colors no-underline ${kind === 'link' ? 'hover:border-qsis/40' : kind === 'upload' ? 'hover:border-green-500/40' : 'hover:border-slate-400/40'}`;
                     const inner = (
