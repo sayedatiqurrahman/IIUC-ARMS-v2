@@ -132,7 +132,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
 
     const member = await prisma.clubMember.upsert({
       where: { clubId_userId: { clubId: club.id, userId } },
-      update: { role: newRole, assignedBy: email },
+      update: { role: newRole, assignedBy: email, previousRole: null, previousRoleSession: null },
       create: { clubId: club.id, userId, role: newRole, assignedBy: email },
     });
 

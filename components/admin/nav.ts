@@ -60,6 +60,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { key: 'batches', label: 'Batches', icon: 'fa-layer-group', color: 'text-purple-400', show: ctx => ctx.isAdmin || ctx.isManager || ctx.isTeacherUser || ctx.profileIsCR || ctx.has('manageBatches') },
       { key: 'notices', label: 'Notice Board', icon: 'fa-bullhorn', color: 'text-amber-400', show: ctx => ctx.isAdmin || ctx.isManager || ctx.isTeacherUser || ctx.has('publishNotice') },
       { key: 'blog', label: 'Blog & Tutorials', icon: 'fa-pen-nib', color: 'text-emerald-400', show: ctx => ctx.isAdmin || ctx.isManager || ctx.isTeacherUser || ctx.has('publishBlog') || ctx.has('publishTutorial') },
+      { key: 'clubs', label: 'Clubs', icon: 'fa-users', color: 'text-qsis', show: ctx => ctx.isAdmin || ctx.isManager || ctx.has('createClub') || ctx.has('manageAllClubs') },
     ],
   },
   {

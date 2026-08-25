@@ -3,6 +3,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { config } from '@/lib/config';
 import { hasPermission } from '@/lib/permissions';
+import { initClubRepo } from '@/lib/club-data';
 
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -81,8 +82,20 @@ export async function POST(req: NextRequest) {
     });
 
     await prisma.clubMember.create({
-      data: { clubId: club.id, userId: email, role: 'gs', assignedBy: email },
+      data: { clubId: club.id, userId: email, role: 'gs', assignedBy: email, isClubAdmin: true },
     });
+
+    const clubDataConfig = {
+      name: club.name,
+      slug: club.slug,
+      department: club.department,
+      description: club.description || undefined,
+      logoUrl: club.logoUrl || undefined,
+      coverUrl: club.coverUrl || undefined,
+      createdAt: club.createdAt.toISOString(),
+      createdBy: club.createdBy,
+    };
+    initClubRepo(slug, clubDataConfig).catch(() => {});
 
     return NextResponse.json({ success: true, club });
   } catch {

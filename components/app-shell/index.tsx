@@ -755,6 +755,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     ['studio', '/studio', 'fas fa-tools', 'bg-orange-500/15', 'text-orange-400', 'Studio', true, 'link'],
                     ['history', '/history', 'fas fa-clock-rotate-left', 'bg-yellow-500/15', 'text-yellow-400', 'History', true, 'link'],
                     ['team', '/contributors', 'fas fa-users', 'bg-pink-500/15', 'text-pink-400', 'Team', true, 'link'],
+                    ['clubs', '/clubs', 'fas fa-shield-halved', 'bg-qsis/15', 'text-qsis', 'Clubs', true, 'link'],
                     ['faculty', '/faculty', 'fas fa-chalkboard-user', 'bg-teal-500/15', 'text-teal-400', 'Faculty', true, 'link'],
                   ] as const).map(([key, href, icon, bg, color, label, isLink, kind]) => {
                     const cls = `flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-dark-bg3 border border-dark-border transition-colors no-underline ${kind === 'link' ? 'hover:border-qsis/40' : kind === 'upload' ? 'hover:border-green-500/40' : 'hover:border-slate-400/40'}`;

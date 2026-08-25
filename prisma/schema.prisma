@@ -309,6 +309,7 @@ model Club {
   logoUrl     String?
   coverUrl    String?
   createdBy   String
+  settings    String?  // JSON: { managerCanManageMembers, managerCanIssueCerts, managerCanManageEvents }
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -327,9 +328,10 @@ model ClubMember {
   clubId               String
   userId               String
   role                 String   @default("member") // gs, ags, ogs, office_secretary, member
+  isClubAdmin          Boolean  @default(false) // creator gets this; super-powers within the club
   assignedBy           String?
-  previousRole         String?  // e.g. "gs" — the role they held before being replaced
-  previousRoleSession  String?  // e.g. "Autumn 2023" — session during which they held the previous role
+  previousRole         String?
+  previousRoleSession  String?
   createdAt            DateTime @default(now())
 
   club       Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)

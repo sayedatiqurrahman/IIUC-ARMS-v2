@@ -62,6 +62,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ slug
     if (body.description !== undefined) data.description = body.description || null;
     if (body.logoUrl !== undefined) data.logoUrl = body.logoUrl || null;
     if (body.coverUrl !== undefined) data.coverUrl = body.coverUrl || null;
+    if (body.settings !== undefined) data.settings = body.settings || null;
     if (body.isActive !== undefined && (isAdmin || isManager || hasManageAll)) data.isActive = body.isActive;
 
     if (body.department !== undefined && body.department !== club.department) {

@@ -10,3 +10,4 @@ export { default as BatchesTab } from './BatchesTab';
 export { default as PermissionsTab } from './PermissionsTab';
 export { default as CoursesTab } from './CoursesTab';
 export { default as TelegramTab } from './TelegramTab';
+export { default as ClubsTab } from './ClubsTab';

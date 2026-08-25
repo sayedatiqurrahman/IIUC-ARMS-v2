@@ -53,7 +53,7 @@ export interface AdminStats {
   githubConnected: number;
 }
 
-export type Tab = 'overview' | 'users' | 'activity' | 'faculty' | 'facultyDept' | 'courses' | 'permissions' | 'roles' | 'rooms' | 'batches' | 'telegram' | 'contributors' | 'notices' | 'cronJobs' | 'blog';
+export type Tab = 'overview' | 'users' | 'activity' | 'faculty' | 'facultyDept' | 'courses' | 'permissions' | 'roles' | 'rooms' | 'batches' | 'telegram' | 'contributors' | 'notices' | 'cronJobs' | 'blog' | 'clubs';
 export type UserSubTab = 'all' | 'admin' | 'manager' | 'teacher' | 'student' | 'external' | 'pending';
 
 export interface ContributorSettings {

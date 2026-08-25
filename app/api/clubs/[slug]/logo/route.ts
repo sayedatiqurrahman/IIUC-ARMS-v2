@@ -48,13 +48,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     const membership = await prisma.clubMember.findUnique({ where: { clubId_userId: { clubId: club.id, userId: email } } });
     const officerRoles = ['gs', 'ags', 'ogs', 'office_secretary'];
     const isOfficer = membership && officerRoles.includes(membership.role);
+    const isClubAdmin = membership?.isClubAdmin || false;
 
-    if (!isAdmin && !isManager && !hasPerm && !isOfficer) {
+    if (!isAdmin && !isManager && !hasPerm && !isOfficer && !isClubAdmin) {
       return NextResponse.json({ error: 'Not authorized to update club logo' }, { status: 403 });
     }
 
     const body = await req.json();
-    const { image } = body;
+    const { image, type } = body;
     if (!image || typeof image !== 'string') {
       return NextResponse.json({ error: 'Image data required (data URI)' }, { status: 400 });
     }
@@ -66,7 +67,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
 
     const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
     const base64Data = match[2];
-    const filePath = `${CLUBS_FOLDER}/${slug}/logo.${ext}`;
+    const isCover = type === 'cover';
+    const fileName = isCover ? 'cover' : 'logo';
+    const filePath = `${CLUBS_FOLDER}/${slug}/${fileName}.${ext}`;
 
     const token = await getRepoBotToken(config.owner, config.repo) || process.env.GITHUB_TOKEN;
     if (!token) {
@@ -87,10 +90,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       return NextResponse.json({ error: 'Failed to upload logo to GitHub' }, { status: 500 });
     }
 
-    const logoUrl = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${filePath}`;
-    await prisma.club.update({ where: { id: club.id }, data: { logoUrl } });
+    const imageUrl = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.branch}/${filePath}`;
+    const updateData = isCover ? { coverUrl: imageUrl } : { logoUrl: imageUrl };
+    await prisma.club.update({ where: { id: club.id }, data: updateData });
 
-    return NextResponse.json({ success: true, logoUrl });
+    return NextResponse.json({ success: true, ...(isCover ? { coverUrl: imageUrl } : { logoUrl: imageUrl }) });
   } catch {
     return NextResponse.json({ error: 'Failed to upload logo' }, { status: 500 });
   }
