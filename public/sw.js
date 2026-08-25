@@ -123,14 +123,13 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
-  // Static viewer apps (pdf.js, pdfjs-express/WebViewer): never intercept.
+  // Static viewer apps: never intercept.
   // Their HTML pages are loaded in an iframe — serving the PWA shell here
   // breaks them (the shell sets X-Frame-Options: deny).
   // opencv.js is a 13MB lazy asset; the browser HTTP cache handles it best,
   // and an SW cache-first hit could return an empty 504 response that would
   // permanently disable the detection engine. Let it go straight to network.
   if (
-    url.pathname.startsWith('/pdfjs/') ||
     url.pathname.startsWith('/webviewer/') ||
     url.pathname === '/opencv.js'
   ) {
@@ -144,7 +143,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API calls: network only, never cache (except the public tree below)
+  // API calls: network only, never cache (except the public tree and raw files below)
   if (url.pathname.startsWith('/api/')) {
     if (url.pathname === '/api/github') {
       // Tree endpoint: network-first so newly uploaded files always appear
@@ -163,6 +162,22 @@ self.addEventListener('fetch', (event) => {
               status: 503,
               headers: { 'Content-Type': 'application/json' },
             });
+          }
+        })
+      );
+    } else if (url.pathname === '/api/github/raw') {
+      // Raw file proxy: network-first with file cache fallback for offline PDF viewing.
+      // Cache key uses the full URL including the ?url= param.
+      event.respondWith(
+        caches.open(FILE_CACHE).then(async (cache) => {
+          try {
+            const response = await fetch(request);
+            if (response.ok) cache.put(request, response.clone());
+            return response;
+          } catch {
+            const cached = await cache.match(request);
+            if (cached) return cached;
+            return new Response('Offline — file not cached', { status: 503 });
           }
         })
       );

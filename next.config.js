@@ -27,14 +27,7 @@ const nextConfig = {
         ],
       },
       {
-        source: '/pdfjs/:path*',
-        headers: [
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-        ],
-      },
-      {
-        source: '/((?!pdfjs/|api/github/raw(?:/|$)|studio/app/|api/studio-apps/).*)',
+        source: '/((?!api/github/raw(?:/|$)|studio/app/|api/studio-apps/).*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },

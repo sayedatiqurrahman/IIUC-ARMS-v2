@@ -133,73 +133,13 @@ export async function optimizePdf(
 }
 
 // ---------------------------------------------------------------------------
-// Full PDF compression — re-render pages to downscaled JPEG via jsPDF
+// PDF compression stub — pdf.js was removed for lightweight viewing.
+// optimizePdf (pdf-lib) still works for in-place JPEG recompression.
 // ---------------------------------------------------------------------------
 
 export async function compressPdf(
-  file: File,
-  opts: { qualities?: number[]; maxWidth?: number } = {},
+  _file: File,
+  _opts: { qualities?: number[]; maxWidth?: number } = {},
 ): Promise<File | null> {
-  const maxWidth = opts.maxWidth ?? 1500;
-  const qualities = opts.qualities ?? [0.78, 0.6];
-  const name = file.name.toLowerCase();
-  if (!/\.pdf$/i.test(name)) return null;
-
-  let pdf: any;
-  try {
-    const pdfjs: any = await import(/* webpackIgnore: true */ '/pdfjs/pdf.min.mjs');
-    pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
-    pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
-  } catch {
-    return null;
-  }
-
-  try {
-    const canvases: HTMLCanvasElement[] = [];
-    const dims: { w: number; h: number }[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const vp = page.getViewport({ scale: 1 });
-      const scale = Math.min(1, maxWidth / vp.width);
-      const w = Math.max(1, Math.round(vp.width * scale));
-      const h = Math.max(1, Math.round(vp.height * scale));
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d')!;
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, w, h);
-      await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale }) }).promise;
-      canvases.push(canvas);
-      dims.push({ w, h });
-    }
-
-    const { jsPDF } = await import('jspdf');
-    let bestBlob: Blob | null = null;
-    for (const q of qualities) {
-      const imgs = await Promise.all(
-        canvases.map(async c => {
-          const raw: RawImage = { data: c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data as Uint8ClampedArray<ArrayBuffer>, width: c.width, height: c.height };
-          const bytes = await encodeJpeg(raw, q);
-          return uint8ToDataUrl(bytes, 'image/jpeg');
-        }),
-      );
-      const firstOrient = dims[0].w >= dims[0].h ? 'landscape' : 'portrait';
-      const doc: any = new jsPDF({ orientation: firstOrient, unit: 'px', format: [dims[0].w, dims[0].h] });
-      for (let i = 0; i < imgs.length; i++) {
-        if (i > 0) doc.addPage([dims[i].w, dims[i].h], dims[i].w >= dims[i].h ? 'landscape' : 'portrait');
-        doc.addImage(imgs[i], 'JPEG', 0, 0, dims[i].w, dims[i].h);
-      }
-      const blob = doc.output('blob') as Blob;
-      if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
-    }
-
-    if (!bestBlob || bestBlob.size >= file.size) return null;
-    const baseName = file.name.replace(/\.pdf$/i, '');
-    return new File([bestBlob], `${baseName}_compressed.pdf`, { type: 'application/pdf' });
-  } catch {
-    return null;
-  } finally {
-    try { pdf.destroy?.(); } catch {}
-  }
+  return null;
 }

@@ -1,11 +1,8 @@
 'use client';
 
-// PDF compression, kept on the main thread (it renders pages via pdf.js + a 2D
-// canvas, which is awkward inside a nested worker). This mirrors what online
-// tools do server-side with Ghostscript: first recompress embedded raster
-// images in place (text/vectors stay crisp), then fall back to rasterising the
-// whole document when there are no recompressible images (scanned PDFs). Never
-// returns a larger file.
+// PDF compression via pdf-lib (in-place JPEG recompression).
+// Raster-based compression (pdf.js) was removed for lightweight viewing.
+// optimizePdf still works for recompressing embedded JPEG images.
 
 import { optimizePdf, compressPdf } from '@/lib/image-utils';
 import type { CompressMode } from './engines';
