@@ -217,10 +217,15 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       const isUni = isUniversityEmail(email);
       setMagicLinkSent(true);
       setSuccess(isUni
-        ? 'Magic link sent! Check your email inbox, spam/junk folder, and "All Mail" if you don\'t see it.'
-        : 'Magic link sent! Note: Non-university emails require admin approval before you can access the system. You\'ll be redirected to a pending page after signing in. Check your spam/junk folder and "All Mail" if you don\'t see it.');
+        ? 'Magic link sent! Check your email inbox, spam/junk folder, and "All Mail" if you don\'t see it within 2 minutes.'
+        : 'Magic link sent! Note: Non-university emails require admin approval before you can access the system. You\'ll be redirected to a pending page after signing in. Check your spam/junk folder and "All Mail" if you don\'t see it within 2 minutes.');
     } catch (err: any) {
-      setError(err.code === 'auth/user-not-found' ? 'No account found. Please sign up first.' : 'Failed to send magic link. Please try again.');
+      console.error('[MagicLink] Send error:', err?.code, err?.message);
+      const msg = err.code === 'auth/user-not-found' ? 'No account found with this email. Please sign up first.'
+        : err.code === 'auth/invalid-email' ? 'Invalid email address.'
+        : err.code === 'auth/too-many-requests' ? 'Too many requests. Please wait a few minutes before trying again.'
+        : 'Failed to send magic link. Please try again or use password login.';
+      setError(msg);
     } finally { setLoading(false); }
   };
 

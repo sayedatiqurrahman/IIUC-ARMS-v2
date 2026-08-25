@@ -3,6 +3,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { config } from '@/lib/config';
 import { hasPermission } from '@/lib/permissions';
+import { hasAnyClubRole, parseClubRoles } from '@/lib/club-member-roles';
 
 function generateCertId(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -18,12 +19,27 @@ async function canIssueCertificates(email: string, clubId: string): Promise<bool
   const { prisma } = await import('@/lib/prisma');
   const profile = await prisma.profile.findUnique({ where: { userId: email } });
   const role = config.getEffectiveRole(email, profile?.role);
+
+  // Site-wide: admin/manager always allowed
   if (config.isAdminOrAbove(email, profile?.role)) return true;
   if (config.isManager(email, profile?.role)) return true;
+
+  // Site-wide: has issueCertificates permission (admin-togglable in Permissions tab)
   if (await hasPermission('issueCertificates', role, false, email)) return true;
-  const member = await prisma.clubMember.findUnique({ where: { clubId_userId: { clubId, userId: email } } });
+
+  // Club-level: must be a member
+  const member = await prisma.clubMember.findUnique({
+    where: { clubId_userId: { clubId, userId: email } }
+  });
   if (!member) return false;
-  return ['gs', 'ags'].includes(member.role);
+
+  // Club officer roles (GS/AGS always allowed)
+  if (['gs', 'ags'].includes(member.role)) return true;
+
+  // Club permission roles (club_admin, club_maintainer, club_cert_issuer)
+  if (hasAnyClubRole(member.clubRoles, ['club_admin', 'club_maintainer', 'club_cert_issuer'])) return true;
+
+  return false;
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {

@@ -24,16 +24,29 @@ async function hasAdminCreatedProfile(email: string): Promise<boolean> {
   }
 }
 
+// Cache account status for 60s to avoid DB hit on every 30s session poll
+const statusCache = new Map<string, { status: string; ts: number }>();
+const STATUS_CACHE_TTL = 60_000;
+
 async function getAccountStatus(email: string): Promise<string | null> {
+  const cached = statusCache.get(email);
+  if (cached && Date.now() - cached.ts < STATUS_CACHE_TTL) return cached.status;
   try {
     const { prisma } = await import('@/lib/prisma');
     const profile = await prisma.profile.findUnique({ where: { userId: email }, select: { accountStatus: true } });
-    return profile?.accountStatus || null;
+    const status = profile?.accountStatus || 'active';
+    statusCache.set(email, { status, ts: Date.now() });
+    return status;
   } catch {
-    return null;
+    return cached?.status || null;
   }
 }
 export { getAccountStatus };
+
+export function invalidateStatusCache(email?: string) {
+  if (email) statusCache.delete(email);
+  else statusCache.clear();
+}
 
 async function ensurePendingProfile(email: string, name?: string): Promise<void> {
   try {
@@ -278,4 +291,33 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60,
   },
   secret: process.env.NEXTAUTH_SECRET,
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+    callbackUrl: {
+      name: `next-auth.callback-url`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+    csrfToken: {
+      name: `next-auth.csrf-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+  },
 };

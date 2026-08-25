@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import {
   getUserTTL,
@@ -28,6 +28,10 @@ export default function SettingsPage() {
   const [clearing, setClearing] = useState(false);
   const [purging, setPurging] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  const [deleteEmail, setDeleteEmail] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/');
@@ -59,6 +63,34 @@ export default function SettingsPage() {
     const purged = await purgeExpiredCache();
     setStats(await getCacheStats());
     setPurging(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteError('');
+    const userEmail = (session as any)?.user?.email;
+    if (deleteEmail.toLowerCase() !== userEmail?.toLowerCase()) {
+      setDeleteError('Email does not match your account email');
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmEmail: deleteEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDeleteError(data.error || 'Failed to delete account');
+        setDeleting(false);
+        return;
+      }
+      await fetch('/api/auth/firebase-session', { method: 'DELETE' });
+      await signOut({ callbackUrl: '/' });
+    } catch {
+      setDeleteError('Network error. Please try again.');
+      setDeleting(false);
+    }
   };
 
   if (status === 'loading') {
@@ -170,7 +202,7 @@ export default function SettingsPage() {
         </div>
 
         {/* ─── About section ─── */}
-        <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
+        <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
           <div className="flex items-center gap-2 mb-2">
             <i className="fas fa-info-circle text-qsis"></i>
             <h2 className="text-[0.9rem] font-bold text-dark-text">How caching works</h2>
@@ -197,6 +229,95 @@ export default function SettingsPage() {
               <span><strong className="text-dark-text">Per-device</strong> — Cache is stored on this device only. Other devices have their own cache.</span>
             </li>
           </ul>
+        </div>
+
+        {/* ─── Dangerous Zone ─── */}
+        <div className="bg-dark-bg2 border border-red-500/30 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <i className="fas fa-triangle-exclamation text-red-400"></i>
+            <h2 className="text-[0.9rem] font-bold text-red-400">Danger Zone</h2>
+          </div>
+          <p className="text-[0.75rem] text-dark-text2 mb-4 leading-relaxed">
+            Permanently delete your account and all associated data. This action cannot be undone.
+          </p>
+
+          {deleteStep === 0 && (
+            <button onClick={() => setDeleteStep(1)}
+              className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-[0.78rem] font-medium text-red-400 hover:bg-red-500/20 cursor-pointer transition">
+              <i className="fas fa-trash-alt mr-1.5"></i>Delete my account
+            </button>
+          )}
+
+          {deleteStep === 1 && (
+            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4">
+              <p className="text-[0.78rem] text-dark-text mb-3">
+                <i className="fas fa-info-circle text-red-400 mr-1.5"></i>
+                <strong>What will be deleted:</strong>
+              </p>
+              <ul className="space-y-1.5 text-[0.72rem] text-dark-text2 mb-4 ml-5">
+                <li className="list-disc">Your profile and personal information</li>
+                <li className="list-disc">Club memberships and claims</li>
+                <li className="list-disc">Firebase authentication account</li>
+                <li className="list-disc">Telegram connections and OTP settings</li>
+                <li className="list-disc">Activity logs and permission grants</li>
+              </ul>
+              <p className="text-[0.72rem] text-green-400 mb-3 ml-5">
+                <i className="fas fa-check mr-1.5"></i>
+                Your contributions (certificates issued, GitHub commits) will be preserved.
+              </p>
+              <p className="text-[0.78rem] text-dark-text mb-3">
+                To confirm, type your email address <strong className="text-red-400">{(session as any)?.user?.email}</strong> below:
+              </p>
+              <input
+                type="text"
+                value={deleteEmail}
+                onChange={e => { setDeleteEmail(e.target.value); setDeleteError(''); }}
+                placeholder="your@email.com"
+                className="w-full px-3 py-2 bg-dark-bg border border-red-500/30 rounded-xl text-[0.78rem] text-dark-text placeholder:text-dark-text3 mb-3 outline-none focus:border-red-500/50"
+              />
+              {deleteError && (
+                <p className="text-[0.72rem] text-red-400 mb-3"><i className="fas fa-exclamation-circle mr-1"></i>{deleteError}</p>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => { setDeleteStep(0); setDeleteEmail(''); setDeleteError(''); }}
+                  className="px-4 py-2 rounded-xl bg-dark-bg3 border border-dark-border text-[0.78rem] font-medium text-dark-text2 hover:text-dark-text cursor-pointer transition">
+                  Cancel
+                </button>
+                <button onClick={() => {
+                  if (deleteEmail.toLowerCase() !== (session as any)?.user?.email?.toLowerCase()) {
+                    setDeleteError('Email does not match your account email');
+                    return;
+                  }
+                  setDeleteStep(2);
+                }}
+                  disabled={!deleteEmail}
+                  className="px-4 py-2 rounded-xl bg-red-500/20 border border-red-500/40 text-[0.78rem] font-medium text-red-400 hover:bg-red-500/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition">
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
+
+          {deleteStep === 2 && (
+            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4">
+              <p className="text-[0.78rem] text-red-400 font-bold mb-2">
+                <i className="fas fa-exclamation-triangle mr-1.5"></i>Final Confirmation
+              </p>
+              <p className="text-[0.72rem] text-dark-text2 mb-4 leading-relaxed">
+                You are about to <strong className="text-red-400">permanently delete</strong> your account. All your data will be removed from IIUC-ARMS. This cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => { setDeleteStep(1); setDeleteEmail(''); setDeleteError(''); }}
+                  className="px-4 py-2 rounded-xl bg-dark-bg3 border border-dark-border text-[0.78rem] font-medium text-dark-text2 hover:text-dark-text cursor-pointer transition">
+                  Go back
+                </button>
+                <button onClick={handleDeleteAccount} disabled={deleting}
+                  className="px-4 py-2 rounded-xl bg-red-600 text-[0.78rem] font-medium text-white hover:bg-red-700 cursor-pointer disabled:opacity-50 transition">
+                  {deleting ? <><i className="fas fa-spinner fa-spin mr-1.5"></i>Deleting...</> : <><i className="fas fa-trash-alt mr-1.5"></i>Delete my account permanently</>}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

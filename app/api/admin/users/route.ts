@@ -3,6 +3,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { invalidatePermissionsCache } from '@/lib/permissions';
+import { invalidateStatusCache } from '@/lib/auth-options';
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.admin);
@@ -385,6 +386,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Cannot ban the owner' }, { status: 403 });
         }
         await prisma.profile.update({ where: { userId: targetEmail }, data: banData });
+        invalidateStatusCache(targetEmail);
         return NextResponse.json({ success: true, message: 'User banned' });
       }
       // Teacher can ban: students, users, managers (not admins, not other teachers)
@@ -396,6 +398,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Teachers cannot ban other teachers' }, { status: 403 });
         }
         await prisma.profile.update({ where: { userId: targetEmail }, data: banData });
+        invalidateStatusCache(targetEmail);
         return NextResponse.json({ success: true, message: 'User banned' });
       }
       // Manager can ban: students, users only (not teachers, not managers, not admins)
@@ -414,6 +417,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Only admins can unban' }, { status: 403 });
       }
       await prisma.profile.update({ where: { userId: targetEmail }, data: { isBanned: false, banReason: null, bannedBy: null } });
+      invalidateStatusCache(targetEmail);
       return NextResponse.json({ success: true, message: 'User unbanned' });
     }
 
@@ -437,6 +441,7 @@ export async function POST(req: NextRequest) {
       // user (e.g. a manually-assigned student on a non-@ugrad email) is no longer
       // treated as a pending external account and shows up under their role tab.
       await prisma.profile.update({ where: { userId: targetEmail }, data: { role: newRole, accountStatus: 'active' } });
+      invalidateStatusCache(targetEmail);
       return NextResponse.json({ success: true, message: `Role changed to ${newRole}` });
     }
 
@@ -573,6 +578,7 @@ export async function POST(req: NextRequest) {
         update: { accountStatus: 'active' },
         create: { userId: targetEmail, email: targetEmail, accountStatus: 'active' },
       });
+      invalidateStatusCache(targetEmail);
       return NextResponse.json({ success: true, message: `Account approved for ${targetEmail}` });
     }
 
@@ -586,6 +592,7 @@ export async function POST(req: NextRequest) {
         update: { accountStatus: 'rejected', isBanned: true },
         create: { userId: targetEmail, email: targetEmail, accountStatus: 'rejected', isBanned: true },
       });
+      invalidateStatusCache(targetEmail);
       return NextResponse.json({ success: true, message: `Account rejected for ${targetEmail}` });
     }
 
@@ -602,6 +609,7 @@ export async function POST(req: NextRequest) {
         update: { accountStatus: 'pending' },
         create: { userId: targetEmail, email: targetEmail, accountStatus: 'pending' },
       });
+      invalidateStatusCache(targetEmail);
       return NextResponse.json({ success: true, message: `Account ${targetEmail} moved back to pending approval` });
     }
 

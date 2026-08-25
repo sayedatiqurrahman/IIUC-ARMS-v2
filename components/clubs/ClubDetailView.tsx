@@ -157,6 +157,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   const isAdmin = profile.role === 'admin' || profile.role === 'manager';
   const canManage = isAdmin || isOfficer || isClubAdmin;
   const isMember = !!myMember;
+  const myClubRoles = parseClubRoles(myMember?.clubRoles);
+  const canIssueCert = isAdmin || isOfficer || isClubAdmin || myClubRoles.includes('club_admin') || myClubRoles.includes('club_maintainer') || myClubRoles.includes('club_cert_issuer');
   const clubSettings = (() => { try { return JSON.parse(club?.settings || '{}'); } catch { return {}; } })();
 
   // Sync self clubRoles state when myMember changes
@@ -472,7 +474,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                   <i className="fas fa-check-circle mr-1.5"></i>Following
                 </span>
               )}
-              {canManage && (
+              {canIssueCert && (
                 <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline">
                   <button className="px-4 py-2.5 bg-[#3a3b3c] hover:bg-[#4e4f50] text-white border border-white/10 rounded-lg text-sm font-semibold transition">
                     <i className="fas fa-award mr-1.5"></i>Issue Cert
@@ -563,11 +565,13 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                 ) : (
                   <p className="text-xs text-gray-500">No certificates issued yet.</p>
                 )}
-                <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline block">
-                  <button className="w-full px-3 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-semibold hover:bg-blue-600/20 transition">
-                    <i className="fas fa-plus mr-1.5"></i>Issue Certificate
-                  </button>
-                </Link>
+                {canIssueCert && (
+                  <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline block">
+                    <button className="w-full px-3 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-semibold hover:bg-blue-600/20 transition">
+                      <i className="fas fa-plus mr-1.5"></i>Issue Certificate
+                    </button>
+                  </Link>
+                )}
               </div>
               <div className="border-t border-[#3a3b3c]">
                 <Link href="/verify" className="flex items-center gap-3 px-4 py-3 hover:bg-[#3a3b3c] transition no-underline">
@@ -665,11 +669,13 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                       <button onClick={() => setShowAddEvent(true)} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-[#3a3b3c] rounded-lg text-sm text-gray-300 font-semibold transition">
                         <i className="fas fa-calendar-plus text-green-400"></i> Event
                       </button>
-                      <Link href={`/clubs/${slug}/certificates/issue`} className="flex-1 no-underline">
-                        <button className="w-full flex items-center justify-center gap-2 py-2 hover:bg-[#3a3b3c] rounded-lg text-sm text-gray-300 font-semibold transition">
-                          <i className="fas fa-award text-yellow-400"></i> Certificate
-                        </button>
-                      </Link>
+                      {canIssueCert && (
+                        <Link href={`/clubs/${slug}/certificates/issue`} className="flex-1 no-underline">
+                          <button className="w-full flex items-center justify-center gap-2 py-2 hover:bg-[#3a3b3c] rounded-lg text-sm text-gray-300 font-semibold transition">
+                            <i className="fas fa-award text-yellow-400"></i> Certificate
+                          </button>
+                        </Link>
+                      )}
                     </div>
                   </div>
                 )}
@@ -869,11 +875,13 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                     ) : (
                       <p className="text-xs text-gray-500">No certificates issued yet.</p>
                     )}
-                    <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline block">
-                      <button className="w-full px-3 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-semibold hover:bg-blue-600/20 transition">
-                        <i className="fas fa-plus mr-1.5"></i>Issue Certificate
-                      </button>
-                    </Link>
+                    {canIssueCert && (
+                      <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline block">
+                        <button className="w-full px-3 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-semibold hover:bg-blue-600/20 transition">
+                          <i className="fas fa-plus mr-1.5"></i>Issue Certificate
+                        </button>
+                      </Link>
+                    )}
                   </div>
                   <div className="border-t border-[#3a3b3c]">
                     <Link href="/verify" className="flex items-center gap-3 px-4 py-3 hover:bg-[#3a3b3c] transition no-underline">
@@ -1101,7 +1109,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                 <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4 mb-4 flex items-center justify-between gap-2 flex-wrap">
                   <h3 className="text-base font-bold text-white"><i className="fas fa-award text-yellow-400 mr-2"></i>Certificates ({certCount})</h3>
                   <div className="flex gap-2">
-                    {canManage && (
+                    {canIssueCert && (
                       <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline">
                         <button className="px-3 py-1.5 bg-yellow-600/15 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-semibold hover:bg-yellow-600/25 transition">
                           <i className="fas fa-plus mr-1"></i>Issue

@@ -112,7 +112,7 @@ export async function resetPassword(email: string) {
 export async function sendMagicLink(email: string) {
   const actionCodeSettings = {
     url: `${window.location.origin}/auth/magic-link`,
-    handleCodeInApp: true,
+    handleCodeInApp: false,
   };
   await sendSignInLinkToEmail(getFirebaseAuth(), email, actionCodeSettings);
   window.localStorage.setItem('emailForSignIn', email);

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAppStore } from '@/lib/store';
+import { parseClubRoles } from '@/lib/club-member-roles';
 import QRCode from 'qrcode';
 import { downloadCertPDF, generateBulkCertPDF, CertPDFData } from '@/lib/club-cert-pdf';
 import { CertSignatory, CertTheme, DEFAULT_THEME, THEME_PRESETS } from '@/lib/cert-theme';
@@ -21,9 +23,11 @@ const defaultSignatories: CertSignatory[] = [
 ];
 
 export default function IssueCertView({ params }: { params: Promise<{ slug: string }> }) {
+  const profile = useAppStore(s => s.profile);
   const [slug, setSlug] = useState('');
   const [club, setClub] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [denied, setDenied] = useState(false);
   const [rows, setRows] = useState<CertRow[]>([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '' }]);
   const [signatories, setSignatories] = useState<CertSignatory[]>(defaultSignatories);
   const [themes, setThemes] = useState<CertTheme[]>(THEME_PRESETS);
@@ -54,10 +58,18 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
           const themeData = await themeRes.json();
           if (themeData.theme) setSelectedTheme(themeData.theme);
         } catch {}
+
+        const myMember = clubData.club?.members?.find((m: any) => m.userId === profile.email);
+        const isAdmin = profile.role === 'admin' || profile.role === 'manager';
+        const isOfficer = !!myMember && ['gs', 'ags', 'ogs', 'office_secretary'].includes(myMember.role);
+        const isClubAdmin = !!myMember?.isClubAdmin;
+        const myClubRoles = parseClubRoles(myMember?.clubRoles);
+        const canIssue = isAdmin || isOfficer || isClubAdmin || myClubRoles.includes('club_admin') || myClubRoles.includes('club_maintainer') || myClubRoles.includes('club_cert_issuer');
+        if (!canIssue) setDenied(true);
       } catch {}
       setLoading(false);
     });
-  }, []);
+  }, [profile.email, profile.role]);
 
   function updateRow(i: number, field: keyof CertRow, value: string) {
     setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
@@ -153,6 +165,19 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
   if (loading) return (
     <div className="min-h-screen bg-dark-bg flex items-center justify-center">
       <i className="fas fa-spinner fa-spin text-qsis text-2xl"></i>
+    </div>
+  );
+
+  if (denied) return (
+    <div className="min-h-screen bg-dark-bg flex items-center justify-center px-4">
+      <div className="text-center max-w-sm">
+        <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+          <i className="fas fa-lock text-red-400 text-2xl"></i>
+        </div>
+        <h2 className="text-lg font-bold text-dark-text mb-2">Access Denied</h2>
+        <p className="text-sm text-dark-text2 mb-4">You don&apos;t have permission to issue certificates for this club. Only club admins, maintainers, certificate issuers, and GS/AGS officers can issue certificates.</p>
+        <a href={`/clubs/${slug}`} className="text-qsis text-sm hover:underline"><i className="fas fa-arrow-left mr-1"></i>Back to {club?.name || 'Club'}</a>
+      </div>
     </div>
   );
 
