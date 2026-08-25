@@ -6,11 +6,9 @@ import 'dotenv/config';
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is not set. Connect Turso on Vercel: turso db tokens create qsis-arms');
-  }
+  const url = process.env.DATABASE_URL || 'file:./prisma/dev.db';
   const adapter = new PrismaLibSql({
-    url: process.env.DATABASE_URL,
+    url,
     authToken: process.env.DATABASE_AUTH_TOKEN || '',
   });
   return new PrismaClient({ adapter });
