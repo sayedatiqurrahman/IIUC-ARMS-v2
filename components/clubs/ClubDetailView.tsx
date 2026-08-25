@@ -4,9 +4,10 @@ import { useEffect, useState, useRef } from 'react';
 import { useAppStore } from '@/lib/store';
 import { useUserAccess } from '@/lib/useUserAccess';
 import Link from 'next/link';
-import { CLUB_ROLES, getRoleGroupMembers } from '@/lib/club-roles';
+import { CLUB_ROLES, getRoleGroupMembers, getRoleLabel } from '@/lib/club-roles';
 import type { ClubDataMember } from '@/lib/club-roles';
 import { CLUB_MEMBER_ROLES, CLUB_MEMBER_ROLE_LIST, parseClubRoles } from '@/lib/club-member-roles';
+import RoleCombobox from './RoleCombobox';
 import { downloadCertPDF, generateBulkCertPDF } from '@/lib/club-cert-pdf';
 import type { CertPDFData } from '@/lib/club-cert-pdf';
 
@@ -36,7 +37,6 @@ type Section = 'posts' | 'about' | 'members' | 'events' | 'certificates' | 'clai
 type ClaimFilter = 'pending' | 'approved' | 'rejected' | 'all';
 
 const GROUP_ORDER = ['Executive', 'Finance', 'Operations', 'Members'];
-const SORTED_ROLES = Object.entries(CLUB_ROLES).sort((a, b) => a[1].order - b[1].order);
 
 function dn(m: ClubDataMember): string { return m.name || m.userId.split('@')[0]; }
 function ui(m: ClubDataMember): string { return dn(m).substring(0, 2).toUpperCase(); }
@@ -97,6 +97,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   const [savingSelfRoles, setSavingSelfRoles] = useState(false);
   const [editClubRoles, setEditClubRoles] = useState<string[]>([]);
   const [selfClubRoles, setSelfClubRoles] = useState<string[]>([]);
+  const [customClubRoles, setCustomClubRoles] = useState<Array<{ key: string; label: string }>>([]);
+  const [selfPositionRole, setSelfPositionRole] = useState('');
 
   useEffect(() => {
     const onScroll = () => {
@@ -130,8 +132,29 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
     setClaimsLoading(false);
   }
 
+  async function loadCustomRoles() {
+    try {
+      const res = await fetch('/api/clubs/roles');
+      const data = await res.json();
+      if (data.customRoles) setCustomClubRoles(data.customRoles);
+    } catch {}
+  }
+
+  async function handleSaveCustomRole(key: string, label: string) {
+    try {
+      const res = await fetch('/api/clubs/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, label }),
+      });
+      const data = await res.json();
+      if (data.customRoles) setCustomClubRoles(data.customRoles);
+    } catch {}
+  }
+
   useEffect(() => {
     params.then(p => { setSlug(p.slug); loadClub(p.slug); });
+    loadCustomRoles();
   }, []);
   useEffect(() => {
     if (section === 'claims' && slug) loadClaims(claimFilter);
@@ -165,8 +188,9 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   useEffect(() => {
     if (myMember) {
       setSelfClubRoles(parseClubRoles(myMember.clubRoles));
+      setSelfPositionRole(myMember.role || 'member');
     }
-  }, [myMember?.clubRoles]);
+  }, [myMember?.clubRoles, myMember?.role]);
 
   async function handleAddMember() {
     if (!addEmail.trim()) return;
@@ -216,7 +240,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
     try {
       const res = await fetch(`/api/clubs/${slug}/members`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: myMember.userId, clubRoles: selfClubRoles }),
+        body: JSON.stringify({ userId: myMember.userId, role: selfPositionRole, clubRoles: selfClubRoles }),
       });
       const data = await res.json();
       if (data.success) { setShowSelfRoles(false); loadClub(slug); }
@@ -637,7 +661,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-white truncate group-hover:text-blue-400 transition">{dn(m)}</p>
                           <span className={`inline-flex items-center gap-1 text-[0.65rem] px-2 py-0.5 rounded-full border font-semibold ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
-                            <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {ri?.label || m.role}
+                            <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {getRoleLabel(m.role, customClubRoles)}
                           </span>
                         </div>
                       </div>
@@ -946,7 +970,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                             <div className="min-w-0">
                               <p className="text-sm font-semibold text-white truncate">{dn(m)}</p>
                               <span className={`inline-flex items-center gap-1 text-[0.65rem] px-2 py-0.5 rounded-full border font-semibold ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
-                                <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {ri?.label || m.role}
+                                <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {getRoleLabel(m.role, customClubRoles)}
                               </span>
                               {m.isClubAdmin && <span className="ml-1 text-[0.6rem] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold">ADMIN</span>}
                             </div>
@@ -1005,11 +1029,11 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                       {m.isClubAdmin && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold">ADMIN</span>}
                                     </div>
                                     <span className={`inline-flex items-center gap-1 text-[0.65rem] px-2 py-0.5 rounded-full border font-semibold mt-0.5 ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
-                                      <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {ri?.label || m.role}
+                                      <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {getRoleLabel(m.role, customClubRoles)}
                                     </span>
                                     {m.previousRole && (
                                       <p className="text-[0.6rem] text-gray-500 mt-0.5">
-                                        <i className="fas fa-clock-rotate-left mr-0.5"></i>Ex {CLUB_ROLES[m.previousRole]?.label || m.previousRole}{m.previousRoleSession ? ` (${m.previousRoleSession})` : ''}
+                                        <i className="fas fa-clock-rotate-left mr-0.5"></i>Ex {getRoleLabel(m.previousRole, customClubRoles)}{m.previousRoleSession ? ` (${m.previousRoleSession})` : ''}
                                       </p>
                                     )}
                                     {(() => {
@@ -1359,10 +1383,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
               </div>
               <div>
                 <label className="text-sm text-gray-400 font-semibold mb-1 block">Role</label>
-                <select value={addRole} onChange={e => setAddRole(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition">
-                  {SORTED_ROLES.map(([key, r]) => <option key={key} value={key}>{r.label}</option>)}
-                </select>
+                <RoleCombobox value={addRole} onChange={setAddRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
@@ -1383,10 +1404,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             <div className="space-y-3">
               <div>
                 <label className="text-sm text-gray-400 font-semibold mb-1 block">Position Role</label>
-                <select value={editRole} onChange={e => setEditRole(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition">
-                  {SORTED_ROLES.map(([key, r]) => <option key={key} value={key}>{r.label}</option>)}
-                </select>
+                <RoleCombobox value={editRole} onChange={setEditRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
               </div>
               <div>
                 <label className="text-sm text-gray-400 font-semibold mb-1 block">Session (for Ex-badge)</label>
@@ -1471,10 +1489,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             <div className="space-y-3">
               <div>
                 <label className="text-sm text-gray-400 font-semibold mb-1 block">Requested Role</label>
-                <select value={claimRole} onChange={e => setClaimRole(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition">
-                  {SORTED_ROLES.map(([key, r]) => <option key={key} value={key}>{r.label}</option>)}
-                </select>
+                <RoleCombobox value={claimRole} onChange={setClaimRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
               </div>
               <div>
                 <label className="text-sm text-gray-400 font-semibold mb-1 block">Message (optional)</label>
@@ -1534,25 +1549,34 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowSelfRoles(false)}>
           <div className="bg-[#242526] border border-[#3a3b3c] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-white mb-1"><i className="fas fa-id-badge text-blue-400 mr-2"></i>My Roles</h3>
-            <p className="text-xs text-gray-500 mb-4">Select the roles that apply to you in this club.</p>
-            <div className="space-y-2">
-              {CLUB_MEMBER_ROLE_LIST.map(r => (
-                <label key={r.key} className="flex items-center gap-3 p-3 rounded-lg bg-[#18191a] border border-[#3a3b3c] hover:border-blue-500/30 cursor-pointer transition">
-                  <input type="checkbox" checked={selfClubRoles.includes(r.key)}
-                    onChange={e => {
-                      const next = e.target.checked ? [...selfClubRoles, r.key] : selfClubRoles.filter(k => k !== r.key);
-                      setSelfClubRoles(next);
-                    }}
-                    className="accent-blue-500 w-4 h-4" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <i className={`${r.icon} ${r.color} text-sm`}></i>
-                      <span className="text-sm font-semibold text-white">{r.label}</span>
-                    </div>
-                    <p className="text-[0.7rem] text-gray-500 mt-0.5">{r.description}</p>
-                  </div>
-                </label>
-              ))}
+            <p className="text-xs text-gray-500 mb-4">Change your position role and permission roles in this club.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm text-gray-400 font-semibold mb-1 block">Position Role</label>
+                <RoleCombobox value={selfPositionRole} onChange={setSelfPositionRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 font-semibold mb-2 block">Permission Roles</label>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {CLUB_MEMBER_ROLE_LIST.map(r => (
+                    <label key={r.key} className="flex items-center gap-3 p-3 rounded-lg bg-[#18191a] border border-[#3a3b3c] hover:border-blue-500/30 cursor-pointer transition">
+                      <input type="checkbox" checked={selfClubRoles.includes(r.key)}
+                        onChange={e => {
+                          const next = e.target.checked ? [...selfClubRoles, r.key] : selfClubRoles.filter(k => k !== r.key);
+                          setSelfClubRoles(next);
+                        }}
+                        className="accent-blue-500 w-4 h-4" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <i className={`${r.icon} ${r.color} text-sm`}></i>
+                          <span className="text-sm font-semibold text-white">{r.label}</span>
+                        </div>
+                        <p className="text-[0.7rem] text-gray-500 mt-0.5">{r.description}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowSelfRoles(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Cancel</button>

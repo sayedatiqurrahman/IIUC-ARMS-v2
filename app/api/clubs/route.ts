@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, department, description, logoUrl, coverUrl } = body;
+    const { name, department, description, logoUrl, coverUrl, creatorRole } = body;
     if (!name?.trim()) return NextResponse.json({ error: 'Club name required' }, { status: 400 });
     if (!department) return NextResponse.json({ error: 'Department required' }, { status: 400 });
 
@@ -83,11 +83,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const validCreatorRole = creatorRole && creatorRole !== 'gs' ? creatorRole : 'member';
     await prisma.clubMember.create({
       data: {
         clubId: club.id,
         userId: email,
-        role: 'gs',
+        role: validCreatorRole,
         assignedBy: email,
         isClubAdmin: true,
         clubRoles: JSON.stringify(['club_admin', 'club_maintainer', 'club_event_manager', 'club_cert_issuer', 'club_content_manager']),

@@ -102,22 +102,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
     const { prisma } = await import('@/lib/prisma');
     const validRoleKeys = ['club_admin', 'club_maintainer', 'club_event_manager', 'club_cert_issuer', 'club_content_manager'];
 
-    // Self-role update: members can update their own clubRoles only (no position change)
     const isSelfUpdate = userId === email;
-    if (clubRoles !== undefined && isSelfUpdate && !newRole) {
-      const filtered = Array.isArray(clubRoles) ? clubRoles.filter((r: string) => validRoleKeys.includes(r)) : [];
+
+    // Self-role update: members can update their own position role AND clubRoles
+    if (isSelfUpdate && !canManage) {
+      const updateData: any = {};
+      if (newRole) updateData.role = newRole;
+      if (clubRoles !== undefined) {
+        updateData.clubRoles = JSON.stringify(
+          Array.isArray(clubRoles) ? clubRoles.filter((r: string) => validRoleKeys.includes(r)) : []
+        );
+      }
+      if (Object.keys(updateData).length === 0) {
+        return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+      }
       const member = await prisma.clubMember.upsert({
         where: { clubId_userId: { clubId: club.id, userId } },
-        update: { clubRoles: JSON.stringify(filtered) },
-        create: { clubId: club.id, userId, role: 'member', assignedBy: email, clubRoles: JSON.stringify(filtered) },
+        update: updateData,
+        create: { clubId: club.id, userId, role: newRole || 'member', assignedBy: email, clubRoles: updateData.clubRoles || '[]' },
       });
       return NextResponse.json({ success: true, member });
     }
 
-    // Manager/admin editing another member: can update role, clubRoles, or both
     if (!newRole && clubRoles === undefined) return NextResponse.json({ error: 'role or clubRoles required' }, { status: 400 });
 
-    // Only clubRoles (admin editing someone else)
+    // Only clubRoles (admin editing someone else or self with admin permissions)
     if (!newRole && clubRoles !== undefined) {
       const filtered = Array.isArray(clubRoles) ? clubRoles.filter((r: string) => validRoleKeys.includes(r)) : [];
       const member = await prisma.clubMember.upsert({
