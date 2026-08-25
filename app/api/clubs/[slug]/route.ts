@@ -17,6 +17,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
   if (!rl.success) return rl.response!;
   try {
     const { slug } = await params;
+    if (!slug) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
     const { prisma } = await import('@/lib/prisma');
     const club = await prisma.club.findUnique({
       where: { slug },
@@ -29,7 +30,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
     if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
     return NextResponse.json({ club });
   } catch {
-    return NextResponse.json({ error: 'Failed to load club' }, { status: 500 });
+    return NextResponse.json({ error: 'Club not found' }, { status: 404 });
   }
 }
 

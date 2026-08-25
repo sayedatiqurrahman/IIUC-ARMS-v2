@@ -15,17 +15,19 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const department = url.searchParams.get('department');
+    const includeAll = url.searchParams.get('all') === 'true';
     const { prisma } = await import('@/lib/prisma');
-    const where: any = { isActive: true };
+    const where: any = {};
+    if (!includeAll) where.isActive = true;
     if (department) where.department = department;
     const clubs = await prisma.club.findMany({
       where,
       orderBy: { name: 'asc' },
-      include: { _count: { select: { members: true } } },
+      include: { _count: { select: { members: true, events: true, certificates: true } } },
     });
-    return NextResponse.json({ clubs });
+    return NextResponse.json({ success: true, clubs });
   } catch {
-    return NextResponse.json({ error: 'Failed to load clubs' }, { status: 500 });
+    return NextResponse.json({ success: true, clubs: [] });
   }
 }
 

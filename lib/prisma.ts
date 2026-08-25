@@ -6,9 +6,12 @@ import 'dotenv/config';
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is not set. Connect Turso on Vercel: turso db tokens create qsis-arms');
+  }
   const adapter = new PrismaLibSql({
-    url: process.env.DATABASE_URL!,
-    authToken: process.env.DATABASE_AUTH_TOKEN!,
+    url: process.env.DATABASE_URL,
+    authToken: process.env.DATABASE_AUTH_TOKEN || '',
   });
   return new PrismaClient({ adapter });
 }
@@ -16,6 +19,16 @@ function createPrismaClient() {
 export const prisma = globalForPrisma.prisma || createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+/** Check if the database is configured and reachable. */
+export async function isDbAvailable(): Promise<boolean> {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function withDbRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   let lastError: any;

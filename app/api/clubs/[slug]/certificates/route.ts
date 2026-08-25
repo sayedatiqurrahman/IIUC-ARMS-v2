@@ -31,14 +31,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   if (!rl.success) return rl.response!;
   try {
     const url = new URL(req.url);
+    const search = url.searchParams.get('search');
     const universityId = url.searchParams.get('universityId');
     const { slug } = await params;
+    if (!slug) return NextResponse.json({ certificates: [] });
     const { prisma } = await import('@/lib/prisma');
     const club = await prisma.club.findUnique({ where: { slug } });
-    if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+    if (!club) return NextResponse.json({ certificates: [] });
 
     const where: any = { clubId: club.id };
-    if (universityId) where.universityId = universityId;
+    if (search) {
+      where.OR = [
+        { memberName: { contains: search } },
+        { certificateId: { contains: search } },
+        { universityId: { contains: search } },
+      ];
+    } else if (universityId) {
+      where.universityId = universityId;
+    }
 
     const certificates = await prisma.clubCertificate.findMany({
       where,
@@ -47,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     });
     return NextResponse.json({ certificates });
   } catch {
-    return NextResponse.json({ error: 'Failed to load certificates' }, { status: 500 });
+    return NextResponse.json({ certificates: [] });
   }
 }
 

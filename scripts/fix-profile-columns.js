@@ -256,6 +256,7 @@ async function main() {
   )`, 'Club');
   await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "Club_slug_idx" ON "Club"("slug")`, 'Club slug idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "Club_department_idx" ON "Club"("department")`, 'Club department idx');
+  await safeExec(`ALTER TABLE "Club" ADD COLUMN "settings" TEXT`, 'Club.settings col');
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "ClubMember" (
     "id" TEXT NOT NULL PRIMARY KEY, "clubId" TEXT NOT NULL, "userId" TEXT NOT NULL,
@@ -265,6 +266,9 @@ async function main() {
   await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "ClubMember_clubId_userId_idx" ON "ClubMember"("clubId", "userId")`, 'ClubMember unique idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "ClubMember_clubId_idx" ON "ClubMember"("clubId")`, 'ClubMember clubId idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "ClubMember_userId_idx" ON "ClubMember"("userId")`, 'ClubMember userId idx');
+  await safeExec(`ALTER TABLE "ClubMember" ADD COLUMN "isClubAdmin" INTEGER NOT NULL DEFAULT 0`, 'ClubMember.isClubAdmin col');
+  await safeExec(`ALTER TABLE "ClubMember" ADD COLUMN "previousRole" TEXT`, 'ClubMember.previousRole col');
+  await safeExec(`ALTER TABLE "ClubMember" ADD COLUMN "previousRoleSession" TEXT`, 'ClubMember.previousRoleSession col');
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "ClubEvent" (
     "id" TEXT NOT NULL PRIMARY KEY, "clubId" TEXT NOT NULL, "title" TEXT NOT NULL,
@@ -284,6 +288,8 @@ async function main() {
   await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "ClubCertificate_certificateId_idx" ON "ClubCertificate"("certificateId")`, 'ClubCertificate certId idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "ClubCertificate_clubId_idx" ON "ClubCertificate"("clubId")`, 'ClubCertificate clubId idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "ClubCertificate_universityId_idx" ON "ClubCertificate"("universityId")`, 'ClubCertificate uniId idx');
+  await safeExec(`ALTER TABLE "ClubCertificate" ADD COLUMN "servicePeriod" TEXT`, 'ClubCertificate.servicePeriod col');
+  await safeExec(`ALTER TABLE "ClubCertificate" ADD COLUMN "signatories" TEXT`, 'ClubCertificate.signatories col');
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "ClubClaim" (
     "id" TEXT NOT NULL PRIMARY KEY,

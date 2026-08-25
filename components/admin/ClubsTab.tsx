@@ -42,15 +42,26 @@ export default function ClubsTab({ email, effectiveRole, profile, customPermissi
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: '', department: '', description: '' });
   const [showCreate, setShowCreate] = useState(false);
+  const [editingClub, setEditingClub] = useState<ClubWithMeta | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', department: '', description: '' });
+  const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState('');
 
   const fetchClubs = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (deptFilter) params.set('department', deptFilter);
+      params.set('all', 'true');
       const res = await fetch(`/api/clubs?${params}`);
       const data = await res.json();
-      if (data.success && Array.isArray(data.clubs)) setClubs(data.clubs);
+      if (data.success && Array.isArray(data.clubs)) {
+        setClubs(data.clubs.map((c: any) => ({
+          ...c,
+          memberCount: c._count?.members ?? c.memberCount ?? 0,
+          eventCount: c._count?.events ?? c.eventCount ?? 0,
+          publishedCertificates: c._count?.certificates ?? c.publishedCertificates ?? 0,
+        })));
+      }
     } catch {}
     setLoading(false);
   }, [deptFilter]);
@@ -103,6 +114,20 @@ export default function ClubsTab({ email, effectiveRole, profile, customPermissi
       fetchClubs();
     } catch {}
     setActionLoading('');
+  };
+
+  const handleEdit = async () => {
+    if (!editingClub || !editForm.name.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/clubs/${editingClub.slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      });
+      if (res.ok) { setEditingClub(null); fetchClubs(); }
+    } catch {}
+    setSaving(false);
   };
 
   const deptOptions = FACULTIES.flatMap(f => f.departments.map(d => ({ label: `${f.name} - ${d.name}`, value: d.name })));
@@ -229,6 +254,15 @@ export default function ClubsTab({ email, effectiveRole, profile, customPermissi
                   >
                     <i className="fas fa-trash" />
                   </button>
+                  <button
+                    onClick={() => {
+                      setEditingClub(club);
+                      setEditForm({ name: club.name, department: club.department, description: club.description || '' });
+                    }}
+                    className="px-3 py-1 text-xs rounded-lg border border-gray-700/50 text-gray-400 hover:text-white hover:border-gray-600 transition-colors"
+                  >
+                    <i className="fas fa-pen" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -280,6 +314,55 @@ export default function ClubsTab({ email, effectiveRole, profile, customPermissi
                 className="bg-qsis hover:bg-qsis-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
               >
                 {creating ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingClub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setEditingClub(null)}>
+          <div className="bg-gray-900 border border-gray-700/50 rounded-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-4">Edit Club</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Club Name *</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-qsis/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Department *</label>
+                <CustomSelect
+                  options={deptOptions}
+                  value={editForm.department}
+                  onChange={v => setEditForm(f => ({ ...f, department: v }))}
+                  placeholder="Select department"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                  className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-qsis/50 resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setEditingClub(null)} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleEdit}
+                disabled={saving || !editForm.name.trim() || !editForm.department}
+                className="bg-qsis hover:bg-qsis-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>

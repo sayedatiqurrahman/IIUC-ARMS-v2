@@ -125,9 +125,11 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   useEffect(() => {
     params.then(p => { setSlug(p.slug); loadClub(p.slug); });
   }, []);
-  useEffect(() => { if (section === 'claims') loadClaims(claimFilter); }, [section, slug, claimFilter]);
   useEffect(() => {
-    if (section === 'certificates' || section === 'posts') handleCertSearch('');
+    if (section === 'claims' && slug) loadClaims(claimFilter);
+  }, [section, slug, claimFilter]);
+  useEffect(() => {
+    if ((section === 'certificates' || section === 'posts') && slug) handleCertSearch('');
   }, [section, slug]);
 
   const myMember: ClubDataMember | undefined = club?.members?.find((m: ClubDataMember) => m.userId === profile.email);

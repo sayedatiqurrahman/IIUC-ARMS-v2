@@ -9,14 +9,15 @@ const SINGLETON_ROLES = ['president', 'vice_president', 'advisor', 'gs', 'ags', 
 async function getClubAndRole(email: string, slug: string) {
   const { prisma } = await import('@/lib/prisma');
   const club = await prisma.club.findUnique({ where: { slug } });
-  if (!club) return { club: null, memberRole: null, isAdmin: false, isManager: false, hasPerm: false };
+  if (!club) return { club: null, memberRole: null, isAdmin: false, isManager: false, hasPerm: false, isTeacher: false, isClubAdmin: false };
   const profile = await prisma.profile.findUnique({ where: { userId: email } });
   const role = config.getEffectiveRole(email, profile?.role);
   const isAdmin = config.isAdminOrAbove(email, profile?.role);
   const isManager = config.isManager(email, profile?.role);
+  const isTeacher = profile?.role === 'teacher';
   const hasPerm = await hasPermission('manageClubMembers', role, false, email);
   const membership = await prisma.clubMember.findUnique({ where: { clubId_userId: { clubId: club.id, userId: email } } });
-  return { club, memberRole: membership?.role || null, isAdmin, isManager, hasPerm };
+  return { club, memberRole: membership?.role || null, isAdmin, isManager, hasPerm, isTeacher, isClubAdmin: membership?.isClubAdmin || false };
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { slug } = await params;
-    const { club, memberRole, isAdmin, isManager, hasPerm } = await getClubAndRole(email, slug);
+    const { club, memberRole, isAdmin, isManager, hasPerm, isTeacher, isClubAdmin } = await getClubAndRole(email, slug);
     if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
 
     const body = await req.json();
@@ -55,11 +56,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     const validRoles = ['gs', 'ags', 'ogs', 'office_secretary', 'member'];
     const assignedRole = validRoles.includes(role) ? role : 'member';
 
-    const canManage = isAdmin || isManager || hasPerm || memberRole === 'gs';
-    const canAssignOfficer = isAdmin || isManager || hasPerm || memberRole === 'gs';
+    const canManage = isAdmin || isManager || hasPerm || memberRole === 'gs' || (isTeacher && !!memberRole) || isClubAdmin;
+    const canAssignOfficer = isAdmin || isManager || hasPerm || memberRole === 'gs' || (isTeacher && !!memberRole) || isClubAdmin;
     const isOfficerRole = ['gs', 'ags', 'ogs', 'office_secretary'].includes(assignedRole);
     if (isOfficerRole && !canAssignOfficer) {
-      return NextResponse.json({ error: 'Only GS, admin, or manager can assign officer roles' }, { status: 403 });
+      return NextResponse.json({ error: 'Only GS, admin, manager, or teacher members can assign officer roles' }, { status: 403 });
     }
     if (!isOfficerRole && !canManage && memberRole !== 'ogs' && memberRole !== 'ags') {
       return NextResponse.json({ error: 'Not authorized to add members' }, { status: 403 });
@@ -86,10 +87,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { slug } = await params;
-    const { club, memberRole, isAdmin, isManager, hasPerm } = await getClubAndRole(email, slug);
+    const { club, memberRole, isAdmin, isManager, hasPerm, isTeacher, isClubAdmin } = await getClubAndRole(email, slug);
     if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
 
-    const canManage = isAdmin || isManager || hasPerm || memberRole === 'gs';
+    const canManage = isAdmin || isManager || hasPerm || memberRole === 'gs' || (isTeacher && !!memberRole) || isClubAdmin;
     if (!canManage) {
       return NextResponse.json({ error: 'Not authorized to change roles' }, { status: 403 });
     }
@@ -104,9 +105,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
     }
 
     const isOfficerRole = SINGLETON_ROLES.includes(newRole);
-    const canAssignOfficer = isAdmin || isManager || hasPerm || memberRole === 'gs';
+    const canAssignOfficer = isAdmin || isManager || hasPerm || memberRole === 'gs' || (isTeacher && !!memberRole) || isClubAdmin;
     if (isOfficerRole && !canAssignOfficer) {
-      return NextResponse.json({ error: 'Only GS, admin, or manager can assign officer roles' }, { status: 403 });
+      return NextResponse.json({ error: 'Only GS, admin, manager, or teacher members can assign officer roles' }, { status: 403 });
     }
 
     const { prisma } = await import('@/lib/prisma');
@@ -150,15 +151,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { slug } = await params;
-    const { club, memberRole, isAdmin, isManager, hasPerm } = await getClubAndRole(email, slug);
+    const { club, memberRole, isAdmin, isManager, hasPerm, isTeacher, isClubAdmin } = await getClubAndRole(email, slug);
     if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
 
     const body = await req.json();
     const { userId } = body;
     if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
 
-    if (!isAdmin && !isManager && !hasPerm && memberRole !== 'gs') {
-      return NextResponse.json({ error: 'Only GS, admin, or manager can remove members' }, { status: 403 });
+    if (!isAdmin && !isManager && !hasPerm && memberRole !== 'gs' && !(isTeacher && !!memberRole) && !isClubAdmin) {
+      return NextResponse.json({ error: 'Only GS, admin, manager, or teacher members can remove members' }, { status: 403 });
     }
 
     const { prisma } = await import('@/lib/prisma');
