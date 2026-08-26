@@ -14,8 +14,10 @@ interface SupportConfig {
 async function getSupportConfig(): Promise<SupportConfig> {
   try {
     const { prisma } = await import('@/lib/prisma');
-    const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
-    const raw = (settings as any)?.supportConfig;
+    const p = prisma as any;
+    // Use raw SQL to avoid schema mismatch if columns are missing
+    const rows = await p.$queryRawUnsafe(`SELECT supportConfig FROM SiteSettings WHERE id = 'site-settings'`);
+    const raw = (rows as any[])[0]?.supportConfig;
     if (!raw) return {};
     return typeof raw === 'string' ? JSON.parse(raw) : raw;
   } catch {

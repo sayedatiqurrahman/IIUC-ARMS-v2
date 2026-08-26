@@ -4,14 +4,36 @@ import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission } from '@/lib/permissions';
 
+async function ensureColumnsExist(p: any): Promise<void> {
+  const tableInfo = await p.$queryRawUnsafe(`PRAGMA table_info(SiteSettings)`);
+  const existingCols = new Set((tableInfo as any[]).map((c: any) => c.name));
+  const needed = [
+    { name: 'supportConfig', type: 'TEXT' },
+    { name: 'postingChannels', type: 'TEXT' },
+  ];
+  for (const col of needed) {
+    if (!existingCols.has(col.name)) {
+      try {
+        await p.$executeRawUnsafe(`ALTER TABLE SiteSettings ADD COLUMN ${col.name} ${col.type}`);
+      } catch {}
+    }
+  }
+}
+
 export async function GET() {
   try {
     const { prisma } = await import('@/lib/prisma');
-    const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
-    const raw = (settings as any)?.supportConfig;
-    const supportConfig = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
-    const postingRaw = (settings as any)?.postingChannels;
-    const postingChannels = postingRaw ? (typeof postingRaw === 'string' ? JSON.parse(postingRaw) : postingRaw) : [];
+    const p = prisma as any;
+    await ensureColumnsExist(p);
+
+    const rows = await p.$queryRawUnsafe(
+      `SELECT supportConfig, postingChannels FROM SiteSettings WHERE id = 'site-settings'`
+    );
+    const row = (rows as any[])[0];
+
+    const supportConfig = row?.supportConfig ? (typeof row.supportConfig === 'string' ? JSON.parse(row.supportConfig) : row.supportConfig) : {};
+    const postingChannels = row?.postingChannels ? (typeof row.postingChannels === 'string' ? JSON.parse(row.postingChannels) : row.postingChannels) : [];
+
     return NextResponse.json({ success: true, supportConfig, postingChannels });
   } catch {
     return NextResponse.json({ success: true, supportConfig: {}, postingChannels: [] });
@@ -36,11 +58,13 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const { supportConfig, postingChannels } = body;
 
-    // Use raw SQL since these fields are new and Prisma client may not be regenerated yet
     const p = prisma as any;
-    const existing = await p.siteSettings.findUnique({ where: { id: 'site-settings' } });
+    await ensureColumnsExist(p);
 
-    if (existing) {
+    // Check if row exists
+    const existing = await p.$queryRawUnsafe(`SELECT id FROM SiteSettings WHERE id = 'site-settings'`);
+
+    if ((existing as any[]).length > 0) {
       const updates: string[] = [];
       const values: any[] = [];
       if (supportConfig !== undefined) { updates.push('supportConfig = ?'); values.push(JSON.stringify(supportConfig)); }

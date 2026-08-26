@@ -15,8 +15,9 @@ interface PostingChannel {
 async function getPostingChannels(): Promise<PostingChannel[]> {
   try {
     const { prisma } = await import('@/lib/prisma');
-    const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
-    const raw = (settings as any)?.postingChannels;
+    const p = prisma as any;
+    const rows = await p.$queryRawUnsafe(`SELECT postingChannels FROM SiteSettings WHERE id = 'site-settings'`);
+    const raw = (rows as any[])[0]?.postingChannels;
     if (!raw) return [];
     return typeof raw === 'string' ? JSON.parse(raw) : raw;
   } catch {
