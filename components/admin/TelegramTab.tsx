@@ -10,6 +10,7 @@ import ExamRoutineNotification from './telegram/ExamRoutineNotification';
 import NotificationHistory from './telegram/NotificationHistory';
 import BroadcastTargets from './telegram/BroadcastTargets';
 import SupportConfigTab from './telegram/SupportConfigTab';
+import WebhookSetup from './telegram/WebhookSetup';
 
 export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boolean; effectiveRole?: string }) {
   const [botStatus, setBotStatus] = useState<'loading' | 'ok' | 'error'>('loading');
@@ -18,7 +19,7 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
   const [deptCounts, setDeptCounts] = useState<Record<string, number>>({});
   const [faculties, setFaculties] = useState<{ id: string; name: string; shortName: string; departments: { id: string; name: string; shortName: string }[] }[]>([]);
   const [historyRefresh, setHistoryRefresh] = useState(0);
-  const [subTab, setSubTab] = useState<'main' | 'support' | 'posting'>('main');
+  const [subTab, setSubTab] = useState<'setup' | 'main' | 'support' | 'posting'>('main');
 
   const allDepts = faculties.flatMap(f => f.departments.map(d => d.shortName));
 
@@ -60,8 +61,9 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
       <h3 className="text-sm font-semibold text-dark-text mb-3"><i className="fas fa-paper-plane text-cyan-400 mr-2"></i>Telegram Bot & Notifications</h3>
 
       {/* Sub-tabs */}
-      <div className="flex gap-1 mb-5 p-1 bg-dark-bg3 rounded-xl">
+      <div className="flex gap-1 mb-5 p-1 bg-dark-bg3 rounded-xl overflow-x-auto">
         {[
+          { key: 'setup' as const, label: 'Setup', icon: 'fa-cog' },
           { key: 'main' as const, label: 'Bot & Notifications', icon: 'fa-robot' },
           { key: 'support' as const, label: 'Support Groups', icon: 'fa-headset' },
           { key: 'posting' as const, label: 'Content Posting', icon: 'fa-share-nodes' },
@@ -69,7 +71,7 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
           <button
             key={tab.key}
             onClick={() => setSubTab(tab.key)}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition ${
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition whitespace-nowrap ${
               subTab === tab.key ? 'bg-dark-bg2 text-dark-text shadow-sm' : 'text-dark-text2 hover:text-dark-text'
             }`}
           >
@@ -78,6 +80,10 @@ export default function TelegramTab({ isOwner, effectiveRole }: { isOwner: boole
           </button>
         ))}
       </div>
+
+      {subTab === 'setup' && (
+        <WebhookSetup />
+      )}
 
       {subTab === 'main' && (
         <>
