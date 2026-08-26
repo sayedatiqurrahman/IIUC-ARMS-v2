@@ -8,6 +8,8 @@ import { CLUB_ROLES, getRoleGroupMembers, getRoleLabel } from '@/lib/club-roles'
 import type { ClubDataMember } from '@/lib/club-roles';
 import { CLUB_MEMBER_ROLES, CLUB_MEMBER_ROLE_LIST, parseClubRoles } from '@/lib/club-member-roles';
 import RoleCombobox from './RoleCombobox';
+import BulkImportView from './BulkImportView';
+import Modal from '@/components/ui/Modal';
 import { downloadCertPDF, generateBulkCertPDF } from '@/lib/club-cert-pdf';
 import type { CertPDFData } from '@/lib/club-cert-pdf';
 
@@ -83,6 +85,11 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   const [addEmail, setAddEmail] = useState('');
   const [addRole, setAddRole] = useState('member');
   const [adding, setAdding] = useState(false);
+  const [addMode, setAddMode] = useState<'email' | 'name'>('email');
+  const [addName, setAddName] = useState('');
+  const [addDept, setAddDept] = useState('');
+  const [addSession, setAddSession] = useState('');
+  const [addWhatsapp, setAddWhatsapp] = useState('');
 
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [evTitle, setEvTitle] = useState('');
@@ -115,6 +122,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   const [customClubRoles, setCustomClubRoles] = useState<Array<{ key: string; label: string }>>([]);
   const [selfPositionRole, setSelfPositionRole] = useState('');
   const [memberView, setMemberView] = useState<'list' | 'grid'>('list');
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   useEffect(() => {
     const onScroll = () => {
@@ -209,18 +217,39 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   }, [myMember?.clubRoles, myMember?.role]);
 
   async function handleAddMember() {
-    if (!addEmail.trim()) return;
-    setAdding(true);
-    try {
-      const res = await fetch(`/api/clubs/${slug}/members`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: addEmail.trim(), role: addRole }),
-      });
-      const data = await res.json();
-      if (data.success) { setShowAddMember(false); setAddEmail(''); setAddRole('member'); loadClub(slug); }
-      else alert(data.error || 'Failed');
-    } catch { alert('Network error'); }
-    setAdding(false);
+    if (addMode === 'email') {
+      if (!addEmail.trim()) return;
+      setAdding(true);
+      try {
+        const res = await fetch(`/api/clubs/${slug}/members`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: addEmail.trim(), role: addRole }),
+        });
+        const data = await res.json();
+        if (data.success) { setShowAddMember(false); setAddEmail(''); setAddRole('member'); loadClub(slug); }
+        else alert(data.error || 'Failed');
+      } catch { alert('Network error'); }
+      setAdding(false);
+    } else {
+      if (!addName.trim()) return;
+      setAdding(true);
+      try {
+        const res = await fetch(`/api/clubs/${slug}/members`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            role: addRole,
+            name: addName.trim(),
+            department: addDept.trim() || undefined,
+            session: addSession.trim() || undefined,
+            whatsapp: addWhatsapp.trim() || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) { setShowAddMember(false); setAddName(''); setAddDept(''); setAddSession(''); setAddWhatsapp(''); setAddRole('member'); loadClub(slug); }
+        else alert(data.error || 'Failed');
+      } catch { alert('Network error'); }
+      setAdding(false);
+    }
   }
 
   async function handleRemoveMember(userId: string) {
@@ -677,7 +706,6 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0 ring-2 ring-dark-bg2 overflow-hidden">
                           {(() => { const img = memberImage(m); return img ? <img src={img} alt="" className="w-full h-full object-cover" /> : ui(m); })()}
                         </div>
-                        </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-dark-text truncate group-hover:text-qsis transition">{dn(m)}</p>
                           <span className={`inline-flex items-center gap-1 text-[0.65rem] px-2 py-0.5 rounded-full border font-semibold ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
@@ -1022,6 +1050,9 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                       <>
                         <button onClick={() => setShowAddMember(true)} className="px-3 py-1.5 bg-qsis/15 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
                           <i className="fas fa-user-plus mr-1"></i>Add
+                        </button>
+                        <button onClick={() => setShowBulkImport(true)} className="px-3 py-1.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-semibold hover:bg-emerald-500/25 transition">
+                          <i className="fas fa-file-import mr-1"></i>Import
                         </button>
                         <button onClick={handleExportMembers} className="px-3 py-1.5 bg-dark-bg3 text-dark-text border border-dark-border rounded-lg text-xs font-semibold hover:bg-dark-bg3 transition">
                           <i className="fas fa-download mr-1"></i>Export
@@ -1481,223 +1512,255 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
       {/* ══════════ MODALS ══════════ */}
 
-      {showAddMember && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowAddMember(false)}>
-          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-dark-text mb-4"><i className="fas fa-user-plus text-qsis mr-2"></i>Add Member</h3>
-            <div className="space-y-3">
+      {/* ── Add Member ── */}
+      <Modal isOpen={showAddMember} onClose={() => setShowAddMember(false)} title="Add Member">
+        <div className="space-y-3 px-4 pb-4">
+          {isAdmin && (
+            <div className="flex bg-dark-bg3 rounded-lg p-0.5 mb-1">
+              <button onClick={() => setAddMode('email')} className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${addMode === 'email' ? 'bg-qsis text-dark-text' : 'text-dark-text2 hover:text-dark-text'}`}>
+                <i className="fas fa-envelope mr-1"></i>By Email
+              </button>
+              <button onClick={() => setAddMode('name')} className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition ${addMode === 'name' ? 'bg-qsis text-dark-text' : 'text-dark-text2 hover:text-dark-text'}`}>
+                <i className="fas fa-user mr-1"></i>By Name
+              </button>
+            </div>
+          )}
+          {addMode === 'email' ? (
+            <>
               <div>
                 <label className="text-sm text-dark-text2 font-semibold mb-1 block">Email *</label>
                 <input type="email" value={addEmail} onChange={e => setAddEmail(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
                   placeholder="student@ugrad.iiuc.ac.bd" />
               </div>
+            </>
+          ) : (
+            <>
               <div>
-                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Role</label>
-                <RoleCombobox value={addRole} onChange={setAddRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowAddMember(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
-              <button onClick={handleAddMember} disabled={!addEmail.trim() || adding} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
-                {adding ? <i className="fas fa-spinner fa-spin"></i> : 'Add Member'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editingMember && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setEditingMember(null)}>
-          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-dark-text mb-1"><i className="fas fa-user-pen text-qsis mr-2"></i>Edit Member Roles</h3>
-            <p className="text-xs text-dark-text2 mb-4">Position role and permission roles for this member.</p>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Position Role</label>
-                <RoleCombobox value={editRole} onChange={setEditRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
-              </div>
-              <div>
-                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Session (for Ex-badge)</label>
-                <input type="text" value={editSession} onChange={e => setEditSession(e.target.value)}
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Full Name *</label>
+                <input type="text" value={addName} onChange={e => setAddName(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
-                  placeholder="e.g. Autumn 2023 (optional)" />
-              </div>
-              <div>
-                <label className="text-sm text-dark-text2 font-semibold mb-2 block">Permission Roles</label>
-                <div className="space-y-2">
-                  {CLUB_MEMBER_ROLE_LIST.map(r => (
-                    <label key={r.key} className="flex items-center gap-3 p-2.5 rounded-lg bg-dark-bg border border-dark-border hover:border-qsis/30 cursor-pointer transition">
-                      <input type="checkbox" checked={editClubRoles.includes(r.key)}
-                        onChange={e => {
-                          const next = e.target.checked ? [...editClubRoles, r.key] : editClubRoles.filter(k => k !== r.key);
-                          setEditClubRoles(next);
-                        }}
-                        className="accent-qsis w-4 h-4" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <i className={`${r.icon} ${r.color} text-sm`}></i>
-                          <span className="text-sm font-semibold text-dark-text">{r.label}</span>
-                        </div>
-                        <p className="text-[0.7rem] text-dark-text2">{r.description}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setEditingMember(null)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
-              <button onClick={handleChangeRole} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold transition">Update</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showAddEvent && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowAddEvent(false)}>
-          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-dark-text mb-4"><i className="fas fa-calendar-plus text-green-400 mr-2"></i>Create Event</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Title *</label>
-                <input type="text" value={evTitle} onChange={e => setEvTitle(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" placeholder="Event title" />
-              </div>
-              <div>
-                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Description</label>
-                <textarea value={evDesc} onChange={e => setEvDesc(e.target.value)} rows={3}
-                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition resize-none" placeholder="Event details..." />
+                  placeholder="e.g. Ahmed Hassan" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm text-dark-text2 font-semibold mb-1 block">Date & Time</label>
-                  <input type="datetime-local" value={evDate} onChange={e => setEvDate(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" />
+                  <label className="text-sm text-dark-text2 font-semibold mb-1 block">Department</label>
+                  <input type="text" value={addDept} onChange={e => setAddDept(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
+                    placeholder="e.g. CSE" />
                 </div>
                 <div>
-                  <label className="text-sm text-dark-text2 font-semibold mb-1 block">Venue</label>
-                  <input type="text" value={evVenue} onChange={e => setEvVenue(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" placeholder="Room / Hall" />
+                  <label className="text-sm text-dark-text2 font-semibold mb-1 block">Session</label>
+                  <input type="text" value={addSession} onChange={e => setAddSession(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
+                    placeholder="e.g. 2021" />
                 </div>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowAddEvent(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
-              <button onClick={handleAddEvent} disabled={!evTitle.trim() || addingEvent} className="flex-1 px-3 py-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
-                {addingEvent ? <i className="fas fa-spinner fa-spin"></i> : 'Create Event'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showClaimModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowClaimModal(false)}>
-          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-dark-text mb-1"><i className="fas fa-hand-sparkles text-qsis mr-2"></i>Follow {club.name}</h3>
-            <p className="text-sm text-dark-text2 mb-4">Request membership &mdash; an officer will review.</p>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Requested Role</label>
-                <RoleCombobox value={claimRole} onChange={setClaimRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
               </div>
               <div>
-                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Message (optional)</label>
-                <textarea value={claimMsg} onChange={e => setClaimMsg(e.target.value)} rows={3}
-                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition resize-none"
-                  placeholder="Why do you want to join?" />
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">WhatsApp (optional)</label>
+                <input type="tel" value={addWhatsapp} onChange={e => setAddWhatsapp(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
+                  placeholder="+880 1XXXXXXXXX" />
               </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowClaimModal(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
-              <button onClick={handleSubmitClaim} disabled={submittingClaim} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
-                {submittingClaim ? <i className="fas fa-spinner fa-spin"></i> : 'Send Request'}
-              </button>
-            </div>
+            </>
+          )}
+          <div>
+            <label className="text-sm text-dark-text2 font-semibold mb-1 block">Role</label>
+            <RoleCombobox value={addRole} onChange={setAddRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
+          </div>
+          <div className="flex gap-3 mt-2">
+            <button onClick={() => setShowAddMember(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+            <button onClick={handleAddMember} disabled={adding || (addMode === 'email' ? !addEmail.trim() : !addName.trim())} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
+              {adding ? <i className="fas fa-spinner fa-spin"></i> : 'Add Member'}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {showCreatorPopup && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowCreatorPopup(false)}>
-          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex flex-col items-center text-center">
-              {creatorProfile?.image ? (
-                <img src={creatorProfile.image} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-dark-border mb-3" />
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-2xl font-bold text-dark-text mb-3">
-                  {(creatorProfile?.name || club.createdBy)?.charAt(0)?.toUpperCase()}
-                </div>
-              )}
-              <h3 className="text-lg font-bold text-dark-text">{creatorProfile?.name || club.createdBy}</h3>
-              {creatorProfile?.title && <p className="text-sm text-dark-text2">{creatorProfile.title}</p>}
-              <div className="mt-3 space-y-2 w-full text-sm">
-                <div className="flex items-center gap-2 text-dark-text">
-                  <i className="fas fa-envelope text-dark-text2 w-5 text-center"></i>
-                  <span>{club.createdBy}</span>
-                </div>
-                {creatorProfile?.department && (
-                  <div className="flex items-center gap-2 text-dark-text">
-                    <i className="fas fa-building text-dark-text2 w-5 text-center"></i>
-                    <span>{creatorProfile.department}</span>
+      {/* ── Edit Member ── */}
+      <Modal isOpen={!!editingMember} onClose={() => setEditingMember(null)} title="Edit Member Roles">
+        <div className="space-y-3 px-4 pb-4">
+          <p className="text-xs text-dark-text2 -mt-1">Position role and permission roles for this member.</p>
+          <div>
+            <label className="text-sm text-dark-text2 font-semibold mb-1 block">Position Role</label>
+            <RoleCombobox value={editRole} onChange={setEditRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
+          </div>
+          <div>
+            <label className="text-sm text-dark-text2 font-semibold mb-1 block">Session (for Ex-badge)</label>
+            <input type="text" value={editSession} onChange={e => setEditSession(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
+              placeholder="e.g. Autumn 2023 (optional)" />
+          </div>
+          <div>
+            <label className="text-sm text-dark-text2 font-semibold mb-2 block">Permission Roles</label>
+            <div className="space-y-2">
+              {CLUB_MEMBER_ROLE_LIST.map(r => (
+                <label key={r.key} className="flex items-center gap-3 p-2.5 rounded-lg bg-dark-bg border border-dark-border hover:border-qsis/30 cursor-pointer transition">
+                  <input type="checkbox" checked={editClubRoles.includes(r.key)}
+                    onChange={e => {
+                      const next = e.target.checked ? [...editClubRoles, r.key] : editClubRoles.filter(k => k !== r.key);
+                      setEditClubRoles(next);
+                    }}
+                    className="accent-qsis w-4 h-4" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <i className={`${r.icon} ${r.color} text-sm`}></i>
+                      <span className="text-sm font-semibold text-dark-text">{r.label}</span>
+                    </div>
+                    <p className="text-[0.7rem] text-dark-text2">{r.description}</p>
                   </div>
-                )}
-                {creatorProfile?.whatsapp && (
-                  <div className="flex items-center gap-2 text-dark-text">
-                    <i className="fab fa-whatsapp text-green-400 w-5 text-center"></i>
-                    <a href={`https://wa.me/${creatorProfile.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="hover:text-green-400 transition">{creatorProfile.whatsapp}</a>
-                  </div>
-                )}
-              </div>
+                </label>
+              ))}
             </div>
-            <button onClick={() => setShowCreatorPopup(false)} className="w-full mt-4 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Close</button>
+          </div>
+          <div className="flex gap-3 mt-2">
+            <button onClick={() => setEditingMember(null)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+            <button onClick={handleChangeRole} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold transition">Update</button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {showSelfRoles && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowSelfRoles(false)}>
-          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-dark-text mb-1"><i className="fas fa-id-badge text-qsis mr-2"></i>My Roles</h3>
-            <p className="text-xs text-dark-text2 mb-4">Change your position role and permission roles in this club.</p>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Position Role</label>
-                <RoleCombobox value={selfPositionRole} onChange={setSelfPositionRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
-              </div>
-              <div>
-                <label className="text-sm text-dark-text2 font-semibold mb-2 block">Permission Roles</label>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {CLUB_MEMBER_ROLE_LIST.map(r => (
-                    <label key={r.key} className="flex items-center gap-3 p-3 rounded-lg bg-dark-bg border border-dark-border hover:border-qsis/30 cursor-pointer transition">
-                      <input type="checkbox" checked={selfClubRoles.includes(r.key)}
-                        onChange={e => {
-                          const next = e.target.checked ? [...selfClubRoles, r.key] : selfClubRoles.filter(k => k !== r.key);
-                          setSelfClubRoles(next);
-                        }}
-                        className="accent-qsis w-4 h-4" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <i className={`${r.icon} ${r.color} text-sm`}></i>
-                          <span className="text-sm font-semibold text-dark-text">{r.label}</span>
-                        </div>
-                        <p className="text-[0.7rem] text-dark-text2 mt-0.5">{r.description}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
+      {/* ── Add Event ── */}
+      <Modal isOpen={showAddEvent} onClose={() => setShowAddEvent(false)} title="Create Event">
+        <div className="space-y-3 px-4 pb-4">
+          <div>
+            <label className="text-sm text-dark-text2 font-semibold mb-1 block">Title *</label>
+            <input type="text" value={evTitle} onChange={e => setEvTitle(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" placeholder="Event title" />
+          </div>
+          <div>
+            <label className="text-sm text-dark-text2 font-semibold mb-1 block">Description</label>
+            <textarea value={evDesc} onChange={e => setEvDesc(e.target.value)} rows={3}
+              className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition resize-none" placeholder="Event details..." />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm text-dark-text2 font-semibold mb-1 block">Date & Time</label>
+              <input type="datetime-local" value={evDate} onChange={e => setEvDate(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" />
             </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowSelfRoles(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
-              <button onClick={handleSaveSelfRoles} disabled={savingSelfRoles} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
-                {savingSelfRoles ? <i className="fas fa-spinner fa-spin"></i> : 'Save Roles'}
-              </button>
+            <div>
+              <label className="text-sm text-dark-text2 font-semibold mb-1 block">Venue</label>
+              <input type="text" value={evVenue} onChange={e => setEvVenue(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" placeholder="Room / Hall" />
             </div>
           </div>
+          <div className="flex gap-3 mt-2">
+            <button onClick={() => setShowAddEvent(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+            <button onClick={handleAddEvent} disabled={!evTitle.trim() || addingEvent} className="flex-1 px-3 py-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
+              {addingEvent ? <i className="fas fa-spinner fa-spin"></i> : 'Create Event'}
+            </button>
+          </div>
         </div>
-      )}
+      </Modal>
+
+      {/* ── Claim Modal ── */}
+      <Modal isOpen={showClaimModal} onClose={() => setShowClaimModal(false)} title={`Follow ${club?.name || ''}`}>
+        <div className="space-y-3 px-4 pb-4">
+          <p className="text-sm text-dark-text2 -mt-1">Request membership &mdash; an officer will review.</p>
+          <div>
+            <label className="text-sm text-dark-text2 font-semibold mb-1 block">Requested Role</label>
+            <RoleCombobox value={claimRole} onChange={setClaimRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
+          </div>
+          <div>
+            <label className="text-sm text-dark-text2 font-semibold mb-1 block">Message (optional)</label>
+            <textarea value={claimMsg} onChange={e => setClaimMsg(e.target.value)} rows={3}
+              className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition resize-none"
+              placeholder="Why do you want to join?" />
+          </div>
+          <div className="flex gap-3 mt-2">
+            <button onClick={() => setShowClaimModal(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+            <button onClick={handleSubmitClaim} disabled={submittingClaim} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
+              {submittingClaim ? <i className="fas fa-spinner fa-spin"></i> : 'Send Request'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Creator Profile ── */}
+      <Modal isOpen={showCreatorPopup} onClose={() => setShowCreatorPopup(false)} maxWidth="max-w-sm">
+        <div className="flex flex-col items-center text-center px-4 pb-4 pt-2">
+          {creatorProfile?.image ? (
+            <img src={creatorProfile.image} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-dark-border mb-3" />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-2xl font-bold text-dark-text mb-3">
+              {(creatorProfile?.name || club?.createdBy)?.charAt(0)?.toUpperCase()}
+            </div>
+          )}
+          <h3 className="text-lg font-bold text-dark-text">{creatorProfile?.name || club?.createdBy}</h3>
+          {creatorProfile?.title && <p className="text-sm text-dark-text2">{creatorProfile.title}</p>}
+          <div className="mt-3 space-y-2 w-full text-sm">
+            <div className="flex items-center gap-2 text-dark-text">
+              <i className="fas fa-envelope text-dark-text2 w-5 text-center"></i>
+              <span>{club?.createdBy}</span>
+            </div>
+            {creatorProfile?.department && (
+              <div className="flex items-center gap-2 text-dark-text">
+                <i className="fas fa-building text-dark-text2 w-5 text-center"></i>
+                <span>{creatorProfile.department}</span>
+              </div>
+            )}
+            {creatorProfile?.whatsapp && (
+              <div className="flex items-center gap-2 text-dark-text">
+                <i className="fab fa-whatsapp text-green-400 w-5 text-center"></i>
+                <a href={`https://wa.me/${creatorProfile.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="hover:text-green-400 transition">{creatorProfile.whatsapp}</a>
+              </div>
+            )}
+          </div>
+          <button onClick={() => setShowCreatorPopup(false)} className="w-full mt-4 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Close</button>
+        </div>
+      </Modal>
+
+      {/* ── Self Roles ── */}
+      <Modal isOpen={showSelfRoles} onClose={() => setShowSelfRoles(false)} title="My Roles">
+        <div className="space-y-3 px-4 pb-4">
+          <p className="text-xs text-dark-text2 -mt-1">Change your position role and permission roles in this club.</p>
+          <div>
+            <label className="text-sm text-dark-text2 font-semibold mb-1 block">Position Role</label>
+            <RoleCombobox value={selfPositionRole} onChange={setSelfPositionRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
+          </div>
+          <div>
+            <label className="text-sm text-dark-text2 font-semibold mb-2 block">Permission Roles</label>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {CLUB_MEMBER_ROLE_LIST.map(r => (
+                <label key={r.key} className="flex items-center gap-3 p-3 rounded-lg bg-dark-bg border border-dark-border hover:border-qsis/30 cursor-pointer transition">
+                  <input type="checkbox" checked={selfClubRoles.includes(r.key)}
+                    onChange={e => {
+                      const next = e.target.checked ? [...selfClubRoles, r.key] : selfClubRoles.filter(k => k !== r.key);
+                      setSelfClubRoles(next);
+                    }}
+                    className="accent-qsis w-4 h-4" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <i className={`${r.icon} ${r.color} text-sm`}></i>
+                      <span className="text-sm font-semibold text-dark-text">{r.label}</span>
+                    </div>
+                    <p className="text-[0.7rem] text-dark-text2 mt-0.5">{r.description}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-3 mt-2">
+            <button onClick={() => setShowSelfRoles(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+            <button onClick={handleSaveSelfRoles} disabled={savingSelfRoles} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
+              {savingSelfRoles ? <i className="fas fa-spinner fa-spin"></i> : 'Save Roles'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Bulk Import ── */}
+      <Modal isOpen={showBulkImport} onClose={() => { setShowBulkImport(false); loadClub(slug); }} title="Bulk Import Members" maxWidth="max-w-2xl">
+        <div className="px-4 pb-4">
+          <BulkImportView
+            clubSlug={slug}
+            customClubRoles={customClubRoles}
+            onSaveCustomRole={handleSaveCustomRole}
+            onClose={() => { setShowBulkImport(false); loadClub(slug); }}
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

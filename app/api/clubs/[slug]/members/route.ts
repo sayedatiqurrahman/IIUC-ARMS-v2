@@ -73,8 +73,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
 
     const body = await req.json();
-    const { userId, role } = body;
-    if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+    const { userId: inputUserId, role, name, department, session, whatsapp } = body;
+
+    let userId = inputUserId;
+
+    // Name-based add: generate userId from name, create stub Profile
+    if (!userId && name) {
+      const slugName = name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
+      userId = `stub.${slugName}.${Date.now()}`;
+
+      const { prisma } = await import('@/lib/prisma');
+      // Create stub Profile if not exists
+      try {
+        await prisma.profile.upsert({
+          where: { userId },
+          update: { name, department: department || undefined, whatsapp: whatsapp || undefined, semester: session || undefined },
+          create: { userId, name, department: department || undefined, whatsapp: whatsapp || undefined, semester: session || undefined },
+        });
+      } catch {}
+    }
+
+    if (!userId) return NextResponse.json({ error: 'userId or name required' }, { status: 400 });
 
     const validRoles = ['gs', 'ags', 'ogs', 'office_secretary', 'member'];
     const assignedRole = validRoles.includes(role) ? role : 'member';

@@ -1428,7 +1428,18 @@ async function handleCallbackQuery(cq: any) {
         ].join('\n'), {
           reply_markup: { inline_keyboard: [] },
         });
-        await sendMessage(chatId, `✅ ${clickerMention} is handling this request.`, { parse_mode: 'HTML' });
+        // Notify the group with a clear mention so the clicker gets pinged
+        const contactLine = clickerUsername
+          ? `💬 Contact: <a href="https://t.me/${from.username}">Message directly</a>`
+          : '';
+        await sendMessage(chatId, [
+          `✅ <b>${clickerMention}</b> is now handling this support request.`,
+          contactLine,
+          `🙏 Thank you for stepping up!`,
+        ].filter(Boolean).join('\n'), {
+          parse_mode: 'HTML',
+          reply_to_message_id: messageId,
+        });
         await answerCallbackQuery(cq.id, `✅ You accepted this request`);
         return;
       }
@@ -1443,19 +1454,23 @@ async function handleCallbackQuery(cq: any) {
         ].join('\n'), {
           reply_markup: { inline_keyboard: [] },
         });
-        await sendMessage(chatId, `❌ ${clickerMention} declined this request.`, { parse_mode: 'HTML' });
+        await sendMessage(chatId, `❌ ${clickerMention} declined this request. Other members can still accept.`, {
+          parse_mode: 'HTML',
+          reply_to_message_id: messageId,
+        });
         await answerCallbackQuery(cq.id, `❌ You rejected this request`);
         return;
       }
 
       if (parsed.type === 'support_reply') {
-        // Send a visible reply prompt in the group so others see someone is handling it
+        const contactLine = clickerUsername
+          ? `💬 Contact: <a href="https://t.me/${from.username}">Message directly</a>`
+          : '';
         await sendMessage(chatId, [
-          `💬 <b>Reply Requested</b>`,
-          ``,
-          `${clickerMention} is handling this request.`,
-          `Please reply to the original message above or contact the person directly.`,
-        ].join('\n'), {
+          `💬 <b>${clickerMention}</b> is handling this request.`,
+          contactLine,
+          `Please reply to the original message above or contact them directly.`,
+        ].filter(Boolean).join('\n'), {
           reply_to_message_id: messageId,
           parse_mode: 'HTML',
         });

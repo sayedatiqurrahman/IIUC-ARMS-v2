@@ -3,6 +3,22 @@ import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 const BOT_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN || ''}`;
 
+function telegramLink(input: string): string {
+  const clean = input.replace(/^@/, '').trim();
+  if (/^\+?\d{7,15}$/.test(clean)) {
+    const num = clean.startsWith('+') ? clean : `+${clean}`;
+    return `https://t.me/${encodeURIComponent(num)}`;
+  }
+  return `https://t.me/${clean}`;
+}
+
+function whatsappLink(input: string): string {
+  let clean = input.replace(/[^\d+]/g, '').trim();
+  if (clean.startsWith('00')) clean = '+' + clean.slice(2);
+  if (!clean.startsWith('+')) clean = '+' + clean;
+  return `https://wa.me/${clean.slice(1)}`;
+}
+
 interface SupportConfig {
   maleChatId?: string;
   femaleChatId?: string;
@@ -49,29 +65,6 @@ export async function POST(req: NextRequest) {
 
     const groupName = gender === 'male' ? (config.maleGroupName || 'Male Support Group') : (config.femaleGroupName || 'Female Support Group');
     const genderEmoji = gender === 'male' ? '👨' : '👩';
-
-    // Build clickable links for WhatsApp and Telegram
-    function telegramLink(input: string): string {
-      const clean = input.replace(/^@/, '').trim();
-      // Phone number (with or without +) → t.me/+{digits}
-      if (/^\+?\d{7,15}$/.test(clean)) {
-        const num = clean.startsWith('+') ? clean : `+${clean}`;
-        return `https://t.me/${encodeURIComponent(num)}`;
-      }
-      // Username → t.me/username
-      return `https://t.me/${clean}`;
-    }
-
-    function whatsappLink(input: string): string {
-      // Strip everything except digits and +
-      let clean = input.replace(/[^\d+]/g, '').trim();
-      // If starts with 00, convert to +
-      if (clean.startsWith('00')) clean = '+' + clean.slice(2);
-      // If no + prefix, add it (wa.me needs full international number)
-      if (!clean.startsWith('+')) clean = '+' + clean;
-      // wa.me uses digits only (no +)
-      return `https://wa.me/${clean.slice(1)}`;
-    }
 
     const message = [
       `🆘 <b>New Support Request</b>`,
