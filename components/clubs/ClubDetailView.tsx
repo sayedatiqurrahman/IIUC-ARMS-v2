@@ -90,6 +90,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   const [addDept, setAddDept] = useState('');
   const [addSession, setAddSession] = useState('');
   const [addWhatsapp, setAddWhatsapp] = useState('');
+  const [addEmailByName, setAddEmailByName] = useState('');
 
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [evTitle, setEvTitle] = useState('');
@@ -239,13 +240,14 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
           body: JSON.stringify({
             role: addRole,
             name: addName.trim(),
+            email: addEmailByName.trim() || undefined,
             department: addDept.trim() || undefined,
             session: addSession.trim() || undefined,
             whatsapp: addWhatsapp.trim() || undefined,
           }),
         });
         const data = await res.json();
-        if (data.success) { setShowAddMember(false); setAddName(''); setAddDept(''); setAddSession(''); setAddWhatsapp(''); setAddRole('member'); loadClub(slug); }
+        if (data.success) { setShowAddMember(false); setAddName(''); setAddEmailByName(''); setAddDept(''); setAddSession(''); setAddWhatsapp(''); setAddRole('member'); loadClub(slug); }
         else alert(data.error || 'Failed');
       } catch { alert('Network error'); }
       setAdding(false);
@@ -387,8 +389,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   async function handleClaimReview(claimId: string, status: 'approved' | 'rejected') {
     try {
       const res = await fetch(`/api/clubs/${slug}/claims`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claimId, status }),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claimId, action: status === 'approved' ? 'approve' : 'reject' }),
       });
       const data = await res.json();
       if (data.success) loadClaims(claimFilter); else alert(data.error || 'Failed');
@@ -401,7 +403,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
     try {
       const res = await fetch(`/api/clubs/${slug}/claims`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: claimRole, message: claimMsg.trim() || undefined }),
+        body: JSON.stringify({ requestedRole: claimRole, message: claimMsg.trim() || undefined }),
       });
       const data = await res.json();
       if (data.success) { setShowClaimModal(false); setClaimMsg(''); setClaimRole('member'); alert('Request submitted!'); }
@@ -1371,29 +1373,44 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {claims.map((cl: any) => (
-                      <div key={cl.id} className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0">
-                              {cl.userId?.substring(0, 2).toUpperCase()}
+                    {claims.map((cl: any) => {
+                      const clName = cl.profileName || cl.userId?.split('@')[0] || 'Unknown';
+                      const clImage = cl.profileImage;
+                      const isStub = cl.userId?.startsWith('stub.');
+                      return (
+                        <div key={cl.id} className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0 overflow-hidden">
+                                {clImage ? <img src={clImage} alt="" className="w-full h-full object-cover" /> : clName.substring(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-semibold text-dark-text">{clName}</p>
+                                  {isStub && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">STUB</span>}
+                                </div>
+                                <p className="text-[0.65rem] text-dark-text2">{cl.userId}</p>
+                                {cl.profileDepartment && <p className="text-[0.6rem] text-dark-text2"><i className="fas fa-building mr-0.5"></i>{cl.profileDepartment}</p>}
+                                <span className={`inline-flex text-[0.65rem] px-2 py-0.5 rounded-full font-semibold mt-1 ${CLAIM_STATUS_BADGE[cl.status] || ''}`}>{cl.status}</span>
+                                <p className="text-sm text-dark-text mt-1">Wants: <span className="text-qsis font-semibold">{CLUB_ROLES[cl.requestedRole]?.label || cl.requestedRole}</span></p>
+                                {cl.message && <p className="text-sm text-dark-text2 mt-1 italic">&ldquo;{cl.message}&rdquo;</p>}
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-sm font-semibold text-dark-text">{cl.userId}</p>
-                              <span className={`inline-flex text-[0.65rem] px-2 py-0.5 rounded-full font-semibold mt-1 ${CLAIM_STATUS_BADGE[cl.status] || ''}`}>{cl.status}</span>
-                              <p className="text-sm text-dark-text mt-1">Wants: <span className="text-qsis font-semibold">{CLUB_ROLES[cl.requestedRole]?.label || cl.requestedRole}</span></p>
-                              {cl.message && <p className="text-sm text-dark-text2 mt-1 italic">&ldquo;{cl.message}&rdquo;</p>}
-                            </div>
+                            {cl.status === 'pending' && (
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => handleClaimReview(cl.id, 'approved')} className="px-3 py-1.5 bg-green-600/15 text-green-400 border border-green-500/30 rounded-lg text-xs font-semibold hover:bg-green-600/25 transition"><i className="fas fa-check mr-1"></i>Approve</button>
+                                <button onClick={() => handleClaimReview(cl.id, 'rejected')} className="px-3 py-1.5 bg-red-600/15 text-red-400 border border-red-500/30 rounded-lg text-xs font-semibold hover:bg-red-600/25 transition"><i className="fas fa-times mr-1"></i>Reject</button>
+                              </div>
+                            )}
                           </div>
-                          {cl.status === 'pending' && (
-                            <div className="flex gap-2 shrink-0">
-                              <button onClick={() => handleClaimReview(cl.id, 'approved')} className="px-3 py-1.5 bg-green-600/15 text-green-400 border border-green-500/30 rounded-lg text-xs font-semibold hover:bg-green-600/25 transition"><i className="fas fa-check mr-1"></i>Approve</button>
-                              <button onClick={() => handleClaimReview(cl.id, 'rejected')} className="px-3 py-1.5 bg-red-600/15 text-red-400 border border-red-500/30 rounded-lg text-xs font-semibold hover:bg-red-600/25 transition"><i className="fas fa-times mr-1"></i>Reject</button>
+                          {isStub && cl.status === 'pending' && (
+                            <div className="mt-3 pt-3 border-t border-dark-border">
+                              <p className="text-[0.65rem] text-amber-400"><i className="fas fa-exclamation-triangle mr-1"></i>This is a stub profile (added by admin, not a registered user). Verify identity before approving.</p>
                             </div>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1541,6 +1558,13 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                 <input type="text" value={addName} onChange={e => setAddName(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
                   placeholder="e.g. Ahmed Hassan" />
+              </div>
+              <div>
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Email (auto-links profile if exists)</label>
+                <input type="email" value={addEmailByName} onChange={e => setAddEmailByName(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
+                  placeholder="student@ugrad.iiuc.ac.bd" />
+                <p className="text-[0.6rem] text-dark-text2/60 mt-1">If this email has an account, their profile info will connect automatically.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

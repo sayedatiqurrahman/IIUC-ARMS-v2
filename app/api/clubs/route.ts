@@ -25,7 +25,26 @@ export async function GET(req: NextRequest) {
       orderBy: { name: 'asc' },
       include: { _count: { select: { members: true, events: true, certificates: true } } },
     });
-    return NextResponse.json({ success: true, clubs });
+
+    const creatorEmails = Array.from(new Set(clubs.map((c: any) => c.createdBy).filter(Boolean)));
+    const creatorProfiles = creatorEmails.length > 0
+      ? await prisma.profile.findMany({
+          where: { userId: { in: creatorEmails } },
+          select: { userId: true, name: true, image: true, githubAvatar: true },
+        })
+      : [];
+    const creatorMap = new Map(creatorProfiles.map((p: any) => [p.userId, p]));
+
+    const enriched = clubs.map((c: any) => {
+      const cp = creatorMap.get(c.createdBy);
+      return {
+        ...c,
+        creatorName: cp?.name || c.createdBy?.split('@')[0] || 'Unknown',
+        creatorImage: cp?.githubAvatar || cp?.image || null,
+      };
+    });
+
+    return NextResponse.json({ success: true, clubs: enriched });
   } catch {
     return NextResponse.json({ success: true, clubs: [] });
   }

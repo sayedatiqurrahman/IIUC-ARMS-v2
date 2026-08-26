@@ -73,17 +73,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
 
     const body = await req.json();
-    const { userId: inputUserId, role, name, department, session, whatsapp } = body;
+    const { userId: inputUserId, role, name, department, session, whatsapp, email: nameEmail } = body;
 
     let userId = inputUserId;
 
     // Name-based add: generate userId from name, create stub Profile
     if (!userId && name) {
-      const slugName = name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
-      userId = `stub.${slugName}.${Date.now()}`;
+      // If email provided, use it as userId (links to existing profile)
+      if (nameEmail?.trim()) {
+        userId = nameEmail.trim();
+      } else {
+        const slugName = name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
+        userId = `stub.${slugName}.${Date.now()}`;
+      }
 
       const { prisma } = await import('@/lib/prisma');
-      // Create stub Profile if not exists
+      // Upsert Profile with provided info
       try {
         await prisma.profile.upsert({
           where: { userId },

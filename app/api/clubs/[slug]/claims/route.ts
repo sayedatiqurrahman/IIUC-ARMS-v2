@@ -40,7 +40,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
-    return NextResponse.json({ claims });
+
+    const claimUserIds = Array.from(new Set(claims.map((c: any) => c.userId)));
+    const profiles = claimUserIds.length > 0
+      ? await prisma.profile.findMany({
+          where: { userId: { in: claimUserIds } },
+          select: { userId: true, name: true, image: true, githubAvatar: true, department: true, whatsapp: true, semester: true },
+        })
+      : [];
+    const profileMap = new Map(profiles.map((p: any) => [p.userId, p]));
+
+    const enriched = claims.map((c: any) => {
+      const p = profileMap.get(c.userId);
+      return {
+        ...c,
+        profileName: p?.name || null,
+        profileImage: p?.githubAvatar || p?.image || null,
+        profileDepartment: p?.department || null,
+        profileWhatsapp: p?.whatsapp || null,
+        profileSemester: p?.semester || null,
+      };
+    });
+
+    return NextResponse.json({ claims: enriched });
   } catch {
     return NextResponse.json({ error: 'Failed to load claims' }, { status: 500 });
   }

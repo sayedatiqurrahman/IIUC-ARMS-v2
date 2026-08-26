@@ -6,6 +6,7 @@ import { useAppStore } from '@/lib/store';
 import { useUserAccess } from '@/lib/useUserAccess';
 import { FACULTIES } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
+import Modal from '@/components/ui/Modal';
 
 const deptOptions = FACULTIES.flatMap(f =>
   f.departments.map(d => ({
@@ -119,15 +120,15 @@ export default function ClubsView() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {clubs.map(club => (
               <Link key={club.id} href={`/clubs/${club.slug}`} className="no-underline">
-                <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 hover:border-qsis/50 transition-all cursor-pointer group h-full">
+                <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 hover:border-qsis/50 transition-all cursor-pointer group h-full flex flex-col">
                   <div className="flex items-center gap-3 mb-3">
                     {club.logoUrl ? (
-                      <img src={club.logoUrl} alt="" className="w-12 h-12 rounded-xl object-cover border border-dark-border" />
+                      <img src={club.logoUrl} alt="" className="w-12 h-12 rounded-xl object-cover border border-dark-border shrink-0" />
                     ) : (
-                      <div className="w-12 h-12 rounded-xl bg-qsis/20 flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-xl bg-qsis/20 flex items-center justify-center shrink-0">
                         <i className="fas fa-users text-qsis"></i>
                       </div>
                     )}
@@ -137,14 +138,27 @@ export default function ClubsView() {
                     </div>
                   </div>
                   {club.description && (
-                    <p className="text-[0.78rem] text-dark-text2 line-clamp-2 mb-3">{club.description}</p>
+                    <p className="text-[0.78rem] text-dark-text2 line-clamp-2 mb-3 flex-1">{club.description}</p>
                   )}
-                  <div className="flex items-center gap-3 text-[0.72rem] text-dark-text2">
+                  <div className="flex items-center gap-3 text-[0.72rem] text-dark-text2 mt-auto pt-3 border-t border-dark-border">
                     <span className="flex items-center gap-1">
-                      <i className="fas fa-user-friends"></i> {club._count?.members || 0} members
+                      <i className="fas fa-user-friends"></i> {club._count?.members || 0}
                     </span>
                     <span className="flex items-center gap-1">
-                      <i className="fas fa-calendar"></i> {club._count?.events || 0} events
+                      <i className="fas fa-calendar"></i> {club._count?.events || 0}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <i className="fas fa-award"></i> {club._count?.certificates || 0}
+                    </span>
+                    <span className="ml-auto flex items-center gap-1.5 text-dark-text2">
+                      {club.creatorImage ? (
+                        <img src={club.creatorImage} alt="" className="w-4 h-4 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-qsis/30 flex items-center justify-center text-[0.4rem] font-bold text-qsis">
+                          {(club.creatorName || '?')[0]?.toUpperCase()}
+                        </div>
+                      )}
+                      <span className="truncate max-w-[80px]">{club.creatorName}</span>
                     </span>
                   </div>
                 </div>
@@ -154,50 +168,45 @@ export default function ClubsView() {
         )}
 
         {showCreate && (
-          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowCreate(false)}>
-            <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-dark-text mb-4 flex items-center gap-2">
-                <i className="fas fa-plus-circle text-qsis"></i> Create New Club
-              </h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-dark-text2 font-semibold mb-1 block">Club Name *</label>
-                  <input
-                    type="text" value={newName} onChange={e => setNewName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis"
-                    placeholder="e.g. CSE Programming Club"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-dark-text2 font-semibold mb-1 block">Department *</label>
-                  <CustomSelect
-                    value={newDept}
-                    onChange={setNewDept}
-                    options={filteredDeptOptions}
-                    placeholder="Select department..."
-                    searchable
-                  />
-                  {isTeacherOnly && (
-                    <p className="text-[0.65rem] text-dark-text3 mt-1">Teachers can only create clubs in their own department</p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs text-dark-text2 font-semibold mb-1 block">Description</label>
-                  <textarea
-                    value={newDesc} onChange={e => setNewDesc(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis resize-none"
-                    rows={3} placeholder="About this club..."
-                  />
-                </div>
+          <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Create New Club" maxWidth="max-w-md">
+            <div className="space-y-3 px-4 pb-4">
+              <div>
+                <label className="text-xs text-dark-text2 font-semibold mb-1 block">Club Name *</label>
+                <input
+                  type="text" value={newName} onChange={e => setNewName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis"
+                  placeholder="e.g. CSE Programming Club"
+                />
               </div>
-              <div className="flex gap-2 mt-4">
+              <div>
+                <label className="text-xs text-dark-text2 font-semibold mb-1 block">Department *</label>
+                <CustomSelect
+                  value={newDept}
+                  onChange={setNewDept}
+                  options={filteredDeptOptions}
+                  placeholder="Select department..."
+                  searchable
+                />
+                {isTeacherOnly && (
+                  <p className="text-[0.65rem] text-dark-text3 mt-1">Teachers can only create clubs in their own department</p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs text-dark-text2 font-semibold mb-1 block">Description</label>
+                <textarea
+                  value={newDesc} onChange={e => setNewDesc(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis resize-none"
+                  rows={3} placeholder="About this club..."
+                />
+              </div>
+              <div className="flex gap-2 mt-2">
                 <button onClick={() => setShowCreate(false)} className="flex-1 px-3 py-2 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-border/30 transition">Cancel</button>
                 <button onClick={handleCreate} disabled={!newName.trim() || !newDept || creating} className="flex-1 px-3 py-2 rounded-lg bg-qsis text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50">
                   {creating ? <i className="fas fa-spinner fa-spin"></i> : 'Create'}
                 </button>
               </div>
             </div>
-          </div>
+          </Modal>
         )}
     </section>
   );
