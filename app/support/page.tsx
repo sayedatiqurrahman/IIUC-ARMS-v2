@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { FACULTIES } from '@/lib/departments';
+import CustomSelect from '@/components/CustomSelect';
+import type { CustomSelectOption } from '@/components/CustomSelect';
 
 const ISSUE_TYPES = [
   'Account Access',
@@ -14,6 +16,19 @@ const ISSUE_TYPES = [
   'Feature Request',
   'Other',
 ];
+
+const deptOptions: CustomSelectOption[] = FACULTIES.flatMap(f =>
+  f.departments.map(d => ({
+    value: d.shortName,
+    label: d.name,
+    group: f.shortName,
+  }))
+);
+
+const issueOptions: CustomSelectOption[] = ISSUE_TYPES.map(t => ({
+  value: t,
+  label: t,
+}));
 
 export default function SupportPage() {
   const [form, setForm] = useState({
@@ -28,8 +43,6 @@ export default function SupportPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
-
-  const allDepartments = FACULTIES.flatMap(f => f.departments);
 
   function update(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -152,38 +165,32 @@ export default function SupportPage() {
           />
         </div>
 
-        {/* Department */}
+        {/* Department — CustomSelect */}
         <div>
           <label className="block text-sm font-medium text-dark-text mb-1.5">Department</label>
-          <select
+          <CustomSelect
+            options={deptOptions}
             value={form.department}
-            onChange={e => update('department', e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-sm focus:outline-none focus:border-qsis transition"
-          >
-            <option value="">Select department</option>
-            {FACULTIES.map(f => (
-              <optgroup key={f.id} label={f.name}>
-                {f.departments.map(d => (
-                  <option key={d.id} value={d.shortName}>{d.name}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+            onChange={v => update('department', v)}
+            placeholder="Select department"
+            searchable
+            showEmpty
+            size="md"
+          />
         </div>
 
-        {/* Issue Type */}
+        {/* Issue Type — CustomSelect */}
         <div>
           <label className="block text-sm font-medium text-dark-text mb-1.5">Issue Type</label>
-          <select
+          <CustomSelect
+            options={issueOptions}
             value={form.issueType}
-            onChange={e => update('issueType', e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-sm focus:outline-none focus:border-qsis transition"
-          >
-            <option value="">Select issue type</option>
-            {ISSUE_TYPES.map(t => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
+            onChange={v => update('issueType', v)}
+            placeholder="Select issue type"
+            searchable
+            showEmpty
+            size="md"
+          />
         </div>
 
         {/* Issue */}
@@ -207,7 +214,7 @@ export default function SupportPage() {
               type="tel"
               value={form.whatsapp}
               onChange={e => update('whatsapp', e.target.value)}
-              placeholder="+880..."
+              placeholder="+8801XXXXXXXXX"
               className="w-full px-4 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-sm placeholder:text-dark-text2/50 focus:outline-none focus:border-qsis transition"
             />
           </div>
@@ -217,7 +224,7 @@ export default function SupportPage() {
               type="text"
               value={form.telegram}
               onChange={e => update('telegram', e.target.value)}
-              placeholder="@username"
+              placeholder="@username or +880..."
               className="w-full px-4 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-sm placeholder:text-dark-text2/50 focus:outline-none focus:border-qsis transition"
             />
           </div>

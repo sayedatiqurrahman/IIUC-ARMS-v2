@@ -50,6 +50,24 @@ export async function POST(req: NextRequest) {
     const groupName = gender === 'male' ? (config.maleGroupName || 'Male Support Group') : (config.femaleGroupName || 'Female Support Group');
     const genderEmoji = gender === 'male' ? '👨' : '👩';
 
+    // Build clickable links for WhatsApp and Telegram
+    function telegramLink(input: string): string {
+      const clean = input.replace(/^@/, '').trim();
+      if (/^\+?\d{8,15}$/.test(clean)) {
+        // Phone number → t.me/+1234567890
+        const num = clean.startsWith('+') ? clean : `+${clean}`;
+        return `https://t.me/${encodeURIComponent(num)}`;
+      }
+      // Username → t.me/username
+      return `https://t.me/${clean}`;
+    }
+
+    function whatsappLink(input: string): string {
+      const clean = input.replace(/[^\d+]/g, '').trim();
+      const num = clean.startsWith('+') ? clean.slice(1) : clean;
+      return `https://wa.me/${num}`;
+    }
+
     const message = [
       `🆘 <b>New Support Request</b>`,
       ``,
@@ -57,8 +75,8 @@ export async function POST(req: NextRequest) {
       `👤 <b>Name:</b> ${name}`,
       universityId ? `🆔 <b>ID:</b> ${universityId}` : null,
       department ? `🏫 <b>Department:</b> ${department}` : null,
-      whatsapp ? `📱 <b>WhatsApp:</b> ${whatsapp}` : null,
-      telegram ? `✈️ <b>Telegram:</b> ${telegram}` : null,
+      whatsapp ? `📱 <b>WhatsApp:</b> <a href="${whatsappLink(whatsapp)}">${whatsapp}</a>` : null,
+      telegram ? `✈️ <b>Telegram:</b> <a href="${telegramLink(telegram)}">${telegram}</a>` : null,
       ``,
       `📝 <b>Issue:</b>`,
       issue,
@@ -66,17 +84,29 @@ export async function POST(req: NextRequest) {
       `⏰ <b>Time:</b> ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' })}`,
     ].filter(Boolean).join('\n');
 
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '✅ Accept', callback_data: `support_accept` },
-          { text: '❌ Reject', callback_data: `support_reject` },
-        ],
-        [
-          { text: '💬 Reply in Group', callback_data: `support_reply` },
-        ],
-      ],
-    };
+    // Build inline keyboard with contact buttons
+    const keyboardRows: any[][] = [];
+
+    // Contact row — direct links to message the person
+    const contactRow: any[] = [];
+    if (whatsapp) {
+      contactRow.push({ text: '📱 WhatsApp', url: whatsappLink(whatsapp) });
+    }
+    if (telegram) {
+      contactRow.push({ text: '✈️ Telegram', url: telegramLink(telegram) });
+    }
+    if (contactRow.length > 0) keyboardRows.push(contactRow);
+
+    // Action row — Accept / Reject / Reply
+    keyboardRows.push([
+      { text: '✅ Accept', callback_data: `support_accept` },
+      { text: '❌ Reject', callback_data: `support_reject` },
+    ]);
+    keyboardRows.push([
+      { text: '💬 Reply in Group', callback_data: `support_reply` },
+    ]);
+
+    const keyboard = { inline_keyboard: keyboardRows };
 
     const res = await fetch(`${BOT_API}/sendMessage`, {
       method: 'POST',

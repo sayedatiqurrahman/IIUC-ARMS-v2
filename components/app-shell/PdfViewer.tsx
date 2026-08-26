@@ -24,7 +24,7 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
   const [useEmbed, setUseEmbed] = useState(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const embedRef = useRef<HTMLEmbedElement>(null);
+  const embedRef = useRef<HTMLIFrameElement>(null);
   const objectRef = useRef<HTMLObjectElement>(null);
   const zoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -322,32 +322,43 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
           </div>
         )}
 
-        {/* PDF renderer — embed first, object fallback */}
+        {/* PDF renderer — iframe (hides native toolbar via #toolbar=0) with object fallback */}
         {status === 'ready' && blobUrl && (
           <div
             ref={containerRef}
-            className="w-full h-full transition-transform duration-150"
+            className="w-full h-full relative transition-transform duration-150"
             style={{
               transform: `scale(${zoom})`,
               transformOrigin: 'center center',
             }}
           >
             {useEmbed ? (
-              <embed
-                ref={embedRef}
-                src={blobUrl}
-                type="application/pdf"
-                className="w-full h-full border-0"
-                onMouseUp={(e) => e.stopPropagation()}
-              />
+              <>
+                <iframe
+                  ref={embedRef as any}
+                  src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=1`}
+                  className="w-full h-full border-0"
+                  title={item.name}
+                  onMouseUp={(e) => e.stopPropagation()}
+                />
+                {/* Mobile overlay — tapping opens in new tab to prevent native viewer hijack */}
+                <div
+                  className="absolute inset-0 md:hidden z-10"
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                  }}
+                  style={{ touchAction: 'manipulation' }}
+                />
+              </>
             ) : (
               <object
                 ref={objectRef}
-                data={blobUrl}
+                data={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=1`}
                 type="application/pdf"
                 className="w-full h-full border-0"
                 onError={() => {
-                  // Both embed and object failed
                   setError('Your browser cannot display PDFs inline. Please download the file.');
                   setStatus('error');
                 }}

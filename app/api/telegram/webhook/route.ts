@@ -1403,6 +1403,55 @@ async function handleCallbackQuery(cq: any) {
         await sendMessage(chatId, `📢 Broadcast ready. Use the admin panel to send.`);
       }
     }
+
+    // ─── Support request callbacks ───
+    if (parsed.type === 'support_accept' || parsed.type === 'support_reject' || parsed.type === 'support_reply') {
+      // Get the person who clicked
+      const from = cq.from;
+      const clickerName = from ? (from.first_name + (from.last_name ? ' ' + from.last_name : '')) : 'Unknown';
+      const clickerUsername = from?.username ? `@${from.username}` : null;
+      const clickerMention = clickerUsername
+        ? `<a href="https://t.me/${from.username}">${clickerName}</a>`
+        : clickerName;
+      const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit' });
+
+      // Get original message text (to preserve the support request info)
+      const originalText = cq.message?.text || '';
+
+      if (parsed.type === 'support_accept') {
+        await editMessageText(chatId, messageId, [
+          originalText,
+          ``,
+          `━━━━━━━━━━━━━━━━━━━━`,
+          `✅ <b>Accepted by</b> ${clickerMention}`,
+          `⏰ ${now}`,
+        ].join('\n'), {
+          reply_markup: { inline_keyboard: [] },
+        });
+        await answerCallbackQuery(cq.id, `✅ You accepted this request`);
+        return;
+      }
+
+      if (parsed.type === 'support_reject') {
+        await editMessageText(chatId, messageId, [
+          originalText,
+          ``,
+          `━━━━━━━━━━━━━━━━━━━━`,
+          `❌ <b>Rejected by</b> ${clickerMention}`,
+          `⏰ ${now}`,
+        ].join('\n'), {
+          reply_markup: { inline_keyboard: [] },
+        });
+        await answerCallbackQuery(cq.id, `❌ You rejected this request`);
+        return;
+      }
+
+      if (parsed.type === 'support_reply') {
+        // Show a hint to reply in the group
+        await answerCallbackQuery(cq.id, `💬 Type your reply below this message`, true);
+        return;
+      }
+    }
   } catch (err: any) {
     console.error('Callback query error:', err);
     await sendMessage(chatId, `⚠️ Error processing action: ${err?.message || 'Unknown'}`);

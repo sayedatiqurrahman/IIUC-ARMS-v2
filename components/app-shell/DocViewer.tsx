@@ -209,6 +209,7 @@ export default function DocViewer({ item, onClose }: { item: any; onClose: () =>
         zoom={zoom}
         annotating={annotating}
         openHref={src}
+        onZoomChange={(z) => { zoomRef.current = z; setZoom(z); setFitMode(false); }}
       />
     </div>
   );
