@@ -40,6 +40,65 @@ const GITHUB_API = 'https://api.github.com';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// ─── Chat ID logging: every message the bot receives gets logged ───
+// This lets the admin panel discover all chats without dropping the webhook.
+const chatLogCache = new Map<number, { title: string; type: string; username?: string; lastSeen: number }>();
+let chatLogFlushTimer: NodeJS.Timeout | null = null;
+
+function logChatFromMessage(msg: any) {
+  const chat = msg.chat;
+  if (!chat?.id) return;
+  chatLogCache.set(chat.id, {
+    title: chat.title || chat.first_name || 'Unknown',
+    type: chat.type,
+    username: chat.username,
+    lastSeen: Date.now(),
+  });
+  // Flush to DB at most every 30 seconds
+  if (!chatLogFlushTimer) {
+    chatLogFlushTimer = setTimeout(() => { chatLogFlushTimer = null; flushChatLog(); }, 30_000);
+  }
+}
+
+async function flushChatLog() {
+  if (chatLogCache.size === 0) return;
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const p = prisma as any;
+    // Ensure column exists
+    try {
+      const tableInfo = await p.$queryRawUnsafe(`PRAGMA table_info(SiteSettings)`);
+      const cols = new Set((tableInfo as any[]).map((c: any) => c.name));
+      if (!cols.has('telegramChats')) {
+        await p.$executeRawUnsafe(`ALTER TABLE SiteSettings ADD COLUMN telegramChats TEXT`);
+      }
+    } catch {}
+
+    const rows = await p.$queryRawUnsafe(`SELECT telegramChats FROM SiteSettings WHERE id = 'site-settings'`);
+    const raw = (rows as any[])[0]?.telegramChats;
+    const existing: any[] = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
+
+    // Merge: update existing entries, add new ones
+    const merged = new Map<string, any>();
+    for (const c of existing) merged.set(String(c.id), c);
+    Array.from(chatLogCache.entries()).forEach(([id, info]) => {
+      merged.set(String(id), { id: String(id), ...info });
+    });
+
+    const updated = Array.from(merged.values());
+    const json = JSON.stringify(updated);
+
+    if ((rows as any[]).length > 0) {
+      await p.$executeRawUnsafe(`UPDATE SiteSettings SET telegramChats = ? WHERE id = 'site-settings'`, json);
+    } else {
+      await p.$executeRawUnsafe(`INSERT INTO SiteSettings (id, permissions, telegramChats) VALUES ('site-settings', '{}', ?)`, json);
+    }
+    chatLogCache.clear();
+  } catch (err: any) {
+    console.error('[TG] Failed to flush chat log:', err?.message);
+  }
+}
+
 function openLink(target: string): string {
   return SITE_URL + '/open?url=' + encodeURIComponent(target);
 }
@@ -366,6 +425,9 @@ async function handleMessage(msg: any) {
   const text = (msg.text || '').trim();
   const chatType = msg.chat.type;
   const isGroup = chatType === 'group' || chatType === 'supergroup';
+
+  // Log this chat for admin panel discovery
+  logChatFromMessage(msg);
 
   // Flood protection — silently drop messages when a chat hammers the bot.
   if (isFlooding(chatId)) return;
@@ -849,6 +911,9 @@ async function handleCallbackQuery(cq: any) {
   const data: string = cq.data || '';
   const chatId = cq.message?.chat?.id;
   const messageId = cq.message?.message_id;
+
+  // Log this chat for admin panel discovery
+  if (cq.message?.chat) logChatFromMessage({ chat: cq.message.chat });
 
   await answerCallbackQuery(cq.id);
 

@@ -20,39 +20,15 @@ export default function TelegramChatDiscovery({ onSelect, filter = 'all' }: Prop
   const [chats, setChats] = useState<ChatInfo[]>([]);
   const [botInfo, setBotInfo] = useState<{ username: string; name: string } | null>(null);
   const [error, setError] = useState('');
-  const [hint, setHint] = useState('');
-  const [step, setStep] = useState<'idle' | 'dropped' | 'fetched'>('idle');
+  const [source, setSource] = useState<{ logged: number; extra: number } | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   async function discover() {
     setLoading(true);
     setError('');
-    setHint('');
     try {
-      if (step === 'idle' || step === 'fetched') {
-        // Step 1: Drop webhook
-        const res = await fetch('/api/telegram/my-chats?step=drop');
-        const data = await res.json();
-        if (data.success) {
-          setBotInfo(data.bot);
-          setStep('dropped');
-          setHint('Now send a test message in each Telegram group/channel, then click "Fetch Chats" below.');
-        } else {
-          setError(data.error || 'Failed to drop webhook');
-        }
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchChats() {
-    setLoading(true);
-    setError('');
-    setHint('');
-    try {
-      const res = await fetch('/api/telegram/my-chats?step=fetch');
+      const res = await fetch('/api/telegram/my-chats');
       const data = await res.json();
       if (data.success) {
         let filtered = data.chats || [];
@@ -60,10 +36,9 @@ export default function TelegramChatDiscovery({ onSelect, filter = 'all' }: Prop
         else if (filter === 'channel') filtered = data.channels || [];
         setChats(filtered);
         setBotInfo(data.bot);
-        setStep('fetched');
-        if (data.hint) setHint(data.hint);
+        setSource(data.source);
       } else {
-        setError(data.error || 'Failed to fetch chats');
+        setError(data.error || 'Failed to discover chats');
       }
     } catch {
       setError('Network error');
@@ -72,20 +47,32 @@ export default function TelegramChatDiscovery({ onSelect, filter = 'all' }: Prop
     }
   }
 
-  const typeIcon = (type: string) => {
+  function copyId(id: number) {
+    navigator.clipboard.writeText(String(id));
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  }
+
+  function selectChat(chat: ChatInfo) {
+    setSelectedId(chat.id);
+    onSelect(String(chat.id), chat.title);
+  }
+
+  const typeBadge = (type: string) => {
     switch (type) {
-      case 'channel': return 'fa-bullhorn text-purple-400';
-      case 'supergroup': return 'fa-users text-blue-400';
-      case 'group': return 'fa-user-friends text-cyan-400';
-      case 'private': return 'fa-user text-emerald-400';
-      default: return 'fa-circle text-gray-400';
+      case 'channel': return { label: 'Channel', bg: 'bg-purple-500/15', text: 'text-purple-400', icon: 'fa-bullhorn' };
+      case 'supergroup': return { label: 'Supergroup', bg: 'bg-blue-500/15', text: 'text-blue-400', icon: 'fa-users' };
+      case 'group': return { label: 'Group', bg: 'bg-cyan-500/15', text: 'text-cyan-400', icon: 'fa-user-friends' };
+      case 'private': return { label: 'Private', bg: 'bg-emerald-500/15', text: 'text-emerald-400', icon: 'fa-user' };
+      default: return { label: type, bg: 'bg-gray-500/15', text: 'text-gray-400', icon: 'fa-circle' };
     }
   };
 
   return (
     <div className="border border-dark-border rounded-xl overflow-hidden">
+      {/* Header */}
       <div className="px-4 py-3 bg-dark-bg3">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-dark-text">Discover Bot Chats</p>
             {botInfo && (
@@ -94,20 +81,20 @@ export default function TelegramChatDiscovery({ onSelect, filter = 'all' }: Prop
               </p>
             )}
           </div>
+          <button
+            onClick={discover}
+            disabled={loading}
+            className="px-3 py-1.5 rounded-lg bg-qsis/15 text-qsis text-xs font-medium hover:bg-qsis/25 transition disabled:opacity-50"
+          >
+            {loading ? <i className="fas fa-spinner fa-spin mr-1"></i> : <i className="fas fa-refresh mr-1"></i>}
+            {chats.length > 0 ? 'Refresh' : 'Discover'}
+          </button>
         </div>
-
-        {/* Step indicators */}
-        <div className="flex items-center gap-2 mt-2">
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${step === 'idle' ? 'bg-qsis/15 text-qsis' : step === 'dropped' ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
-            {step === 'idle' ? <i className="fas fa-circle text-[6px]"></i> : step === 'dropped' ? <i className="fas fa-check text-[8px]"></i> : <i className="fas fa-check text-[8px]"></i>}
-            1. Drop Webhook
-          </div>
-          <i className="fas fa-arrow-right text-dark-text2 text-[10px]"></i>
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${step === 'fetched' ? 'bg-emerald-500/15 text-emerald-400' : step === 'dropped' ? 'bg-qsis/15 text-qsis' : 'bg-dark-bg2 text-dark-text2'}`}>
-            {step === 'fetched' ? <i className="fas fa-check text-[8px]"></i> : <i className="fas fa-circle text-[6px]"></i>}
-            2. Fetch Chats
-          </div>
-        </div>
+        {source && (
+          <p className="text-[0.65rem] text-dark-text3 mt-1">
+            Found {source.logged} from webhook logs{source.extra > 0 ? ` + ${source.extra} extra` : ''}
+          </p>
+        )}
       </div>
 
       {error && (
@@ -116,66 +103,86 @@ export default function TelegramChatDiscovery({ onSelect, filter = 'all' }: Prop
         </div>
       )}
 
-      {hint && (
-        <div className="px-4 py-3 bg-blue-500/10 border-t border-blue-500/20 text-blue-400 text-xs">
-          <i className="fas fa-info-circle mr-1"></i>{hint}
-        </div>
-      )}
-
-      {/* Action buttons */}
-      <div className="px-4 py-3 border-t border-dark-border flex gap-2">
-        {step === 'idle' || step === 'fetched' ? (
-          <button
-            onClick={discover}
-            disabled={loading}
-            className="flex-1 px-3 py-2 rounded-lg bg-amber-500/15 text-amber-400 text-xs font-medium hover:bg-amber-500/25 transition disabled:opacity-50"
-          >
-            {loading ? <i className="fas fa-spinner fa-spin mr-1"></i> : <i className="fas fa-plug mr-1"></i>}
-            {step === 'fetched' ? 'Re-Drop Webhook' : '1. Drop Webhook'}
-          </button>
-        ) : null}
-        {step === 'dropped' ? (
-          <button
-            onClick={fetchChats}
-            disabled={loading}
-            className="flex-1 px-3 py-2 rounded-lg bg-qsis/15 text-qsis text-xs font-medium hover:bg-qsis/25 transition disabled:opacity-50"
-          >
-            {loading ? <i className="fas fa-spinner fa-spin mr-1"></i> : <i className="fas fa-search mr-1"></i>}
-            2. Fetch Chats
-          </button>
-        ) : null}
-      </div>
-
-      {/* Results */}
+      {/* Chat cards — profile style */}
       {chats.length > 0 && (
-        <div className="max-h-64 overflow-y-auto divide-y divide-dark-border border-t border-dark-border">
-          {chats.map(chat => (
-            <button
-              key={chat.id}
-              onClick={() => onSelect(String(chat.id), chat.title)}
-              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-dark-bg3 transition text-left"
-            >
-              <i className={`fas ${typeIcon(chat.type)} w-4 text-center`}></i>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-dark-text truncate">{chat.title}</p>
-                <p className="text-xs text-dark-text2">
-                  {chat.type}
-                  {chat.username ? ` @${chat.username}` : ''}
-                  {chat.memberCount ? ` · ${chat.memberCount} members` : ''}
-                </p>
+        <div className="max-h-80 overflow-y-auto divide-y divide-dark-border">
+          {chats.map(chat => {
+            const badge = typeBadge(chat.type);
+            const isSelected = selectedId === chat.id;
+            const isCopied = copiedId === chat.id;
+            return (
+              <div
+                key={chat.id}
+                className={`px-4 py-3 transition ${isSelected ? 'bg-qsis/10' : 'hover:bg-dark-bg3'}`}
+              >
+                <div className="flex items-center gap-3">
+                  {/* Avatar */}
+                  <div className={`w-10 h-10 rounded-full ${badge.bg} flex items-center justify-center flex-shrink-0`}>
+                    <i className={`fas ${badge.icon} ${badge.text} text-sm`}></i>
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-dark-text truncate">{chat.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-[0.6rem] px-1.5 py-0.5 rounded-full ${badge.bg} ${badge.text} font-medium`}>
+                        {badge.label}
+                      </span>
+                      {chat.username && (
+                        <span className="text-[0.65rem] text-dark-text2">@{chat.username}</span>
+                      )}
+                      {chat.memberCount && (
+                        <span className="text-[0.65rem] text-dark-text3">
+                          <i className="fas fa-users mr-0.5"></i>{chat.memberCount}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {/* Copy ID button */}
+                    <button
+                      onClick={() => copyId(chat.id)}
+                      className={`px-2 py-1 rounded-lg text-xs font-mono transition ${
+                        isCopied
+                          ? 'bg-emerald-500/15 text-emerald-400'
+                          : 'bg-dark-bg2 border border-dark-border text-dark-text2 hover:text-dark-text hover:border-dark-text2'
+                      }`}
+                      title="Click to copy chat ID"
+                    >
+                      {isCopied ? (
+                        <><i className="fas fa-check mr-1"></i>Copied!</>
+                      ) : (
+                        <><i className="fas fa-copy mr-1"></i>{chat.id}</>
+                      )}
+                    </button>
+
+                    {/* Select button */}
+                    <button
+                      onClick={() => selectChat(chat)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                        isSelected
+                          ? 'bg-qsis text-white'
+                          : 'bg-qsis/15 text-qsis hover:bg-qsis/25'
+                      }`}
+                    >
+                      {isSelected ? <i className="fas fa-check"></i> : 'Select'}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <span className="text-xs text-dark-text2 font-mono">{chat.id}</span>
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {step === 'fetched' && chats.length === 0 && !error && (
-        <div className="px-4 py-6 text-center text-dark-text2 text-xs border-t border-dark-border">
+      {chats.length === 0 && !error && !loading && (
+        <div className="px-4 py-6 text-center text-dark-text2 text-xs">
           <i className="fas fa-inbox text-lg mb-2 block opacity-50"></i>
-          No chats found. Make sure you sent a test message in each group AFTER dropping the webhook.
+          No chats found yet. The bot logs chats automatically when it receives messages.
           <br />
-          <span className="text-dark-text3">Try: Drop Webhook → Send messages → Fetch Chats</span>
+          <span className="text-dark-text3">Send a message in your groups, then click Discover.</span>
         </div>
       )}
     </div>

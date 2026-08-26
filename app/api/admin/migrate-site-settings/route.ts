@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       { name: 'customClubRoles', type: 'TEXT' },
       { name: 'supportConfig', type: 'TEXT' },
       { name: 'postingChannels', type: 'TEXT' },
+      { name: 'telegramChats', type: 'TEXT' },
     ];
 
     // Check existing columns
@@ -73,7 +74,7 @@ export async function GET(req: NextRequest) {
     const tableInfo = await p.$queryRawUnsafe(`PRAGMA table_info(SiteSettings)`);
     const cols = (tableInfo as any[]).map((c: any) => ({ name: c.name, type: c.type }));
 
-    const needed = ['customClubRoles', 'supportConfig', 'postingChannels'];
+    const needed = ['customClubRoles', 'supportConfig', 'postingChannels', 'telegramChats'];
     const missing = needed.filter(n => !cols.find((c: any) => c.name === n));
 
     return NextResponse.json({ columns: cols, missing });
