@@ -118,15 +118,20 @@ export default function SupportConfigTab({ onSave }: Props) {
               type="text"
               value={config.maleGroupName || ''}
               onChange={e => setConfig(prev => ({ ...prev, maleGroupName: e.target.value }))}
-              placeholder="Group name"
+              placeholder="Group name (for display)"
               className="w-full px-3 py-2 rounded-lg bg-dark-bg2 border border-dark-border text-dark-text text-xs mb-2 focus:outline-none focus:border-qsis"
             />
-            <button
-              onClick={() => setShowDiscovery(showDiscovery === 'support-male' ? null : 'support-male')}
-              className="text-xs text-qsis hover:underline"
-            >
-              <i className="fas fa-search mr-1"></i>Auto-discover from bot
-            </button>
+            <div className="flex flex-wrap gap-2 mb-2">
+              <button
+                onClick={() => setShowDiscovery(showDiscovery === 'support-male' ? null : 'support-male')}
+                className="text-xs text-qsis hover:underline"
+              >
+                <i className="fas fa-search mr-1"></i>Auto-discover from bot
+              </button>
+            </div>
+            <p className="text-[0.65rem] text-dark-text3">
+              Or get ID manually: add <a href="https://t.me/getidsbot" target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline">@getidsbot</a> to your group
+            </p>
             {showDiscovery === 'support-male' && (
               <div className="mt-2">
                 <ChatDiscovery onSelect={(id, title) => handleChatSelect('support-male', id, title)} filter="group" />
@@ -151,15 +156,20 @@ export default function SupportConfigTab({ onSave }: Props) {
               type="text"
               value={config.femaleGroupName || ''}
               onChange={e => setConfig(prev => ({ ...prev, femaleGroupName: e.target.value }))}
-              placeholder="Group name"
+              placeholder="Group name (for display)"
               className="w-full px-3 py-2 rounded-lg bg-dark-bg2 border border-dark-border text-dark-text text-xs mb-2 focus:outline-none focus:border-qsis"
             />
-            <button
-              onClick={() => setShowDiscovery(showDiscovery === 'support-female' ? null : 'support-female')}
-              className="text-xs text-qsis hover:underline"
-            >
-              <i className="fas fa-search mr-1"></i>Auto-discover from bot
-            </button>
+            <div className="flex flex-wrap gap-2 mb-2">
+              <button
+                onClick={() => setShowDiscovery(showDiscovery === 'support-female' ? null : 'support-female')}
+                className="text-xs text-qsis hover:underline"
+              >
+                <i className="fas fa-search mr-1"></i>Auto-discover from bot
+              </button>
+            </div>
+            <p className="text-[0.65rem] text-dark-text3">
+              Or get ID manually: add <a href="https://t.me/getidsbot" target="_blank" rel="noopener noreferrer" className="text-qsis hover:underline">@getidsbot</a> to your group
+            </p>
             {showDiscovery === 'support-female' && (
               <div className="mt-2">
                 <ChatDiscovery onSelect={(id, title) => handleChatSelect('support-female', id, title)} filter="group" />
