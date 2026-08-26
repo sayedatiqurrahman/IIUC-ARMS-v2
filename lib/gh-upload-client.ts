@@ -238,18 +238,19 @@ async function uploadViaLFS(opts: {
 }): Promise<void> {
   const { token, owner, repo, file, oid, size, onProgress } = opts;
 
-  const batchRes = await fetch(`${GITHUB_API}/repos/${owner}/${repo}.git/info/lfs/objects/batch`, {
+  const batchRes = await fetch('/api/github/lfs-batch', {
     method: 'POST',
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: 'application/vnd.github.git-lfs+json',
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      operation: 'upload',
-      transfers: ['basic'],
-      ref: { name: 'refs/heads/main' },
-      objects: [{ oid, size }],
+      token,
+      owner,
+      repo,
+      body: {
+        operation: 'upload',
+        transfers: ['basic'],
+        ref: { name: 'refs/heads/main' },
+        objects: [{ oid, size }],
+      },
     }),
   });
 
