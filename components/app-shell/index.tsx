@@ -424,6 +424,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { href: '/contributors', match: isActive('/contributors'), icon: 'fa-users', label: 'Team' },
   ];
 
+  const isFullWidthPage = pathname?.startsWith('/clubs/') && pathname !== '/clubs';
+
   return (
     <div className="min-h-screen bg-dark-bg text-dark-text">
       {(session as any)?.accountStatus === 'pending' && (
@@ -666,7 +668,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* MAIN CONTENT */}
-      <main className="max-w-[1200px] min-h-[calc(100vh-120px)] mx-auto px-5 py-5 pb-24 md:pb-5">
+      <main className={`${isFullWidthPage ? 'min-h-[calc(100vh-60px)] pb-24 md:pb-0' : 'max-w-[1200px] min-h-[calc(100vh-120px)] mx-auto px-5 py-5 pb-24 md:pb-5'}`}>
         {children}
       </main>
 
