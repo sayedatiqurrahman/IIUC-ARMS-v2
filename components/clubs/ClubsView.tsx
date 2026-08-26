@@ -76,8 +76,7 @@ export default function ClubsView() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-bg py-8 px-4">
-      <div className="max-w-5xl mx-auto">
+    <section className="mb-5">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-dark-text flex items-center gap-2">
@@ -200,7 +199,6 @@ export default function ClubsView() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </section>
   );
 }

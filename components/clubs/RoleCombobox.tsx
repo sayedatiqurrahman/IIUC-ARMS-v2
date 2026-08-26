@@ -135,17 +135,17 @@ export default function RoleCombobox({ value, onChange, customRoles = [], onSave
         type="button"
         onClick={() => { if (!disabled) { setOpen(!open); setQuery(''); } }}
         disabled={disabled}
-        className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm text-left flex items-center justify-between gap-2 outline-none focus:border-blue-500 transition disabled:opacity-50"
+        className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm text-left flex items-center justify-between gap-2 outline-none focus:border-qsis transition disabled:opacity-50"
       >
         <span className="truncate">{displayLabel}</span>
-        <i className={`fas fa-chevron-down text-gray-500 text-xs transition-transform ${open ? 'rotate-180' : ''}`}></i>
+        <i className={`fas fa-chevron-down text-dark-text2 text-xs transition-transform ${open ? 'rotate-180' : ''}`}></i>
       </button>
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-[#242526] border border-[#3a3b3c] rounded-xl shadow-2xl max-h-72 overflow-hidden flex flex-col">
+        <div className="absolute z-50 mt-1 w-full bg-dark-bg2 border border-dark-border rounded-xl shadow-2xl max-h-72 overflow-hidden flex flex-col">
           {/* Search input */}
-          <div className="p-2 border-b border-[#3a3b3c]">
+          <div className="p-2 border-b border-dark-border">
             <input
               ref={inputRef}
               type="text"
@@ -153,14 +153,14 @@ export default function RoleCombobox({ value, onChange, customRoles = [], onSave
               onChange={e => { setQuery(e.target.value); setCustomInput(e.target.value); }}
               onKeyDown={handleKeyDown}
               placeholder="Search roles..."
-              className="w-full px-2.5 py-1.5 rounded-lg bg-[#18191a] border border-[#3a3b3c] text-white text-sm outline-none focus:border-blue-500"
+              className="w-full px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-sm outline-none focus:border-qsis"
               autoFocus
             />
           </div>
           {/* Options list */}
           <div className="overflow-y-auto flex-1">
             {filtered.length === 0 && !queryIsNew && (
-              <div className="px-3 py-4 text-center text-gray-500 text-sm">No roles found</div>
+              <div className="px-3 py-4 text-center text-dark-text2 text-sm">No roles found</div>
             )}
             {filtered.map((opt, i) => {
               const isSelected = opt.key === value;
@@ -172,13 +172,13 @@ export default function RoleCombobox({ value, onChange, customRoles = [], onSave
                   onClick={() => selectOption(opt.key)}
                   onMouseEnter={() => setHighlightIdx(i)}
                   className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 transition ${
-                    isHighlighted ? 'bg-blue-500/15' : 'hover:bg-white/5'
-                  } ${isSelected ? 'text-blue-400' : 'text-gray-300'}`}
+                    isHighlighted ? 'bg-qsis/15' : 'hover:bg-dark-bg3'
+                  } ${isSelected ? 'text-qsis' : 'text-dark-text'}`}
                 >
-                  {isSelected && <i className="fas fa-check text-blue-400 text-xs w-4"></i>}
+                  {isSelected && <i className="fas fa-check text-qsis text-xs w-4"></i>}
                   {!isSelected && <span className="w-4"></span>}
                   <span className="flex-1 truncate">{opt.label}</span>
-                  <span className="text-[0.65rem] text-gray-600 uppercase tracking-wider">{opt.group}</span>
+                  <span className="text-[0.65rem] text-dark-text2 uppercase tracking-wider">{opt.group}</span>
                 </button>
               );
             })}
@@ -187,11 +187,11 @@ export default function RoleCombobox({ value, onChange, customRoles = [], onSave
               <button
                 type="button"
                 onClick={saveCustomAndSelect}
-                className="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2.5 bg-blue-500/10 border-t border-[#3a3b3c] hover:bg-blue-500/20 transition"
+                className="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2.5 bg-qsis/10 border-t border-dark-border hover:bg-qsis/20 transition"
               >
-                <i className="fas fa-plus text-blue-400 text-xs w-4 text-center"></i>
-                <span className="text-blue-400 font-semibold">Create &ldquo;{query.trim()}&rdquo;</span>
-                <span className="text-[0.65rem] text-blue-400/60 uppercase tracking-wider">Custom</span>
+                <i className="fas fa-plus text-qsis text-xs w-4 text-center"></i>
+                <span className="text-qsis font-semibold">Create &ldquo;{query.trim()}&rdquo;</span>
+                <span className="text-[0.65rem] text-qsis/60 uppercase tracking-wider">Custom</span>
               </button>
             )}
           </div>

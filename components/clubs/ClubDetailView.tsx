@@ -16,7 +16,7 @@ const ROLE_BADGE: Record<string, string> = {
   president: 'bg-red-500/15 text-red-400 border-red-500/30',
   vice_president: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
   gs: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-  ags: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  ags: 'bg-qsis/15 text-qsis border-qsis/30',
   ogs: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
   treasurer: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   finance: 'bg-green-500/15 text-green-400 border-green-500/30',
@@ -394,23 +394,23 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-[#18191a] flex items-center justify-center">
+    <div className="min-h-screen bg-dark-bg flex items-center justify-center">
       <div className="text-center">
-        <i className="fas fa-spinner fa-spin text-blue-500 text-3xl"></i>
-        <p className="text-gray-400 mt-3 text-sm">Loading club page...</p>
+        <i className="fas fa-spinner fa-spin text-qsis text-3xl"></i>
+        <p className="text-dark-text2 mt-3 text-sm">Loading club page...</p>
       </div>
     </div>
   );
 
   if (!club) return (
-    <div className="min-h-screen bg-[#18191a] flex items-center justify-center">
+    <div className="min-h-screen bg-dark-bg flex items-center justify-center">
       <div className="text-center max-w-sm mx-auto px-4">
-        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
-          <i className="fas fa-users text-gray-500 text-3xl"></i>
+        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-dark-bg3 flex items-center justify-center">
+          <i className="fas fa-users text-dark-text2 text-3xl"></i>
         </div>
-        <h2 className="text-white text-lg font-bold mb-2">Club not found</h2>
-        <p className="text-gray-400 text-sm mb-4">This club page doesn&apos;t exist or hasn&apos;t been set up yet.</p>
-        <Link href="/clubs" className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition">
+        <h2 className="text-dark-text text-lg font-bold mb-2">Club not found</h2>
+        <p className="text-dark-text2 text-sm mb-4">This club page doesn&apos;t exist or hasn&apos;t been set up yet.</p>
+        <Link href="/clubs" className="inline-flex items-center gap-2 px-4 py-2 bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold rounded-lg transition">
           <i className="fas fa-arrow-left"></i> Back to Clubs
         </Link>
       </div>
@@ -436,18 +436,18 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   ];
 
   return (
-    <div className="min-h-screen bg-[#18191a]">
+    <div>
       {/* ══════════ COVER ══════════ */}
       <div ref={headerRef} className="relative">
         <div className="relative h-[200px] sm:h-[280px] md:h-[340px] lg:h-[380px]">
           {club.coverUrl ? (
             <img src={club.coverUrl} alt="" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-blue-900/60 via-[#1c1e21] to-purple-900/40" />
+            <div className="w-full h-full bg-gradient-to-br from-dark-bg2 via-dark-bg to-dark-bg3" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#18191a] via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-dark-bg via-transparent to-transparent" />
           {canManage && (
-            <label className="absolute bottom-4 right-4 flex items-center gap-1.5 px-3 py-2 bg-[#3a3b3c]/80 hover:bg-[#4e4f50]/80 backdrop-blur-sm text-white rounded-lg text-xs font-semibold cursor-pointer transition border border-white/10">
+            <label className="absolute bottom-4 right-4 flex items-center gap-1.5 px-3 py-2 bg-dark-bg3/80 hover:bg-dark-bg3/80 backdrop-blur-sm text-dark-text rounded-lg text-xs font-semibold cursor-pointer transition border border-white/10">
               <i className="fas fa-camera"></i>{coverUploading ? ' Uploading...' : 'Edit cover'}
               <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" disabled={coverUploading} />
             </label>
@@ -460,15 +460,15 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {/* Logo */}
             <div className="relative shrink-0 self-center sm:self-auto">
               {club.logoUrl ? (
-                <img src={club.logoUrl} alt={club.name} className="w-[120px] h-[120px] sm:w-[168px] sm:h-[168px] rounded-full object-cover border-4 border-[#18191a] shadow-xl" />
+                <img src={club.logoUrl} alt={club.name} className="w-[120px] h-[120px] sm:w-[168px] sm:h-[168px] rounded-full object-cover border-4 border-dark-bg shadow-xl" />
               ) : (
-                <div className="w-[120px] h-[120px] sm:w-[168px] sm:h-[168px] rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center border-4 border-[#18191a] shadow-xl">
-                  <i className="fas fa-users text-white text-4xl sm:text-5xl"></i>
+                <div className="w-[120px] h-[120px] sm:w-[168px] sm:h-[168px] rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center border-4 border-dark-bg shadow-xl">
+                  <i className="fas fa-users text-dark-text text-4xl sm:text-5xl"></i>
                 </div>
               )}
               {canManage && (
-                <label className="absolute bottom-1 right-1 w-9 h-9 bg-[#3a3b3c] hover:bg-[#4e4f50] rounded-full flex items-center justify-center cursor-pointer shadow-lg transition border border-white/10">
-                  <i className="fas fa-camera text-white text-sm"></i>
+                <label className="absolute bottom-1 right-1 w-9 h-9 bg-dark-bg3 hover:bg-dark-bg3 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition border border-white/10">
+                  <i className="fas fa-camera text-dark-text text-sm"></i>
                   <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" disabled={logoUploading} />
                 </label>
               )}
@@ -476,27 +476,27 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
             {/* Name & Info */}
             <div className="flex-1 min-w-0 pb-2 text-center sm:text-left">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">{club.name}</h1>
-              <p className="text-sm text-gray-400 mt-1">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-dark-text leading-tight">{club.name}</h1>
+              <p className="text-sm text-dark-text2 mt-1">
                 <i className="fas fa-building mr-1"></i>{club.department}
               </p>
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 mt-2 text-sm text-gray-400">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 mt-2 text-sm text-dark-text2">
                 <span className="flex items-center gap-1">
-                  <i className="fas fa-user-group text-blue-400"></i>
-                  <strong className="text-white">{memberCount}</strong> members
+                  <i className="fas fa-user-group text-qsis"></i>
+                  <strong className="text-dark-text">{memberCount}</strong> members
                 </span>
                 <span className="flex items-center gap-1">
                   <i className="fas fa-calendar-days text-green-400"></i>
-                  <strong className="text-white">{eventCount}</strong> events
+                  <strong className="text-dark-text">{eventCount}</strong> events
                 </span>
                 <span className="flex items-center gap-1">
                   <i className="fas fa-award text-yellow-400"></i>
-                  <strong className="text-white">{certCount}</strong> certificates
+                  <strong className="text-dark-text">{certCount}</strong> certificates
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-dark-text2 mt-1">
                 <i className="fas fa-clock mr-1"></i>Created {timeAgo(club.createdAt)} by{' '}
-                <button onClick={() => setShowCreatorPopup(true)} className="text-blue-400 hover:underline font-semibold">
+                <button onClick={() => setShowCreatorPopup(true)} className="text-qsis hover:underline font-semibold">
                   {creatorProfile?.name || club.createdBy?.split('@')[0]}
                 </button>
               </p>
@@ -505,7 +505,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {/* Action Buttons */}
             <div className="flex gap-2 shrink-0 pb-2">
               {!isMember && profile.email && (
-                <button onClick={() => setShowClaimModal(true)} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold transition shadow-lg shadow-blue-600/20">
+                <button onClick={() => setShowClaimModal(true)} className="px-5 py-2.5 bg-qsis hover:bg-qsis/80 text-dark-text rounded-lg text-sm font-bold transition shadow-lg shadow-qsis/20">
                   <i className="fas fa-hand-sparkles mr-1.5"></i>Follow
                 </button>
               )}
@@ -516,7 +516,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
               )}
               {canIssueCert && (
                 <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline">
-                  <button className="px-4 py-2.5 bg-[#3a3b3c] hover:bg-[#4e4f50] text-white border border-white/10 rounded-lg text-sm font-semibold transition">
+                  <button className="px-4 py-2.5 bg-dark-bg3 hover:bg-dark-bg3 text-dark-text border border-white/10 rounded-lg text-sm font-semibold transition">
                     <i className="fas fa-award mr-1.5"></i>Issue Cert
                   </button>
                 </Link>
@@ -525,7 +525,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
           </div>
 
           {/* ══════════ TAB BAR ══════════ */}
-          <div className={`mt-4 border-b border-[#3a3b3c] transition-all ${stickyTab ? 'fixed top-0 left-0 right-0 z-50 bg-[#242526] shadow-xl shadow-black/30' : ''}`}>
+          <div className={`mt-4 border-b border-dark-border transition-all ${stickyTab ? 'fixed top-0 left-0 right-0 z-50 bg-dark-bg2 shadow-xl shadow-black/30' : ''}`}>
             <div className="max-w-[1100px] mx-auto px-4 sm:px-6">
               <div className="flex gap-0 overflow-x-auto scrollbar-hide">
                 {navItems.map(item => {
@@ -534,14 +534,14 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                     <button key={item.key} onClick={() => setSection(item.key)}
                       className={`relative px-4 py-3.5 text-sm font-semibold transition whitespace-nowrap ${
                         active
-                          ? 'text-blue-400'
-                          : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                          ? 'text-qsis'
+                          : 'text-dark-text2 hover:text-dark-text hover:bg-dark-bg3'
                       }`}>
                       <i className={`fas ${item.icon} mr-1.5`}></i>{item.label}
                       {item.badge !== undefined && item.badge > 0 && (
-                        <span className="ml-1.5 px-1.5 py-0.5 text-[0.6rem] rounded-full bg-blue-500/20 text-blue-400 font-bold">{item.badge}</span>
+                        <span className="ml-1.5 px-1.5 py-0.5 text-[0.6rem] rounded-full bg-qsis/20 text-qsis font-bold">{item.badge}</span>
                       )}
-                      {active && <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-blue-500 rounded-t-full"></div>}
+                      {active && <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-qsis rounded-t-full"></div>}
                     </button>
                   );
                 })}
@@ -558,69 +558,69 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
           {/* ── LEFT SIDEBAR ── (desktop only) */}
           <div className="hidden lg:block lg:w-[360px] shrink-0 space-y-4">
             {/* About Card */}
-            <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+            <div className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
               <div className="p-4">
-                <h3 className="text-lg font-bold text-white mb-3">About</h3>
+                <h3 className="text-lg font-bold text-dark-text mb-3">About</h3>
                 {club.description ? (
-                  <p className="text-sm text-gray-300 leading-relaxed">{club.description}</p>
+                  <p className="text-sm text-dark-text leading-relaxed">{club.description}</p>
                 ) : (
-                  <p className="text-sm text-gray-500 italic">No description yet.</p>
+                  <p className="text-sm text-dark-text2 italic">No description yet.</p>
                 )}
               </div>
-              <div className="border-t border-[#3a3b3c]">
+              <div className="border-t border-dark-border">
                 <div className="px-4 py-3 flex items-center gap-3">
-                  <i className="fas fa-building text-gray-400 w-5 text-center"></i>
-                  <div><p className="text-sm text-white">{club.department}</p><p className="text-xs text-gray-500">Department</p></div>
+                  <i className="fas fa-building text-dark-text2 w-5 text-center"></i>
+                  <div><p className="text-sm text-dark-text">{club.department}</p><p className="text-xs text-dark-text2">Department</p></div>
                 </div>
                 <div className="px-4 py-3 flex items-center gap-3">
-                  <i className="fas fa-clock text-gray-400 w-5 text-center"></i>
-                  <div><p className="text-sm text-white">Created {new Date(club.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p><p className="text-xs text-gray-500">Club established</p></div>
+                  <i className="fas fa-clock text-dark-text2 w-5 text-center"></i>
+                  <div><p className="text-sm text-dark-text">Created {new Date(club.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p><p className="text-xs text-dark-text2">Club established</p></div>
                 </div>
                 <div className="px-4 py-3 flex items-center gap-3">
-                  <i className="fas fa-user text-gray-400 w-5 text-center"></i>
+                  <i className="fas fa-user text-dark-text2 w-5 text-center"></i>
                   <div>
-                    <button onClick={() => setShowCreatorPopup(true)} className="text-sm text-blue-400 hover:underline font-semibold text-left">
+                    <button onClick={() => setShowCreatorPopup(true)} className="text-sm text-qsis hover:underline font-semibold text-left">
                       {creatorProfile?.name || club.createdBy?.split('@')[0]}
                     </button>
-                    <p className="text-xs text-gray-500">Created by</p>
+                    <p className="text-xs text-dark-text2">Created by</p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Certificates Highlight */}
-            <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+            <div className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
               <div className="p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base font-bold text-white"><i className="fas fa-award text-yellow-400 mr-2"></i>Certificates</h3>
+                  <h3 className="text-base font-bold text-dark-text"><i className="fas fa-award text-yellow-400 mr-2"></i>Certificates</h3>
                   <span className="text-sm font-bold text-yellow-400">{certCount}</span>
                 </div>
                 {certCount > 0 ? (
                   <>
-                    <p className="text-xs text-gray-400 mb-3">Official certificates issued by {club.name}. Scan the QR code on any certificate to verify.</p>
+                    <p className="text-xs text-dark-text2 mb-3">Official certificates issued by {club.name}. Scan the QR code on any certificate to verify.</p>
                     <button onClick={() => setSection('certificates')} className="w-full px-3 py-2 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded-lg text-xs font-semibold hover:bg-yellow-500/20 transition mb-2">
                       <i className="fas fa-award mr-1.5"></i>View All Certificates
                     </button>
                   </>
                 ) : (
-                  <p className="text-xs text-gray-500">No certificates issued yet.</p>
+                  <p className="text-xs text-dark-text2">No certificates issued yet.</p>
                 )}
                 {canIssueCert && (
                   <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline block">
-                    <button className="w-full px-3 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-semibold hover:bg-blue-600/20 transition">
+                    <button className="w-full px-3 py-2 bg-qsis/10 text-qsis border border-qsis/20 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
                       <i className="fas fa-plus mr-1.5"></i>Issue Certificate
                     </button>
                   </Link>
                 )}
               </div>
-              <div className="border-t border-[#3a3b3c]">
-                <Link href="/verify" className="flex items-center gap-3 px-4 py-3 hover:bg-[#3a3b3c] transition no-underline">
+              <div className="border-t border-dark-border">
+                <Link href="/verify" className="flex items-center gap-3 px-4 py-3 hover:bg-dark-bg3 transition no-underline">
                   <div className="w-9 h-9 rounded-lg bg-green-500/15 flex items-center justify-center">
                     <i className="fas fa-qrcode text-green-400"></i>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-white">Verify Certificate</p>
-                    <p className="text-xs text-gray-500">Scan QR or enter ID</p>
+                    <p className="text-sm font-semibold text-dark-text">Verify Certificate</p>
+                    <p className="text-xs text-dark-text2">Scan QR or enter ID</p>
                   </div>
                 </Link>
               </div>
@@ -628,29 +628,29 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
             {/* Members Quick View */}
             {recentMembers.length > 0 && (
-              <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+              <div className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-base font-bold text-white"><i className="fas fa-user-group text-blue-400 mr-2"></i>Members</h3>
-                    <span className="text-sm font-bold text-blue-400">{memberCount}</span>
+                    <h3 className="text-base font-bold text-dark-text"><i className="fas fa-user-group text-qsis mr-2"></i>Members</h3>
+                    <span className="text-sm font-bold text-qsis">{memberCount}</span>
                   </div>
                   {/* Avatar stack */}
                   <div className="flex -space-x-2 mb-3">
                     {recentMembers.slice(0, 10).map((m: ClubDataMember) => {
                       const img = memberImage(m);
                       return (
-                        <div key={m.userId} className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-[0.55rem] font-bold text-white ring-2 ring-[#242526] overflow-hidden shrink-0" title={dn(m)}>
+                        <div key={m.userId} className="w-9 h-9 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-[0.55rem] font-bold text-dark-text ring-2 ring-dark-bg2 overflow-hidden shrink-0" title={dn(m)}>
                           {img ? <img src={img} alt="" className="w-full h-full object-cover" /> : ui(m)}
                         </div>
                       );
                     })}
                     {memberCount > 10 && (
-                      <div className="w-9 h-9 rounded-full bg-[#3a3b3c] flex items-center justify-center text-[0.55rem] font-bold text-gray-400 ring-2 ring-[#242526]">
+                      <div className="w-9 h-9 rounded-full bg-dark-bg3 flex items-center justify-center text-[0.55rem] font-bold text-dark-text2 ring-2 ring-dark-bg2">
                         +{memberCount - 10}
                       </div>
                     )}
                   </div>
-                  <button onClick={() => setSection('members')} className="w-full px-3 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-semibold hover:bg-blue-600/20 transition">
+                  <button onClick={() => setSection('members')} className="w-full px-3 py-2 bg-qsis/10 text-qsis border border-qsis/20 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
                     <i className="fas fa-user-group mr-1.5"></i>View All Members
                   </button>
                 </div>
@@ -659,27 +659,27 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
             {/* Photos placeholder */}
             {club.coverUrl && (
-              <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4">
-                <h3 className="text-base font-bold text-white mb-3">Cover Photo</h3>
+              <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4">
+                <h3 className="text-base font-bold text-dark-text mb-3">Cover Photo</h3>
                 <img src={club.coverUrl} alt="" className="w-full rounded-lg object-cover" />
               </div>
             )}
 
             {/* Leadership Quick View */}
             {leadership.length > 0 && (
-              <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4">
-                <h3 className="text-base font-bold text-white mb-3">Leadership</h3>
+              <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4">
+                <h3 className="text-base font-bold text-dark-text mb-3">Leadership</h3>
                 <div className="space-y-2.5">
                   {leadership.slice(0, 6).map((m: ClubDataMember) => {
                     const ri = CLUB_ROLES[m.role];
                     return (
                       <div key={m.userId} className="flex items-center gap-3 group">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0 ring-2 ring-[#242526] overflow-hidden">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0 ring-2 ring-dark-bg2 overflow-hidden">
                           {(() => { const img = memberImage(m); return img ? <img src={img} alt="" className="w-full h-full object-cover" /> : ui(m); })()}
                         </div>
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-white truncate group-hover:text-blue-400 transition">{dn(m)}</p>
+                          <p className="text-sm font-semibold text-dark-text truncate group-hover:text-qsis transition">{dn(m)}</p>
                           <span className={`inline-flex items-center gap-1 text-[0.65rem] px-2 py-0.5 rounded-full border font-semibold ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
                             <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {getRoleLabel(m.role, customClubRoles)}
                           </span>
@@ -700,22 +700,22 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
               <div className="space-y-4">
                 {/* Create Post Box */}
                 {canManage && (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4">
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0">
                         {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-full h-full rounded-full object-cover" /> : <i className="fas fa-users"></i>}
                       </div>
-                      <button onClick={() => setShowAddEvent(true)} className="flex-1 text-left px-4 py-2.5 bg-[#3a3b3c] hover:bg-[#4e4f50] rounded-full text-sm text-gray-400 transition">
+                      <button onClick={() => setShowAddEvent(true)} className="flex-1 text-left px-4 py-2.5 bg-dark-bg3 hover:bg-dark-bg3 rounded-full text-sm text-dark-text2 transition">
                         Create an event...
                       </button>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => setShowAddEvent(true)} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-[#3a3b3c] rounded-lg text-sm text-gray-300 font-semibold transition">
+                      <button onClick={() => setShowAddEvent(true)} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-dark-bg3 rounded-lg text-sm text-dark-text font-semibold transition">
                         <i className="fas fa-calendar-plus text-green-400"></i> Event
                       </button>
                       {canIssueCert && (
                         <Link href={`/clubs/${slug}/certificates/issue`} className="flex-1 no-underline">
-                          <button className="w-full flex items-center justify-center gap-2 py-2 hover:bg-[#3a3b3c] rounded-lg text-sm text-gray-300 font-semibold transition">
+                          <button className="w-full flex items-center justify-center gap-2 py-2 hover:bg-dark-bg3 rounded-lg text-sm text-dark-text font-semibold transition">
                             <i className="fas fa-award text-yellow-400"></i> Certificate
                           </button>
                         </Link>
@@ -725,18 +725,18 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                 )}
 
                 {/* Certificates Highlight Card */}
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
                   <div className="p-5">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-12 h-12 rounded-xl bg-yellow-500/15 flex items-center justify-center">
                         <i className="fas fa-award text-yellow-400 text-xl"></i>
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-white">{certCount} Certificates Issued</h3>
-                        <p className="text-sm text-gray-400">Verified credentials from {club.name}</p>
+                        <h3 className="text-lg font-bold text-dark-text">{certCount} Certificates Issued</h3>
+                        <p className="text-sm text-dark-text2">Verified credentials from {club.name}</p>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-300 mb-4 leading-relaxed">
+                    <p className="text-sm text-dark-text mb-4 leading-relaxed">
                       Every certificate issued by {club.name} contains a unique QR code. Anyone can scan it with their phone camera or any QR scanner to verify authenticity instantly.
                     </p>
                     <div className="flex gap-3">
@@ -754,40 +754,40 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
                 {/* Recent Certificates as Posts */}
                 {certResults.length > 0 && certResults.slice(0, 3).map((cert: any) => (
-                  <div key={cert.id || cert.certificateId} className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+                  <div key={cert.id || cert.certificateId} className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
                     <div className="p-4 pb-0">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0">
                           {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-full h-full rounded-full object-cover" /> : <i className="fas fa-users"></i>}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-white">{club.name}</p>
-                          <p className="text-xs text-gray-500">Issued a certificate &middot; {timeAgo(cert.issuedAt)}</p>
+                          <p className="text-sm font-semibold text-dark-text">{club.name}</p>
+                          <p className="text-xs text-dark-text2">Issued a certificate &middot; {timeAgo(cert.issuedAt)}</p>
                         </div>
                       </div>
                     </div>
                     <div className="p-4">
-                      <div className="bg-[#18191a] rounded-xl p-4 border border-yellow-500/10">
+                      <div className="bg-dark-bg rounded-xl p-4 border border-yellow-500/10">
                         <div className="flex items-center gap-3 mb-3">
                           <div className="w-10 h-10 rounded-lg bg-yellow-500/15 flex items-center justify-center shrink-0">
                             <i className="fas fa-award text-yellow-400"></i>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-bold text-white truncate">{cert.memberName}</p>
-                            <p className="text-xs text-gray-500 font-mono">{cert.certificateId}</p>
+                            <p className="text-sm font-bold text-dark-text truncate">{cert.memberName}</p>
+                            <p className="text-xs text-dark-text2 font-mono">{cert.certificateId}</p>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs">
-                          {cert.post && <span className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded-md">{cert.post}</span>}
+                          {cert.post && <span className="px-2 py-1 bg-qsis/10 text-qsis rounded-md">{cert.post}</span>}
                           {cert.eventName && <span className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded-md">{cert.eventName}</span>}
-                          {cert.servicePeriod && <span className="px-2 py-1 bg-gray-500/10 text-gray-400 rounded-md">{cert.servicePeriod}</span>}
+                          {cert.servicePeriod && <span className="px-2 py-1 bg-dark-bg3/50 text-dark-text2 rounded-md">{cert.servicePeriod}</span>}
                         </div>
                       </div>
                     </div>
-                    <div className="border-t border-[#3a3b3c] px-4 py-2 flex items-center justify-between text-xs text-gray-500">
+                    <div className="border-t border-dark-border px-4 py-2 flex items-center justify-between text-xs text-dark-text2">
                       <span><i className="fas fa-shield-check mr-1 text-green-400"></i>Verified by IIUC-ARMS</span>
                       <div className="flex gap-3">
-                        <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition font-semibold">View</a>
+                        <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer" className="hover:text-qsis transition font-semibold">View</a>
                         <button onClick={() => downloadCertPDF(toCertPDFData(cert))} className="hover:text-yellow-400 transition font-semibold">PDF</button>
                       </div>
                     </div>
@@ -796,52 +796,52 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
                 {/* Events as Posts */}
                 {(club.events || []).length === 0 && certResults.length === 0 ? (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-8 text-center">
-                    <i className="fas fa-newspaper text-gray-600 text-4xl mb-3 block"></i>
-                    <p className="text-gray-400 text-sm font-semibold">No posts yet</p>
-                    <p className="text-gray-500 text-xs mt-1">Certificates and events will appear here.</p>
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border p-8 text-center">
+                    <i className="fas fa-newspaper text-dark-text2 text-4xl mb-3 block"></i>
+                    <p className="text-dark-text2 text-sm font-semibold">No posts yet</p>
+                    <p className="text-dark-text2 text-xs mt-1">Certificates and events will appear here.</p>
                   </div>
                 ) : (
                   club.events?.slice(0, 3).map((ev: any) => (
-                    <div key={ev.id} className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+                    <div key={ev.id} className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
                       <div className="p-4 pb-0">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0">
                             {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-full h-full rounded-full object-cover" /> : <i className="fas fa-users"></i>}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-white">{club.name}</p>
-                            <p className="text-xs text-gray-500">Posted an event &middot; {timeAgo(ev.createdAt)}</p>
+                            <p className="text-sm font-semibold text-dark-text">{club.name}</p>
+                            <p className="text-xs text-dark-text2">Posted an event &middot; {timeAgo(ev.createdAt)}</p>
                           </div>
                         </div>
                       </div>
                       <div className="p-4">
-                        <h3 className="text-lg font-bold text-white mb-2">{ev.title}</h3>
-                        {ev.description && <p className="text-sm text-gray-300 leading-relaxed mb-3">{ev.description}</p>}
+                        <h3 className="text-lg font-bold text-dark-text mb-2">{ev.title}</h3>
+                        {ev.description && <p className="text-sm text-dark-text leading-relaxed mb-3">{ev.description}</p>}
                         <div className="flex flex-wrap gap-3">
                           {ev.eventDate && (
-                            <div className="flex items-center gap-2 bg-[#3a3b3c] rounded-lg px-3 py-2">
+                            <div className="flex items-center gap-2 bg-dark-bg3 rounded-lg px-3 py-2">
                               <div className="text-center w-10">
-                                <p className="text-lg font-bold text-white leading-none">{new Date(ev.eventDate).getDate()}</p>
-                                <p className="text-[0.6rem] text-gray-400 uppercase">{new Date(ev.eventDate).toLocaleString('en', { month: 'short' })}</p>
+                                <p className="text-lg font-bold text-dark-text leading-none">{new Date(ev.eventDate).getDate()}</p>
+                                <p className="text-[0.6rem] text-dark-text2 uppercase">{new Date(ev.eventDate).toLocaleString('en', { month: 'short' })}</p>
                               </div>
-                              <div className="border-l border-gray-600 pl-2">
-                                <p className="text-xs text-gray-300 font-semibold">{new Date(ev.eventDate).toLocaleString('en', { weekday: 'short' })}</p>
-                                <p className="text-xs text-gray-400">{new Date(ev.eventDate).toLocaleString('en', { hour: '2-digit', minute: '2-digit' })}</p>
+                              <div className="border-l border-dark-border pl-2">
+                                <p className="text-xs text-dark-text font-semibold">{new Date(ev.eventDate).toLocaleString('en', { weekday: 'short' })}</p>
+                                <p className="text-xs text-dark-text2">{new Date(ev.eventDate).toLocaleString('en', { hour: '2-digit', minute: '2-digit' })}</p>
                               </div>
                             </div>
                           )}
                           {ev.venue && (
-                            <div className="flex items-center gap-2 bg-[#3a3b3c] rounded-lg px-3 py-2">
-                              <i className="fas fa-location-dot text-blue-400"></i>
-                              <span className="text-sm text-gray-300">{ev.venue}</span>
+                            <div className="flex items-center gap-2 bg-dark-bg3 rounded-lg px-3 py-2">
+                              <i className="fas fa-location-dot text-qsis"></i>
+                              <span className="text-sm text-dark-text">{ev.venue}</span>
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="border-t border-[#3a3b3c] px-4 py-2 flex items-center justify-between text-xs text-gray-500">
+                      <div className="border-t border-dark-border px-4 py-2 flex items-center justify-between text-xs text-dark-text2">
                         <span><i className="fas fa-calendar-check mr-1 text-green-400"></i>{eventCount} total events</span>
-                        <button onClick={() => setSection('events')} className="hover:text-blue-400 transition font-semibold">View all events</button>
+                        <button onClick={() => setSection('events')} className="hover:text-qsis transition font-semibold">View all events</button>
                       </div>
                     </div>
                   ))
@@ -853,88 +853,88 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {section === 'about' && (
               <div className="space-y-4">
                 {/* Description */}
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
-                  <h3 className="text-lg font-bold text-white mb-3">About {club.name}</h3>
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border p-5">
+                  <h3 className="text-lg font-bold text-dark-text mb-3">About {club.name}</h3>
                   {club.description ? (
-                    <p className="text-sm text-gray-300 leading-relaxed">{club.description}</p>
+                    <p className="text-sm text-dark-text leading-relaxed">{club.description}</p>
                   ) : (
-                    <p className="text-sm text-gray-500 italic">No description provided. Club admins can add one in Settings.</p>
+                    <p className="text-sm text-dark-text2 italic">No description provided. Club admins can add one in Settings.</p>
                   )}
                 </div>
 
                 {/* Overview */}
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
-                  <h3 className="text-base font-bold text-white mb-4">Overview</h3>
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border p-5">
+                  <h3 className="text-base font-bold text-dark-text mb-4">Overview</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    <div className="text-center p-3 bg-[#18191a] rounded-lg">
-                      <p className="text-2xl font-bold text-blue-400">{memberCount}</p>
-                      <p className="text-xs text-gray-400 mt-1">Members</p>
+                    <div className="text-center p-3 bg-dark-bg rounded-lg">
+                      <p className="text-2xl font-bold text-qsis">{memberCount}</p>
+                      <p className="text-xs text-dark-text2 mt-1">Members</p>
                     </div>
-                    <div className="text-center p-3 bg-[#18191a] rounded-lg">
+                    <div className="text-center p-3 bg-dark-bg rounded-lg">
                       <p className="text-2xl font-bold text-green-400">{eventCount}</p>
-                      <p className="text-xs text-gray-400 mt-1">Events</p>
+                      <p className="text-xs text-dark-text2 mt-1">Events</p>
                     </div>
-                    <div className="text-center p-3 bg-[#18191a] rounded-lg">
+                    <div className="text-center p-3 bg-dark-bg rounded-lg">
                       <p className="text-2xl font-bold text-yellow-400">{certCount}</p>
-                      <p className="text-xs text-gray-400 mt-1">Certificates</p>
+                      <p className="text-xs text-dark-text2 mt-1">Certificates</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Info rows */}
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
                   <div className="px-4 py-3 flex items-center gap-3">
-                    <i className="fas fa-building text-gray-400 w-5 text-center"></i>
-                    <div><p className="text-sm text-white">{club.department}</p><p className="text-xs text-gray-500">Department</p></div>
+                    <i className="fas fa-building text-dark-text2 w-5 text-center"></i>
+                    <div><p className="text-sm text-dark-text">{club.department}</p><p className="text-xs text-dark-text2">Department</p></div>
                   </div>
                   <div className="px-4 py-3 flex items-center gap-3">
-                    <i className="fas fa-clock text-gray-400 w-5 text-center"></i>
-                    <div><p className="text-sm text-white">Created {new Date(club.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p><p className="text-xs text-gray-500">Club established</p></div>
+                    <i className="fas fa-clock text-dark-text2 w-5 text-center"></i>
+                    <div><p className="text-sm text-dark-text">Created {new Date(club.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p><p className="text-xs text-dark-text2">Club established</p></div>
                   </div>
                   <div className="px-4 py-3 flex items-center gap-3">
-                    <i className="fas fa-user text-gray-400 w-5 text-center"></i>
+                    <i className="fas fa-user text-dark-text2 w-5 text-center"></i>
                     <div>
-                      <button onClick={() => setShowCreatorPopup(true)} className="text-sm text-blue-400 hover:underline font-semibold text-left">
+                      <button onClick={() => setShowCreatorPopup(true)} className="text-sm text-qsis hover:underline font-semibold text-left">
                         {creatorProfile?.name || club.createdBy?.split('@')[0]}
                       </button>
-                      <p className="text-xs text-gray-500">Created by</p>
+                      <p className="text-xs text-dark-text2">Created by</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Certificates Quick */}
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-base font-bold text-white"><i className="fas fa-award text-yellow-400 mr-2"></i>Certificates</h3>
+                      <h3 className="text-base font-bold text-dark-text"><i className="fas fa-award text-yellow-400 mr-2"></i>Certificates</h3>
                       <span className="text-sm font-bold text-yellow-400">{certCount}</span>
                     </div>
                     {certCount > 0 ? (
                       <>
-                        <p className="text-xs text-gray-400 mb-3">Official certificates issued by {club.name}. Scan the QR code on any certificate to verify.</p>
+                        <p className="text-xs text-dark-text2 mb-3">Official certificates issued by {club.name}. Scan the QR code on any certificate to verify.</p>
                         <button onClick={() => setSection('certificates')} className="w-full px-3 py-2 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded-lg text-xs font-semibold hover:bg-yellow-500/20 transition mb-2">
                           <i className="fas fa-award mr-1.5"></i>View All Certificates
                         </button>
                       </>
                     ) : (
-                      <p className="text-xs text-gray-500">No certificates issued yet.</p>
+                      <p className="text-xs text-dark-text2">No certificates issued yet.</p>
                     )}
                     {canIssueCert && (
                       <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline block">
-                        <button className="w-full px-3 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-semibold hover:bg-blue-600/20 transition">
+                        <button className="w-full px-3 py-2 bg-qsis/10 text-qsis border border-qsis/20 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
                           <i className="fas fa-plus mr-1.5"></i>Issue Certificate
                         </button>
                       </Link>
                     )}
                   </div>
-                  <div className="border-t border-[#3a3b3c]">
-                    <Link href="/verify" className="flex items-center gap-3 px-4 py-3 hover:bg-[#3a3b3c] transition no-underline">
+                  <div className="border-t border-dark-border">
+                    <Link href="/verify" className="flex items-center gap-3 px-4 py-3 hover:bg-dark-bg3 transition no-underline">
                       <div className="w-9 h-9 rounded-lg bg-green-500/15 flex items-center justify-center">
                         <i className="fas fa-qrcode text-green-400"></i>
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-white">Verify Certificate</p>
-                        <p className="text-xs text-gray-500">Scan QR or enter ID</p>
+                        <p className="text-sm font-semibold text-dark-text">Verify Certificate</p>
+                        <p className="text-xs text-dark-text2">Scan QR or enter ID</p>
                       </div>
                     </Link>
                   </div>
@@ -942,25 +942,25 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
                 {/* Members Quick */}
                 {recentMembers.length > 0 && (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] overflow-hidden">
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
                     <div className="p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-base font-bold text-white"><i className="fas fa-user-group text-blue-400 mr-2"></i>Members</h3>
-                        <span className="text-sm font-bold text-blue-400">{memberCount}</span>
+                        <h3 className="text-base font-bold text-dark-text"><i className="fas fa-user-group text-qsis mr-2"></i>Members</h3>
+                        <span className="text-sm font-bold text-qsis">{memberCount}</span>
                       </div>
                       <div className="flex -space-x-2 mb-3">
                         {recentMembers.slice(0, 10).map((m: ClubDataMember) => (
-                          <div key={m.userId} className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-[0.55rem] font-bold text-white ring-2 ring-[#242526]" title={dn(m)}>
+                          <div key={m.userId} className="w-9 h-9 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-[0.55rem] font-bold text-dark-text ring-2 ring-dark-bg2" title={dn(m)}>
                             {ui(m)}
                           </div>
                         ))}
                         {memberCount > 10 && (
-                          <div className="w-9 h-9 rounded-full bg-[#3a3b3c] flex items-center justify-center text-[0.55rem] font-bold text-gray-400 ring-2 ring-[#242526]">
+                          <div className="w-9 h-9 rounded-full bg-dark-bg3 flex items-center justify-center text-[0.55rem] font-bold text-dark-text2 ring-2 ring-dark-bg2">
                             +{memberCount - 10}
                           </div>
                         )}
                       </div>
-                      <button onClick={() => setSection('members')} className="w-full px-3 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-semibold hover:bg-blue-600/20 transition">
+                      <button onClick={() => setSection('members')} className="w-full px-3 py-2 bg-qsis/10 text-qsis border border-qsis/20 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
                         <i className="fas fa-user-group mr-1.5"></i>View All Members
                       </button>
                     </div>
@@ -969,30 +969,30 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
                 {/* Cover Photo */}
                 {club.coverUrl && (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4">
-                    <h3 className="text-base font-bold text-white mb-3">Cover Photo</h3>
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4">
+                    <h3 className="text-base font-bold text-dark-text mb-3">Cover Photo</h3>
                     <img src={club.coverUrl} alt="" className="w-full rounded-lg object-cover" />
                   </div>
                 )}
 
                 {/* Leadership */}
                 {leadership.length > 0 && (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
-                    <h3 className="text-base font-bold text-white mb-4">Key People</h3>
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border p-5">
+                    <h3 className="text-base font-bold text-dark-text mb-4">Key People</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {leadership.map((m: ClubDataMember) => {
                         const ri = CLUB_ROLES[m.role];
                         return (
-                          <div key={m.userId} className="flex items-center gap-3 p-3 bg-[#18191a] rounded-lg hover:bg-[#3a3b3c] transition">
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white shrink-0">
+                          <div key={m.userId} className="flex items-center gap-3 p-3 bg-dark-bg rounded-lg hover:bg-dark-bg3 transition">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-sm font-bold text-dark-text shrink-0">
                               {ui(m)}
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold text-white truncate">{dn(m)}</p>
+                              <p className="text-sm font-semibold text-dark-text truncate">{dn(m)}</p>
                               <span className={`inline-flex items-center gap-1 text-[0.65rem] px-2 py-0.5 rounded-full border font-semibold ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
                                 <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {getRoleLabel(m.role, customClubRoles)}
                               </span>
-                              {m.isClubAdmin && <span className="ml-1 text-[0.6rem] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold">ADMIN</span>}
+                              {m.isClubAdmin && <span className="ml-1 text-[0.6rem] px-1.5 py-0.5 rounded bg-qsis/20 text-qsis font-bold">ADMIN</span>}
                             </div>
                           </div>
                         );
@@ -1006,24 +1006,24 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {/* ═══ MEMBERS ═══ */}
             {section === 'members' && (
               <div>
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4 mb-4 flex items-center justify-between gap-2 flex-wrap">
-                  <h3 className="text-base font-bold text-white"><i className="fas fa-user-group text-blue-400 mr-2"></i>{memberCount} Members</h3>
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4 mb-4 flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-dark-text"><i className="fas fa-user-group text-qsis mr-2"></i>{memberCount} Members</h3>
                   <div className="flex items-center gap-2">
                     {/* View toggle */}
-                    <div className="flex bg-[#3a3b3c] rounded-lg p-0.5">
-                      <button onClick={() => setMemberView('list')} className={`px-2 py-1 rounded-md text-xs transition ${memberView === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`} title="List view">
+                    <div className="flex bg-dark-bg3 rounded-lg p-0.5">
+                      <button onClick={() => setMemberView('list')} className={`px-2 py-1 rounded-md text-xs transition ${memberView === 'list' ? 'bg-qsis text-dark-text' : 'text-dark-text2 hover:text-dark-text'}`} title="List view">
                         <i className="fas fa-list"></i>
                       </button>
-                      <button onClick={() => setMemberView('grid')} className={`px-2 py-1 rounded-md text-xs transition ${memberView === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`} title="Grid view">
+                      <button onClick={() => setMemberView('grid')} className={`px-2 py-1 rounded-md text-xs transition ${memberView === 'grid' ? 'bg-qsis text-dark-text' : 'text-dark-text2 hover:text-dark-text'}`} title="Grid view">
                         <i className="fas fa-grip"></i>
                       </button>
                     </div>
                     {canManage && (
                       <>
-                        <button onClick={() => setShowAddMember(true)} className="px-3 py-1.5 bg-blue-600/15 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-semibold hover:bg-blue-600/25 transition">
+                        <button onClick={() => setShowAddMember(true)} className="px-3 py-1.5 bg-qsis/15 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
                           <i className="fas fa-user-plus mr-1"></i>Add
                         </button>
-                        <button onClick={handleExportMembers} className="px-3 py-1.5 bg-[#3a3b3c] text-gray-300 border border-[#4e4f50] rounded-lg text-xs font-semibold hover:bg-[#4e4f50] transition">
+                        <button onClick={handleExportMembers} className="px-3 py-1.5 bg-dark-bg3 text-dark-text border border-dark-border rounded-lg text-xs font-semibold hover:bg-dark-bg3 transition">
                           <i className="fas fa-download mr-1"></i>Export
                         </button>
                       </>
@@ -1031,9 +1031,9 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                   </div>
                 </div>
                 {(club.members || []).length === 0 ? (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-12 text-center">
-                    <i className="fas fa-user-group text-gray-600 text-4xl mb-3 block"></i>
-                    <p className="text-gray-400 text-sm">No members yet</p>
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border p-12 text-center">
+                    <i className="fas fa-user-group text-dark-text2 text-4xl mb-3 block"></i>
+                    <p className="text-dark-text2 text-sm">No members yet</p>
                   </div>
                 ) : (
                   orderedGroups.map(groupName => {
@@ -1041,9 +1041,9 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                     return (
                       <div key={groupName} className="mb-6">
                         <div className="flex items-center gap-2 mb-3">
-                          <h4 className="text-base font-bold text-white">{groupName}</h4>
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-[#3a3b3c] text-gray-400 font-semibold">{members.length}</span>
-                          <div className="flex-1 h-px bg-[#3a3b3c]"></div>
+                          <h4 className="text-base font-bold text-dark-text">{groupName}</h4>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-dark-bg3 text-dark-text2 font-semibold">{members.length}</span>
+                          <div className="flex-1 h-px bg-dark-bg3"></div>
                         </div>
                         {memberView === 'grid' ? (
                           /* ═══ GRID VIEW ═══ */
@@ -1053,20 +1053,20 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                               const img = memberImage(m);
                               const pRoles = parseClubRoles(m.clubRoles);
                               return (
-                                <div key={`${m.userId}-${m.role}`} className="bg-[#242526] border border-[#3a3b3c] rounded-xl overflow-hidden hover:border-[#4e4f50] transition group">
+                                <div key={`${m.userId}-${m.role}`} className="bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden hover:border-dark-border transition group">
                                   {/* Profile image */}
-                                  <div className="w-full aspect-square bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl font-bold text-white relative overflow-hidden">
+                                  <div className="w-full aspect-square bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-2xl font-bold text-dark-text relative overflow-hidden">
                                     {img ? <img src={img} alt="" className="w-full h-full object-cover" /> : ui(m)}
-                                    {m.isClubAdmin && <span className="absolute top-2 right-2 text-[0.5rem] px-1.5 py-0.5 rounded bg-blue-500/90 text-white font-bold">ADMIN</span>}
+                                    {m.isClubAdmin && <span className="absolute top-2 right-2 text-[0.5rem] px-1.5 py-0.5 rounded bg-qsis/90 text-dark-text font-bold">ADMIN</span>}
                                   </div>
                                   <div className="p-3">
-                                    <p className="text-sm font-semibold text-white truncate">{dn(m)}</p>
-                                    {m.profileDepartment && <p className="text-[0.6rem] text-gray-500 truncate">{m.profileDepartment}</p>}
+                                    <p className="text-sm font-semibold text-dark-text truncate">{dn(m)}</p>
+                                    {m.profileDepartment && <p className="text-[0.6rem] text-dark-text2 truncate">{m.profileDepartment}</p>}
                                     <span className={`inline-flex items-center gap-1 text-[0.6rem] px-2 py-0.5 rounded-full border font-semibold mt-1.5 ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
                                       <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {getRoleLabel(m.role, customClubRoles)}
                                     </span>
                                     {m.previousRole && (
-                                      <p className="text-[0.55rem] text-gray-500 mt-1">
+                                      <p className="text-[0.55rem] text-dark-text2 mt-1">
                                         <i className="fas fa-clock-rotate-left mr-0.5"></i>Ex {getRoleLabel(m.previousRole, customClubRoles)}{m.previousRoleSession ? ` (${m.previousRoleSession})` : ''}
                                       </p>
                                     )}
@@ -1075,9 +1075,9 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                         {pRoles.slice(0, 2).map((rk: string) => {
                                           const r = CLUB_MEMBER_ROLES[rk];
                                           if (!r) return null;
-                                          return <span key={rk} title={r.description} className={`inline-flex items-center gap-0.5 text-[0.5rem] px-1 py-0.5 rounded bg-[#3a3b3c] font-semibold ${r.color}`}><i className={`fas ${r.icon}`}></i> {r.label}</span>;
+                                          return <span key={rk} title={r.description} className={`inline-flex items-center gap-0.5 text-[0.5rem] px-1 py-0.5 rounded bg-dark-bg3 font-semibold ${r.color}`}><i className={`fas ${r.icon}`}></i> {r.label}</span>;
                                         })}
-                                        {pRoles.length > 2 && <span className="text-[0.5rem] text-gray-500">+{pRoles.length - 2}</span>}
+                                        {pRoles.length > 2 && <span className="text-[0.5rem] text-dark-text2">+{pRoles.length - 2}</span>}
                                       </div>
                                     )}
                                     {/* Contact row */}
@@ -1088,20 +1088,20 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                         </a>
                                       )}
                                       {m.userId && (
-                                        <a href={`mailto:${m.userId}`} className="text-gray-500 hover:text-gray-300 transition" title={m.userId}>
+                                        <a href={`mailto:${m.userId}`} className="text-dark-text2 hover:text-dark-text transition" title={m.userId}>
                                           <i className="fas fa-envelope text-xs"></i>
                                         </a>
                                       )}
                                     </div>
                                     {/* Actions */}
                                     {(canManage || m.userId === profile.email) && (
-                                      <div className="flex items-center gap-1 mt-2 pt-2 border-t border-[#3a3b3c]">
+                                      <div className="flex items-center gap-1 mt-2 pt-2 border-t border-dark-border">
                                         {m.userId === profile.email && (
                                           <button onClick={() => setShowSelfRoles(true)} title="Edit my roles" className="text-green-400 hover:text-green-300 text-[0.65rem] px-1.5 py-0.5 rounded hover:bg-green-500/10 transition"><i className="fas fa-id-badge mr-0.5"></i>Edit</button>
                                         )}
                                         {canManage && m.userId !== profile.email && (
                                           <>
-                                            <button onClick={() => { setEditingMember(m.userId); setEditRole(m.role); setEditSession(''); setEditClubRoles(parseClubRoles(m.clubRoles)); }} title="Change role" className="text-blue-400 hover:text-blue-300 text-[0.65rem] px-1.5 py-0.5 rounded hover:bg-blue-500/10 transition"><i className="fas fa-pen mr-0.5"></i>Edit</button>
+                                            <button onClick={() => { setEditingMember(m.userId); setEditRole(m.role); setEditSession(''); setEditClubRoles(parseClubRoles(m.clubRoles)); }} title="Change role" className="text-qsis hover:text-qsis text-[0.65rem] px-1.5 py-0.5 rounded hover:bg-qsis/10 transition"><i className="fas fa-pen mr-0.5"></i>Edit</button>
                                             <button onClick={() => handleRemoveMember(m.userId)} title="Remove" className="text-red-400 hover:text-red-300 text-[0.65rem] px-1.5 py-0.5 rounded hover:bg-red-500/10 transition ml-auto"><i className="fas fa-user-minus"></i></button>
                                           </>
                                         )}
@@ -1120,33 +1120,33 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                               const img = memberImage(m);
                               const pRoles = parseClubRoles(m.clubRoles);
                               return (
-                                <div key={`${m.userId}-${m.role}`} className="bg-[#242526] border border-[#3a3b3c] rounded-xl p-3 flex items-center gap-3 hover:border-[#4e4f50] transition">
+                                <div key={`${m.userId}-${m.role}`} className="bg-dark-bg2 border border-dark-border rounded-xl p-3 flex items-center gap-3 hover:border-dark-border transition">
                                   {/* Avatar */}
-                                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden ring-2 ring-[#242526]">
+                                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0 overflow-hidden ring-2 ring-dark-bg2">
                                     {img ? <img src={img} alt="" className="w-full h-full object-cover" /> : ui(m)}
                                   </div>
                                   {/* Info */}
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                      <p className="text-sm font-semibold text-white truncate">{dn(m)}</p>
-                                      {m.isClubAdmin && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold">ADMIN</span>}
+                                      <p className="text-sm font-semibold text-dark-text truncate">{dn(m)}</p>
+                                      {m.isClubAdmin && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-qsis/20 text-qsis font-bold">ADMIN</span>}
                                       <span className={`inline-flex items-center gap-1 text-[0.65rem] px-2 py-0.5 rounded-full border font-semibold ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
                                         <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {getRoleLabel(m.role, customClubRoles)}
                                       </span>
                                       {m.previousRole && (
-                                        <span className="text-[0.55rem] text-gray-500">
+                                        <span className="text-[0.55rem] text-dark-text2">
                                           <i className="fas fa-clock-rotate-left mr-0.5"></i>Ex {getRoleLabel(m.previousRole, customClubRoles)}{m.previousRoleSession ? ` (${m.previousRoleSession})` : ''}
                                         </span>
                                       )}
                                     </div>
                                     <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                                      {m.profileDepartment && <span className="text-[0.6rem] text-gray-500"><i className="fas fa-building mr-0.5"></i>{m.profileDepartment}</span>}
+                                      {m.profileDepartment && <span className="text-[0.6rem] text-dark-text2"><i className="fas fa-building mr-0.5"></i>{m.profileDepartment}</span>}
                                       {m.profileWhatsapp && (
                                         <a href={waLink(m.profileWhatsapp)} target="_blank" rel="noopener noreferrer" className="text-[0.6rem] text-emerald-400 hover:text-emerald-300 transition no-underline">
                                           <i className="fab fa-whatsapp mr-0.5"></i>{m.profileWhatsapp}
                                         </a>
                                       )}
-                                      <a href={`mailto:${m.userId}`} className="text-[0.6rem] text-gray-500 hover:text-gray-300 transition no-underline">
+                                      <a href={`mailto:${m.userId}`} className="text-[0.6rem] text-dark-text2 hover:text-dark-text transition no-underline">
                                         <i className="fas fa-envelope mr-0.5"></i>{m.userId}
                                       </a>
                                     </div>
@@ -1155,7 +1155,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                         {pRoles.map((rk: string) => {
                                           const r = CLUB_MEMBER_ROLES[rk];
                                           if (!r) return null;
-                                          return <span key={rk} title={r.description} className={`inline-flex items-center gap-0.5 text-[0.55rem] px-1.5 py-0.5 rounded bg-[#3a3b3c] font-semibold ${r.color}`}><i className={`fas ${r.icon}`}></i> {r.label}</span>;
+                                          return <span key={rk} title={r.description} className={`inline-flex items-center gap-0.5 text-[0.55rem] px-1.5 py-0.5 rounded bg-dark-bg3 font-semibold ${r.color}`}><i className={`fas ${r.icon}`}></i> {r.label}</span>;
                                         })}
                                       </div>
                                     )}
@@ -1168,7 +1168,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                       )}
                                       {canManage && m.userId !== profile.email && (
                                         <>
-                                          <button onClick={() => { setEditingMember(m.userId); setEditRole(m.role); setEditSession(''); setEditClubRoles(parseClubRoles(m.clubRoles)); }} title="Change role" className="text-blue-400 hover:text-blue-300 text-xs p-1.5 rounded-lg hover:bg-blue-500/10 transition"><i className="fas fa-pen"></i></button>
+                                          <button onClick={() => { setEditingMember(m.userId); setEditRole(m.role); setEditSession(''); setEditClubRoles(parseClubRoles(m.clubRoles)); }} title="Change role" className="text-qsis hover:text-qsis text-xs p-1.5 rounded-lg hover:bg-qsis/10 transition"><i className="fas fa-pen"></i></button>
                                           <button onClick={() => handleRemoveMember(m.userId)} title="Remove" className="text-red-400 hover:text-red-300 text-xs p-1.5 rounded-lg hover:bg-red-500/10 transition"><i className="fas fa-user-minus"></i></button>
                                         </>
                                       )}
@@ -1189,8 +1189,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {/* ═══ EVENTS ═══ */}
             {section === 'events' && (
               <div>
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4 mb-4 flex items-center justify-between">
-                  <h3 className="text-base font-bold text-white"><i className="fas fa-calendar-days text-green-400 mr-2"></i>Events ({eventCount})</h3>
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4 mb-4 flex items-center justify-between">
+                  <h3 className="text-base font-bold text-dark-text"><i className="fas fa-calendar-days text-green-400 mr-2"></i>Events ({eventCount})</h3>
                   {canManage && (
                     <button onClick={() => setShowAddEvent(true)} className="px-3 py-1.5 bg-green-600/15 text-green-400 border border-green-500/30 rounded-lg text-xs font-semibold hover:bg-green-600/25 transition">
                       <i className="fas fa-plus mr-1"></i>New Event
@@ -1198,29 +1198,29 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                   )}
                 </div>
                 {(club.events || []).length === 0 ? (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-12 text-center">
-                    <i className="fas fa-calendar-xmark text-gray-600 text-4xl mb-3 block"></i>
-                    <p className="text-gray-400 text-sm">No events yet</p>
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border p-12 text-center">
+                    <i className="fas fa-calendar-xmark text-dark-text2 text-4xl mb-3 block"></i>
+                    <p className="text-dark-text2 text-sm">No events yet</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {club.events.map((ev: any) => (
-                      <div key={ev.id} className="bg-[#242526] border border-[#3a3b3c] rounded-xl overflow-hidden">
+                      <div key={ev.id} className="bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden">
                         <div className="p-5">
                           <div className="flex items-start gap-4">
                             {ev.eventDate && (
-                              <div className="text-center shrink-0 w-14 bg-blue-600/15 rounded-xl p-2.5 border border-blue-500/20">
-                                <p className="text-2xl font-bold text-blue-400 leading-none">{new Date(ev.eventDate).getDate()}</p>
-                                <p className="text-[0.6rem] text-blue-300/70 uppercase mt-0.5">{new Date(ev.eventDate).toLocaleString('en', { month: 'short' })}</p>
-                                <p className="text-[0.55rem] text-gray-500">{new Date(ev.eventDate).toLocaleString('en', { year: 'numeric' })}</p>
+                              <div className="text-center shrink-0 w-14 bg-qsis/15 rounded-xl p-2.5 border border-qsis/20">
+                                <p className="text-2xl font-bold text-qsis leading-none">{new Date(ev.eventDate).getDate()}</p>
+                                <p className="text-[0.6rem] text-qsis/70 uppercase mt-0.5">{new Date(ev.eventDate).toLocaleString('en', { month: 'short' })}</p>
+                                <p className="text-[0.55rem] text-dark-text2">{new Date(ev.eventDate).toLocaleString('en', { year: 'numeric' })}</p>
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
-                              <h4 className="text-base font-bold text-white">{ev.title}</h4>
-                              {ev.venue && <p className="text-sm text-gray-400 mt-1"><i className="fas fa-location-dot mr-1 text-blue-400"></i>{ev.venue}</p>}
-                              {ev.description && <p className="text-sm text-gray-300 mt-2 leading-relaxed">{ev.description}</p>}
+                              <h4 className="text-base font-bold text-dark-text">{ev.title}</h4>
+                              {ev.venue && <p className="text-sm text-dark-text2 mt-1"><i className="fas fa-location-dot mr-1 text-qsis"></i>{ev.venue}</p>}
+                              {ev.description && <p className="text-sm text-dark-text mt-2 leading-relaxed">{ev.description}</p>}
                               {ev.eventDate && (
-                                <p className="text-xs text-gray-500 mt-2">
+                                <p className="text-xs text-dark-text2 mt-2">
                                   <i className="fas fa-clock mr-1"></i>
                                   {new Date(ev.eventDate).toLocaleString('en-US', { weekday: 'long', hour: '2-digit', minute: '2-digit' })}
                                 </p>
@@ -1228,7 +1228,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                             </div>
                           </div>
                         </div>
-                        <div className="border-t border-[#3a3b3c] px-5 py-2 flex items-center gap-4 text-xs text-gray-500">
+                        <div className="border-t border-dark-border px-5 py-2 flex items-center gap-4 text-xs text-dark-text2">
                           <span>Posted {timeAgo(ev.createdAt)}</span>
                         </div>
                       </div>
@@ -1241,8 +1241,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {/* ═══ CERTIFICATES ═══ */}
             {section === 'certificates' && (
               <div>
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4 mb-4 flex items-center justify-between gap-2 flex-wrap">
-                  <h3 className="text-base font-bold text-white"><i className="fas fa-award text-yellow-400 mr-2"></i>Certificates ({certCount})</h3>
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4 mb-4 flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-dark-text"><i className="fas fa-award text-yellow-400 mr-2"></i>Certificates ({certCount})</h3>
                   <div className="flex gap-2">
                     {canIssueCert && (
                       <Link href={`/clubs/${slug}/certificates/issue`} className="no-underline">
@@ -1252,34 +1252,34 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                       </Link>
                     )}
                     <button onClick={handleBulkDownload} disabled={certResults.length === 0}
-                      className="px-3 py-1.5 bg-[#3a3b3c] text-gray-300 border border-[#4e4f50] rounded-lg text-xs font-semibold hover:bg-[#4e4f50] transition disabled:opacity-40 disabled:pointer-events-none">
+                      className="px-3 py-1.5 bg-dark-bg3 text-dark-text border border-dark-border rounded-lg text-xs font-semibold hover:bg-dark-bg3 transition disabled:opacity-40 disabled:pointer-events-none">
                       <i className="fas fa-file-pdf mr-1 text-red-400"></i>Download All ({certResults.length})
                     </button>
                   </div>
                 </div>
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4 mb-4">
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4 mb-4">
                   <div className="flex gap-2">
                     <div className="relative flex-1">
-                      <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                      <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-dark-text2 text-sm"></i>
                       <input type="text" value={certSearch} onChange={e => setCertSearch(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleCertSearch()}
-                        className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
                         placeholder="Search by name or ID..." />
                     </div>
-                    <button onClick={() => handleCertSearch()} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold transition">
+                    <button onClick={() => handleCertSearch()} className="px-4 py-2.5 bg-qsis hover:bg-qsis/80 text-dark-text rounded-lg text-sm font-semibold transition">
                       <i className="fas fa-search"></i>
                     </button>
                   </div>
                 </div>
                 {certResults.length === 0 ? (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-12 text-center">
-                    <i className="fas fa-award text-gray-600 text-4xl mb-3 block"></i>
-                    <p className="text-gray-400 text-sm">{certSearch ? 'No certificates match your search' : 'No certificates issued yet'}</p>
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border p-12 text-center">
+                    <i className="fas fa-award text-dark-text2 text-4xl mb-3 block"></i>
+                    <p className="text-dark-text2 text-sm">{certSearch ? 'No certificates match your search' : 'No certificates issued yet'}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {certResults.map((cert: any) => (
-                      <div key={cert.id || cert.certificateId} className="bg-[#242526] border border-[#3a3b3c] rounded-xl p-4">
+                      <div key={cert.id || cert.certificateId} className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-1.5">
@@ -1287,19 +1287,19 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                 <i className="fas fa-award text-yellow-400 text-sm"></i>
                               </div>
                               <div>
-                                <p className="text-xs font-mono font-bold text-white">{cert.certificateId}</p>
-                                <p className="text-xs text-gray-500">{cert.memberName}</p>
+                                <p className="text-xs font-mono font-bold text-dark-text">{cert.certificateId}</p>
+                                <p className="text-xs text-dark-text2">{cert.memberName}</p>
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[0.7rem] ml-10">
-                              <span className="text-gray-500">UID: <span className="text-gray-300">{cert.universityId}</span></span>
-                              {cert.post && <span className="text-gray-500">Post: <span className="text-blue-400">{cert.post}</span></span>}
-                              {cert.servicePeriod && <span className="text-gray-500">Period: <span className="text-gray-300">{cert.servicePeriod}</span></span>}
+                              <span className="text-dark-text2">UID: <span className="text-dark-text">{cert.universityId}</span></span>
+                              {cert.post && <span className="text-dark-text2">Post: <span className="text-qsis">{cert.post}</span></span>}
+                              {cert.servicePeriod && <span className="text-dark-text2">Period: <span className="text-dark-text">{cert.servicePeriod}</span></span>}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
-                              className="w-8 h-8 flex items-center justify-center bg-blue-600/15 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600/25 transition no-underline">
+                              className="w-8 h-8 flex items-center justify-center bg-qsis/15 text-qsis border border-qsis/30 rounded-lg hover:bg-qsis/20 transition no-underline">
                               <i className="fas fa-external-link-alt text-xs"></i>
                             </a>
                             <button onClick={() => downloadCertPDF(toCertPDFData(cert))}
@@ -1318,40 +1318,40 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {/* ═══ CLAIMS ═══ */}
             {section === 'claims' && canManage && (
               <div>
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4 mb-4">
-                  <h3 className="text-base font-bold text-white"><i className="fas fa-inbox text-purple-400 mr-2"></i>Membership Claims</h3>
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4 mb-4">
+                  <h3 className="text-base font-bold text-dark-text"><i className="fas fa-inbox text-purple-400 mr-2"></i>Membership Claims</h3>
                 </div>
                 <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-hide">
                   {(['pending', 'approved', 'rejected', 'all'] as ClaimFilter[]).map(f => (
                     <button key={f} onClick={() => setClaimFilter(f)}
                       className={`px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap ${
-                        claimFilter === f ? 'bg-blue-600 text-white' : 'bg-[#242526] text-gray-400 border border-[#3a3b3c] hover:border-blue-500/50'
+                        claimFilter === f ? 'bg-qsis text-dark-text' : 'bg-dark-bg2 text-dark-text2 border border-dark-border hover:border-qsis/50'
                       }`}>
                       {f.charAt(0).toUpperCase() + f.slice(1)}
                     </button>
                   ))}
                 </div>
                 {claimsLoading ? (
-                  <div className="flex items-center justify-center py-12"><i className="fas fa-spinner fa-spin text-blue-500 text-2xl"></i></div>
+                  <div className="flex items-center justify-center py-12"><i className="fas fa-spinner fa-spin text-qsis text-2xl"></i></div>
                 ) : claims.length === 0 ? (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-12 text-center">
-                    <i className="fas fa-inbox text-gray-600 text-4xl mb-3 block"></i>
-                    <p className="text-gray-400 text-sm">No {claimFilter === 'all' ? '' : claimFilter} claims</p>
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border p-12 text-center">
+                    <i className="fas fa-inbox text-dark-text2 text-4xl mb-3 block"></i>
+                    <p className="text-dark-text2 text-sm">No {claimFilter === 'all' ? '' : claimFilter} claims</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {claims.map((cl: any) => (
-                      <div key={cl.id} className="bg-[#242526] border border-[#3a3b3c] rounded-xl p-4">
+                      <div key={cl.id} className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0">
                               {cl.userId?.substring(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <p className="text-sm font-semibold text-white">{cl.userId}</p>
+                              <p className="text-sm font-semibold text-dark-text">{cl.userId}</p>
                               <span className={`inline-flex text-[0.65rem] px-2 py-0.5 rounded-full font-semibold mt-1 ${CLAIM_STATUS_BADGE[cl.status] || ''}`}>{cl.status}</span>
-                              <p className="text-sm text-gray-300 mt-1">Wants: <span className="text-blue-400 font-semibold">{CLUB_ROLES[cl.requestedRole]?.label || cl.requestedRole}</span></p>
-                              {cl.message && <p className="text-sm text-gray-400 mt-1 italic">&ldquo;{cl.message}&rdquo;</p>}
+                              <p className="text-sm text-dark-text mt-1">Wants: <span className="text-qsis font-semibold">{CLUB_ROLES[cl.requestedRole]?.label || cl.requestedRole}</span></p>
+                              {cl.message && <p className="text-sm text-dark-text2 mt-1 italic">&ldquo;{cl.message}&rdquo;</p>}
                             </div>
                           </div>
                           {cl.status === 'pending' && (
@@ -1372,24 +1372,24 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {section === 'settings' && (isGS || isClubAdmin || isAdmin) && (
               <div className="space-y-4">
                 {/* Logo & Cover */}
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
-                  <h3 className="text-base font-bold text-white mb-4"><i className="fas fa-images text-blue-400 mr-2"></i>Appearance</h3>
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border p-5">
+                  <h3 className="text-base font-bold text-dark-text mb-4"><i className="fas fa-images text-qsis mr-2"></i>Appearance</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs text-gray-400 font-semibold mb-2">Club Logo</p>
+                      <p className="text-xs text-dark-text2 font-semibold mb-2">Club Logo</p>
                       <div className="flex items-center gap-3">
-                        {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-[#3a3b3c]" /> : <div className="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center"><i className="fas fa-users text-blue-400"></i></div>}
-                        <label className="px-3 py-1.5 bg-[#3a3b3c] hover:bg-[#4e4f50] text-white rounded-lg text-xs font-semibold cursor-pointer transition border border-[#4e4f50]">
+                        {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-dark-border" /> : <div className="w-16 h-16 rounded-full bg-qsis/20 flex items-center justify-center"><i className="fas fa-users text-qsis"></i></div>}
+                        <label className="px-3 py-1.5 bg-dark-bg3 hover:bg-dark-bg3 text-dark-text rounded-lg text-xs font-semibold cursor-pointer transition border border-dark-border">
                           {logoUploading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Uploading...</> : <><i className="fas fa-upload mr-1"></i>Upload Logo</>}
                           <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" disabled={logoUploading} />
                         </label>
                       </div>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-400 font-semibold mb-2">Cover Photo</p>
+                      <p className="text-xs text-dark-text2 font-semibold mb-2">Cover Photo</p>
                       <div className="flex items-center gap-3">
-                        {club.coverUrl ? <img src={club.coverUrl} alt="" className="w-16 h-10 rounded-lg object-cover border border-[#3a3b3c]" /> : <div className="w-16 h-10 rounded-lg bg-[#3a3b3c] flex items-center justify-center"><i className="fas fa-image text-gray-500 text-xs"></i></div>}
-                        <label className="px-3 py-1.5 bg-[#3a3b3c] hover:bg-[#4e4f50] text-white rounded-lg text-xs font-semibold cursor-pointer transition border border-[#4e4f50]">
+                        {club.coverUrl ? <img src={club.coverUrl} alt="" className="w-16 h-10 rounded-lg object-cover border border-dark-border" /> : <div className="w-16 h-10 rounded-lg bg-dark-bg3 flex items-center justify-center"><i className="fas fa-image text-dark-text2 text-xs"></i></div>}
+                        <label className="px-3 py-1.5 bg-dark-bg3 hover:bg-dark-bg3 text-dark-text rounded-lg text-xs font-semibold cursor-pointer transition border border-dark-border">
                           {coverUploading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Uploading...</> : <><i className="fas fa-upload mr-1"></i>Upload Cover</>}
                           <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" disabled={coverUploading} />
                         </label>
@@ -1399,21 +1399,21 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                 </div>
 
                 {/* Basic Info */}
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
-                  <h3 className="text-base font-bold text-white mb-4"><i className="fas fa-circle-info text-blue-400 mr-2"></i>Club Info</h3>
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border p-5">
+                  <h3 className="text-base font-bold text-dark-text mb-4"><i className="fas fa-circle-info text-qsis mr-2"></i>Club Info</h3>
                   <div className="space-y-3 text-sm">
-                    <div className="flex justify-between items-center py-2 border-b border-[#3a3b3c]"><span className="text-gray-400 font-semibold">Name</span><span className="text-white">{club.name}</span></div>
-                    <div className="flex justify-between items-center py-2 border-b border-[#3a3b3c]"><span className="text-gray-400 font-semibold">Department</span><span className="text-white">{club.department}</span></div>
-                    <div className="flex justify-between items-start py-2 border-b border-[#3a3b3c]"><span className="text-gray-400 font-semibold">Description</span><span className="text-white text-right max-w-[60%]">{club.description || '—'}</span></div>
-                    <div className="flex justify-between items-center py-2"><span className="text-gray-400 font-semibold">Created By</span><button onClick={() => setShowCreatorPopup(true)} className="text-blue-400 hover:underline">{creatorProfile?.name || club.createdBy}</button></div>
+                    <div className="flex justify-between items-center py-2 border-b border-dark-border"><span className="text-dark-text2 font-semibold">Name</span><span className="text-dark-text">{club.name}</span></div>
+                    <div className="flex justify-between items-center py-2 border-b border-dark-border"><span className="text-dark-text2 font-semibold">Department</span><span className="text-dark-text">{club.department}</span></div>
+                    <div className="flex justify-between items-start py-2 border-b border-dark-border"><span className="text-dark-text2 font-semibold">Description</span><span className="text-dark-text text-right max-w-[60%]">{club.description || '—'}</span></div>
+                    <div className="flex justify-between items-center py-2"><span className="text-dark-text2 font-semibold">Created By</span><button onClick={() => setShowCreatorPopup(true)} className="text-qsis hover:underline">{creatorProfile?.name || club.createdBy}</button></div>
                   </div>
                 </div>
 
                 {/* Access Control */}
                 {(isGS || isClubAdmin) && (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
-                    <h3 className="text-base font-bold text-white mb-1"><i className="fas fa-shield-halved text-blue-400 mr-2"></i>Access Control</h3>
-                    <p className="text-xs text-gray-500 mb-4">Control what managers (non-club members) can do in your club.</p>
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border p-5">
+                    <h3 className="text-base font-bold text-dark-text mb-1"><i className="fas fa-shield-halved text-qsis mr-2"></i>Access Control</h3>
+                    <p className="text-xs text-dark-text2 mb-4">Control what managers (non-club members) can do in your club.</p>
                     <div className="space-y-4">
                       {[
                         { key: 'managerCanManageMembers', label: 'Allow managers to manage members', default: true },
@@ -1421,7 +1421,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                         { key: 'managerCanManageEvents', label: 'Allow managers to manage events', default: true },
                       ].map(item => (
                         <label key={item.key} className="flex items-center justify-between cursor-pointer py-2">
-                          <span className="text-sm text-gray-300">{item.label}</span>
+                          <span className="text-sm text-dark-text">{item.label}</span>
                           <div className="relative">
                             <input type="checkbox" checked={clubSettings[item.key] !== undefined ? clubSettings[item.key] : item.default}
                               onChange={async (e) => {
@@ -1432,7 +1432,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                 } catch {}
                               }}
                               className="sr-only peer" />
-                            <div className="w-10 h-6 bg-[#3a3b3c] rounded-full peer peer-checked:bg-blue-600 transition"></div>
+                            <div className="w-10 h-6 bg-dark-bg3 rounded-full peer peer-checked:bg-qsis transition"></div>
                             <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition peer-checked:translate-x-4"></div>
                           </div>
                         </label>
@@ -1443,18 +1443,18 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
                 {/* Club Admins */}
                 {(isGS || isClubAdmin) && (
-                  <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
-                    <h3 className="text-base font-bold text-white mb-1"><i className="fas fa-user-shield text-blue-400 mr-2"></i>Club Admins</h3>
-                    <p className="text-xs text-gray-500 mb-3">Club admins have full control over the club.</p>
+                  <div className="bg-dark-bg2 rounded-xl border border-dark-border p-5">
+                    <h3 className="text-base font-bold text-dark-text mb-1"><i className="fas fa-user-shield text-qsis mr-2"></i>Club Admins</h3>
+                    <p className="text-xs text-dark-text2 mb-3">Club admins have full control over the club.</p>
                     <div className="space-y-2">
                       {club.members?.filter((m: ClubDataMember) => m.isClubAdmin).map((m: ClubDataMember) => (
-                        <div key={m.userId} className="flex items-center gap-3 bg-[#18191a] border border-[#3a3b3c] rounded-lg p-3">
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-[0.65rem] font-bold text-white">{ui(m)}</div>
+                        <div key={m.userId} className="flex items-center gap-3 bg-dark-bg border border-dark-border rounded-lg p-3">
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-[0.65rem] font-bold text-dark-text">{ui(m)}</div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-white truncate">{dn(m)}</p>
-                            <p className="text-xs text-gray-500">{m.userId}</p>
+                            <p className="text-sm font-semibold text-dark-text truncate">{dn(m)}</p>
+                            <p className="text-xs text-dark-text2">{m.userId}</p>
                           </div>
-                          <span className="text-[0.6rem] px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold">ADMIN</span>
+                          <span className="text-[0.6rem] px-2 py-0.5 rounded bg-qsis/20 text-qsis font-bold">ADMIN</span>
                         </div>
                       ))}
                     </div>
@@ -1462,15 +1462,15 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                 )}
 
                 {/* GitHub Sync */}
-                <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-5">
-                  <h3 className="text-base font-bold text-white mb-1"><i className="fab fa-github text-gray-300 mr-2"></i>GitHub Backup</h3>
-                  <p className="text-xs text-gray-500 mb-3">Sync club data to GitHub as JSON.</p>
+                <div className="bg-dark-bg2 rounded-xl border border-dark-border p-5">
+                  <h3 className="text-base font-bold text-dark-text mb-1"><i className="fab fa-github text-dark-text mr-2"></i>GitHub Backup</h3>
+                  <p className="text-xs text-dark-text2 mb-3">Sync club data to GitHub as JSON.</p>
                   {isAdmin ? (
-                    <button onClick={handleSyncGitHub} className="px-4 py-2 bg-[#3a3b3c] hover:bg-[#4e4f50] text-white border border-[#4e4f50] rounded-lg text-sm font-semibold transition">
+                    <button onClick={handleSyncGitHub} className="px-4 py-2 bg-dark-bg3 hover:bg-dark-bg3 text-dark-text border border-dark-border rounded-lg text-sm font-semibold transition">
                       <i className="fas fa-rotate mr-1.5"></i>Sync to GitHub
                     </button>
                   ) : (
-                    <p className="text-xs text-gray-500"><i className="fas fa-lock mr-1"></i>Admin only.</p>
+                    <p className="text-xs text-dark-text2"><i className="fas fa-lock mr-1"></i>Admin only.</p>
                   )}
                 </div>
               </div>
@@ -1483,23 +1483,23 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
       {showAddMember && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowAddMember(false)}>
-          <div className="bg-[#242526] border border-[#3a3b3c] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-4"><i className="fas fa-user-plus text-blue-400 mr-2"></i>Add Member</h3>
+          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-dark-text mb-4"><i className="fas fa-user-plus text-qsis mr-2"></i>Add Member</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-1 block">Email *</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Email *</label>
                 <input type="email" value={addEmail} onChange={e => setAddEmail(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition"
+                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
                   placeholder="student@ugrad.iiuc.ac.bd" />
               </div>
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-1 block">Role</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Role</label>
                 <RoleCombobox value={addRole} onChange={setAddRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowAddMember(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Cancel</button>
-              <button onClick={handleAddMember} disabled={!addEmail.trim() || adding} className="flex-1 px-3 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold disabled:opacity-50 transition">
+              <button onClick={() => setShowAddMember(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+              <button onClick={handleAddMember} disabled={!addEmail.trim() || adding} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
                 {adding ? <i className="fas fa-spinner fa-spin"></i> : 'Add Member'}
               </button>
             </div>
@@ -1509,37 +1509,37 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
       {editingMember && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setEditingMember(null)}>
-          <div className="bg-[#242526] border border-[#3a3b3c] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-1"><i className="fas fa-user-pen text-blue-400 mr-2"></i>Edit Member Roles</h3>
-            <p className="text-xs text-gray-500 mb-4">Position role and permission roles for this member.</p>
+          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-dark-text mb-1"><i className="fas fa-user-pen text-qsis mr-2"></i>Edit Member Roles</h3>
+            <p className="text-xs text-dark-text2 mb-4">Position role and permission roles for this member.</p>
             <div className="space-y-3">
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-1 block">Position Role</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Position Role</label>
                 <RoleCombobox value={editRole} onChange={setEditRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
               </div>
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-1 block">Session (for Ex-badge)</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Session (for Ex-badge)</label>
                 <input type="text" value={editSession} onChange={e => setEditSession(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition"
+                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
                   placeholder="e.g. Autumn 2023 (optional)" />
               </div>
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-2 block">Permission Roles</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-2 block">Permission Roles</label>
                 <div className="space-y-2">
                   {CLUB_MEMBER_ROLE_LIST.map(r => (
-                    <label key={r.key} className="flex items-center gap-3 p-2.5 rounded-lg bg-[#18191a] border border-[#3a3b3c] hover:border-blue-500/30 cursor-pointer transition">
+                    <label key={r.key} className="flex items-center gap-3 p-2.5 rounded-lg bg-dark-bg border border-dark-border hover:border-qsis/30 cursor-pointer transition">
                       <input type="checkbox" checked={editClubRoles.includes(r.key)}
                         onChange={e => {
                           const next = e.target.checked ? [...editClubRoles, r.key] : editClubRoles.filter(k => k !== r.key);
                           setEditClubRoles(next);
                         }}
-                        className="accent-blue-500 w-4 h-4" />
+                        className="accent-qsis w-4 h-4" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <i className={`${r.icon} ${r.color} text-sm`}></i>
-                          <span className="text-sm font-semibold text-white">{r.label}</span>
+                          <span className="text-sm font-semibold text-dark-text">{r.label}</span>
                         </div>
-                        <p className="text-[0.7rem] text-gray-500">{r.description}</p>
+                        <p className="text-[0.7rem] text-dark-text2">{r.description}</p>
                       </div>
                     </label>
                   ))}
@@ -1547,8 +1547,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setEditingMember(null)} className="flex-1 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Cancel</button>
-              <button onClick={handleChangeRole} className="flex-1 px-3 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition">Update</button>
+              <button onClick={() => setEditingMember(null)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+              <button onClick={handleChangeRole} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold transition">Update</button>
             </div>
           </div>
         </div>
@@ -1556,35 +1556,35 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
       {showAddEvent && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowAddEvent(false)}>
-          <div className="bg-[#242526] border border-[#3a3b3c] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-4"><i className="fas fa-calendar-plus text-green-400 mr-2"></i>Create Event</h3>
+          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-dark-text mb-4"><i className="fas fa-calendar-plus text-green-400 mr-2"></i>Create Event</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-1 block">Title *</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Title *</label>
                 <input type="text" value={evTitle} onChange={e => setEvTitle(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition" placeholder="Event title" />
+                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" placeholder="Event title" />
               </div>
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-1 block">Description</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Description</label>
                 <textarea value={evDesc} onChange={e => setEvDesc(e.target.value)} rows={3}
-                  className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition resize-none" placeholder="Event details..." />
+                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition resize-none" placeholder="Event details..." />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm text-gray-400 font-semibold mb-1 block">Date & Time</label>
+                  <label className="text-sm text-dark-text2 font-semibold mb-1 block">Date & Time</label>
                   <input type="datetime-local" value={evDate} onChange={e => setEvDate(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition" />
+                    className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-400 font-semibold mb-1 block">Venue</label>
+                  <label className="text-sm text-dark-text2 font-semibold mb-1 block">Venue</label>
                   <input type="text" value={evVenue} onChange={e => setEvVenue(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition" placeholder="Room / Hall" />
+                    className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" placeholder="Room / Hall" />
                 </div>
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowAddEvent(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Cancel</button>
-              <button onClick={handleAddEvent} disabled={!evTitle.trim() || addingEvent} className="flex-1 px-3 py-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-semibold disabled:opacity-50 transition">
+              <button onClick={() => setShowAddEvent(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+              <button onClick={handleAddEvent} disabled={!evTitle.trim() || addingEvent} className="flex-1 px-3 py-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
                 {addingEvent ? <i className="fas fa-spinner fa-spin"></i> : 'Create Event'}
               </button>
             </div>
@@ -1594,24 +1594,24 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
       {showClaimModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowClaimModal(false)}>
-          <div className="bg-[#242526] border border-[#3a3b3c] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-1"><i className="fas fa-hand-sparkles text-blue-400 mr-2"></i>Follow {club.name}</h3>
-            <p className="text-sm text-gray-400 mb-4">Request membership &mdash; an officer will review.</p>
+          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-dark-text mb-1"><i className="fas fa-hand-sparkles text-qsis mr-2"></i>Follow {club.name}</h3>
+            <p className="text-sm text-dark-text2 mb-4">Request membership &mdash; an officer will review.</p>
             <div className="space-y-3">
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-1 block">Requested Role</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Requested Role</label>
                 <RoleCombobox value={claimRole} onChange={setClaimRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
               </div>
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-1 block">Message (optional)</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Message (optional)</label>
                 <textarea value={claimMsg} onChange={e => setClaimMsg(e.target.value)} rows={3}
-                  className="w-full px-3 py-2.5 rounded-lg border border-[#3a3b3c] bg-[#18191a] text-white text-sm outline-none focus:border-blue-500 transition resize-none"
+                  className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition resize-none"
                   placeholder="Why do you want to join?" />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowClaimModal(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Cancel</button>
-              <button onClick={handleSubmitClaim} disabled={submittingClaim} className="flex-1 px-3 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold disabled:opacity-50 transition">
+              <button onClick={() => setShowClaimModal(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+              <button onClick={handleSubmitClaim} disabled={submittingClaim} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
                 {submittingClaim ? <i className="fas fa-spinner fa-spin"></i> : 'Send Request'}
               </button>
             </div>
@@ -1621,68 +1621,68 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
       {showCreatorPopup && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowCreatorPopup(false)}>
-          <div className="bg-[#242526] border border-[#3a3b3c] rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex flex-col items-center text-center">
               {creatorProfile?.image ? (
-                <img src={creatorProfile.image} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-[#3a3b3c] mb-3" />
+                <img src={creatorProfile.image} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-dark-border mb-3" />
               ) : (
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl font-bold text-white mb-3">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-2xl font-bold text-dark-text mb-3">
                   {(creatorProfile?.name || club.createdBy)?.charAt(0)?.toUpperCase()}
                 </div>
               )}
-              <h3 className="text-lg font-bold text-white">{creatorProfile?.name || club.createdBy}</h3>
-              {creatorProfile?.title && <p className="text-sm text-gray-400">{creatorProfile.title}</p>}
+              <h3 className="text-lg font-bold text-dark-text">{creatorProfile?.name || club.createdBy}</h3>
+              {creatorProfile?.title && <p className="text-sm text-dark-text2">{creatorProfile.title}</p>}
               <div className="mt-3 space-y-2 w-full text-sm">
-                <div className="flex items-center gap-2 text-gray-300">
-                  <i className="fas fa-envelope text-gray-500 w-5 text-center"></i>
+                <div className="flex items-center gap-2 text-dark-text">
+                  <i className="fas fa-envelope text-dark-text2 w-5 text-center"></i>
                   <span>{club.createdBy}</span>
                 </div>
                 {creatorProfile?.department && (
-                  <div className="flex items-center gap-2 text-gray-300">
-                    <i className="fas fa-building text-gray-500 w-5 text-center"></i>
+                  <div className="flex items-center gap-2 text-dark-text">
+                    <i className="fas fa-building text-dark-text2 w-5 text-center"></i>
                     <span>{creatorProfile.department}</span>
                   </div>
                 )}
                 {creatorProfile?.whatsapp && (
-                  <div className="flex items-center gap-2 text-gray-300">
+                  <div className="flex items-center gap-2 text-dark-text">
                     <i className="fab fa-whatsapp text-green-400 w-5 text-center"></i>
                     <a href={`https://wa.me/${creatorProfile.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="hover:text-green-400 transition">{creatorProfile.whatsapp}</a>
                   </div>
                 )}
               </div>
             </div>
-            <button onClick={() => setShowCreatorPopup(false)} className="w-full mt-4 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Close</button>
+            <button onClick={() => setShowCreatorPopup(false)} className="w-full mt-4 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Close</button>
           </div>
         </div>
       )}
 
       {showSelfRoles && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowSelfRoles(false)}>
-          <div className="bg-[#242526] border border-[#3a3b3c] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-1"><i className="fas fa-id-badge text-blue-400 mr-2"></i>My Roles</h3>
-            <p className="text-xs text-gray-500 mb-4">Change your position role and permission roles in this club.</p>
+          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-dark-text mb-1"><i className="fas fa-id-badge text-qsis mr-2"></i>My Roles</h3>
+            <p className="text-xs text-dark-text2 mb-4">Change your position role and permission roles in this club.</p>
             <div className="space-y-3">
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-1 block">Position Role</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-1 block">Position Role</label>
                 <RoleCombobox value={selfPositionRole} onChange={setSelfPositionRole} customRoles={customClubRoles} onSaveCustom={handleSaveCustomRole} />
               </div>
               <div>
-                <label className="text-sm text-gray-400 font-semibold mb-2 block">Permission Roles</label>
+                <label className="text-sm text-dark-text2 font-semibold mb-2 block">Permission Roles</label>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {CLUB_MEMBER_ROLE_LIST.map(r => (
-                    <label key={r.key} className="flex items-center gap-3 p-3 rounded-lg bg-[#18191a] border border-[#3a3b3c] hover:border-blue-500/30 cursor-pointer transition">
+                    <label key={r.key} className="flex items-center gap-3 p-3 rounded-lg bg-dark-bg border border-dark-border hover:border-qsis/30 cursor-pointer transition">
                       <input type="checkbox" checked={selfClubRoles.includes(r.key)}
                         onChange={e => {
                           const next = e.target.checked ? [...selfClubRoles, r.key] : selfClubRoles.filter(k => k !== r.key);
                           setSelfClubRoles(next);
                         }}
-                        className="accent-blue-500 w-4 h-4" />
+                        className="accent-qsis w-4 h-4" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <i className={`${r.icon} ${r.color} text-sm`}></i>
-                          <span className="text-sm font-semibold text-white">{r.label}</span>
+                          <span className="text-sm font-semibold text-dark-text">{r.label}</span>
                         </div>
-                        <p className="text-[0.7rem] text-gray-500 mt-0.5">{r.description}</p>
+                        <p className="text-[0.7rem] text-dark-text2 mt-0.5">{r.description}</p>
                       </div>
                     </label>
                   ))}
@@ -1690,8 +1690,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowSelfRoles(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-[#3a3b3c] text-gray-400 text-sm font-semibold hover:bg-[#3a3b3c] transition">Cancel</button>
-              <button onClick={handleSaveSelfRoles} disabled={savingSelfRoles} className="flex-1 px-3 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold disabled:opacity-50 transition">
+              <button onClick={() => setShowSelfRoles(false)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+              <button onClick={handleSaveSelfRoles} disabled={savingSelfRoles} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold disabled:opacity-50 transition">
                 {savingSelfRoles ? <i className="fas fa-spinner fa-spin"></i> : 'Save Roles'}
               </button>
             </div>
