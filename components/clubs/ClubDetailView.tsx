@@ -42,13 +42,16 @@ function dn(m: ClubDataMember): string { return m.profileName || m.name || m.use
 function ui(m: ClubDataMember): string { return dn(m).substring(0, 2).toUpperCase(); }
 function memberImage(m: ClubDataMember): string | null { return m.profileImage || null; }
 function waLink(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  return `https://wa.me/${digits}`;
+  let clean = phone.replace(/[^\d+]/g, '').trim();
+  if (clean.startsWith('00')) clean = '+' + clean.slice(2);
+  if (!clean.startsWith('+')) clean = '+' + clean;
+  return `https://wa.me/${clean.slice(1)}`;
 }
 function tgLink(input: string): string {
   const clean = input.replace(/^@/, '').trim();
-  if (/^\+?\d{8,15}$/.test(clean)) {
-    return `https://t.me/${clean.startsWith('+') ? clean : '+' + clean}`;
+  if (/^\+?\d{7,15}$/.test(clean)) {
+    const num = clean.startsWith('+') ? clean : `+${clean}`;
+    return `https://t.me/${encodeURIComponent(num)}`;
   }
   return `https://t.me/${clean}`;
 }

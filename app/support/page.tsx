@@ -214,9 +214,10 @@ export default function SupportPage() {
               type="tel"
               value={form.whatsapp}
               onChange={e => update('whatsapp', e.target.value)}
-              placeholder="+8801XXXXXXXXX"
+              placeholder="+880 1XXXXXXXXX"
               className="w-full px-4 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-sm placeholder:text-dark-text2/50 focus:outline-none focus:border-qsis transition"
             />
+            <p className="text-[0.6rem] text-dark-text2/60 mt-1">Include country code (e.g. +880)</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-dark-text mb-1.5">Telegram</label>
@@ -227,6 +228,7 @@ export default function SupportPage() {
               placeholder="@username or +880..."
               className="w-full px-4 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-sm placeholder:text-dark-text2/50 focus:outline-none focus:border-qsis transition"
             />
+            <p className="text-[0.6rem] text-dark-text2/60 mt-1">Username or phone with country code</p>
           </div>
         </div>
 

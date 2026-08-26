@@ -53,8 +53,8 @@ export async function POST(req: NextRequest) {
     // Build clickable links for WhatsApp and Telegram
     function telegramLink(input: string): string {
       const clean = input.replace(/^@/, '').trim();
-      if (/^\+?\d{8,15}$/.test(clean)) {
-        // Phone number → t.me/+1234567890
+      // Phone number (with or without +) → t.me/+{digits}
+      if (/^\+?\d{7,15}$/.test(clean)) {
         const num = clean.startsWith('+') ? clean : `+${clean}`;
         return `https://t.me/${encodeURIComponent(num)}`;
       }
@@ -63,9 +63,14 @@ export async function POST(req: NextRequest) {
     }
 
     function whatsappLink(input: string): string {
-      const clean = input.replace(/[^\d+]/g, '').trim();
-      const num = clean.startsWith('+') ? clean.slice(1) : clean;
-      return `https://wa.me/${num}`;
+      // Strip everything except digits and +
+      let clean = input.replace(/[^\d+]/g, '').trim();
+      // If starts with 00, convert to +
+      if (clean.startsWith('00')) clean = '+' + clean.slice(2);
+      // If no + prefix, add it (wa.me needs full international number)
+      if (!clean.startsWith('+')) clean = '+' + clean;
+      // wa.me uses digits only (no +)
+      return `https://wa.me/${clean.slice(1)}`;
     }
 
     const message = [
