@@ -206,14 +206,23 @@ export default function RoutineView({ dept }: { dept: string }) {
   }, [canPublish]);
 
   const handleUnpublish = useCallback(async (id: string) => {
+    const routine = publishedRoutines.find(r => r.id === id);
+    // Remove from published
     const updated = publishedRoutines.filter(r => r.id !== id);
     setPublishedRoutines(updated);
     savePublishedRoutines(updated);
     try {
       await fetch(`/api/published-routines?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
     } catch {}
-    showToast('Routine unpublished', 'success');
-  }, [publishedRoutines]);
+    // Move to My Routines so the creator keeps a local copy
+    if (routine) {
+      const myCopy = { ...routine, id: `my-${Date.now()}`, routineId: `my-${Date.now()}`, published: false, isDraft: true };
+      const myUpdated = [...myRoutines, myCopy];
+      setMyRoutines(myUpdated);
+      persistMyRoutines(myUpdated);
+    }
+    showToast('Routine unpublished — moved to My Routines', 'success');
+  }, [publishedRoutines, myRoutines]);
 
   const canEditPublished = useCallback((routine: RoutineItem) => {
     if (isOwner) return true;

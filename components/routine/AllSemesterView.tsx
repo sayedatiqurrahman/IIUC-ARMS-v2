@@ -19,7 +19,7 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
   onBack: () => void;
 }) {
   const { confirm, confirmDialog } = useConfirm();
-  const [draft, setDraft] = useState<AllSemesterDraft>(() => {
+  const [draft, setDraft] = useState<AllSemesterDraft | null>(() => {
     const existing = loadAllSemDraft();
     if (existing) {
       if (!existing.malePeriods) existing.malePeriods = [...DEFAULT_PERIODS];
@@ -31,9 +31,7 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
       }
       return existing;
     }
-    const fresh = createEmptyDraft();
-    saveAllSemDraft(fresh);
-    return fresh;
+    return null;
   });
   const [step, setStep] = useState<AllSemBuilderStep>('info');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -63,6 +61,7 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
   const [tempGenderSlots, setTempGenderSlots] = useState<Record<string, Record<string, Record<number, string>>>>({});
 
   useEffect(() => {
+    if (!draft) return;
     const timer = setTimeout(() => saveAllSemDraft(draft), 600);
     return () => clearTimeout(timer);
   }, [draft]);
@@ -730,7 +729,27 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
                                             const cellKey = `${semKey}:${d}:${cpIdx}`;
                                             const conflicts = conflictMap[cellKey] || [];
                                             const hasConflict = conflicts.length > 0;
-                                            return (
+  // No draft yet — show create button
+  if (!draft) {
+    return (
+      <div className="routine-page-header no-print">
+        <div>
+          <h3 className="routine-page-title"><i className="fas fa-layer-group"></i> All Semester Routine</h3>
+          <p className="routine-page-sub">4-step builder for all semesters, genders &amp; sections with separate rooms</p>
+        </div>
+        <div className="routine-page-actions">
+          <button className="routine-btn routine-btn-accent" onClick={() => {
+            const fresh = createEmptyDraft();
+            saveAllSemDraft(fresh);
+            setDraft(fresh);
+          }}><i className="fas fa-plus"></i> Create New Draft</button>
+          <button className="routine-btn routine-btn-ghost" onClick={onBack}><i className="fas fa-arrow-left"></i> Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
                                               <td key={`${d}-${cpIdx}`} style={hasConflict ? { background: '#ef444420', position: 'relative' } : undefined}
                                                 onMouseEnter={hasConflict ? (e) => setTooltip({ x: e.clientX, y: e.clientY - 40, text: conflicts.join('\n') }) : undefined}
                                                 onMouseLeave={hasConflict ? () => setTooltip(null) : undefined}>
