@@ -1428,6 +1428,7 @@ async function handleCallbackQuery(cq: any) {
         ].join('\n'), {
           reply_markup: { inline_keyboard: [] },
         });
+        await sendMessage(chatId, `✅ ${clickerMention} is handling this request.`, { parse_mode: 'HTML' });
         await answerCallbackQuery(cq.id, `✅ You accepted this request`);
         return;
       }
@@ -1442,13 +1443,23 @@ async function handleCallbackQuery(cq: any) {
         ].join('\n'), {
           reply_markup: { inline_keyboard: [] },
         });
+        await sendMessage(chatId, `❌ ${clickerMention} declined this request.`, { parse_mode: 'HTML' });
         await answerCallbackQuery(cq.id, `❌ You rejected this request`);
         return;
       }
 
       if (parsed.type === 'support_reply') {
-        // Show a hint to reply in the group
-        await answerCallbackQuery(cq.id, `💬 Type your reply below this message`, true);
+        // Send a visible reply prompt in the group so others see someone is handling it
+        await sendMessage(chatId, [
+          `💬 <b>Reply Requested</b>`,
+          ``,
+          `${clickerMention} is handling this request.`,
+          `Please reply to the original message above or contact the person directly.`,
+        ].join('\n'), {
+          reply_to_message_id: messageId,
+          parse_mode: 'HTML',
+        });
+        await answerCallbackQuery(cq.id, `💬 Reply to the message above`);
         return;
       }
     }

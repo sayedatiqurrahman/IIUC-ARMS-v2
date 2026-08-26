@@ -38,8 +38,20 @@ type ClaimFilter = 'pending' | 'approved' | 'rejected' | 'all';
 
 const GROUP_ORDER = ['Executive', 'Finance', 'Operations', 'Members'];
 
-function dn(m: ClubDataMember): string { return m.name || m.userId.split('@')[0]; }
+function dn(m: ClubDataMember): string { return m.profileName || m.name || m.userId.split('@')[0]; }
 function ui(m: ClubDataMember): string { return dn(m).substring(0, 2).toUpperCase(); }
+function memberImage(m: ClubDataMember): string | null { return m.profileImage || null; }
+function waLink(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return `https://wa.me/${digits}`;
+}
+function tgLink(input: string): string {
+  const clean = input.replace(/^@/, '').trim();
+  if (/^\+?\d{8,15}$/.test(clean)) {
+    return `https://t.me/${clean.startsWith('+') ? clean : '+' + clean}`;
+  }
+  return `https://t.me/${clean}`;
+}
 function timeAgo(d: string): string {
   const ms = Date.now() - new Date(d).getTime();
   const m = Math.floor(ms / 60000);
@@ -99,6 +111,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
   const [selfClubRoles, setSelfClubRoles] = useState<string[]>([]);
   const [customClubRoles, setCustomClubRoles] = useState<Array<{ key: string; label: string }>>([]);
   const [selfPositionRole, setSelfPositionRole] = useState('');
+  const [memberView, setMemberView] = useState<'list' | 'grid'>('list');
 
   useEffect(() => {
     const onScroll = () => {
@@ -620,11 +633,14 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                   </div>
                   {/* Avatar stack */}
                   <div className="flex -space-x-2 mb-3">
-                    {recentMembers.slice(0, 10).map((m: ClubDataMember) => (
-                      <div key={m.userId} className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-[0.55rem] font-bold text-white ring-2 ring-[#242526]" title={dn(m)}>
-                        {ui(m)}
-                      </div>
-                    ))}
+                    {recentMembers.slice(0, 10).map((m: ClubDataMember) => {
+                      const img = memberImage(m);
+                      return (
+                        <div key={m.userId} className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-[0.55rem] font-bold text-white ring-2 ring-[#242526] overflow-hidden shrink-0" title={dn(m)}>
+                          {img ? <img src={img} alt="" className="w-full h-full object-cover" /> : ui(m)}
+                        </div>
+                      );
+                    })}
                     {memberCount > 10 && (
                       <div className="w-9 h-9 rounded-full bg-[#3a3b3c] flex items-center justify-center text-[0.55rem] font-bold text-gray-400 ring-2 ring-[#242526]">
                         +{memberCount - 10}
@@ -655,8 +671,9 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                     const ri = CLUB_ROLES[m.role];
                     return (
                       <div key={m.userId} className="flex items-center gap-3 group">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0 ring-2 ring-[#242526]">
-                          {ui(m)}
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0 ring-2 ring-[#242526] overflow-hidden">
+                          {(() => { const img = memberImage(m); return img ? <img src={img} alt="" className="w-full h-full object-cover" /> : ui(m); })()}
+                        </div>
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-white truncate group-hover:text-blue-400 transition">{dn(m)}</p>
@@ -988,16 +1005,27 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
               <div>
                 <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-4 mb-4 flex items-center justify-between gap-2 flex-wrap">
                   <h3 className="text-base font-bold text-white"><i className="fas fa-user-group text-blue-400 mr-2"></i>{memberCount} Members</h3>
-                  {canManage && (
-                    <div className="flex gap-2">
-                      <button onClick={() => setShowAddMember(true)} className="px-3 py-1.5 bg-blue-600/15 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-semibold hover:bg-blue-600/25 transition">
-                        <i className="fas fa-user-plus mr-1"></i>Add
+                  <div className="flex items-center gap-2">
+                    {/* View toggle */}
+                    <div className="flex bg-[#3a3b3c] rounded-lg p-0.5">
+                      <button onClick={() => setMemberView('list')} className={`px-2 py-1 rounded-md text-xs transition ${memberView === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`} title="List view">
+                        <i className="fas fa-list"></i>
                       </button>
-                      <button onClick={handleExportMembers} className="px-3 py-1.5 bg-[#3a3b3c] text-gray-300 border border-[#4e4f50] rounded-lg text-xs font-semibold hover:bg-[#4e4f50] transition">
-                        <i className="fas fa-download mr-1"></i>Export
+                      <button onClick={() => setMemberView('grid')} className={`px-2 py-1 rounded-md text-xs transition ${memberView === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`} title="Grid view">
+                        <i className="fas fa-grip"></i>
                       </button>
                     </div>
-                  )}
+                    {canManage && (
+                      <>
+                        <button onClick={() => setShowAddMember(true)} className="px-3 py-1.5 bg-blue-600/15 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-semibold hover:bg-blue-600/25 transition">
+                          <i className="fas fa-user-plus mr-1"></i>Add
+                        </button>
+                        <button onClick={handleExportMembers} className="px-3 py-1.5 bg-[#3a3b3c] text-gray-300 border border-[#4e4f50] rounded-lg text-xs font-semibold hover:bg-[#4e4f50] transition">
+                          <i className="fas fa-download mr-1"></i>Export
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 {(club.members || []).length === 0 ? (
                   <div className="bg-[#242526] rounded-xl border border-[#3a3b3c] p-12 text-center">
@@ -1014,60 +1042,140 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                           <span className="text-xs px-2 py-0.5 rounded-full bg-[#3a3b3c] text-gray-400 font-semibold">{members.length}</span>
                           <div className="flex-1 h-px bg-[#3a3b3c]"></div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {members.map((m: ClubDataMember) => {
-                            const ri = CLUB_ROLES[m.role];
-                            return (
-                              <div key={`${m.userId}-${m.role}`} className="bg-[#242526] border border-[#3a3b3c] rounded-xl p-3 flex items-center justify-between gap-3 hover:border-[#4e4f50] transition">
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
-                                    {ui(m)}
+                        {memberView === 'grid' ? (
+                          /* ═══ GRID VIEW ═══ */
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {members.map((m: ClubDataMember) => {
+                              const ri = CLUB_ROLES[m.role];
+                              const img = memberImage(m);
+                              const pRoles = parseClubRoles(m.clubRoles);
+                              return (
+                                <div key={`${m.userId}-${m.role}`} className="bg-[#242526] border border-[#3a3b3c] rounded-xl overflow-hidden hover:border-[#4e4f50] transition group">
+                                  {/* Profile image */}
+                                  <div className="w-full aspect-square bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl font-bold text-white relative overflow-hidden">
+                                    {img ? <img src={img} alt="" className="w-full h-full object-cover" /> : ui(m)}
+                                    {m.isClubAdmin && <span className="absolute top-2 right-2 text-[0.5rem] px-1.5 py-0.5 rounded bg-blue-500/90 text-white font-bold">ADMIN</span>}
                                   </div>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <p className="text-sm font-semibold text-white truncate">{dn(m)}</p>
-                                      {m.isClubAdmin && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold">ADMIN</span>}
-                                    </div>
-                                    <span className={`inline-flex items-center gap-1 text-[0.65rem] px-2 py-0.5 rounded-full border font-semibold mt-0.5 ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
+                                  <div className="p-3">
+                                    <p className="text-sm font-semibold text-white truncate">{dn(m)}</p>
+                                    {m.profileDepartment && <p className="text-[0.6rem] text-gray-500 truncate">{m.profileDepartment}</p>}
+                                    <span className={`inline-flex items-center gap-1 text-[0.6rem] px-2 py-0.5 rounded-full border font-semibold mt-1.5 ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
                                       <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {getRoleLabel(m.role, customClubRoles)}
                                     </span>
                                     {m.previousRole && (
-                                      <p className="text-[0.6rem] text-gray-500 mt-0.5">
+                                      <p className="text-[0.55rem] text-gray-500 mt-1">
                                         <i className="fas fa-clock-rotate-left mr-0.5"></i>Ex {getRoleLabel(m.previousRole, customClubRoles)}{m.previousRoleSession ? ` (${m.previousRoleSession})` : ''}
                                       </p>
                                     )}
-                                    {(() => {
-                                      const pRoles = parseClubRoles(m.clubRoles);
-                                      if (pRoles.length === 0) return null;
-                                      return (
-                                        <div className="flex flex-wrap gap-1 mt-1">
-                                          {pRoles.map((rk: string) => {
-                                            const r = CLUB_MEMBER_ROLES[rk];
-                                            if (!r) return null;
-                                            return <span key={rk} title={r.description} className={`inline-flex items-center gap-0.5 text-[0.55rem] px-1.5 py-0.5 rounded bg-[#3a3b3c] font-semibold ${r.color}`}><i className={`fas ${r.icon}`}></i> {r.label}</span>;
-                                          })}
-                                        </div>
-                                      );
-                                    })()}
+                                    {pRoles.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1.5">
+                                        {pRoles.slice(0, 2).map((rk: string) => {
+                                          const r = CLUB_MEMBER_ROLES[rk];
+                                          if (!r) return null;
+                                          return <span key={rk} title={r.description} className={`inline-flex items-center gap-0.5 text-[0.5rem] px-1 py-0.5 rounded bg-[#3a3b3c] font-semibold ${r.color}`}><i className={`fas ${r.icon}`}></i> {r.label}</span>;
+                                        })}
+                                        {pRoles.length > 2 && <span className="text-[0.5rem] text-gray-500">+{pRoles.length - 2}</span>}
+                                      </div>
+                                    )}
+                                    {/* Contact row */}
+                                    <div className="flex items-center gap-2 mt-2">
+                                      {m.profileWhatsapp && (
+                                        <a href={waLink(m.profileWhatsapp)} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 transition" title="WhatsApp">
+                                          <i className="fab fa-whatsapp text-xs"></i>
+                                        </a>
+                                      )}
+                                      {m.userId && (
+                                        <a href={`mailto:${m.userId}`} className="text-gray-500 hover:text-gray-300 transition" title={m.userId}>
+                                          <i className="fas fa-envelope text-xs"></i>
+                                        </a>
+                                      )}
+                                    </div>
+                                    {/* Actions */}
+                                    {(canManage || m.userId === profile.email) && (
+                                      <div className="flex items-center gap-1 mt-2 pt-2 border-t border-[#3a3b3c]">
+                                        {m.userId === profile.email && (
+                                          <button onClick={() => setShowSelfRoles(true)} title="Edit my roles" className="text-green-400 hover:text-green-300 text-[0.65rem] px-1.5 py-0.5 rounded hover:bg-green-500/10 transition"><i className="fas fa-id-badge mr-0.5"></i>Edit</button>
+                                        )}
+                                        {canManage && m.userId !== profile.email && (
+                                          <>
+                                            <button onClick={() => { setEditingMember(m.userId); setEditRole(m.role); setEditSession(''); setEditClubRoles(parseClubRoles(m.clubRoles)); }} title="Change role" className="text-blue-400 hover:text-blue-300 text-[0.65rem] px-1.5 py-0.5 rounded hover:bg-blue-500/10 transition"><i className="fas fa-pen mr-0.5"></i>Edit</button>
+                                            <button onClick={() => handleRemoveMember(m.userId)} title="Remove" className="text-red-400 hover:text-red-300 text-[0.65rem] px-1.5 py-0.5 rounded hover:bg-red-500/10 transition ml-auto"><i className="fas fa-user-minus"></i></button>
+                                          </>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
-                                {(canManage || m.userId === profile.email) && (
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    {m.userId === profile.email && (
-                                      <button onClick={() => { setShowSelfRoles(true); }} title="Edit my roles" className="text-green-400 hover:text-green-300 text-xs p-1.5 rounded-lg hover:bg-green-500/10 transition"><i className="fas fa-id-badge"></i></button>
-                                    )}
-                                    {canManage && m.userId !== profile.email && (
-                                      <>
-                                        <button onClick={() => { setEditingMember(m.userId); setEditRole(m.role); setEditSession(''); setEditClubRoles(parseClubRoles(m.clubRoles)); }} title="Change role" className="text-blue-400 hover:text-blue-300 text-xs p-1.5 rounded-lg hover:bg-blue-500/10 transition"><i className="fas fa-pen"></i></button>
-                                        <button onClick={() => handleRemoveMember(m.userId)} title="Remove" className="text-red-400 hover:text-red-300 text-xs p-1.5 rounded-lg hover:bg-red-500/10 transition"><i className="fas fa-user-minus"></i></button>
-                                      </>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          /* ═══ LIST VIEW ═══ */
+                          <div className="space-y-2">
+                            {members.map((m: ClubDataMember) => {
+                              const ri = CLUB_ROLES[m.role];
+                              const img = memberImage(m);
+                              const pRoles = parseClubRoles(m.clubRoles);
+                              return (
+                                <div key={`${m.userId}-${m.role}`} className="bg-[#242526] border border-[#3a3b3c] rounded-xl p-3 flex items-center gap-3 hover:border-[#4e4f50] transition">
+                                  {/* Avatar */}
+                                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden ring-2 ring-[#242526]">
+                                    {img ? <img src={img} alt="" className="w-full h-full object-cover" /> : ui(m)}
+                                  </div>
+                                  {/* Info */}
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <p className="text-sm font-semibold text-white truncate">{dn(m)}</p>
+                                      {m.isClubAdmin && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold">ADMIN</span>}
+                                      <span className={`inline-flex items-center gap-1 text-[0.65rem] px-2 py-0.5 rounded-full border font-semibold ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
+                                        <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {getRoleLabel(m.role, customClubRoles)}
+                                      </span>
+                                      {m.previousRole && (
+                                        <span className="text-[0.55rem] text-gray-500">
+                                          <i className="fas fa-clock-rotate-left mr-0.5"></i>Ex {getRoleLabel(m.previousRole, customClubRoles)}{m.previousRoleSession ? ` (${m.previousRoleSession})` : ''}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                                      {m.profileDepartment && <span className="text-[0.6rem] text-gray-500"><i className="fas fa-building mr-0.5"></i>{m.profileDepartment}</span>}
+                                      {m.profileWhatsapp && (
+                                        <a href={waLink(m.profileWhatsapp)} target="_blank" rel="noopener noreferrer" className="text-[0.6rem] text-emerald-400 hover:text-emerald-300 transition no-underline">
+                                          <i className="fab fa-whatsapp mr-0.5"></i>{m.profileWhatsapp}
+                                        </a>
+                                      )}
+                                      <a href={`mailto:${m.userId}`} className="text-[0.6rem] text-gray-500 hover:text-gray-300 transition no-underline">
+                                        <i className="fas fa-envelope mr-0.5"></i>{m.userId}
+                                      </a>
+                                    </div>
+                                    {pRoles.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {pRoles.map((rk: string) => {
+                                          const r = CLUB_MEMBER_ROLES[rk];
+                                          if (!r) return null;
+                                          return <span key={rk} title={r.description} className={`inline-flex items-center gap-0.5 text-[0.55rem] px-1.5 py-0.5 rounded bg-[#3a3b3c] font-semibold ${r.color}`}><i className={`fas ${r.icon}`}></i> {r.label}</span>;
+                                        })}
+                                      </div>
                                     )}
                                   </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                                  {/* Actions */}
+                                  {(canManage || m.userId === profile.email) && (
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {m.userId === profile.email && (
+                                        <button onClick={() => setShowSelfRoles(true)} title="Edit my roles" className="text-green-400 hover:text-green-300 text-xs p-1.5 rounded-lg hover:bg-green-500/10 transition"><i className="fas fa-id-badge"></i></button>
+                                      )}
+                                      {canManage && m.userId !== profile.email && (
+                                        <>
+                                          <button onClick={() => { setEditingMember(m.userId); setEditRole(m.role); setEditSession(''); setEditClubRoles(parseClubRoles(m.clubRoles)); }} title="Change role" className="text-blue-400 hover:text-blue-300 text-xs p-1.5 rounded-lg hover:bg-blue-500/10 transition"><i className="fas fa-pen"></i></button>
+                                          <button onClick={() => handleRemoveMember(m.userId)} title="Remove" className="text-red-400 hover:text-red-300 text-xs p-1.5 rounded-lg hover:bg-red-500/10 transition"><i className="fas fa-user-minus"></i></button>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })

@@ -32,7 +32,30 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
       where: { clubId: club.id },
       orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
     });
-    return NextResponse.json({ members });
+
+    // Enrich with Profile data
+    const memberEmails = members.map((m: any) => m.userId);
+    const profiles = memberEmails.length > 0
+      ? await prisma.profile.findMany({
+          where: { userId: { in: memberEmails } },
+          select: { userId: true, name: true, image: true, githubAvatar: true, department: true, whatsapp: true, title: true, semester: true },
+        })
+      : [];
+    const profileMap = new Map(profiles.map((p: any) => [p.userId, p]));
+    const enriched = members.map((m: any) => {
+      const p = profileMap.get(m.userId);
+      return {
+        ...m,
+        profileName: p?.name || null,
+        profileImage: p?.githubAvatar || p?.image || null,
+        profileDepartment: p?.department || null,
+        profileWhatsapp: p?.whatsapp || null,
+        profileTitle: p?.title || null,
+        profileSemester: p?.semester || null,
+      };
+    });
+
+    return NextResponse.json({ members: enriched });
   } catch {
     return NextResponse.json({ error: 'Failed to load members' }, { status: 500 });
   }

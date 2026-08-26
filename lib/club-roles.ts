@@ -10,6 +10,13 @@ export interface ClubDataMember {
   previousRole?: string;
   previousRoleSession?: string;
   isClubAdmin?: boolean;
+  // Profile enrichment (from API join)
+  profileName?: string | null;
+  profileImage?: string | null;
+  profileDepartment?: string | null;
+  profileWhatsapp?: string | null;
+  profileTitle?: string | null;
+  profileSemester?: string | null;
 }
 
 export const CLUB_ROLES: Record<string, { label: string; group: string; color: string; icon: string; order: number }> = {

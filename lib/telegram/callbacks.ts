@@ -77,5 +77,9 @@ export function parseCallbackData(data: string): { type: string; args: string[] 
   // Connect flow callbacks
   if (data === 'connect_confirm') return { type: 'connect_confirm', args: [] };
   if (data === 'connect_cancel') return { type: 'connect_cancel', args: [] };
+  // Support request callbacks
+  if (data === 'support_accept') return { type: 'support_accept', args: [] };
+  if (data === 'support_reject') return { type: 'support_reject', args: [] };
+  if (data === 'support_reply') return { type: 'support_reply', args: [] };
   return null;
 }

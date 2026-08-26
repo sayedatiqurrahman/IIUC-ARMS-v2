@@ -19,16 +19,39 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
     const { slug } = await params;
     if (!slug) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
     const { prisma } = await import('@/lib/prisma');
-    const club = await prisma.club.findUnique({
-      where: { slug },
-      include: {
-        members: { orderBy: { createdAt: 'asc' } },
-        events: { orderBy: { eventDate: 'desc' }, take: 20 },
-        _count: { select: { members: true, events: true, certificates: true } },
-      },
-    });
-    if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
-    return NextResponse.json({ club });
+      const club = await prisma.club.findUnique({
+        where: { slug },
+        include: {
+          members: { orderBy: { createdAt: 'asc' } },
+          events: { orderBy: { eventDate: 'desc' }, take: 20 },
+          _count: { select: { members: true, events: true, certificates: true } },
+        },
+      });
+      if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+
+      // Enrich members with Profile data (name, image, department, contact)
+      const memberEmails = (club.members || []).map((m: any) => m.userId);
+      const profiles = memberEmails.length > 0
+        ? await prisma.profile.findMany({
+            where: { userId: { in: memberEmails } },
+            select: { userId: true, name: true, image: true, githubAvatar: true, department: true, whatsapp: true, title: true, semester: true },
+          })
+        : [];
+      const profileMap = new Map(profiles.map((p: any) => [p.userId, p]));
+      const enrichedMembers = (club.members || []).map((m: any) => {
+        const p = profileMap.get(m.userId);
+        return {
+          ...m,
+          profileName: p?.name || null,
+          profileImage: p?.githubAvatar || p?.image || null,
+          profileDepartment: p?.department || null,
+          profileWhatsapp: p?.whatsapp || null,
+          profileTitle: p?.title || null,
+          profileSemester: p?.semester || null,
+        };
+      });
+
+      return NextResponse.json({ club: { ...club, members: enrichedMembers } });
   } catch {
     return NextResponse.json({ error: 'Club not found' }, { status: 404 });
   }
