@@ -3,8 +3,8 @@ import ContributorsView from '@/components/contributors';
 
 export const metadata: Metadata = {
   title: 'Contributors — IIUC-ARMS',
-  description: 'Meet the developers, resource providers, and contributors behind IIUC-ARMS — the open-source IIUC Question Hub & academic resource management system for IIUC QSIS departments.',
-  keywords: ['IIUC-ARMS contributors', 'IIUC developers', 'QSIS team', 'IIUC open source', 'academic platform contributors'],
+  description: 'Meet the developers and contributors behind IIUC-ARMS — the open-source academic resource and research management system for IIUC.',
+  keywords: ['IIUC-ARMS contributors', 'IIUC developers', 'IIUC open source', 'academic platform contributors'],
   openGraph: {
     title: 'IIUC-ARMS Contributors',
     description: 'Developers and resource providers who built the IIUC academic platform.',

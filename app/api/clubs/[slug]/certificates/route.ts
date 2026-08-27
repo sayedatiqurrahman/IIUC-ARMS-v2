@@ -128,3 +128,39 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: 'Failed to issue certificates' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  const rl = rateLimit(req, RATE_LIMITS.faculty);
+  if (!rl.success) return rl.response!;
+  try {
+    const email = await getUserEmail(req);
+    if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { slug } = await params;
+    const { prisma } = await import('@/lib/prisma');
+    const club = await prisma.club.findUnique({ where: { slug } });
+    if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+
+    const profile = await prisma.profile.findUnique({ where: { userId: email } });
+    const isAdmin = config.isAdminOrAbove(email, profile?.role);
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Only admins can delete certificates' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { certificateId } = body;
+    if (!certificateId) return NextResponse.json({ error: 'certificateId required' }, { status: 400 });
+
+    const deleted = await prisma.clubCertificate.deleteMany({
+      where: { certificateId, clubId: club.id },
+    });
+
+    if (deleted.count === 0) {
+      return NextResponse.json({ error: 'Certificate not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: 'Failed to delete certificate' }, { status: 500 });
+  }
+}

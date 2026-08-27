@@ -47,6 +47,8 @@ export interface CertSignatory {
   name: string;
   designation: string;
   title: string;
+  signatureUrl?: string;
+  autoSignature?: boolean;
 }
 
 export interface CertTheme {
@@ -103,8 +105,8 @@ export const DEFAULT_THEME: CertTheme = {
   },
   footer: {
     qrSize: 22,
-    verifiedText: 'VERIFIED BY IIUC-ARMS',
-    showScanHint: true,
+    verifiedText: '',
+    showScanHint: false,
   },
 };
 
@@ -133,7 +135,7 @@ export const THEME_PRESETS: CertTheme[] = [
     header: { style: 'banner', showAbbreviation: true, showLocation: true },
     title: { fontSize: 26, subtitle: 'OF APPRECIATION', subtitleFontSize: 12, decoration: 'diamond' },
     signatures: { style: 'line', count: 3 },
-    footer: { qrSize: 22, verifiedText: 'VERIFIED BY IIUC-ARMS', showScanHint: true },
+    footer: { qrSize: 22, verifiedText: '', showScanHint: false },
   },
   {
     name: 'crimson-royal',
@@ -156,7 +158,7 @@ export const THEME_PRESETS: CertTheme[] = [
     header: { style: 'regal', showAbbreviation: true, showLocation: true },
     title: { fontSize: 26, subtitle: 'OF APPRECIATION', subtitleFontSize: 12, decoration: 'flourish' },
     signatures: { style: 'line', count: 3 },
-    footer: { qrSize: 22, verifiedText: 'VERIFIED BY IIUC-ARMS', showScanHint: true },
+    footer: { qrSize: 22, verifiedText: '', showScanHint: false },
   },
   {
     name: 'midnight-gold',
@@ -179,7 +181,7 @@ export const THEME_PRESETS: CertTheme[] = [
     header: { style: 'banner', showAbbreviation: true, showLocation: true },
     title: { fontSize: 26, subtitle: 'OF APPRECIATION', subtitleFontSize: 12, decoration: 'dots' },
     signatures: { style: 'line', count: 3 },
-    footer: { qrSize: 22, verifiedText: 'VERIFIED BY IIUC-ARMS', showScanHint: true },
+    footer: { qrSize: 22, verifiedText: '', showScanHint: false },
   },
   {
     name: 'emerald-islamic',
@@ -202,7 +204,7 @@ export const THEME_PRESETS: CertTheme[] = [
     header: { style: 'regal', showAbbreviation: true, showLocation: true },
     title: { fontSize: 26, subtitle: 'OF APPRECIATION', subtitleFontSize: 12, decoration: 'flourish' },
     signatures: { style: 'line', count: 3 },
-    footer: { qrSize: 22, verifiedText: 'VERIFIED BY IIUC-ARMS', showScanHint: true },
+    footer: { qrSize: 22, verifiedText: '', showScanHint: false },
   },
   {
     name: 'minimalist-gray',

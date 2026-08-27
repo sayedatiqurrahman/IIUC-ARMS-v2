@@ -124,7 +124,7 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
           <p className="routine-updated">Last Updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
         <div className="routine-footer-strip">
-          <p>&copy; {new Date().getFullYear()} IIUC-ARMS &mdash; Qur&apos;anic Sciences &amp; Islamic Studies, IIUC</p>
+          <p>&copy; {new Date().getFullYear()} IIUC-ARMS &mdash; IIUC</p>
         </div>
       </div>
     </div>

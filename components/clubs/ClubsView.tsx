@@ -7,6 +7,7 @@ import { useUserAccess } from '@/lib/useUserAccess';
 import { FACULTIES } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
 import Modal from '@/components/ui/Modal';
+import { ClubCardSkeleton } from '@/components/ui/Skeleton';
 
 const deptOptions = FACULTIES.flatMap(f =>
   f.departments.map(d => ({
@@ -106,8 +107,8 @@ export default function ClubsView() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <i className="fas fa-spinner fa-spin text-qsis text-2xl"></i>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => <ClubCardSkeleton key={i} />)}
           </div>
         ) : clubs.length === 0 ? (
           <div className="text-center py-20 bg-dark-bg2 rounded-2xl border border-dark-border">

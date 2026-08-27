@@ -866,7 +866,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={24} height={24} className="w-6 h-6 rounded-full border border-qsis object-contain bg-white" />
                   <span className="text-[0.82rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</span>
                 </div>
-                <p className="text-[0.65rem] text-dark-text3 leading-relaxed">A centralized platform for managing and sharing<br/>academic resources for QSIS, IIUC.</p>
+                <p className="text-[0.65rem] text-dark-text3 leading-relaxed">Academic resource &amp; research management<br/>system for IIUC departments.</p>
                 <p className="text-[0.6rem] text-dark-text3 mt-2">&copy; {new Date().getFullYear()} IIUC-ARMS</p>
               </div>
               {/* Reset App */}
@@ -903,10 +903,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={36} height={36} className="w-9 h-9 rounded-full border-2 border-qsis object-contain bg-white" />
                 <div>
                   <h3 className="text-[0.95rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent">IIUC-ARMS</h3>
-                  <span className="text-[0.68rem] text-dark-text2">Academic Resource System</span>
+                  <span className="text-[0.68rem] text-dark-text2">Academic Resource &amp; Research System</span>
                 </div>
               </div>
-              <p className="text-[0.8rem] text-dark-text2 leading-relaxed">A centralized platform for managing and sharing academic resources for the Department of Qur&apos;anic Sciences &amp; Islamic Studies, IIUC.</p>
+              <p className="text-[0.8rem] text-dark-text2 leading-relaxed">A centralized platform for managing and sharing academic resources across all IIUC departments, with built-in research toolkit for scholars and students.</p>
             </div>
             <div>
               <h4 className="text-[0.85rem] font-semibold text-dark-text mb-3">Quick Links</h4>

@@ -12,6 +12,8 @@ import BulkImportView from './BulkImportView';
 import Modal from '@/components/ui/Modal';
 import { downloadCertPDF, generateBulkCertPDF } from '@/lib/club-cert-pdf';
 import type { CertPDFData } from '@/lib/club-cert-pdf';
+import { ClubDetailSkeleton } from '@/components/ui/Skeleton';
+import AlumniTimeline from './AlumniTimeline';
 
 const ROLE_BADGE: Record<string, string> = {
   advisor: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
@@ -35,7 +37,7 @@ const CLAIM_STATUS_BADGE: Record<string, string> = {
   rejected: 'bg-red-500/15 text-red-400 border border-red-500/30',
 };
 
-type Section = 'posts' | 'about' | 'members' | 'events' | 'certificates' | 'claims' | 'settings';
+type Section = 'posts' | 'about' | 'members' | 'events' | 'certificates' | 'claims' | 'settings' | 'timeline';
 type ClaimFilter = 'pending' | 'approved' | 'rejected' | 'all';
 
 const GROUP_ORDER = ['Executive', 'Finance', 'Operations', 'Members'];
@@ -424,14 +426,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
     };
   }
 
-  if (loading) return (
-    <div className="min-h-screen bg-dark-bg flex items-center justify-center">
-      <div className="text-center">
-        <i className="fas fa-spinner fa-spin text-qsis text-3xl"></i>
-        <p className="text-dark-text2 mt-3 text-sm">Loading club page...</p>
-      </div>
-    </div>
-  );
+  if (loading) return <ClubDetailSkeleton />;
 
   if (!club) return (
     <div className="min-h-screen bg-dark-bg flex items-center justify-center">
@@ -462,6 +457,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
     { key: 'events', label: 'Events', icon: 'fa-calendar-days', badge: eventCount },
     { key: 'members', label: 'Members', icon: 'fa-user-group', badge: memberCount },
     { key: 'about', label: 'About', icon: 'fa-circle-info' },
+    { key: 'timeline', label: 'Timeline', icon: 'fa-stream' },
     ...(canManage ? [{ key: 'claims' as Section, label: 'Claims', icon: 'fa-inbox', badge: pendingClaimCount }] : []),
     ...(isGS || isClubAdmin || isAdmin ? [{ key: 'settings' as Section, label: 'Settings', icon: 'fa-gear' }] : []),
   ];
@@ -1339,12 +1335,38 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                               className="w-8 h-8 flex items-center justify-center bg-red-600/15 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-600/25 transition">
                               <i className="fas fa-file-pdf text-xs"></i>
                             </button>
+                            {isAdmin && (
+                              <button onClick={async () => {
+                                if (!confirm(`Delete certificate ${cert.certificateId}?`)) return;
+                                try {
+                                  const res = await fetch(`/api/clubs/${slug}/certificates`, {
+                                    method: 'DELETE',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ certificateId: cert.certificateId }),
+                                  });
+                                  const data = await res.json();
+                                  if (data.success) setCertResults(prev => prev.filter((c: any) => c.certificateId !== cert.certificateId));
+                                  else alert(data.error || 'Failed to delete');
+                                } catch { alert('Network error'); }
+                              }}
+                              className="w-8 h-8 flex items-center justify-center bg-red-600/10 text-red-400/60 border border-red-500/20 rounded-lg hover:bg-red-600/20 hover:text-red-400 transition"
+                              title="Delete certificate (admin only)">
+                                <i className="fas fa-trash text-xs"></i>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ═══ TIMELINE ═══ */}
+            {section === 'timeline' && (
+              <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4">
+                <AlumniTimeline slug={slug} />
               </div>
             )}
 

@@ -11,18 +11,13 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'IIUC-ARMS | Academic Resource Management System',
+    default: 'IIUC-ARMS',
     template: '%s | IIUC-ARMS',
   },
-  description: 'IIUC-ARMS — IIUC Question Hub & Academic Resource Management System. Free open-source platform for IIUC departments: browse notes, sheets, syllabi, previous questions, and academic files for Qur\'anic Sciences & Islamic Studies (QSIS).',
+  description: 'IIUC-ARMS — Academic resource and research management system for IIUC.',
   keywords: [
-    'IIUC', 'IIUC-ARMS', 'ARMS', 'QSIS', 'IIUC question hub',
-    'IIUC previous questions', 'IIUC notes', 'IIUC academic resources',
-    'academic resource management system', 'educational website',
-    'Quranic Sciences', 'Islamic Studies', 'IIUC sheets', 'IIUC syllabus',
-    'open source education', 'free academic platform', 'IIUC department',
-    'university notes', 'previous year questions', 'academic file manager',
-    'IIUC QSIS', 'student resources', 'study materials IIUC',
+    'IIUC', 'IIUC-ARMS', 'academic resources', 'research tools',
+    'university management', 'open source', 'education platform',
   ],
   authors: [{ name: 'Sayed Atiqur Rahman', url: 'https://github.com/sayedatiqurrahman' }],
   creator: 'Programming Light',
@@ -33,8 +28,8 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: siteUrl,
     siteName: 'IIUC-ARMS',
-    title: 'IIUC-ARMS | IIUC Question Hub & Academic Resource Management System',
-    description: 'IIUC-ARMS — free academic resource management system for IIUC departments. Browse notes, sheets, syllabi, previous questions, and study materials.',
+    title: 'IIUC-ARMS',
+    description: 'Academic resource and research management system for IIUC departments.',
     images: [
       {
         url: `${siteUrl}/arms-logo-icon.png`,
@@ -47,8 +42,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'IIUC-ARMS | IIUC Question Hub & Academic Resource Management System',
-    description: 'IIUC-ARMS — free academic resource management for IIUC departments. Notes, sheets, syllabi, previous questions.',
+    title: 'IIUC-ARMS',
+    description: 'Academic resource and research management system for IIUC.',
     images: [`${siteUrl}/arms-logo-icon.png`],
     creator: '@sayedatiqurrahman',
   },
@@ -86,9 +81,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
     name: 'IIUC-ARMS',
-    alternateName: 'QSIS Academic Resource Management System',
+    alternateName: 'IIUC Academic Resource & Research Management System',
     url: siteUrl,
-    description: 'Free open-source academic resource management system for IIUC departments including Qur\'anic Sciences & Islamic Studies. Browse, share, and manage notes, sheets, syllabi, and previous questions.',
+    description: 'Academic resource and research management system for IIUC departments.',
     applicationCategory: 'EducationalApplication',
     operatingSystem: 'Web',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
@@ -96,7 +91,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     publisher: { '@type': 'Organization', name: 'Programming Light' },
     inLanguage: 'en',
     isAccessibleForFree: true,
-    keywords: ['IIUC', 'IIUC-ARMS', 'ARMS', 'QSIS', 'question hub', 'academic resources', 'previous questions', 'notes', 'sheets', 'syllabus', 'educational website'],
+    keywords: ['IIUC', 'IIUC-ARMS', 'academic resources', 'research tools', 'education platform', 'open source'],
   };
 
   return (
