@@ -10,7 +10,7 @@ import { CLUB_MEMBER_ROLES, CLUB_MEMBER_ROLE_LIST, parseClubRoles } from '@/lib/
 import RoleCombobox from './RoleCombobox';
 import BulkImportView from './BulkImportView';
 import Modal from '@/components/ui/Modal';
-import { downloadCertPDF, generateBulkCertPDF } from '@/lib/club-cert-pdf';
+import { downloadCertPDF, downloadCertPNG, generateBulkCertPDF } from '@/lib/club-cert-pdf';
 import type { CertPDFData } from '@/lib/club-cert-pdf';
 import { ClubDetailSkeleton } from '@/components/ui/Skeleton';
 import AlumniTimeline from './AlumniTimeline';
@@ -815,6 +815,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                       <div className="flex gap-3">
                         <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer" className="hover:text-qsis transition font-semibold">View</a>
                         <button onClick={() => downloadCertPDF(toCertPDFData(cert))} className="hover:text-yellow-400 transition font-semibold">PDF</button>
+                        <button onClick={() => downloadCertPNG(toCertPDFData(cert))} className="hover:text-qsis transition font-semibold">PNG</button>
                       </div>
                     </div>
                   </div>
@@ -1334,6 +1335,10 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                             <button onClick={() => downloadCertPDF(toCertPDFData(cert))}
                               className="w-8 h-8 flex items-center justify-center bg-red-600/15 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-600/25 transition">
                               <i className="fas fa-file-pdf text-xs"></i>
+                            </button>
+                            <button onClick={() => downloadCertPNG(toCertPDFData(cert))}
+                              className="w-8 h-8 flex items-center justify-center bg-qsis/15 text-qsis border border-qsis/30 rounded-lg hover:bg-qsis/20 transition">
+                              <i className="fas fa-image text-xs"></i>
                             </button>
                             {isAdmin && (
                               <button onClick={async () => {

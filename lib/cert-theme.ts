@@ -43,6 +43,58 @@ export interface CertThemeFooter {
   showScanHint: boolean;
 }
 
+// ── Rich design configuration (all fields optional for backward compatibility) ──
+
+export interface CertTextConfig {
+  mainTitle?: string;      // e.g. "CERTIFICATE"
+  subtitle?: string;       // e.g. "OF APPRECIATION"
+  intro?: string;          // e.g. "This is to certify that"
+  closing?: string;        // e.g. "THANK YOU FOR YOUR VALUABLE CONTRIBUTION"
+  institutionName?: string;// overrides the header university line
+  tagline?: string;        // subtitle under the university name
+}
+
+export interface CertFontConfig {
+  titleFontSize?: number;      // "CERTIFICATE"
+  subtitleFontSize?: number;
+  titleLetterSpacing?: number; // character spacing for the subtitle
+  bodySize?: number;           // body / intro font size
+  nameSize?: number;           // serif fallback recipient size
+  nameScriptFont?: string;     // calligraphy family, e.g. "Great Vibes"
+}
+
+export interface CertBismillahConfig {
+  enabled?: boolean;
+  text?: string;
+  fontSize?: number;
+  color?: [number, number, number];
+}
+
+export interface CertSignatureLineConfig {
+  enabled?: boolean;
+  thickness?: number;
+  color?: [number, number, number];
+}
+
+export interface CertLogoConfig {
+  width?: number;   // mm, drawn box width (aspect preserved via image natural ratio)
+  height?: number;  // mm, drawn box height
+  opacity?: number; // 0..1
+}
+
+export interface CertQrConfig {
+  enabled?: boolean;
+}
+
+export interface CertDesignConfig {
+  text?: CertTextConfig;
+  fonts?: CertFontConfig;
+  bismillah?: CertBismillahConfig;
+  signatureLine?: CertSignatureLineConfig;
+  qr?: CertQrConfig;
+  logo?: CertLogoConfig;
+}
+
 export interface CertSignatory {
   name: string;
   designation: string;
@@ -62,6 +114,43 @@ export interface CertTheme {
   title: CertThemeTitle;
   signatures: CertThemeSignatures;
   footer: CertThemeFooter;
+  design?: CertDesignConfig;
+}
+
+export const DESIGN_DEFAULTS: Required<CertDesignConfig> = {
+  text: {
+    mainTitle: 'CERTIFICATE',
+    subtitle: 'OF APPRECIATION',
+    intro: 'This is to certify that',
+    closing: 'THANK YOU FOR YOUR VALUABLE CONTRIBUTION',
+    institutionName: 'INTERNATIONAL ISLAMIC UNIVERSITY CHITTAGONG',
+    tagline: 'An International Centre for Higher Education and Research',
+  },
+  fonts: {
+    titleFontSize: 30,
+    subtitleFontSize: 10,
+    titleLetterSpacing: 3.4,
+    bodySize: 9.5,
+    nameSize: 20,
+    nameScriptFont: 'Great Vibes',
+  },
+  bismillah: { enabled: true, text: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', fontSize: 9, color: [60, 60, 60] },
+  signatureLine: { enabled: true, thickness: 0.28, color: [100, 100, 100] },
+  qr: { enabled: true },
+  logo: { width: 20, height: 14, opacity: 1 },
+};
+
+// Merge a partially-specified design config onto defaults (deep-ish merge per group).
+export function resolveDesign(design?: CertDesignConfig): Required<CertDesignConfig> {
+  const d = design || {};
+  return {
+    text: { ...DESIGN_DEFAULTS.text, ...(d.text || {}) },
+    fonts: { ...DESIGN_DEFAULTS.fonts, ...(d.fonts || {}) },
+    bismillah: { ...DESIGN_DEFAULTS.bismillah, ...(d.bismillah || {}) },
+    signatureLine: { ...DESIGN_DEFAULTS.signatureLine, ...(d.signatureLine || {}) },
+    qr: { ...DESIGN_DEFAULTS.qr, ...(d.qr || {}) },
+    logo: { ...DESIGN_DEFAULTS.logo, ...(d.logo || {}) },
+  };
 }
 
 export const DEFAULT_THEME: CertTheme = {
@@ -108,6 +197,7 @@ export const DEFAULT_THEME: CertTheme = {
     verifiedText: '',
     showScanHint: false,
   },
+  design: DESIGN_DEFAULTS,
 };
 
 export const THEME_PRESETS: CertTheme[] = [

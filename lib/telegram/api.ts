@@ -129,3 +129,67 @@ export async function sendDocument(chatId: number | string, fileUrl: string, cap
     }),
   });
 }
+
+// ─── Unified broadcast targets ───────────────────────────────────
+// The app historically stored posting channels in two places:
+//   * `postingChannels`  — set from the Telegram "Content Posting Channels" UI
+//     (see SupportConfigTab). Each entry: { id, name, chatId, type, autoPost, categories }.
+//   * `broadcastTargets` — set from the BroadcastTargets UI.
+//     Each entry: { chatId, type, enabled, ... }.
+// Notices must honour BOTH so channels added from either UI actually broadcast.
+// Returns a de-duplicated list keyed by chatId.
+export async function getEffectiveBroadcastTargets(): Promise<{ chatId: string; type: string; enabled: boolean; name?: string }[]> {
+  const { prisma } = await import('@/lib/prisma');
+  const p = prisma as any;
+
+  let row: any;
+  try {
+    // Prefer reading both columns; fall back to postingChannels only if
+    // broadcastTargets is missing from the table (schema drift safety).
+    const rows = await p.$queryRawUnsafe(
+      `SELECT broadcastTargets, postingChannels FROM SiteSettings WHERE id = 'site-settings'`
+    );
+    row = (rows as any[])[0];
+  } catch {
+    try {
+      const rows = await p.$queryRawUnsafe(
+        `SELECT postingChannels FROM SiteSettings WHERE id = 'site-settings'`
+      );
+      row = (rows as any[])[0];
+    } catch { row = undefined; }
+  }
+
+  const parse = (v: any): any[] => {
+    if (!v) return [];
+    if (Array.isArray(v)) return v;
+    if (typeof v === 'string') { try { return JSON.parse(v); } catch { return []; } }
+    return [];
+  };
+
+  const targets = parse(row?.broadcastTargets);
+  const channels = parse(row?.postingChannels);
+
+  const merged = new Map<string, { chatId: string; type: string; enabled: boolean; name?: string }>();
+
+  for (const t of targets) {
+    if (!t?.chatId) continue;
+    merged.set(String(t.chatId), {
+      chatId: String(t.chatId),
+      type: t.type || (String(t.chatId).startsWith('-') ? 'group' : 'channel'),
+      enabled: t.enabled !== false,
+      name: t.name,
+    });
+  }
+  // Posting channels are only broadcast when autoPost is enabled (mirrors telegram/post route).
+  for (const c of channels) {
+    if (!c?.chatId) continue;
+    merged.set(String(c.chatId), {
+      chatId: String(c.chatId),
+      type: c.type || (String(c.chatId).startsWith('-') ? 'group' : 'channel'),
+      enabled: !!c.autoPost && (c.enabled !== false),
+      name: c.name,
+    });
+  }
+
+  return Array.from(merged.values()).filter(t => t.enabled);
+}

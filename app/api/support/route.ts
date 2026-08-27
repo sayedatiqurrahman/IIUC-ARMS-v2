@@ -53,6 +53,13 @@ export async function POST(req: NextRequest) {
     if (!gender || !['male', 'female'].includes(gender)) return NextResponse.json({ error: 'Gender is required' }, { status: 400 });
     if (!issue?.trim()) return NextResponse.json({ error: 'Issue description is required' }, { status: 400 });
 
+    // Validate that the bot is configured at all, with a clear, actionable message.
+    if (!process.env.TELEGRAM_BOT_TOKEN) {
+      return NextResponse.json({
+        error: 'Telegram bot token (TELEGRAM_BOT_TOKEN) is not configured on the server. Add it in the environment/deployment settings.',
+      }, { status: 500 });
+    }
+
     const config = await getSupportConfig();
     if (!config.enabled) {
       return NextResponse.json({ error: 'Support system is currently disabled' }, { status: 503 });
@@ -120,13 +127,17 @@ export async function POST(req: NextRequest) {
 
     const result = await res.json();
     if (!result.ok) {
-      console.error('[Support] Failed to send to Telegram:', result.description);
-      return NextResponse.json({ error: 'Failed to send support request' }, { status: 500 });
+      const desc: string = result.description || `Telegram request failed (HTTP ${res.status})`;
+      console.error('[Support] Failed to send to Telegram:', desc, '| chat_id:', chatId);
+      // Return Telegram's own description to the caller so the root cause is visible.
+      return NextResponse.json({
+        error: `Failed to send to the support group. Telegram says: ${desc}. Make sure your bot (@${process.env.TELEGRAM_BOT_USERNAME || 'your bot'}) is added as an ADMIN of the support group, and that the chat ID is correct (must be negative, e.g. -1001234567890).`,
+      }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, groupName });
   } catch (err: any) {
     console.error('[Support] Error:', err?.message);
-    return NextResponse.json({ error: 'Failed to submit support request' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to submit support request ' + (err?.message ? `(${err.message})` : '') }, { status: 500 });
   }
 }

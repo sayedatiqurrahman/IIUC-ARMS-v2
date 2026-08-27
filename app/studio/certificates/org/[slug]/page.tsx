@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import Link from 'next/link';
-import { downloadCertPDF, generateBulkCertPDF, CertPDFData } from '@/lib/club-cert-pdf';
+import { downloadCertPDF, downloadCertPNG, generateBulkCertPDF, CertPDFData } from '@/lib/club-cert-pdf';
 import { CertSignatory, CertTheme, DEFAULT_THEME, THEME_PRESETS } from '@/lib/cert-theme';
 import { useAppStore } from '@/lib/store';
+import CertDesignPanel from '@/components/studio/CertDesignPanel';
 
 interface CertRow {
   memberName: string;
@@ -39,6 +40,7 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
   const [issued, setIssued] = useState<any[]>([]);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [qrUrls, setQrUrls] = useState<Record<string, string>>({});
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isOwner = org?.createdBy === profile.email;
 
@@ -46,15 +48,22 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
     params.then(async p => {
       setSlug(p.slug);
       try {
-        const [orgRes, themesRes] = await Promise.all([
+        const [orgRes, themesRes, themeRes] = await Promise.all([
           fetch(`/api/studio/certificates/orgs/${p.slug}`),
           fetch('/api/clubs/themes'),
+          fetch(`/api/studio/certificates/orgs/${p.slug}/theme`).catch(() => null),
         ]);
         const orgData = await orgRes.json();
         const themesData = await themesRes.json();
         setOrg(orgData.org);
         setCerts(orgData.org?.certificates || []);
         if (themesData.themes) setThemes(themesData.themes);
+        if (themeRes && themeRes.ok) {
+          const savedTheme = await themeRes.json();
+          if (savedTheme.theme?.design) {
+            setSelectedTheme(prev => ({ ...prev, design: savedTheme.theme.design }));
+          }
+        }
       } catch {}
       setLoading(false);
     });
@@ -84,6 +93,23 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
   function removeSignatory(i: number) {
     if (signatories.length <= 1) return;
     setSignatories(prev => prev.filter((_, idx) => idx !== i));
+  }
+
+  function handleDesignChange(next: CertTheme) {
+    setSelectedTheme(next);
+    try {
+      localStorage.setItem(`cert-design:${slug}`, JSON.stringify(next.design || {}));
+    } catch {}
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await fetch(`/api/studio/certificates/orgs/${slug}/theme`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ theme: next }),
+        });
+      } catch {}
+    }, 800);
   }
 
   async function handleIssue() {
@@ -234,6 +260,9 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
                 ))}
               </div>
             </div>
+
+            {/* Design Customization */}
+            <CertDesignPanel theme={selectedTheme} onChange={handleDesignChange} />
 
             {/* Signatories */}
             <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
@@ -394,6 +423,10 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
                         <button onClick={() => downloadCertPDF(toCertPDFData(cert))}
                           className="w-8 h-8 flex items-center justify-center bg-red-500/15 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/25 transition">
                           <i className="fas fa-file-pdf text-xs"></i>
+                        </button>
+                        <button onClick={() => downloadCertPNG(toCertPDFData(cert))}
+                          className="w-8 h-8 flex items-center justify-center bg-qsis/15 text-qsis border border-qsis/30 rounded-lg hover:bg-qsis/25 transition">
+                          <i className="fas fa-image text-xs"></i>
                         </button>
                       </div>
                     </div>

@@ -129,6 +129,11 @@ async function runScheduledNotices() {
 
     // Broadcast each published notice to Telegram
     const { sendMessage, sendDocument, CHANNEL_ID, GROUP_ID, SITE_URL } = await import('@/lib/telegram/api');
+    let dynamicTargets: { chatId: string; type: string; enabled: boolean }[] = [];
+    try {
+      const { getEffectiveBroadcastTargets } = await import('@/lib/telegram/api');
+      dynamicTargets = await getEffectiveBroadcastTargets();
+    } catch {}
     for (const notice of scheduled) {
       try {
         const targets = notice.telegramTargets;
@@ -164,6 +169,16 @@ async function runScheduledNotices() {
         ].filter(Boolean).join('\n');
 
         const fullText = body + footer;
+
+        for (const target of dynamicTargets) {
+          if (target.type === 'channel' && !sendToChannel) continue;
+          if (target.type === 'group' && !sendToGroup) continue;
+          try {
+            if (hasAttachment && (isImage || isPdf)) await sendDocument(target.chatId, notice.attachmentUrl!, fullText);
+            else await sendMessage(target.chatId, fullText, { disable_web_page_preview: !hasAttachment });
+            console.log(`[TG] Scheduled broadcast to ${target.type} ${target.chatId} OK`);
+          } catch (e) { console.error(`[TG] Scheduled broadcast to ${target.type} ${target.chatId} failed:`, e); }
+        }
 
         if (sendToChannel && CHANNEL_ID) {
           if (hasAttachment && (isImage || isPdf)) await sendDocument(CHANNEL_ID, notice.attachmentUrl!, fullText);

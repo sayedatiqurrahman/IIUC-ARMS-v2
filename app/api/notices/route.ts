@@ -197,12 +197,12 @@ async function broadcastNotice(notice: Notice, targetTypes?: ('channel' | 'group
     const sendToGroup = !targetTypes || targetTypes.includes('group');
     const sendToPersonal = !targetTypes || targetTypes.includes('personal');
 
-    // Load dynamic broadcast targets from DB
+    // Load dynamic broadcast targets from DB (unifies both postingChannels and
+    // broadcastTargets so channels configured from either UI are honoured).
     let dynamicTargets: { chatId: string; type: string; enabled: boolean }[] = [];
     try {
-      const { prisma } = await import('@/lib/prisma');
-      const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
-      dynamicTargets = ((settings?.broadcastTargets as unknown as any[]) || []).filter((t: any) => t?.enabled);
+      const { getEffectiveBroadcastTargets } = await import('@/lib/telegram/api');
+      dynamicTargets = await getEffectiveBroadcastTargets();
     } catch {}
 
     const catLabel = notice.category === 'academic-calendar' ? 'Academic Calendar'
