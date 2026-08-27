@@ -74,9 +74,12 @@ export async function GET(req: NextRequest) {
         };
       }
     }
-    // Every non-pending view excludes pending/rejected accounts, so "All Users"
-    // only ever shows registered (non-pending) users.
-    if (filterDomain !== 'pending' && !filterAccountStatus && !where.accountStatus) {
+    // The "All Users" view is the only entry point that must surface EVERY
+    // account (including those without an 'active' status — e.g. profiles
+    // auto-created when an admin assigns a role, or pending DB-only records).
+    // Domain/role/status-filtered views keep excluding pending/rejected.
+    const isAllView = !filterDomain && !filterRole && !filterAccountStatus;
+    if (!isAllView && filterDomain !== 'pending' && !filterAccountStatus && !where.accountStatus) {
       where.accountStatus = { notIn: ['pending', 'rejected'] };
     }
     if (filterAccountStatus && filterAccountStatus !== 'all') {
@@ -280,8 +283,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Every non-pending view excludes pending/rejected accounts
-    if (filterDomain !== 'pending' && !filterAccountStatus) {
+    // Domain/role/status-filtered views exclude pending/rejected accounts.
+    // The "All Users" view (isAllView) surfaces every account.
+    if (!isAllView && filterDomain !== 'pending' && !filterAccountStatus) {
       result = result.filter(u => u.accountStatus !== 'pending' && u.accountStatus !== 'rejected');
     }
 

@@ -112,7 +112,10 @@ export async function resetPassword(email: string) {
 export async function sendMagicLink(email: string) {
   const actionCodeSettings = {
     url: `${window.location.origin}/auth/magic-link`,
-    handleCodeInApp: false,
+    // Must be true so the oobCode is carried through to our in-app callback
+    // (/auth/magic-link). With false, Firebase's hosted handler consumes the
+    // code and the link never resolves as a sign-in link in our app.
+    handleCodeInApp: true,
   };
   await sendSignInLinkToEmail(getFirebaseAuth(), email, actionCodeSettings);
   window.localStorage.setItem('emailForSignIn', email);
