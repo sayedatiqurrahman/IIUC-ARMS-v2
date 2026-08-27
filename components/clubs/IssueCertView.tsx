@@ -224,6 +224,16 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
           <p className="text-sm text-dark-text2 mt-1">Generate verifiable certificates with unique IDs and QR codes</p>
         </div>
 
+        {!club?.logoUrl && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4 flex items-start gap-3">
+            <i className="fas fa-exclamation-triangle text-amber-400 mt-0.5"></i>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-400">No club logo set</p>
+              <p className="text-xs text-dark-text2 mt-0.5">Your certificates won't display the club logo. <a href={`/clubs/${slug}`} className="text-amber-400 font-semibold hover:underline no-underline">Upload your club logo</a> in the club settings first for a complete certificate.</p>
+            </div>
+          </div>
+        )}
+
         {issued.length === 0 ? (
           <div className="space-y-4">
             <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">

@@ -62,10 +62,10 @@ function drawHeader(p: any, t: CertTheme, department: string, clubName: string, 
   const cx = W / 2;
 
   if (logos.iiuc) {
-    try { p.addImage(logos.iiuc, 'PNG', cx - 70, 16, 16, 16); } catch {}
+    try { p.addImage(logos.iiuc, 'PNG', 20, 14, 16, 16); } catch {}
   }
   if (logos.club) {
-    try { p.addImage(logos.club, 'PNG', cx + 54, 16, 16, 16); } catch {}
+    try { p.addImage(logos.club, 'PNG', W - 36, 14, 16, 16); } catch {}
   }
 
   p.setFont('helvetica', 'bold');
@@ -112,13 +112,9 @@ function drawTitle(p: any, t: CertTheme) {
   p.line(cx - 55, dy, cx - 8, dy);
   p.line(cx + 8, dy, cx + 55, dy);
   p.setFillColor(...t.colors.secondary);
-  const sz = 2.5;
-  p.moveTo(cx, dy - sz);
-  p.lineTo(cx + sz, dy);
-  p.lineTo(cx, dy + sz);
-  p.lineTo(cx - sz, dy);
-  p.closePath();
-  p.fill();
+  const sz = 3;
+  p.triangle(cx, dy, cx + sz, dy + sz, cx - sz, dy + sz, 'F');
+  p.triangle(cx, dy, cx + sz, dy - sz, cx - sz, dy - sz, 'F');
 }
 
 function drawBody(p: any, t: CertTheme, data: CertPDFData) {
