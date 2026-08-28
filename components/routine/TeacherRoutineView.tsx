@@ -214,14 +214,20 @@ export default function TeacherRoutineView({ initialTeacher, onTeacherChange }: 
     examDuties.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     invigilation.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-    // Group class duties per routine
+    // Group class duties per routine, then per department
     const byRoutine = new Map<string, { routine: RoutineItem; label?: string; duties: ClassDuty[] }>();
     for (const c of classes) {
       const key = `${c.routine.id}::${c.label || ''}`;
       if (!byRoutine.has(key)) byRoutine.set(key, { routine: c.routine, label: c.label, duties: [] });
       byRoutine.get(key)!.duties.push(c);
     }
-    return { classes, examDuties, invigilation, byRoutine: Array.from(byRoutine.values()) };
+    const routineGroups = Array.from(byRoutine.values());
+    const deptOrder = Array.from(new Set(routineGroups.map(g => g.routine.department || 'Other')));
+    const byDepartment = deptOrder.map(department => ({
+      department,
+      groups: routineGroups.filter(g => (g.routine.department || 'Other') === department),
+    }));
+    return { classes, examDuties, invigilation, byDepartment };
   }, [routines, examRoutines, selected]);
 
   const weeklyClassCount = data.classes.length;
@@ -229,18 +235,21 @@ export default function TeacherRoutineView({ initialTeacher, onTeacherChange }: 
     const set = new Set<string>();
     data.examDuties.forEach(d => set.add(d.department));
     data.invigilation.forEach(d => set.add(d.department));
-    data.byRoutine.forEach(g => set.add(g.routine.department));
+    data.byDepartment.forEach(g => set.add(g.department));
     return Array.from(set).filter(Boolean);
   }, [data]);
 
   const handleCopy = async () => {
     const lines: string[] = [`📚 Personal Routine — ${selected}`, ''];
-    for (const g of data.byRoutine) {
-      const r = g.routine;
-      lines.push(`${r.semester || ''}${g.label ? ` (${g.label})` : ''}${r.branch ? ` · Section ${r.branch}` : ''} — ${getDeptName(r.department || '')}`);
-      for (const c of g.duties) {
-        const room = c.slot?.room || c.course.room;
-        lines.push(`  • ${c.day} ${c.period?.start || ''}–${c.period?.end || ''}: ${c.course.code} — ${c.course.title}${room ? ` (${room})` : ''}`);
+    for (const dept of data.byDepartment) {
+      lines.push(`🏫 ${getDeptName(dept.department || '')}`);
+      for (const g of dept.groups) {
+        const r = g.routine;
+        lines.push(`  ${r.semester || ''}${g.label ? ` (${g.label})` : ''}${r.branch ? ` · Section ${r.branch}` : ''}`);
+        for (const c of g.duties) {
+          const room = c.slot?.room || c.course.room;
+          lines.push(`    • ${c.day} ${c.period?.start || ''}–${c.period?.end || ''}: ${c.course.code} — ${c.course.title}${room ? ` (${room})` : ''}`);
+        }
       }
       lines.push('');
     }
@@ -348,14 +357,25 @@ export default function TeacherRoutineView({ initialTeacher, onTeacherChange }: 
           </div>
 
           {/* ─── Class routine ─── */}
-          {data.byRoutine.length > 0 && (
+          {data.byDepartment.length > 0 && (
             <div className="mb-6">
               <h5 className="text-[0.85rem] font-semibold flex items-center gap-2 mb-3 text-dark-text">
                 <i className="fas fa-calendar-alt text-qsis"></i> Class Routine
               </h5>
-              <div className="space-y-4">
-                {data.byRoutine.map(g => (
-                  <TeacherWeeklyTable key={`${g.routine.id}::${g.label || ''}`} group={g} />
+              <div className="space-y-6">
+                {data.byDepartment.map(dept => (
+                  <div key={dept.department}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <i className="fas fa-building text-qsis"></i>
+                      <h6 className="text-[0.82rem] font-semibold text-dark-text">{getDeptName(dept.department || '')}</h6>
+                      <span className="ml-auto text-[0.7rem] text-dark-text3 flex-shrink-0">{dept.groups.length} routine{dept.groups.length === 1 ? '' : 's'}</span>
+                    </div>
+                    <div className="space-y-4">
+                      {dept.groups.map(g => (
+                        <TeacherWeeklyTable key={`${g.routine.id}::${g.label || ''}`} group={g} />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
