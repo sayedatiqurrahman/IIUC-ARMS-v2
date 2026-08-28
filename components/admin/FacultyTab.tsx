@@ -67,6 +67,22 @@ export default function FacultyTab({
   const [editingSaving, setEditingSaving] = useState(false);
   const [syncingCloud, setSyncingCloud] = useState(false);
   const [cloudSyncResult, setCloudSyncResult] = useState<string | null>(null);
+  const [importingEte, setImportingEte] = useState(false);
+
+  const handleImportEte = async () => {
+    if (!window.confirm('Import the 16 missing ETE members? Existing members are skipped automatically.')) return;
+    setImportingEte(true);
+    try {
+      const res = await fetch('/api/faculty/seed-ete', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setCloudSyncResult(`ETE import: ${data.inserted} added, ${data.skipped} already present`);
+        showToast(`${data.inserted} ETE members added!`, 'success');
+        loadFaculty();
+      } else showToast(data.error || 'ETE import failed', 'error');
+    } catch { showToast('ETE import failed', 'error'); }
+    finally { setImportingEte(false); }
+  };
 
   const handleCloudSync = async () => {
     setSyncingCloud(true);
@@ -132,6 +148,10 @@ export default function FacultyTab({
         <button onClick={handleCloudSync} disabled={syncingCloud}
           className="px-4 py-2 rounded-lg text-[0.78rem] font-semibold cursor-pointer border transition-all bg-dark-bg2 text-dark-text2 border-dark-border hover:text-qsis hover:border-qsis/50 disabled:opacity-50">
           {syncingCloud ? <><i className="fas fa-spinner fa-spin mr-1"></i>Backing Up...</> : <><i className="fas fa-cloud-upload-alt mr-1"></i>Back up to cloud</>}
+        </button>
+        <button onClick={handleImportEte} disabled={importingEte}
+          className="px-4 py-2 rounded-lg text-[0.78rem] font-semibold cursor-pointer border transition-all bg-dark-bg2 text-dark-text2 border-dark-border hover:text-qsis hover:border-qsis/50 disabled:opacity-50">
+          {importingEte ? <><i className="fas fa-spinner fa-spin mr-1"></i>Importing...</> : <><i className="fas fa-satellite-dish mr-1"></i>Import ETE (16)</>}
         </button>
       </div>
       {cloudSyncResult && (
