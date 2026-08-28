@@ -16,6 +16,7 @@ export const config = {
   relatedKitabsFolder: 'related-kitabs',
   relatedKitabsParent: 'shariah',
   relatedSourcesFolder: 'related-sources',
+  routineDataFolder: 'routines',
   founderName: 'Sayed Atiqur Rahman',
   founderAgency: 'Programming Light',
   adobeClientId: process.env.NEXT_PUBLIC_ADOBE_CLIENT_ID || '',

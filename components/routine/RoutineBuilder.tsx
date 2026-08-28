@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import CustomSelect from '@/components/CustomSelect';
+import RoutineImportControl from './RoutineImportControl';
+import { mergeBlocks } from '@/lib/routine-import';
 import { resolveDepartment, getDepartmentSelectOptions } from '@/lib/departments';
 import { getOnboardingData } from '@/lib/onboarding-storage';
 import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, BuilderStep, DraftData } from './types';
@@ -46,8 +48,10 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
   const [periodTab, setPeriodTab] = useState<'male' | 'female'>('male');
   const [draftSaved, setDraftSaved] = useState(false);
   const [semesterCourses, setSemesterCourses] = useState<{ code: string; title: string; teacher: string; room: string }[]>([]);
+  const [cloudCourses, setCloudCourses] = useState<{ code: string; title: string; teacher: string; room: string }[]>([]);
+  const [cloudLoading, setCloudLoading] = useState(false);
   const [codeSuggestions, setCodeSuggestions] = useState<{ idx: number; matches: { code: string; title: string; teacher: string; room: string }[] } | null>(null);
-  const [githubLoading, setGithubLoading] = useState(false);
+  const [savingMap, setSavingMap] = useState(false);
 
   useEffect(() => {
     if (!semester) { setSemesterCourses([]); return; }
@@ -60,6 +64,21 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
       })
       .catch(() => {});
   }, [semester, department]);
+
+  // Auto-load the course list (with saved teachers) for THIS department + semester.
+  useEffect(() => {
+    if (!department || !semester) { setCloudCourses([]); return; }
+    setCloudLoading(true);
+    fetch(`/api/cloud-courses?department=${encodeURIComponent(department)}&semester=${encodeURIComponent(semester)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.courses)) {
+          setCloudCourses(d.courses.map((c: any) => ({ code: c.code, title: c.title, teacher: c.teacher || '', room: c.room || '' })));
+        }
+      })
+      .catch(() => setCloudCourses([]))
+      .finally(() => setCloudLoading(false));
+  }, [department, semester]);
 
   useEffect(() => {
     if (existing) return;
@@ -85,10 +104,12 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
     }
   }, []);
 
+  const listToUse = cloudCourses.length > 0 ? cloudCourses : semesterCourses;
+
   useEffect(() => {
-    if (!semester || semesterCourses.length === 0 || existing || courses.length > 0) return;
-    setCourses(semesterCourses.map(c => ({ code: c.code, title: c.title, teacher: c.teacher, room: c.room })));
-  }, [semesterCourses, existing, courses.length]);
+    if (!semester || listToUse.length === 0 || existing || courses.length > 0) return;
+    setCourses(listToUse.map(c => ({ code: c.code, title: c.title, teacher: c.teacher || '', room: c.room || '' })));
+  }, [listToUse, existing, courses.length]);
 
   const draftRef = useRef<DraftData>({});
   draftRef.current = { semester, branch, gender, session, room, periods, days, courses, slots, malePeriods, femalePeriods, maleSlots, femaleSlots, step, maleRoom, femaleRoom };
@@ -170,25 +191,64 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
 
   const addCourse = () => setCourses([...courses, { code: '', title: '', teacher: '', room: '' }]);
 
-  // Load the course list for the selected department + semester from GitHub.
-  const loadCoursesFromGitHub = async () => {
+  // Load the course list for the selected department + semester from the cloud.
+  const loadCoursesFromCloud = async () => {
     if (!department) { showToast('Please select a department first', 'error'); return; }
     if (!semester) { showToast('Please select a semester first', 'error'); return; }
-    setGithubLoading(true);
+    setCloudLoading(true);
     try {
-      const res = await fetch(`/api/github-courses?department=${encodeURIComponent(department)}&semester=${encodeURIComponent(semester)}`);
+      const res = await fetch(`/api/cloud-courses?department=${encodeURIComponent(department)}&semester=${encodeURIComponent(semester)}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.courses) && data.courses.length > 0) {
-        setCourses(data.courses.map((c: any) => ({ code: c.code, title: c.title, teacher: '', room: '' })));
-        showToast(`Loaded ${data.courses.length} courses from GitHub`, 'success');
+        setCourses(data.courses.map((c: any) => ({ code: c.code, title: c.title, teacher: c.teacher || '', room: c.room || '' })));
+        showToast(`Loaded ${data.courses.length} courses for ${semester}`, 'success');
       } else {
-        showToast(data.error || 'No courses found on GitHub for this department & semester', 'error');
+        showToast(data.error || `No courses found for ${department} — ${semester}`, 'error');
       }
     } catch {
-      showToast('Failed to load courses from GitHub', 'error');
+      showToast('Failed to load courses from the cloud', 'error');
     } finally {
-      setGithubLoading(false);
+      setCloudLoading(false);
     }
+  };
+
+  // Save the current course → teacher list as the remembered mapping, so it
+  // auto-loads next time (routines are mostly the same every semester).
+  const saveTeacherMapping = async () => {
+    const valid = courses.filter(c => String(c.code || '').trim());
+    if (valid.length === 0) { showToast('Add courses first', 'error'); return; }
+    setSavingMap(true);
+    try {
+      const res = await fetch('/api/cloud-courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ department, semester, courses: valid }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Teacher mapping saved — it will auto-load next time', 'success');
+      } else {
+        showToast(data.error || 'Failed to save mapping', 'error');
+      }
+    } catch {
+      showToast('Failed to save mapping', 'error');
+    } finally {
+      setSavingMap(false);
+    }
+  };
+
+  const handleImport = (data: import('@/lib/routine-import').RoutineImportData) => {
+    const block = mergeBlocks(data, semester);
+    if (!block) { showToast('Nothing to import', 'error'); return; }
+    if (block.semester) setSemester(block.semester);
+    if (block.courses.length > 0) setCourses(block.courses);
+    if (block.slots.length > 0) setSlots(block.slots);
+    if (block.periods.length > 0) setPeriods(block.periods);
+    if (block.days.length > 0) setDays(block.days);
+    if (block.branch) setBranch(block.branch);
+    if (block.gender) setGender(block.gender);
+    if (block.session) setSession(block.session);
+    showToast('Routine data imported', 'success');
   };
   const toInitials = (name: string): string => {
     if (!name) return '';
@@ -210,7 +270,7 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
       }
     }
     if (field === 'code' && value.trim()) {
-      const matches = semesterCourses.filter(sc => sc.code.toLowerCase().includes(value.toLowerCase()));
+      const matches = listToUse.filter(sc => sc.code.toLowerCase().includes(value.toLowerCase()));
       if (matches.length > 0 && !(matches.length === 1 && matches[0].code.toLowerCase() === value.toLowerCase())) {
         setCodeSuggestions({ idx, matches: matches.slice(0, 5) });
       } else {
@@ -355,12 +415,22 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
           <div className="routine-builder-section-header">
             <h4><i className="fas fa-book"></i> Course List</h4>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button className="routine-add-btn" onClick={loadCoursesFromGitHub} disabled={githubLoading}>
-                <i className={`fas ${githubLoading ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt'}`}></i> {githubLoading ? 'Loading...' : 'Load from GitHub'}
+              <button className="routine-add-btn" onClick={loadCoursesFromCloud} disabled={cloudLoading}>
+                <i className={`fas ${cloudLoading ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt'}`}></i> {cloudLoading ? 'Loading…' : 'Load course list'}
               </button>
               <button className="routine-add-btn" onClick={addCourse}><i className="fas fa-plus"></i> Add Course</button>
+              <RoutineImportControl onImport={handleImport} preferSemester={semester} />
+              <button className="routine-add-btn" onClick={saveTeacherMapping} disabled={savingMap}>
+                <i className={`fas ${savingMap ? 'fa-spinner fa-spin' : 'fa-save'}`}></i> {savingMap ? 'Saving…' : 'Save teacher map'}
+              </button>
             </div>
           </div>
+          {cloudLoading && courses.length === 0 && (
+            <div style={{ fontSize: '0.72rem', color: 'var(--text3)', padding: '6px 0' }}>
+              <i className="fas fa-cloud-upload-alt" style={{ marginRight: 6 }}></i>
+              Auto-loading the course list for {department} — {semester}…
+            </div>
+          )}
           {courses.length > 0 && (
             <div className="routine-course-list">
               {courses.map((c, idx) => (

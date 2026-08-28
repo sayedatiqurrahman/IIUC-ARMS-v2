@@ -239,7 +239,8 @@ export default function TeacherRoutineView({ initialTeacher, onTeacherChange }: 
       const r = g.routine;
       lines.push(`${r.semester || ''}${g.label ? ` (${g.label})` : ''}${r.branch ? ` · Section ${r.branch}` : ''} — ${getDeptName(r.department || '')}`);
       for (const c of g.duties) {
-        lines.push(`  • ${c.day} ${c.period?.start || ''}–${c.period?.end || ''}: ${c.course.code} — ${c.course.title}${c.course.room ? ` (${c.course.room})` : ''}`);
+        const room = c.slot?.room || c.course.room;
+        lines.push(`  • ${c.day} ${c.period?.start || ''}–${c.period?.end || ''}: ${c.course.code} — ${c.course.title}${room ? ` (${room})` : ''}`);
       }
       lines.push('');
     }
@@ -514,7 +515,7 @@ function TeacherWeeklyTable({ group }: { group: { routine: RoutineItem; label?: 
                           <div className="routine-course">
                             <span className="routine-course-code">{duty.course.code}</span>
                             <span className="routine-course-title">{duty.course.title}</span>
-                            {duty.course.room && <span className="routine-course-room"><i className="fas fa-door-open mr-1"></i>{/^\d+$/.test(duty.course.room) ? `Room ${duty.course.room}` : duty.course.room}</span>}
+                            {(duty.slot?.room || duty.course.room) && <span className="routine-course-room"><i className="fas fa-door-open mr-1"></i>{/^\d+$/.test(duty.slot?.room || duty.course.room) ? `Room ${duty.slot?.room || duty.course.room}` : duty.slot?.room || duty.course.room}</span>}
                           </div>
                         ) : (
                           <span className="routine-empty">&mdash;</span>

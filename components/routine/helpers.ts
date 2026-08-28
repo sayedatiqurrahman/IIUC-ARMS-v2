@@ -1,6 +1,6 @@
 /* ─── Shared Helper Functions for Routine Components ─── */
 
-import type { RoutineCourse, RoutineSlot, RoutinePeriod, RoutineItem, DraftData, AllSemesterDraft, TeacherConflict } from './types';
+import type { RoutineCourse, RoutineSlot, RoutinePeriod, RoutineItem, DraftData, AllSemesterDraft, TeacherConflict, TempGenderCell } from './types';
 import { DEFAULT_DAYS, SEMESTERS, DEFAULT_PERIODS, DEFAULT_FEMALE_PERIODS } from './types';
 
 /* ─── Time Helpers ─── */
@@ -171,7 +171,7 @@ export function findTeacherConflicts(
   day: string,
   periodIdx: number,
   excludeKey: string,
-  tempGenderSlots?: Record<string, Record<string, Record<number, string>>>
+  tempGenderSlots?: Record<string, Record<string, Record<string, TempGenderCell>>>
 ): TeacherConflict[] {
   if (!teacherName) return [];
   const conflicts: TeacherConflict[] = [];
@@ -208,11 +208,11 @@ export function findTeacherConflicts(
         if (key === excludeKey) continue;
         const sem = draft.semesters.find(s => s.name === semName);
         if (!sem) continue;
-        for (const [cellKey, courseCode] of Object.entries(cells)) {
-          if (!courseCode) continue;
+        for (const [cellKey, cell] of Object.entries(cells)) {
+          if (!cell?.course) continue;
           const [cDay, periodStr] = cellKey.split(':');
           if (cDay !== day || parseInt(periodStr) !== periodIdx) continue;
-          const course = sem.courses.find(c => c.code === courseCode);
+          const course = sem.courses.find(c => c.code === cell.course);
           if (course && course.teacher === teacherName) {
             conflicts.push({
               semester: semName,

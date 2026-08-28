@@ -18,6 +18,7 @@ export interface RoutineSlot {
   day: string;
   period: number;
   course: string;
+  room?: string;
 }
 
 export interface RoutineItem {
@@ -100,6 +101,11 @@ export interface TeacherConflict {
   teacher: string;
   day: string;
   period: number;
+}
+
+export interface TempGenderCell {
+  course: string;
+  room: string;
 }
 
 export type AllSemBuilderStep = 'info' | 'courses' | 'periods' | 'assign';

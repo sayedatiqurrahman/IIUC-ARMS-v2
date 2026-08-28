@@ -6,7 +6,7 @@ import CustomSelect from '@/components/CustomSelect';
 import { resolveDepartment, getDepartmentSelectOptions, getDepartmentDisplayName } from '@/lib/departments';
 import { getOnboardingData } from '@/lib/onboarding-storage';
 import { useAppStore } from '@/lib/store';
-import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, AllSemesterDraft, AllSemesterDraftSection, AllSemBuilderStep } from './types';
+import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, AllSemesterDraft, AllSemesterDraftSection, AllSemBuilderStep, TempGenderCell } from './types';
 import { DEFAULT_PERIODS, DEFAULT_FEMALE_PERIODS } from './types';
 import { loadAllSemDraft, saveAllSemDraft, createEmptyDraft, findTeacherConflicts } from './helpers';
 import { showToast } from '@/lib/utils';
@@ -58,7 +58,7 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
   }, [profile?.department, department]);
 
   // Temporary slots for gender-level grid (no sections)
-  const [tempGenderSlots, setTempGenderSlots] = useState<Record<string, Record<string, Record<number, string>>>>({});
+  const [tempGenderSlots, setTempGenderSlots] = useState<Record<string, Record<string, Record<string, TempGenderCell>>>>({});
 
   useEffect(() => {
     if (!draft) return;
@@ -92,12 +92,12 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
         const refPeriods = gender === 'male' ? draft.malePeriods : draft.femalePeriods;
         const classPeriods = refPeriods.filter(p => !p.isBreak);
         const key = `${semName}-${gender}-all`;
-        for (const [cellKey, courseCode] of Object.entries(cells)) {
-          if (!courseCode) continue;
+        for (const [cellKey, cell] of Object.entries(cells)) {
+          if (!cell?.course) continue;
           const [day, periodStr] = cellKey.split(':');
           const periodIdx = parseInt(periodStr);
           const sem = draft.semesters.find(s => s.name === semName);
-          const course = sem?.courses.find(c => c.code === courseCode);
+          const course = sem?.courses.find(c => c.code === cell.course);
           if (!course?.teacher) continue;
           const cpIdx = classPeriods.reduce((acc, p, i) => i <= periodIdx && !p.isBreak ? acc + 1 : acc, 0) - 1;
           const conflicts = findTeacherConflicts(draft, course.teacher, day, cpIdx, key, tempGenderSlots);
@@ -214,11 +214,26 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
     const sec = { ...updated.semesters[semIdx].sections[sectionIdx] };
     if (courseCode === '') {
       sec.slots = sec.slots.filter(s => !(s.day === day && s.period === period));
-    } else if (sec.slots.find(s => s.day === day && s.period === period)) {
-      sec.slots = sec.slots.map(s => s.day === day && s.period === period ? { ...s, course: courseCode } : s);
     } else {
-      sec.slots = [...sec.slots, { day, period, course: courseCode }];
+      const existing = sec.slots.find(s => s.day === day && s.period === period);
+      const course = updated.semesters[semIdx].courses.find(c => c.code === courseCode);
+      const room = existing?.room || course?.room || sec.room || '';
+      if (existing) {
+        sec.slots = sec.slots.map(s => s.day === day && s.period === period ? { ...s, course: courseCode, room } : s);
+      } else {
+        sec.slots = [...sec.slots, { day, period, course: courseCode, room }];
+      }
     }
+    updated.semesters[semIdx].sections[sectionIdx] = sec;
+    setDraft(updated);
+  };
+
+  const updateSlotRoomInSection = (semIdx: number, sectionIdx: number, day: string, period: number, room: string) => {
+    const updated = { ...draft };
+    updated.semesters = [...updated.semesters];
+    updated.semesters[semIdx] = { ...updated.semesters[semIdx], sections: [...updated.semesters[semIdx].sections] };
+    const sec = { ...updated.semesters[semIdx].sections[sectionIdx] };
+    sec.slots = sec.slots.map(s => s.day === day && s.period === period ? { ...s, room } : s);
     updated.semesters[semIdx].sections[sectionIdx] = sec;
     setDraft(updated);
   };
@@ -246,30 +261,38 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
     setDraft(updated);
   };
 
-  // Load the course list for the selected department + this semester from GitHub.
-  const loadCoursesFromGitHub = async (semIdx: number) => {
+  // Load the course list + teacher mapping for the selected department + this semester from the cloud.
+  const loadCoursesFromCloud = async (semIdx: number, silent = false) => {
     if (!department) { showToast('Please select a department first', 'error'); return; }
     const sem = draft.semesters[semIdx];
     setGithubLoadingSem(sem.name);
     try {
-      const res = await fetch(`/api/github-courses?department=${encodeURIComponent(department)}&semester=${encodeURIComponent(sem.name)}`);
+      const res = await fetch(`/api/cloud-courses?department=${encodeURIComponent(department)}&semester=${encodeURIComponent(sem.name)}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.courses) && data.courses.length > 0) {
-        const courses = data.courses.map((c: any) => ({ code: c.code, title: c.title, teacher: '', room: '' }));
+        const courses = data.courses.map((c: any) => ({ code: c.code, title: c.title, teacher: c.teacher || '', room: c.room || '' }));
         const updated = { ...draft };
         updated.semesters = [...updated.semesters];
         updated.semesters[semIdx] = { ...updated.semesters[semIdx], courses };
         setDraft(updated);
-        showToast(`Loaded ${courses.length} courses for ${sem.name} from GitHub`, 'success');
-      } else {
-        showToast(data.error || `No courses found on GitHub for this department & ${sem.name}`, 'error');
+        if (!silent) showToast(`Loaded ${courses.length} courses for ${sem.name} from the cloud`, 'success');
+        return;
       }
+      if (!silent) showToast(data.error || `No courses found for this department & ${sem.name}`, 'error');
     } catch {
-      showToast('Failed to load courses from GitHub', 'error');
+      if (!silent) showToast('Failed to load courses from the cloud', 'error');
     } finally {
       setGithubLoadingSem(null);
     }
   };
+
+  // Auto-load cloud courses for any semester that has none yet
+  useEffect(() => {
+    if (!draft || !department) return;
+    draft.semesters.forEach((sem, semIdx) => {
+      if (sem.courses.length === 0) loadCoursesFromCloud(semIdx, true);
+    });
+  }, [department]);
 
   const updatePeriods = (gender: 'male' | 'female', periods: RoutinePeriod[]) => {
     updateDraft(gender === 'male' ? { malePeriods: periods } : { femalePeriods: periods });
@@ -278,6 +301,36 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
   const handlePublishAll = async () => {
     if (Object.keys(conflictMap).length > 0) {
       showToast('Cannot publish — teacher conflicts detected! Fix all conflicts first.', 'error');
+      return;
+    }
+    const missingRooms: string[] = [];
+    for (const sem of draft.semesters) {
+      for (const gender of getGendersToShow()) {
+        const genderSections = sem.sections.filter(s => s.gender === gender);
+        if (genderSections.length > 0) {
+          for (const section of genderSections) {
+            for (const slot of section.slots) {
+              const course = sem.courses.find(c => c.code === slot.course);
+              if (course && !slot.room?.trim()) {
+                missingRooms.push(`${sem.name} · Section ${section.branch || 'Main'} · ${slot.day} P${slot.period + 1} (${course.code})`);
+              }
+            }
+          }
+        } else {
+          const cells = tempGenderSlots[sem.name]?.[gender] || {};
+          for (const [key, cell] of Object.entries(cells)) {
+            if (!cell?.course) continue;
+            const course = sem.courses.find(c => c.code === cell.course);
+            if (course && !cell.room?.trim()) {
+              const [day, periodStr] = key.split(':');
+              missingRooms.push(`${sem.name} · ${day} P${parseInt(periodStr) + 1} (${course.code})`);
+            }
+          }
+        }
+      }
+    }
+    if (missingRooms.length > 0) {
+      showToast(`Add a room to ${missingRooms.length} class slot(s) first — e.g. ${missingRooms[0]}`, 'error');
       return;
     }
     const routines: RoutineItem[] = [];
@@ -306,10 +359,10 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
           // Convert tempGenderSlots to RoutineSlot[]
           const genderSlots: RoutineSlot[] = [];
           const semGenderSlots = tempGenderSlots[sem.name]?.[gender] || {};
-          for (const [key, course] of Object.entries(semGenderSlots)) {
-            if (course) {
+          for (const [key, cell] of Object.entries(semGenderSlots)) {
+            if (cell?.course) {
               const [day, periodStr] = key.split(':');
-              genderSlots.push({ day, period: parseInt(periodStr), course });
+              genderSlots.push({ day, period: parseInt(periodStr), course: cell.course, room: cell.room });
             }
           }
           routines.push({
@@ -535,8 +588,8 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
                     </div>
                   ))}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                    <button className="routine-add-btn" onClick={() => loadCoursesFromGitHub(semIdx)} disabled={githubLoadingSem === sem.name}>
-                      <i className={`fas ${githubLoadingSem === sem.name ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt'}`}></i> {githubLoadingSem === sem.name ? 'Loading...' : 'Load from GitHub'}
+                    <button className="routine-add-btn" onClick={() => loadCoursesFromCloud(semIdx)} disabled={githubLoadingSem === sem.name}>
+                      <i className={`fas ${githubLoadingSem === sem.name ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt'}`}></i> {githubLoadingSem === sem.name ? 'Loading...' : 'Load course list'}
                     </button>
                     <button className="routine-add-btn" onClick={() => addCourseToSem(semIdx)}><i className="fas fa-plus"></i> Add Course to {sem.name}</button>
                   </div>
@@ -648,17 +701,28 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
                                           <small>{p.start} - {p.end}</small>
                                         </td>
                                         {draft.days.map(d => {
-                                          const currentVal = tempGenderSlots[sem.name]?.[gender]?.[`${d}:${cpIdx}`] || '';
+                                          const cellKey = `${d}:${cpIdx}`;
+                                          const currentCell = tempGenderSlots[sem.name]?.[gender]?.[cellKey] || null;
                                           return (
                                             <td key={`${d}-${cpIdx}`}>
                                               <CustomSelect
-                                                value={currentVal}
+                                                value={currentCell?.course || ''}
                                                 onChange={(val) => {
                                                   setTempGenderSlots(prev => {
                                                     const next = { ...prev };
                                                     if (!next[sem.name]) next[sem.name] = {};
                                                     if (!next[sem.name][gender]) next[sem.name][gender] = {};
-                                                    next[sem.name][gender] = { ...next[sem.name][gender], [`${d}:${cpIdx}`]: val };
+                                                    const cells = { ...next[sem.name][gender] };
+                                                    if (val === '') {
+                                                      delete cells[cellKey];
+                                                    } else {
+                                                      const course = sem.courses.find(c => c.code === val);
+                                                      cells[cellKey] = {
+                                                        course: val,
+                                                        room: cells[cellKey]?.room || course?.room || sem[genderRoomKey] || '',
+                                                      };
+                                                    }
+                                                    next[sem.name][gender] = cells;
                                                     return next;
                                                   });
                                                 }}
@@ -666,6 +730,24 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
                                                 options={sem.courses.map(c => ({ value: c.code, label: `${c.code} - ${c.title}${c.teacher ? ` (${c.teacher})` : ''}` }))}
                                                 showEmpty
                                               />
+                                              {currentCell?.course && (
+                                                <input
+                                                  value={currentCell.room}
+                                                  onChange={(e) => {
+                                                    setTempGenderSlots(prev => {
+                                                      const next = { ...prev };
+                                                      if (!next[sem.name]) next[sem.name] = {};
+                                                      if (!next[sem.name][gender]) next[sem.name][gender] = {};
+                                                      const cells = { ...next[sem.name][gender] };
+                                                      if (cells[cellKey]) cells[cellKey] = { ...cells[cellKey], room: e.target.value };
+                                                      next[sem.name][gender] = cells;
+                                                      return next;
+                                                    });
+                                                  }}
+                                                  placeholder="Room #"
+                                                  style={{ width: '90%', marginTop: 3, padding: '2px 6px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.68rem', outline: 'none' }}
+                                                />
+                                              )}
                                             </td>
                                           );
                                         })}
@@ -761,6 +843,14 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
                                                   showEmpty
                                                   size="sm"
                                                 />
+                                                {currentSlot?.course && (
+                                                  <input
+                                                    value={currentSlot.room || ''}
+                                                    onChange={(e) => updateSlotRoomInSection(semIdx, secIdx, d, cpIdx, e.target.value)}
+                                                    placeholder={currentSlot.room ? 'Room #' : 'Room # (required)'}
+                                                    style={{ width: '90%', marginTop: 3, padding: '2px 6px', borderRadius: 5, border: `${currentSlot.room?.trim() ? '1px solid var(--border)' : '1px solid #ef4444'}`, background: 'var(--bg)', color: 'var(--text)', fontSize: '0.68rem', outline: 'none' }}
+                                                  />
+                                                )}
                                               </td>
                                             );
                                           })}

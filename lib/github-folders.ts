@@ -71,6 +71,91 @@ async function api(method: string, urlPath: string, body: any, token: string) {
   return { s: res.status, d: data };
 }
 
+/* ─── Cloud Data Files (course/teacher mapping etc.) ────────────────── */
+
+export interface CloudTeacherMap {
+  version?: number;
+  updatedAt?: number;
+  updatedBy?: string;
+  departments?: Record<string, Record<string, { code: string; title?: string; teacher?: string; room?: string }[]>>;
+}
+
+const CLOUD_CACHE_TTL = 60 * 1000;
+let cloudCache: { key: string; ts: number; data: CloudTeacherMap } | null = null;
+
+async function getCloudFileToken(): Promise<string | null> {
+  const appId = process.env.GITHUB_ID;
+  const privateKey = (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/^"/, '').replace(/"$/, '');
+  if (!appId || !privateKey) return null;
+  const jwt = makeJwt(appId, privateKey);
+  const inst = await api('GET', `/repos/${config.owner}/${config.repo}/installation`, null, jwt);
+  if (inst.s !== 200) return null;
+  const tok = (await api('POST', `/app/installations/${inst.d.id}/access_tokens`, null, jwt)).d.token;
+  return tok || null;
+}
+
+// Read a UTF-8 file from the data repo (GitHub = the cloud storage backend).
+export async function readCloudFile(path: string): Promise<string | null> {
+  const token = await getCloudFileToken();
+  if (!token) return null;
+  const res = await api('GET', `/repos/${config.owner}/${config.repo}/contents/${path}`, null, token);
+  if (res.s !== 200 || !res.d?.content) return null;
+  const buffer = Buffer.from(res.d.content, 'base64');
+  return buffer.toString('utf8');
+}
+
+// Write (create or update) a UTF-8 file in the data repo.
+export async function writeCloudFile(path: string, content: string, message: string): Promise<{ success: boolean; error?: string }> {
+  const token = await getCloudFileToken();
+  if (!token) return { success: false, error: 'Cloud not configured' };
+  const existing = await api('GET', `/repos/${config.owner}/${config.repo}/contents/${path}`, null, token);
+  const body: any = {
+    message,
+    content: Buffer.from(content, 'utf8').toString('base64'),
+  };
+  if (existing.s === 200 && existing.d?.sha) body.sha = existing.d.sha;
+  const res = await api('PUT', `/repos/${config.owner}/${config.repo}/contents/${path}`, body, token);
+  if (res.s === 200 || res.s === 201) return { success: true };
+  return { success: false, error: res.d?.message || 'Failed to save to cloud' };
+}
+
+// course-teachers.json holds "which course is taught by which teacher" per
+// department + semester. Routines barely change each semester, so teachers are
+// remembered here and re-applied automatically when building a routine.
+export async function fetchCloudTeacherMapping(force = false): Promise<CloudTeacherMap> {
+  const key = `${config.owner}/${config.repo}/course-teachers`;
+  if (!force && cloudCache && cloudCache.key === key && Date.now() - cloudCache.ts < CLOUD_CACHE_TTL) {
+    return cloudCache.data;
+  }
+  const raw = await readCloudFile(`${config.routineDataFolder}/course-teachers.json`);
+  let data: CloudTeacherMap = {};
+  if (raw) {
+    try { data = JSON.parse(raw); } catch {}
+  }
+  if (!data || typeof data !== 'object') data = {};
+  if (!data.departments) data.departments = {};
+  cloudCache = { key, ts: Date.now(), data };
+  return data;
+}
+
+export async function saveTeacherMapping(mapping: CloudTeacherMap, byEmail: string): Promise<{ success: boolean; error?: string }> {
+  const payload: CloudTeacherMap = {
+    version: 1,
+    updatedAt: Date.now(),
+    updatedBy: byEmail,
+    departments: mapping.departments || {},
+  };
+  const res = await writeCloudFile(
+    `${config.routineDataFolder}/course-teachers.json`,
+    JSON.stringify(payload, null, 2),
+    'Update course-teacher mapping',
+  );
+  if (res.success) {
+    cloudCache = { key: `${config.owner}/${config.repo}/course-teachers`, ts: Date.now(), data: payload };
+  }
+  return res;
+}
+
 function parseCourseFolder(name: string): { code: string; title: string } | null {
   return matchCourseFolder(name);
 }
