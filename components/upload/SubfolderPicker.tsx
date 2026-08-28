@@ -18,45 +18,6 @@ interface SubfolderPickerProps {
   canCreateFolder?: boolean;
 }
 
-/**
- * Extracts the immediate subfolders present under a given folder path inside a
- * course+category. `parentPath` is the relative path (empty = category root).
- */
-function extractSubfolders(
-  tree: any[],
-  deptFolder: string,
-  semester: string,
-  courseFolder: string,
-  category: string,
-  midFinal: string | undefined,
-  parentPath: string,
-): string[] {
-  const prefix = `${deptFolder}/${semester}/${courseFolder}/`;
-  const midFinalPart = midFinal ? `${midFinal}/` : '';
-  const catPrefix = `${prefix}${midFinalPart}${category}/`;
-  const base = parentPath ? `${catPrefix}${parentPath}/` : catPrefix;
-  const subfolders = new Set<string>();
-
-  for (const item of tree) {
-    const path = item.githubPath || item.path || '';
-    if (!path.startsWith(base)) continue;
-    const rel = path.substring(base.length);
-    if (!rel || rel === '.gitkeep') continue;
-
-    // A tree entry at exactly one segment below base is an (empty) folder.
-    if (item.type === 'tree') {
-      const first = rel.split('/')[0];
-      if (first) subfolders.add(first);
-      continue;
-    }
-
-    const parts = rel.split('/');
-    if (parts.length > 1) subfolders.add(parts[0]);
-  }
-
-  return Array.from(subfolders).sort();
-}
-
 export default function SubfolderPicker({
   department,
   semester,
@@ -94,15 +55,23 @@ export default function SubfolderPicker({
   };
   const isExamCat = category === config.categories.notes.folder || category === config.categories.questions.folder;
   const rootName = `${catLabels[category] || category}${isExamCat && midFinal ? ` · ${midFinal}` : ''}`;
+  const categoryKey = Object.entries(config.categories).find(([, c]) => c.folder === category)?.[0] || '';
 
   // Browse location = the folder whose contents are visible.
   const pathSegments = browse ? browse.split('/').filter(Boolean) : [];
 
   const children = useMemo(() => {
-    if (!deptFolder || !semester || !courseFolder || !category) return [];
-    const mf = isExamCat ? midFinal : undefined;
-    return extractSubfolders(tree, deptFolder, semester, courseFolder, category, mf, browse);
-  }, [tree, treeLength, deptFolder, semester, courseFolder, category, midFinal, browse]);
+    if (!semester || !courseCode || !categoryKey) return [];
+    const contents = useAppStore.getState().getSubfolderContents(
+      semester,
+      courseCode,
+      department || null,
+      isExamCat ? midFinal || null : null,
+      categoryKey,
+      browse,
+    );
+    return contents.subfolders.map(s => s.name);
+  }, [tree, treeLength, semester, courseCode, department, categoryKey, midFinal, browse]);
 
   const openDropdown = () => {
     setBrowse(value);
