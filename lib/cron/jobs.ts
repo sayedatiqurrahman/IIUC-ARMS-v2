@@ -142,7 +142,9 @@ async function runScheduledNotices() {
         const sendToPersonal = !targets || targets.includes('personal');
 
         const catLabel = notice.category === 'academic-calendar' ? 'Academic Calendar'
-          : notice.category === 'bus-schedule' ? 'Bus Schedule' : 'Notice';
+          : notice.category === 'bus-schedule' ? 'Bus Schedule'
+          : notice.category === 'academic' ? 'Academic Notice' : 'General Notice';
+        const mainLabel = notice.mainCategory === 'academic' ? 'Academic' : 'Non-Academic';
         const emoji = notice.category === 'academic-calendar' ? '📅'
           : notice.category === 'bus-schedule' ? '🚌' : '📢';
 
@@ -150,7 +152,7 @@ async function runScheduledNotices() {
         const isImage = hasAttachment && /\.(jpg|jpeg|png|gif|webp)$/i.test(notice.attachmentUrl!);
         const isPdf = hasAttachment && /\.pdf$/i.test(notice.attachmentUrl!);
 
-        let body = `${emoji} <b>${catLabel}</b>\n`;
+        let body = `${emoji} <b>${mainLabel} · ${catLabel}</b>\n`;
         body += `<b>${notice.title}</b>\n`;
         if (notice.description) body += `\n${notice.description}\n`;
         if (notice.link) body += `\n🔗 <a href="${notice.link}">Open Link</a>`;

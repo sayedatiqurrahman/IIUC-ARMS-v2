@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { noticeAttachmentUrl } from '@/lib/notice-proxy';
 import type { Notice } from '@/lib/notices';
-import { CATEGORY_META } from '@/lib/notices';
+import { CATEGORY_META, MAIN_CATEGORY_META, mainCategoryOf } from '@/lib/notices';
 import type { ViewerItem } from '@/lib/store/types';
 
 const DocumentViewer = dynamic(() => import('@/components/app-shell/DocumentViewer'), { ssr: false });
@@ -83,6 +83,7 @@ export default function NoticeDetail({ params }: { params: Promise<{ id: string 
   }
 
   const meta = CATEGORY_META[notice.category];
+  const mainMeta = MAIN_CATEGORY_META[notice.mainCategory || mainCategoryOf(notice.category)];
   const formatDate = (d: string) => {
     try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); }
     catch { return d; }
@@ -109,6 +110,9 @@ export default function NoticeDetail({ params }: { params: Promise<{ id: string 
         {/* Header bar */}
         <div className="px-5 py-4 border-b border-dark-border bg-dark-bg3/30">
           <div className="flex items-center gap-2 flex-wrap">
+            <span className={`px-2.5 py-0.5 rounded-lg text-[0.68rem] font-semibold ${mainMeta.bg} ${mainMeta.color}`}>
+              <i className={`${mainMeta.icon} mr-1`}></i>{mainMeta.label}
+            </span>
             <span className={`px-2.5 py-0.5 rounded-lg text-[0.68rem] font-semibold ${meta.bg} ${meta.color}`}>
               <i className={`${meta.icon} mr-1`}></i>{meta.label}
             </span>

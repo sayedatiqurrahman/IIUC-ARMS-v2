@@ -5,12 +5,15 @@ const GITHUB_API = 'https://api.github.com';
 const NOTICES_PATH = 'notices';
 const NOTICES_INDEX = `${NOTICES_PATH}/notices.json`;
 
-export type NoticeCategory = 'notice' | 'academic-calendar' | 'bus-schedule';
+export type MainNoticeCategory = 'academic' | 'non-academic';
+
+export type NoticeCategory = 'academic' | 'academic-calendar' | 'bus-schedule' | 'non-academic';
 
 export interface Notice {
   id: string;
   title: string;
   description: string;
+  mainCategory?: MainNoticeCategory;
   category: NoticeCategory;
   date: string;           // ISO date string
   pinned: boolean;
@@ -26,11 +29,36 @@ export interface Notice {
   telegramTargets?: ('channel' | 'group' | 'personal')[]; // where to forward
 }
 
-export const CATEGORY_META: Record<NoticeCategory, { label: string; icon: string; color: string; bg: string }> = {
-  'notice':            { label: 'Notice',            icon: 'fas fa-bullhorn',          color: 'text-amber-400',  bg: 'bg-amber-500/15' },
-  'academic-calendar': { label: 'Academic Calendar', icon: 'fas fa-calendar-days',     color: 'text-blue-400',   bg: 'bg-blue-500/15' },
-  'bus-schedule':      { label: 'Bus Schedule',      icon: 'fas fa-bus',               color: 'text-green-400',  bg: 'bg-green-500/15' },
+export const MAIN_CATEGORY_META: Record<MainNoticeCategory, { label: string; icon: string; color: string; bg: string }> = {
+  'academic':     { label: 'Academic',     icon: 'fas fa-graduation-cap', color: 'text-sky-400',     bg: 'bg-sky-500/15' },
+  'non-academic': { label: 'Non-Academic', icon: 'fas fa-bullhorn',      color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/15' },
 };
+
+export const CATEGORY_META: Record<NoticeCategory, { label: string; icon: string; color: string; bg: string }> = {
+  'academic':          { label: 'Academic Notice',  icon: 'fas fa-graduation-cap', color: 'text-sky-400',     bg: 'bg-sky-500/15' },
+  'academic-calendar': { label: 'Academic Calendar', icon: 'fas fa-calendar-days',  color: 'text-blue-400',    bg: 'bg-blue-500/15' },
+  'bus-schedule':      { label: 'Bus Schedule',      icon: 'fas fa-bus',            color: 'text-green-400',   bg: 'bg-green-500/15' },
+  'non-academic':      { label: 'General Notice',    icon: 'fas fa-bullhorn',       color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/15' },
+};
+
+/** Sub-categories available under each main category. */
+export const SUBCATEGORIES_FOR_MAIN: Record<MainNoticeCategory, NoticeCategory[]> = {
+  'academic': ['academic', 'academic-calendar', 'bus-schedule'],
+  'non-academic': ['non-academic'],
+};
+
+/** Resolve the main category for a sub-category, mapping pre-split legacy values. */
+export function mainCategoryOf(category?: string | null): MainNoticeCategory {
+  if (category === 'academic-calendar' || category === 'bus-schedule' || category === 'academic') return 'academic';
+  return 'non-academic';
+}
+
+/** Normalize legacy notices (published before the Academic/Non-Academic split). */
+export function normalizeNotice(n: Notice): Notice {
+  const mainCategory = n.mainCategory || mainCategoryOf(n.category || 'notice');
+  const category = (n.category === ('notice' as string) ? 'non-academic' : n.category) as NoticeCategory;
+  return { ...n, mainCategory, category: category || 'non-academic' };
+}
 
 function ghHeaders(token: string) {
   return {
@@ -53,7 +81,7 @@ export async function readNoticesIndex(): Promise<Notice[]> {
     if (res.ok) {
       const text = await res.text();
       const data = JSON.parse(text);
-      return Array.isArray(data) ? data : [];
+      return Array.isArray(data) ? data.map(normalizeNotice) : [];
     }
   } catch {}
 
@@ -67,7 +95,7 @@ export async function readNoticesIndex(): Promise<Notice[]> {
     const meta = await res.json();
     const content = Buffer.from(meta.content, 'base64').toString('utf8');
     const data = JSON.parse(content);
-    return Array.isArray(data) ? data : [];
+    return Array.isArray(data) ? data.map(normalizeNotice) : [];
   } catch {
     return [];
   }
@@ -251,6 +279,15 @@ export async function deleteNoticeAttachments(
     message: `notice: delete attachment "${notice.title}"`,
     author,
   });
+}
+
+/** Delete a single notice attachment file from GitHub by raw URL. */
+export async function deleteNoticeAttachmentUrl(
+  url: string,
+  token: string,
+  author?: { name: string; email: string },
+): Promise<void> {
+  await deleteNoticeAttachments({ attachmentUrl: url, title: 'attachment' } as unknown as Notice, token, author);
 }
 
 /** Remove expired notices from the index. Returns the number removed. */

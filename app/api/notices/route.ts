@@ -3,7 +3,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission } from '@/lib/permissions';
-import { readNoticesIndex, writeNoticesIndex, uploadNoticeAttachment, isNoticeExpired, renameNoticeAttachment, deleteNoticeAttachments, type Notice, type NoticeCategory } from '@/lib/notices';
+import { readNoticesIndex, writeNoticesIndex, uploadNoticeAttachment, isNoticeExpired, renameNoticeAttachment, deleteNoticeAttachments, deleteNoticeAttachmentUrl, mainCategoryOf, type Notice, type NoticeCategory, type MainNoticeCategory } from '@/lib/notices';
 
 /** Default auto-delete TTL in days (≈6 months). */
 const DEFAULT_NOTICE_TTL_DAYS = 183;
@@ -57,11 +57,13 @@ export async function POST(req: NextRequest) {
       if (action === 'create') {
         // Determine if this is a scheduled or immediate publish
         const isScheduled = scheduledAt && new Date(scheduledAt) > new Date();
+        const rawCategory = (notice.category as string) || 'notice';
         const newNotice: Notice = {
           id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           title: notice.title.trim(),
           description: (notice.description || '').trim(),
-          category: (notice.category as NoticeCategory) || 'notice',
+          mainCategory: (notice.mainCategory as MainNoticeCategory) || mainCategoryOf(rawCategory),
+          category: (rawCategory === 'notice' ? 'non-academic' : rawCategory) as NoticeCategory,
           date: notice.date || now.split('T')[0],
           pinned: !!notice.pinned,
           attachmentUrl: notice.attachmentUrl,
@@ -107,11 +109,16 @@ export async function POST(req: NextRequest) {
       const idx = notices.findIndex(n => n.id === notice.id);
       if (idx === -1) return NextResponse.json({ error: 'Notice not found' }, { status: 404 });
 
+      const oldAttachmentUrl = notices[idx].attachmentUrl;
+      const prevCategory = notices[idx].category;
+      const rawCategory = (notice.category as string) || prevCategory || 'notice';
+
       notices[idx] = {
         ...notices[idx],
         title: notice.title.trim(),
         description: (notice.description || '').trim(),
-        category: (notice.category as NoticeCategory) || notices[idx].category,
+        mainCategory: (notice.mainCategory as MainNoticeCategory) || notices[idx].mainCategory || mainCategoryOf(rawCategory),
+        category: (rawCategory === 'notice' ? 'non-academic' : rawCategory) as NoticeCategory,
         date: notice.date || notices[idx].date,
         pinned: !!notice.pinned,
         attachmentUrl: notice.attachmentUrl ?? notices[idx].attachmentUrl,
@@ -121,6 +128,11 @@ export async function POST(req: NextRequest) {
       };
 
       await writeNoticesIndex(notices, (await getToken(email))!, `notice: update "${notices[idx].title}"`, author);
+
+      // Remove the previous attachment file from GitHub when it was replaced
+      if (oldAttachmentUrl && notices[idx].attachmentUrl && oldAttachmentUrl !== notices[idx].attachmentUrl) {
+        await deleteNoticeAttachmentUrl(oldAttachmentUrl, (await getToken(email))!, author).catch(() => {});
+      }
 
       // Rename attachment to canonical name if it exists and title/category/date changed
       if (notices[idx].attachmentUrl) {
@@ -206,7 +218,9 @@ async function broadcastNotice(notice: Notice, targetTypes?: ('channel' | 'group
     } catch {}
 
     const catLabel = notice.category === 'academic-calendar' ? 'Academic Calendar'
-      : notice.category === 'bus-schedule' ? 'Bus Schedule' : 'Notice';
+      : notice.category === 'bus-schedule' ? 'Bus Schedule'
+      : notice.category === 'academic' ? 'Academic Notice' : 'General Notice';
+    const mainLabel = notice.mainCategory === 'academic' ? 'Academic' : 'Non-Academic';
     const emoji = notice.category === 'academic-calendar' ? '📅'
       : notice.category === 'bus-schedule' ? '🚌' : '📢';
 
@@ -232,7 +246,7 @@ async function broadcastNotice(notice: Notice, targetTypes?: ('channel' | 'group
     ].filter(Boolean).join('\n');
 
     // --- Main message body ---
-    let body = `${emoji} <b>${catLabel}</b>\n`;
+    let body = `${emoji} <b>${mainLabel} · ${catLabel}</b>\n`;
     body += `<b>${notice.title}</b>\n`;
     if (notice.description) body += `\n${notice.description}\n`;
     if (notice.link) body += `\n🔗 <a href="${notice.link}">Open Link</a>`;

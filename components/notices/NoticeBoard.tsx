@@ -5,16 +5,14 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { config } from '@/lib/config';
 import { noticeAttachmentUrl } from '@/lib/notice-proxy';
-import type { Notice, NoticeCategory } from '@/lib/notices';
-import { CATEGORY_META } from '@/lib/notices';
+import type { Notice, NoticeCategory, MainNoticeCategory } from '@/lib/notices';
+import { CATEGORY_META, MAIN_CATEGORY_META, SUBCATEGORIES_FOR_MAIN, mainCategoryOf } from '@/lib/notices';
 import NoticePublishModal, { type NoticePublishOptions } from './NoticePublishModal';
 import { isNoticesTickerVisible, setNoticesTickerVisible } from './LatestNotices';
 
-const CATEGORIES: { key: NoticeCategory | 'all'; label: string; icon: string }[] = [
-  { key: 'all', label: 'All', icon: 'fas fa-layer-group' },
-  { key: 'notice', label: 'Notices', icon: 'fas fa-bullhorn' },
-  { key: 'academic-calendar', label: 'Academic Calendar', icon: 'fas fa-calendar-days' },
-  { key: 'bus-schedule', label: 'Bus Schedule', icon: 'fas fa-bus' },
+const MAIN_CATEGORIES: { key: MainNoticeCategory; label: string; icon: string }[] = [
+  { key: 'academic', label: 'Academic', icon: 'fas fa-graduation-cap' },
+  { key: 'non-academic', label: 'Non-Academic', icon: 'fas fa-bullhorn' },
 ];
 
 export default function NoticeBoardView() {
@@ -25,7 +23,8 @@ export default function NoticeBoardView() {
 
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<NoticeCategory | 'all'>('all');
+  const [mainFilter, setMainFilter] = useState<MainNoticeCategory | 'all'>('all');
+  const [subFilter, setSubFilter] = useState<NoticeCategory | 'all'>('all');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -35,7 +34,7 @@ export default function NoticeBoardView() {
   // Create/Edit state
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Notice | null>(null);
-  const [form, setForm] = useState({ title: '', description: '', category: 'notice' as NoticeCategory, date: '', pinned: false, link: '', ttlDays: 183 as number | null });
+  const [form, setForm] = useState({ title: '', description: '', mainCategory: 'academic' as MainNoticeCategory, category: 'academic' as NoticeCategory, date: '', pinned: false, link: '', ttlDays: 183 as number | null });
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -70,7 +69,8 @@ export default function NoticeBoardView() {
   useEffect(() => { fetchNotices(); }, [fetchNotices]);
 
   const filtered = notices
-    .filter(n => filter === 'all' || n.category === filter)
+    .filter(n => mainFilter === 'all' || (n.mainCategory || mainCategoryOf(n.category)) === mainFilter)
+    .filter(n => subFilter === 'all' || n.category === subFilter)
     .filter(n => {
       if (!search) return true;
       const q = search.toLowerCase();
@@ -90,7 +90,7 @@ export default function NoticeBoardView() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ title: '', description: '', category: 'notice', date: new Date().toISOString().split('T')[0], pinned: false, link: '', ttlDays: 183 });
+    setForm({ title: '', description: '', mainCategory: 'academic', category: 'academic', date: new Date().toISOString().split('T')[0], pinned: false, link: '', ttlDays: 183 });
     pendingAttachmentRef.current = null;
     if (attachmentPreview.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview);
     setAttachmentPreview('');
@@ -107,7 +107,7 @@ export default function NoticeBoardView() {
     } else {
       ttlDays = null; // never expires
     }
-    setForm({ title: n.title, description: n.description, category: n.category, date: n.date, pinned: n.pinned, link: n.link || '', ttlDays });
+    setForm({ title: n.title, description: n.description, mainCategory: n.mainCategory || mainCategoryOf(n.category), category: n.category, date: n.date, pinned: n.pinned, link: n.link || '', ttlDays });
     pendingAttachmentRef.current = null;
     if (attachmentPreview.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview);
     setAttachmentPreview('');
@@ -299,13 +299,36 @@ export default function NoticeBoardView() {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-5">
-        <div className="flex gap-1.5 flex-wrap">
-          {CATEGORIES.map(c => (
-            <button key={c.key} onClick={() => setFilter(c.key)}
-              className={`px-3 py-1.5 rounded-lg text-[0.75rem] font-medium border cursor-pointer transition ${filter === c.key ? 'bg-qsis/15 border-qsis/30 text-qsis' : 'bg-dark-bg2 border-dark-border text-dark-text2 hover:text-dark-text'}`}>
-              <i className={`${c.icon} mr-1`}></i>{c.label}
+        <div className="flex gap-1.5 flex-wrap flex-col w-full sm:w-auto">
+          <div className="flex gap-1.5 flex-wrap">
+            <button onClick={() => { setMainFilter('all'); setSubFilter('all'); }}
+              className={`px-3 py-1.5 rounded-lg text-[0.75rem] font-medium border cursor-pointer transition ${mainFilter === 'all' ? 'bg-qsis/15 border-qsis/30 text-qsis' : 'bg-dark-bg2 border-dark-border text-dark-text2 hover:text-dark-text'}`}>
+              <i className="fas fa-layer-group mr-1"></i>All
             </button>
-          ))}
+            {MAIN_CATEGORIES.map(m => (
+              <button key={m.key} onClick={() => { setMainFilter(m.key); setSubFilter('all'); }}
+                className={`px-3 py-1.5 rounded-lg text-[0.75rem] font-medium border cursor-pointer transition ${mainFilter === m.key ? 'bg-qsis/15 border-qsis/30 text-qsis' : 'bg-dark-bg2 border-dark-border text-dark-text2 hover:text-dark-text'}`}>
+                <i className={`${m.icon} mr-1`}></i>{m.label}
+              </button>
+            ))}
+          </div>
+          {mainFilter !== 'all' && SUBCATEGORIES_FOR_MAIN[mainFilter].length > 1 && (
+            <div className="flex gap-1.5 flex-wrap">
+              <button onClick={() => setSubFilter('all')}
+                className={`px-2.5 py-1 rounded-md text-[0.7rem] font-medium border cursor-pointer transition ${subFilter === 'all' ? 'bg-qsis/15 border-qsis/30 text-qsis' : 'bg-dark-bg3 border-dark-border text-dark-text3 hover:text-dark-text'}`}>
+                All types
+              </button>
+              {SUBCATEGORIES_FOR_MAIN[mainFilter].map(key => {
+                const m = CATEGORY_META[key];
+                return (
+                  <button key={key} onClick={() => setSubFilter(key)}
+                    className={`px-2.5 py-1 rounded-md text-[0.7rem] font-medium border cursor-pointer transition ${subFilter === key ? 'bg-qsis/15 border-qsis/30 text-qsis' : 'bg-dark-bg3 border-dark-border text-dark-text3 hover:text-dark-text'}`}>
+                    <i className={`${m.icon} mr-1`}></i>{m.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -502,15 +525,38 @@ export default function NoticeBoardView() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Category</label>
+                <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Main Category</label>
                 <div className="flex gap-2">
-                  {(CATEGORIES.filter(c => c.key !== 'all')).map(c => (
-                    <button key={c.key} type="button" onClick={() => setForm(f => ({ ...f, category: c.key as NoticeCategory }))}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[0.78rem] font-medium border cursor-pointer transition ${form.category === c.key ? 'bg-qsis/15 border-qsis/30 text-qsis' : 'bg-dark-bg3 border-dark-border text-dark-text2'}`}>
-                      <i className={c.icon}></i>{c.label}
-                    </button>
-                  ))}
+                  {MAIN_CATEGORIES.map(m => {
+                    const mm = MAIN_CATEGORY_META[m.key];
+                    return (
+                      <button key={m.key} type="button" onClick={() => setForm(f => ({ ...f, mainCategory: m.key, category: SUBCATEGORIES_FOR_MAIN[m.key][0] }))}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[0.78rem] font-medium border cursor-pointer transition ${form.mainCategory === m.key ? 'bg-qsis/15 border-qsis/30 text-qsis' : 'bg-dark-bg3 border-dark-border text-dark-text2'}`}>
+                        <i className={m.icon}></i>{m.label}
+                      </button>
+                    );
+                  })}
                 </div>
+                {form.mainCategory && SUBCATEGORIES_FOR_MAIN[form.mainCategory].length > 0 && (
+                  <>
+                    <label className="block text-[0.75rem] font-medium text-dark-text2 mt-2 mb-1">Type</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {SUBCATEGORIES_FOR_MAIN[form.mainCategory].map(key => {
+                        const m = CATEGORY_META[key];
+                        const active = form.category === key;
+                        return (
+                          <button key={key} type="button" onClick={() => setForm(f => ({ ...f, category: key }))}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[0.78rem] font-medium border cursor-pointer transition ${active ? 'text-qsis border-qsis/30 bg-qsis/10' : 'bg-dark-bg3 border-dark-border text-dark-text2'}`}>
+                            <span className={`w-4 h-4 rounded-md border flex items-center justify-center ${active ? 'bg-qsis border-qsis' : 'border-dark-text3'}`}>
+                              {active && <i className="fas fa-check text-white text-[0.5rem]"></i>}
+                            </span>
+                            <i className={`${m.icon} mx-0.5`}></i>{m.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
               <div>
                 <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Title *</label>

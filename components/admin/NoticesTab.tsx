@@ -1,16 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Notice, NoticeCategory } from '@/lib/notices';
-import { CATEGORY_META } from '@/lib/notices';
+import type { Notice, NoticeCategory, MainNoticeCategory } from '@/lib/notices';
+import { CATEGORY_META, MAIN_CATEGORY_META, SUBCATEGORIES_FOR_MAIN, mainCategoryOf } from '@/lib/notices';
 import NoticePublishModal, { type NoticePublishOptions } from '@/components/notices/NoticePublishModal';
+
+const MAIN_CATEGORIES = Object.keys(MAIN_CATEGORY_META) as MainNoticeCategory[];
 
 export default function NoticesTab() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Notice | null>(null);
-  const [form, setForm] = useState({ title: '', description: '', category: 'notice' as NoticeCategory, date: '', pinned: false, link: '', attachmentUrl: '', attachmentName: '', ttlDays: 183 as number | null });
+  const [form, setForm] = useState({ title: '', description: '', mainCategory: 'academic' as MainNoticeCategory, category: 'academic' as NoticeCategory, date: '', pinned: false, link: '', attachmentUrl: '', attachmentName: '', ttlDays: 183 as number | null });
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -33,7 +35,7 @@ export default function NoticesTab() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ title: '', description: '', category: 'notice', date: new Date().toISOString().split('T')[0], pinned: false, link: '', attachmentUrl: '', attachmentName: '', ttlDays: 183 });
+    setForm({ title: '', description: '', mainCategory: 'academic', category: 'academic', date: new Date().toISOString().split('T')[0], pinned: false, link: '', attachmentUrl: '', attachmentName: '', ttlDays: 183 });
     setShowForm(true);
   };
 
@@ -46,7 +48,7 @@ export default function NoticesTab() {
     } else {
       ttlDays = null;
     }
-    setForm({ title: n.title, description: n.description, category: n.category, date: n.date, pinned: n.pinned, link: n.link || '', attachmentUrl: n.attachmentUrl || '', attachmentName: n.attachmentName || '', ttlDays });
+    setForm({ title: n.title, description: n.description, mainCategory: n.mainCategory || mainCategoryOf(n.category), category: n.category, date: n.date, pinned: n.pinned, link: n.link || '', attachmentUrl: n.attachmentUrl || '', attachmentName: n.attachmentName || '', ttlDays });
     setShowForm(true);
   };
 
@@ -229,18 +231,38 @@ export default function NoticesTab() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Category</label>
+                <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Main Category</label>
                 <div className="flex gap-2">
-                  {(['notice', 'academic-calendar', 'bus-schedule'] as NoticeCategory[]).map(cat => {
-                    const m = CATEGORY_META[cat];
+                  {MAIN_CATEGORIES.map(key => {
+                    const m = MAIN_CATEGORY_META[key];
                     return (
-                      <button key={cat} type="button" onClick={() => setForm(f => ({ ...f, category: cat }))}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[0.78rem] font-medium border cursor-pointer transition ${form.category === cat ? 'bg-qsis/15 border-qsis/30 text-qsis' : 'bg-dark-bg3 border-dark-border text-dark-text2'}`}>
+                      <button key={key} type="button" onClick={() => setForm(f => ({ ...f, mainCategory: key, category: SUBCATEGORIES_FOR_MAIN[key][0] }))}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[0.78rem] font-medium border cursor-pointer transition ${form.mainCategory === key ? 'bg-qsis/15 border-qsis/30 text-qsis' : 'bg-dark-bg3 border-dark-border text-dark-text2'}`}>
                         <i className={m.icon}></i>{m.label}
                       </button>
                     );
                   })}
                 </div>
+                {form.mainCategory && SUBCATEGORIES_FOR_MAIN[form.mainCategory].length > 0 && (
+                  <>
+                    <label className="block text-[0.75rem] font-medium text-dark-text2 mt-2 mb-1">Type</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {SUBCATEGORIES_FOR_MAIN[form.mainCategory].map(key => {
+                        const m = CATEGORY_META[key];
+                        const active = form.category === key;
+                        return (
+                          <button key={key} type="button" onClick={() => setForm(f => ({ ...f, category: key }))}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[0.78rem] font-medium border cursor-pointer transition ${active ? 'text-qsis border-qsis/30 bg-qsis/10' : 'bg-dark-bg3 border-dark-border text-dark-text2'}`}>
+                            <span className={`w-4 h-4 rounded-md border flex items-center justify-center ${active ? 'bg-qsis border-qsis' : 'border-dark-text3'}`}>
+                              {active && <i className="fas fa-check text-white text-[0.5rem]"></i>}
+                            </span>
+                            <i className={`${m.icon} mx-0.5`}></i>{m.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
               <div>
                 <label className="block text-[0.75rem] font-medium text-dark-text2 mb-1">Title *</label>
