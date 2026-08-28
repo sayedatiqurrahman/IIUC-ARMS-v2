@@ -129,6 +129,25 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Self-heal: the legacy ETE roster was never imported into the database.
+    // When an admin opens the (correctly empty) ETE directory, import the known
+    // members once so the department is no longer blank. Guarded and idempotent
+    // — it can never duplicate or invent members.
+    if (filtered.length === 0 && resolveDepartment(department) === 'ete') {
+      const email = await getUserEmail(req);
+      if (email) {
+        const profile = await prisma.profile.findUnique({ where: { userId: email } });
+        if (config.getEffectiveRole(email, profile?.role || undefined) === 'admin') {
+          const { importEteMembers } = await import('@/lib/ete-seed');
+          await importEteMembers(prisma);
+          filtered = await prisma.facultyMember.findMany({
+            where: { department: getDepartmentDisplayName('ete') },
+            orderBy: [{ department: 'asc' }, { sortOrder: 'asc' }],
+          });
+        }
+      }
+    }
+
     return NextResponse.json({ members: filtered });
   } catch {
     return NextResponse.json({ error: 'Failed to load faculty' }, { status: 500 });
