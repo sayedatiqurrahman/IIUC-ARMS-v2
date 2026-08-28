@@ -72,6 +72,7 @@ export default function SubfolderPicker({
   const tree = useAppStore(s => s.tree);
   const treeLength = useAppStore(s => s.tree.length);
   const [open, setOpen] = useState(false);
+  const [browse, setBrowse] = useState('');
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
@@ -83,14 +84,20 @@ export default function SubfolderPicker({
     ? (courseTitle ? `${courseCode} - ${courseTitle}` : courseCode)
     : '';
 
-  const pathSegments = value ? value.split('/').filter(Boolean) : [];
+  // Browse location = the folder whose contents are visible.
+  const pathSegments = browse ? browse.split('/').filter(Boolean) : [];
 
   const children = useMemo(() => {
     if (!deptFolder || !semester || !courseFolder || !category) return [];
     const isExamCat = category === config.categories.notes.folder || category === config.categories.questions.folder;
     const mf = isExamCat ? midFinal : undefined;
-    return extractSubfolders(tree, deptFolder, semester, courseFolder, category, mf, value);
-  }, [tree, treeLength, deptFolder, semester, courseFolder, category, midFinal, value]);
+    return extractSubfolders(tree, deptFolder, semester, courseFolder, category, mf, browse);
+  }, [tree, treeLength, deptFolder, semester, courseFolder, category, midFinal, browse]);
+
+  const openDropdown = () => {
+    setBrowse(value);
+    setOpen(true);
+  };
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -111,13 +118,25 @@ export default function SubfolderPicker({
     if (creating) inputRef.current?.focus();
   }, [creating]);
 
-  const handleNavigate = (segment: string) => {
-    onChange(value ? `${value}/${segment}` : segment);
+  const childPath = (segment: string) => (browse ? `${browse}/${segment}` : segment);
+
+  // Clicking a folder only drills INTO it (view its nested folders).
+  const handleDrillDown = (segment: string) => {
+    setBrowse(childPath(segment));
+    setOpen(true);
+  };
+
+  // Selecting a folder (or breadcrumb position) sets it as the upload target.
+  const handleSelect = (path: string) => {
+    onChange(path);
+    setBrowse(path);
     setOpen(true);
   };
 
   const handleBreadcrumb = (segments: string[]) => {
-    onChange(segments.join('/'));
+    const path = segments.join('/');
+    onChange(path);
+    setBrowse(path);
     setOpen(true);
   };
 
@@ -127,7 +146,8 @@ export default function SubfolderPicker({
 
     const isExamCat = category === config.categories.notes.folder || category === config.categories.questions.folder;
     const mfPart = isExamCat && midFinal ? `${midFinal}/` : '';
-    const folderPath = `${config.uploadPath}/${deptFolder}/${semester}/${courseFolder}/${mfPart}${category}/${value ? value + '/' : ''}${name}`;
+    const folderPath = `${config.uploadPath}/${deptFolder}/${semester}/${courseFolder}/${mfPart}${category}/${browse ? browse + '/' : ''}${name}`;
+    const newPath = browse ? `${browse}/${name}` : name;
 
     setCreatingFolder(true);
     try {
@@ -138,7 +158,8 @@ export default function SubfolderPicker({
       });
       const data = await res.json();
       if (data.success) {
-        onChange(value ? `${value}/${name}` : name);
+        onChange(newPath);
+        setBrowse(newPath);
         setOpen(true);
         setCreating(false);
         setNewName('');
@@ -159,7 +180,7 @@ export default function SubfolderPicker({
     <div className="relative" ref={dropdownRef}>
       <button
         type="button"
-        onClick={() => !disabled && setOpen(o => !o)}
+        onClick={() => (!disabled ? (open ? setOpen(false) : openDropdown()) : undefined)}
         disabled={disabled}
         className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-dark-bg border text-[0.78rem] text-left transition cursor-pointer ${
           disabled ? 'opacity-50 pointer-events-none border-dark-border' : 'border-dark-border hover:border-qsis/40 focus:border-qsis outline-none'
@@ -173,10 +194,14 @@ export default function SubfolderPicker({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full max-h-[340px] overflow-y-auto rounded-xl border border-dark-border bg-dark-bg2 shadow-xl">
-          {/* Header hint */}
-          <div className="px-3 py-1.5 text-[0.62rem] text-dark-text3 uppercase tracking-wider font-semibold bg-dark-bg3/50">
-            Upload to folder
+        <div className="absolute z-50 mt-1 w-full max-h-[360px] overflow-y-auto rounded-xl border border-dark-border bg-dark-bg2 shadow-xl">
+          {/* Header: target indicator */}
+          <div className="px-3 py-1.5 text-[0.62rem] text-dark-text3 uppercase tracking-wider font-semibold bg-dark-bg3/50 flex items-center justify-between">
+            <span>Upload to folder</span>
+            <span className="flex items-center gap-1 normal-case font-medium text-qsis">
+              <i className="fas fa-check-circle text-[0.65rem]"></i>
+              {value ? `Root / ${value}` : 'Root'}
+            </span>
           </div>
 
           {/* Breadcrumb navigation */}
@@ -208,30 +233,45 @@ export default function SubfolderPicker({
             ))}
           </div>
 
-          {/* Subfolders at the current path */}
+          {/* Subfolders at the current browse location */}
           {children.length === 0 ? (
             <div className="px-3 py-3 text-[0.72rem] text-dark-text3">
               <i className="fas fa-folder-open mr-1.5 opacity-60"></i>
-              No subfolders in this folder.
+              This folder is empty. Create a subfolder below.
             </div>
           ) : (
             <div>
-              {children.map(child => (
-                <button
-                  key={child}
-                  type="button"
-                  onClick={() => handleNavigate(child)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-[0.78rem] text-left border-none cursor-pointer transition bg-transparent text-dark-text2 hover:bg-dark-bg3 hover:text-dark-text"
-                >
-                  <i className="fas fa-folder text-[0.7rem] w-4 text-center text-qsis"></i>
-                  <span className="flex-1 truncate">{child}</span>
-                  <i className="fas fa-chevron-right text-[0.6rem] text-dark-text3"></i>
-                </button>
-              ))}
+              {children.map(child => {
+                const path = childPath(child);
+                const isSelected = value === path;
+                return (
+                  <div key={child} className="flex items-center w-full group hover:bg-dark-bg3 transition">
+                    <button
+                      type="button"
+                      onClick={() => handleDrillDown(child)}
+                      className="flex-1 flex items-center gap-2 px-3 py-2 text-[0.78rem] text-left border-none cursor-pointer bg-transparent text-dark-text2 hover:text-dark-text min-w-0"
+                    >
+                      <i className="fas fa-folder text-[0.7rem] w-4 text-center text-qsis shrink-0"></i>
+                      <span className="flex-1 truncate">{child}</span>
+                      <i className="fas fa-chevron-right text-[0.6rem] text-dark-text3"></i>
+                    </button>
+                    <button
+                      type="button"
+                      title={isSelected ? 'Selected for upload' : 'Select for upload'}
+                      onClick={() => handleSelect(path)}
+                      className={`px-2.5 py-2 border-none cursor-pointer bg-transparent transition shrink-0 ${
+                        isSelected ? 'text-qsis' : 'text-dark-text3 opacity-0 group-hover:opacity-100 hover:text-qsis'
+                      }`}
+                    >
+                      <i className={`fas ${isSelected ? 'fa-check-circle' : 'fa-circle-check'}`}></i>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {/* Create nested folder at the current path */}
+          {/* Create nested folder at the current browse location */}
           {canCreateFolder && (
             <div className="border-t border-dark-border">
               {!creating ? (
@@ -241,7 +281,7 @@ export default function SubfolderPicker({
                   className="w-full flex items-center gap-2 px-3 py-2 text-[0.78rem] text-left bg-transparent border-none cursor-pointer text-qsis hover:bg-qsis/5 transition"
                 >
                   <i className="fas fa-plus text-[0.7rem] w-4 text-center"></i>
-                  Create new subfolder here
+                  Create new subfolder inside {browse ? `Root / ${browse}` : 'Root'}
                 </button>
               ) : (
                 <div className="p-2 bg-dark-bg3/50">
@@ -263,7 +303,7 @@ export default function SubfolderPicker({
                       {creatingFolder ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-plus"></i>}
                     </button>
                   </div>
-                  <p className="text-[0.6rem] text-dark-text3 mt-1 px-0.5">Creating inside: {value ? `Root / ${value}` : 'Root'}. Press Enter to create, Esc to cancel.</p>
+                  <p className="text-[0.6rem] text-dark-text3 mt-1 px-0.5">Creating inside {browse ? `Root / ${browse}` : 'Root'}. Press Enter to create, Esc to cancel.</p>
                 </div>
               )}
             </div>
