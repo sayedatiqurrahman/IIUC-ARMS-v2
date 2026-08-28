@@ -125,7 +125,7 @@ export default function BrowsePage() {
             canDelete: perms.deleteCourse.includes(isCR ? 'cr' : role),
             canEditLinks: perms.editLinks.includes(isCR ? 'cr' : role),
           });
-          setCanCreateFolder(perms.createFolder?.includes(isCR ? 'cr' : role) ?? true);
+          setCanCreateFolder(!!email);
           return;
         }
         const perms = data.permissions || {};
@@ -155,7 +155,7 @@ export default function BrowsePage() {
           canDelete: check('deleteCourse'),
           canEditLinks: check('editLinks'),
         });
-        setCanCreateFolder(check('createFolder'));
+        setCanCreateFolder(!!email);
       } catch {
         // Fall back to default permissions
         const perms = await import('@/lib/permission-defaults').then(m => m.DEFAULT_PERMISSIONS);
@@ -171,7 +171,7 @@ export default function BrowsePage() {
           canDelete: perms.deleteCourse.includes(isCR ? 'cr' : role),
           canEditLinks: perms.editLinks.includes(isCR ? 'cr' : role),
         });
-        setCanCreateFolder(perms.createFolder?.includes(isCR ? 'cr' : role) ?? true);
+        setCanCreateFolder(!!email);
       }
     };
     loadPerms();

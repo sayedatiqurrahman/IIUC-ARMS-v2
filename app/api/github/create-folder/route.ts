@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
-import { hasPermission } from '@/lib/permissions';
 import { getRepoBotToken } from '@/lib/github-app';
 import { getInstallationAccessToken, getAppInstallations } from '@/lib/github-app';
 import { getServerSession } from 'next-auth';
@@ -73,16 +72,6 @@ export async function POST(req: NextRequest) {
   try {
     const email = await getUserEmail(req);
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const { prisma } = await import('@/lib/prisma');
-    const profile = await prisma.profile.findUnique({ where: { userId: email } });
-    const role = profile?.role || 'user';
-    const isCR = profile?.isCR || false;
-    const effectiveRole = config.getEffectiveRole(email, role);
-
-    if (!(await hasPermission('createFolder', effectiveRole, isCR, email))) {
-      return NextResponse.json({ error: 'Permission denied. Ask admin to enable "Create Folders" in Settings > Permissions.' }, { status: 403 });
-    }
 
     const { folderPath } = await req.json();
     if (!folderPath || typeof folderPath !== 'string') {
