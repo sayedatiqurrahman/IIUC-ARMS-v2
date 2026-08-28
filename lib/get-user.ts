@@ -31,10 +31,12 @@ export async function getUserEmail(req?: NextRequest): Promise<string | null> {
       const { adminAuth } = await import('@/lib/firebase-admin');
       const decoded = await adminAuth.verifyIdToken(idToken);
       if (decoded.email) {
+        const { resolveSignInEmail } = await import('@/lib/linked-accounts');
+        const email = await resolveSignInEmail(decoded.email);
         const { getAccountStatus } = await import('@/lib/auth-options');
-        const status = await getAccountStatus(decoded.email);
+        const status = await getAccountStatus(email);
         if (status === 'pending' || status === 'rejected') return null;
-        return decoded.email;
+        return email;
       }
     } catch {
       // Invalid Firebase token in header
@@ -48,10 +50,12 @@ export async function getUserEmail(req?: NextRequest): Promise<string | null> {
       const { adminAuth } = await import('@/lib/firebase-admin');
       const decoded = await adminAuth.verifyIdToken(cookieToken);
       if (decoded.email) {
+        const { resolveSignInEmail } = await import('@/lib/linked-accounts');
+        const email = await resolveSignInEmail(decoded.email);
         const { getAccountStatus } = await import('@/lib/auth-options');
-        const status = await getAccountStatus(decoded.email);
+        const status = await getAccountStatus(email);
         if (status === 'pending' || status === 'rejected') return null;
-        return decoded.email;
+        return email;
       }
     } catch {
       // Invalid Firebase token

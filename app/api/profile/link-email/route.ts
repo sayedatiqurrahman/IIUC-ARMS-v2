@@ -22,9 +22,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Cannot link your own email' }, { status: 400 });
     }
 
-    // Check if this email is already used by another profile
+    // Linking is for personal (non-university) emails so users can keep signing
+    // in after their IIUC email expires.
+    const { isIiucEmail, isLinkedElsewhere, ensureFirebaseIdentity, sendPasswordResetLink, invalidateLinkedEmail } = await import('@/lib/linked-accounts');
+    if (isIiucEmail(normalizedEmail)) {
+      return NextResponse.json({ error: 'University emails cannot be linked. Use a personal email (e.g. a Gmail) instead.' }, { status: 400 });
+    }
+
+    // Check if this email is already used by another profile (as the primary
+    // userId or as one of their linked emails)
     const existing = await prisma.profile.findUnique({ where: { userId: normalizedEmail } });
     if (existing) {
+      return NextResponse.json({ error: 'This email is already associated with another account' }, { status: 400 });
+    }
+    if (await isLinkedElsewhere(normalizedEmail, email)) {
       return NextResponse.json({ error: 'This email is already associated with another account' }, { status: 400 });
     }
 
@@ -44,8 +55,18 @@ export async function POST(req: NextRequest) {
       where: { userId: email },
       data: { linkedEmails: JSON.stringify([...currentLinked, normalizedEmail]) },
     });
+    invalidateLinkedEmail(normalizedEmail);
 
-    return NextResponse.json({ success: true, linkedEmails: [...currentLinked, normalizedEmail] });
+    // Make the personal email a real login identity, then send a password-set
+    // email to that inbox so the owner can log in with email + password.
+    await ensureFirebaseIdentity(normalizedEmail);
+    const resetLinkSent = await sendPasswordResetLink(normalizedEmail);
+
+    return NextResponse.json({
+      success: true,
+      linkedEmails: [...currentLinked, normalizedEmail],
+      resetLinkSent,
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Failed to link email' }, { status: 500 });
   }
@@ -66,6 +87,8 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Email required' }, { status: 400 });
     }
 
+    const { invalidateLinkedEmail } = await import('@/lib/linked-accounts');
+
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
     const currentLinked: string[] = (() => { try { return JSON.parse(profile?.linkedEmails as string || '[]'); } catch { return []; } })();
     const updated = currentLinked.filter(e => e.toLowerCase() !== unlinkEmail.toLowerCase());
@@ -74,6 +97,7 @@ export async function DELETE(req: NextRequest) {
       where: { userId: email },
       data: { linkedEmails: JSON.stringify(updated) },
     });
+    invalidateLinkedEmail(unlinkEmail);
 
     return NextResponse.json({ success: true, linkedEmails: updated });
   } catch (err: any) {

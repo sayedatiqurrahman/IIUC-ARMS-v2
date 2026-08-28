@@ -110,9 +110,15 @@ export const authOptions: NextAuthOptions = {
         const decoded = await verifyFirebaseToken(credentials.idToken);
         console.log('[Auth] authorize: Firebase token decoded =', !!decoded, decoded?.email);
         if (decoded) {
-          const email = decoded.email || credentials.email;
+          let email = decoded.email || credentials.email;
           if (!email) { console.log('[Auth] authorize: no email from token'); return null; }
-          const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
+          let allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
+          // A linked (personal) email signs into the primary account
+          if (!allowed) {
+            const { resolveSignInEmail } = await import('@/lib/linked-accounts');
+            email = await resolveSignInEmail(email);
+            allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
+          }
           console.log('[Auth] authorize: email =', email, 'allowed =', allowed);
 
           if (!allowed) {
@@ -145,9 +151,14 @@ export const authOptions: NextAuthOptions = {
           const parts = credentials.idToken.split('.');
           if (parts.length !== 3) return null;
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
-          const email = credentials.email || payload.email;
+          let email = credentials.email || payload.email;
           if (!email) return null;
-          const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
+          let allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
+          if (!allowed) {
+            const { resolveSignInEmail } = await import('@/lib/linked-accounts');
+            email = await resolveSignInEmail(email);
+            allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
+          }
           if (!allowed) return null;
           if (payload.email_verified === false) return null;
           try {
@@ -170,7 +181,11 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }) {
       try {
-        const email = user.email || (profile as any)?.email;
+        let email = user.email || (profile as any)?.email;
+        if (email) {
+          const { resolveSignInEmail } = await import('@/lib/linked-accounts');
+          email = await resolveSignInEmail(email);
+        }
         console.log('[Auth] signIn callback — email:', email, 'provider:', account?.provider);
         if (!email) { console.log('[Auth] signIn: no email, rejecting'); return '/auth/error?error=invalid-email'; }
 

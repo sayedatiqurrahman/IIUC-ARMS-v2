@@ -9,8 +9,8 @@ export default function AccountLinkingSection({ email, linkedEmails, onRefresh }
   const [success, setSuccess] = useState('');
 
   const flash = (msg: string, type: 'ok' | 'err') => {
-    if (type === 'ok') { setSuccess(msg); setTimeout(() => setSuccess(''), 2500); }
-    else { setError(msg); setTimeout(() => setError(''), 2500); }
+    if (type === 'ok') { setSuccess(msg); setTimeout(() => setSuccess(''), 5000); }
+    else { setError(msg); setTimeout(() => setError(''), 5000); }
   };
 
   const handleLink = async () => {
@@ -24,7 +24,11 @@ export default function AccountLinkingSection({ email, linkedEmails, onRefresh }
       });
       const data = await res.json();
       if (data.success) {
-        flash('Email linked!', 'ok');
+        if (data.resetLinkSent) {
+          flash(`Linked! A password-set email was sent to ${newEmail.trim()}. Set a password there, then sign in with it.`, 'ok');
+        } else {
+          flash('Email linked! You can sign in with it via Magic Link.', 'ok');
+        }
         setNewEmail('');
         onRefresh();
       } else {
@@ -63,7 +67,9 @@ export default function AccountLinkingSection({ email, linkedEmails, onRefresh }
         <i className="fas fa-link text-cyan-400"></i> Account Linking
       </h4>
       <p className="text-[0.75rem] text-dark-text3 mb-3">
-        Link additional email addresses to sign in to this account from multiple emails. Your profile data stays shared across all linked emails.
+        Link a <strong>personal email</strong> (e.g. a Gmail) to this account. You can then sign in with
+        that personal email too — so if your university email expires, you can still use the app.
+        Your profile and data stay shared across all linked emails.
       </p>
 
       {linkedEmails.length > 0 && (
@@ -92,7 +98,7 @@ export default function AccountLinkingSection({ email, linkedEmails, onRefresh }
           type="email"
           value={newEmail}
           onChange={e => { setNewEmail(e.target.value); setError(''); setSuccess(''); }}
-          placeholder="Add another email..."
+          placeholder="Add a personal email (e.g. name@gmail.com)..."
           className="flex-1 px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.8rem] outline-none focus:border-qsis transition-colors"
         />
         <button onClick={handleLink} disabled={loading || !newEmail.trim()} className="px-4 py-2 rounded-lg bg-cyan-500/15 text-cyan-400 text-[0.78rem] font-semibold cursor-pointer hover:bg-cyan-500/25 border-none disabled:opacity-50 transition-colors">

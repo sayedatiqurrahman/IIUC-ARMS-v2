@@ -167,6 +167,23 @@ export async function GET(req: NextRequest) {
       console.error('[Admin Users] Firebase listUsers failed:', err?.message, err?.code);
     }
 
+    // Secondary (linked) identities — every email a profile has linked. These
+    // resolve to their primary account at sign-in, so they must not appear as
+    // separate rows in the user list.
+    const linkedSet = new Set<string>();
+    try {
+      const { prisma: q } = await import('@/lib/prisma');
+      const linkedProfiles = await q.profile.findMany({
+        where: { NOT: [{ linkedEmails: '[]' }, { linkedEmails: null }] },
+        select: { linkedEmails: true },
+      });
+      for (const p of linkedProfiles) {
+        let arr: string[] = [];
+        try { arr = JSON.parse((p.linkedEmails as string) || '[]'); } catch { arr = []; }
+        arr.forEach(e => linkedSet.add((e || '').toLowerCase().trim()));
+      }
+    } catch {}
+
     const profileMap = new Map(profiles.map(p => [p.email?.toLowerCase(), p]));
     const merged = new Map<string, any>();
 
@@ -253,6 +270,10 @@ export async function GET(req: NextRequest) {
     });
 
     let result = Array.from(merged.values());
+
+    // Drop secondary identities: their only purpose is to log into the primary
+    // account, so they shouldn't show up as their own users in the list.
+    result = result.filter(u => !linkedSet.has((u.email || '').toLowerCase()));
 
     // Server-side search filter for Firebase users
     if (search) {

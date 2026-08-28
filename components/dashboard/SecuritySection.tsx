@@ -1,7 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { hasPasswordProvider, reauthenticateAndSetPassword, setInitialPassword } from '@/lib/firebase';
+import { hasPasswordProvider, reauthenticateAndSetPassword } from '@/lib/firebase';
+
+async function serverSetPassword(newPassword: string) {
+  const res = await fetch('/api/auth/set-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newPassword }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to set password');
+  }
+}
 
 interface SecuritySectionProps {
   totpEnabled: boolean;
@@ -56,7 +68,7 @@ export default function SecuritySection({
       if (newPassword !== confirmPassword) { setPasswordErr('Passwords do not match'); return; }
       setPasswordLoading(true);
       try {
-        await setInitialPassword('', newPassword);
+        await serverSetPassword(newPassword);
         setPasswordMsg('Password set successfully!');
         setPasswordMode('none');
         setNewPassword('');
@@ -86,6 +98,8 @@ export default function SecuritySection({
       } catch (e: any) {
         if (e.code === 'auth/wrong-password') {
           setPasswordErr('Current password is incorrect');
+        } else if (e.code === 'auth/requires-recent-login') {
+          setPasswordErr('For security, sign out and sign in again, then retry changing your password. Set your initial password from the "Set Password" option if you do not have one yet.');
         } else {
           setPasswordErr(e.message || 'Failed to change password');
         }
@@ -143,7 +157,7 @@ export default function SecuritySection({
           <div className="bg-dark-bg3 border border-dark-border rounded-xl p-4 space-y-3">
             <p className="text-[0.78rem] text-dark-text2">
               <i className="fas fa-info-circle text-qsis mr-1"></i>
-              Set a password so you can also sign in with email + password (in addition to Google).
+              Set a password so you can also sign in with email + password (works with your linked personal email too).
             </p>
             <div>
               <label className="text-[0.72rem] text-dark-text2 block mb-1">New Password</label>
