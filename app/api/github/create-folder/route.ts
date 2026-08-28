@@ -121,6 +121,22 @@ export async function POST(req: NextRequest) {
     });
     if (!updateRefRes.ok) return NextResponse.json({ error: 'Failed to update ref' }, { status: 502 });
 
+    // Log the folder creation so we can later let the same creator delete it
+    // directly (without admin approval).
+    try {
+      const { prisma } = await import('@/lib/prisma');
+      const profile = await prisma.profile.findUnique({ where: { userId: email } });
+      const relPath = cleanPath.startsWith(config.uploadPath + '/') ? cleanPath.slice(config.uploadPath.length + 1) : cleanPath;
+      await prisma.activityLog.create({
+        data: {
+          action: 'folder_create',
+          userId: email,
+          userName: profile?.name || email.split('@')[0],
+          details: JSON.stringify({ path: relPath }),
+        },
+      });
+    } catch {}
+
     return NextResponse.json({ success: true, path: cleanPath });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });

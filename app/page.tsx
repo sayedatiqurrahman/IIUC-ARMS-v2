@@ -41,7 +41,7 @@ export default function BrowsePage() {
   const isPrivileged = userRole === 'admin' || userRole === 'teacher';
   const isOwner = email ? config.ownerEmails.includes(email.toLowerCase()) : false;
   const [filePerms, setFilePerms] = useState<Record<string, boolean>>({
-    move: false, copy: false, rename: false, delete: false,
+    move: false, copy: false, rename: false, delete: false, folderDelete: false,
   });
   const [coursePerms, setCoursePerms] = useState<{ canAdd: boolean; canEdit: boolean; canDelete: boolean; canEditLinks: boolean }>({
     canAdd: false, canEdit: false, canDelete: false, canEditLinks: false,
@@ -49,7 +49,7 @@ export default function BrowsePage() {
   const [canCreateFolder, setCanCreateFolder] = useState(false);
   const [moveTarget, setMoveTarget] = useState<{ path: string; name: string; mode: 'move' | 'copy' } | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ path: string; name: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ path: string; name: string; kind?: 'file' | 'folder' } | null>(null);
   const [actionLoading, setActionLoading] = useState('');
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState<{ show: boolean; message: string; contact: string }>({ show: false, message: '', contact: '' });
@@ -120,6 +120,7 @@ export default function BrowsePage() {
             copy: isOwner || perms.copyFile.includes(isCR ? 'cr' : role),
             rename: isOwner || perms.renameFile.includes(isCR ? 'cr' : role),
             delete: isOwner || perms.deleteFile.includes(isCR ? 'cr' : role),
+            folderDelete: isOwner || perms.deleteFolder.includes(isCR ? 'cr' : role),
           });
           setCoursePerms({
             canAdd: perms.addCourse.includes(isCR ? 'cr' : role),
@@ -150,6 +151,7 @@ export default function BrowsePage() {
           copy: isOwner || check('copyFile'),
           rename: isOwner || check('renameFile'),
           delete: isOwner || check('deleteFile'),
+          folderDelete: isOwner || check('deleteFolder'),
         });
         setCoursePerms({
           canAdd: check('addCourse'),
@@ -166,6 +168,7 @@ export default function BrowsePage() {
           copy: isOwner || perms.copyFile.includes(isCR ? 'cr' : role),
           rename: isOwner || perms.renameFile.includes(isCR ? 'cr' : role),
           delete: isOwner || perms.deleteFile.includes(isCR ? 'cr' : role),
+          folderDelete: isOwner || perms.deleteFolder.includes(isCR ? 'cr' : role),
         });
         setCoursePerms({
           canAdd: perms.addCourse.includes(isCR ? 'cr' : role),
@@ -689,6 +692,8 @@ export default function BrowsePage() {
           actionLoading={actionLoading}
           canCreateFolder={canCreateFolder}
           onCreateFolderAt={(rp) => { setRelatedCreatePath(rp); setShowCreateFolder(true); }}
+          canDeleteFolder={!!session?.user}
+          onDeleteFolder={(t) => setDeleteConfirm({ ...t, kind: 'folder' })}
         />
       ) : (
         <CoursesView
@@ -724,6 +729,8 @@ export default function BrowsePage() {
           actionLoading={actionLoading}
           canCreateFolder={canCreateFolder}
           onCreateFolder={() => setShowCreateFolder(true)}
+          canDeleteFolder={!!session?.user}
+          onDeleteFolder={(t) => setDeleteConfirm({ ...t, kind: 'folder' })}
         />
       )}
       {!loading && !error && isSearching && (
@@ -844,6 +851,7 @@ export default function BrowsePage() {
         permissionDenied={permissionDenied} setPermissionDenied={setPermissionDenied}
         handleFileAction={handleFileAction}
         canDeleteFile={filePerms.delete}
+        canDeleteFolder={filePerms.folderDelete}
       />
       {(() => {
         const deptFolder = getDepartmentFolder(currentDept);

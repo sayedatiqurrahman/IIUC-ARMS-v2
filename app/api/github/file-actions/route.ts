@@ -79,6 +79,30 @@ async function getFileSha(token: string, filePath: string, branch: string): Prom
   return data.sha || null;
 }
 
+// A folder may be deleted directly by the user who created it inside the app
+// (creation is tracked in the activity log, without the upload path prefix).
+async function isFolderCreator(email: string, folderPath: string): Promise<boolean> {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const logs = await prisma.activityLog.findMany({
+      where: { userId: email, action: 'folder_create' },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    const target = folderPath.replace(/\/+$/, '');
+    return logs.some((l: any) => {
+      try {
+        const d = JSON.parse(l.details || '{}');
+        return (d?.path || '').replace(/\/+$/, '') === target;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}
+
 // POST /api/github/file-actions — { action: 'move'|'rename'|'copy'|'delete', from, to? }
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.admin);
@@ -156,9 +180,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'File not found' }, { status: 404 });
       }
 
-      const isAdmin = isOwner || effectiveRole === 'admin' || effectiveRole === 'manager';
+      const isAdmin = isOwner || effectiveRole === 'admin' || effectiveRole === 'manager'
+        || (isFolder && await hasPermission('deleteFolder', effectiveRole, isCR, email))
+        || (isFolder && await isFolderCreator(email, from));
 
-      // OWNER / ADMIN: direct atomic delete (single tree commit via the bot)
+      // OWNER / ADMIN / FOLDER CREATOR: direct atomic delete (single tree commit via the bot)
       if (isAdmin) {
         const { deleteRepoEntries } = await import('@/lib/file-delete');
         try {

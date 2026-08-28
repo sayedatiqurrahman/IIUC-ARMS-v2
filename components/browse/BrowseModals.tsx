@@ -11,8 +11,8 @@ interface BrowseModalsProps {
   setMoveTarget: (v: { path: string; name: string; mode: 'move' | 'copy' } | null) => void;
   renameTarget: { path: string; name: string } | null;
   setRenameTarget: (v: { path: string; name: string } | null) => void;
-  deleteConfirm: { path: string; name: string } | null;
-  setDeleteConfirm: (v: { path: string; name: string } | null) => void;
+  deleteConfirm: { path: string; name: string; kind?: 'file' | 'folder' } | null;
+  setDeleteConfirm: (v: { path: string; name: string; kind?: 'file' | 'folder' } | null) => void;
   showAddCourse: boolean;
   setShowAddCourse: (v: boolean) => void;
   currentDept: string | null;
@@ -22,6 +22,7 @@ interface BrowseModalsProps {
   setPermissionDenied: (v: { show: boolean; message: string; contact: string }) => void;
   handleFileAction: (action: string, from: string, to?: string, newName?: string) => Promise<any>;
   canDeleteFile?: boolean;
+  canDeleteFolder?: boolean;
 }
 
 export default function BrowseModals({
@@ -34,6 +35,7 @@ export default function BrowseModals({
   permissionDenied, setPermissionDenied,
   handleFileAction,
   canDeleteFile = false,
+  canDeleteFolder = false,
 }: BrowseModalsProps) {
   const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
 
@@ -72,18 +74,30 @@ export default function BrowseModals({
       )}
 
       {/* Delete Confirmation */}
-      {deleteConfirm && (
+      {deleteConfirm && (() => {
+        const isFolder = deleteConfirm.kind === 'folder';
+        const canDelete = isFolder ? canDeleteFolder : canDeleteFile;
+        const title = isFolder ? 'Delete Folder?' : 'Delete File?';
+        const body = isFolder
+          ? (canDeleteFolder
+              ? 'This will permanently delete this folder and everything inside it:'
+              : 'Folders you created can be deleted immediately. Other folders will be sent to admins for approval:')
+          : (canDeleteFile ? 'This will permanently delete:' : 'This will send a delete request for:');
+        const warning = isFolder
+          ? (canDeleteFolder ? 'This action cannot be undone.' : 'Your own folders are deleted right away; others need admin approval.')
+          : (canDeleteFile ? 'This action cannot be undone.' : 'An admin will need to approve this deletion.');
+        return (
         <>
           <div className="fixed inset-0 bg-black/60 z-[200]" onClick={() => setDeleteConfirm(null)} />
           <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-dark-bg2 border border-red-500/30 rounded-2xl shadow-2xl w-[380px] p-6">
             <div className="text-center">
               <div className="w-14 h-14 rounded-full bg-red-500/15 flex items-center justify-center mx-auto mb-4">
-                <i className="fas fa-trash text-red-400 text-xl"></i>
+                <i className={`${isFolder ? 'fas fa-folder' : 'fas fa-trash'} text-red-400 text-xl`}></i>
               </div>
-              <h3 className="font-semibold text-[1rem] mb-2">Delete File?</h3>
-              <p className="text-[0.82rem] text-dark-text2 mb-1">{canDeleteFile ? 'This will permanently delete:' : 'This will send a delete request for:'}</p>
+              <h3 className="font-semibold text-[1rem] mb-2">{title}</h3>
+              <p className="text-[0.82rem] text-dark-text2 mb-1">{body}</p>
               <p className="text-[0.78rem] text-dark-text font-mono bg-dark-bg rounded-lg px-3 py-2 border border-dark-border truncate">{deleteConfirm.name}</p>
-              <p className="text-[0.72rem] text-red-400 mt-3"><i className="fas fa-exclamation-triangle mr-1"></i>{canDeleteFile ? 'This action cannot be undone.' : 'An admin will need to approve this deletion.'}</p>
+              <p className="text-[0.72rem] text-red-400 mt-3"><i className="fas fa-exclamation-triangle mr-1"></i>{warning}</p>
             </div>
             <div className="flex gap-2 mt-5">
               <button
@@ -101,12 +115,13 @@ export default function BrowseModals({
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[0.82rem] font-semibold hover:bg-red-500/90 transition-colors"
               >
-                <i className="fas fa-trash mr-1.5"></i>{canDeleteFile ? 'Delete' : 'Request Delete'}
+                <i className={`${isFolder ? 'fas fa-folder-minus' : 'fas fa-trash'} mr-1.5`}></i>{canDelete ? 'Delete' : 'Request Delete'}
               </button>
             </div>
           </div>
         </>
-      )}
+        );
+      })()}
 
       {/* Add Course Modal — shared reusable modal */}
       {showAddCourse && (

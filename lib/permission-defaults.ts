@@ -20,6 +20,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   copyFile: ['admin'],
   renameFile: ['admin'],
   deleteFile: ['admin'],
+  deleteFolder: ['admin', 'manager', 'teacher'],
   editLinks: ['admin', 'manager', 'teacher', 'cr'],
   saveCourseToGitHub: ['admin', 'manager', 'teacher', 'cr'],
   manageRooms: ['admin', 'manager', 'teacher'],

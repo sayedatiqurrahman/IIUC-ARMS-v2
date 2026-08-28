@@ -3,7 +3,7 @@
 import FileGrid from './FileGrid';
 
 interface SubFolderViewProps {
-  subfolders: { name: string; fileCount: number; count: number; path: string }[];
+  subfolders: { name: string; fileCount: number; count: number; path: string; githubPath: string }[];
   files: any[];
   subPathSegments: string[];
   onOpenFolder: (name: string) => void;
@@ -18,6 +18,8 @@ interface SubFolderViewProps {
   actionLoading: string;
   canCreateFolder?: boolean;
   onCreateFolder?: () => void;
+  canDeleteFolder?: boolean;
+  onDeleteFolder?: (target: { path: string; name: string }) => void;
 }
 
 export default function SubFolderView({
@@ -36,6 +38,8 @@ export default function SubFolderView({
   actionLoading,
   canCreateFolder,
   onCreateFolder,
+  canDeleteFolder,
+  onDeleteFolder,
 }: SubFolderViewProps) {
   return (
     <section className="mb-5">
@@ -94,6 +98,15 @@ export default function SubFolderView({
                 <div className="text-[0.65rem] text-dark-text2 font-mono truncate">{sf.path}</div>
               </div>
               <span className="text-[0.7rem] text-dark-text2 flex-shrink-0">{sf.fileCount} file{sf.fileCount !== 1 ? 's' : ''}</span>
+              {canDeleteFolder && onDeleteFolder && (
+                <button
+                  title="Delete folder"
+                  onClick={(e) => { e.stopPropagation(); onDeleteFolder({ path: sf.githubPath || sf.path, name: sf.name }); }}
+                  className="bg-transparent border-none text-dark-text2 cursor-pointer w-[30px] h-[30px] rounded-md inline-flex items-center justify-center text-[0.78rem] hover:bg-red-500/10 hover:text-red-400 transition-all"
+                >
+                  <i className="fas fa-trash"></i>
+                </button>
+              )}
               <i className="fas fa-chevron-right text-dark-text2 text-[0.65rem] flex-shrink-0"></i>
             </div>
           ))}

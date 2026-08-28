@@ -634,8 +634,13 @@ export function createTreeHelpers(get: GetState) {
       const code = normalizeCourseCode(courseCode);
       const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
 
-      const subfolders = new Map<string, { name: string; fileCount: number; count: number; path: string }>();
+      const subfolders = new Map<string, { name: string; fileCount: number; count: number; path: string; githubPath: string }>();
       const files: any[] = [];
+
+      const folderGitPath = (i: any) => {
+        const gp = i.githubPath || i.path || '';
+        return i.type === 'tree' ? gp : gp.split('/').slice(0, -1).join('/');
+      };
 
       const matchesDept = (item: any) => {
         if (!departmentId) return true;
@@ -682,7 +687,7 @@ export function createTreeHelpers(get: GetState) {
         if (fileName === '.gitkeep') {
           if (tail.length >= 2) {
             const name = tail[0];
-            if (!subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: subBase + name });
+            if (!subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: subBase + name, githubPath: folderGitPath(item) });
           }
           return;
         }
@@ -691,7 +696,7 @@ export function createTreeHelpers(get: GetState) {
           if (tail.length === 1) {
             const name = tail[0];
             if (name && name !== '.') {
-              if (!subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: subBase + name });
+              if (!subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: subBase + name, githubPath: folderGitPath(item) });
             }
           }
           return;
@@ -701,7 +706,7 @@ export function createTreeHelpers(get: GetState) {
           files.push(item);
         } else if (tail.length >= 2) {
           const name = tail[0];
-          const existing = subfolders.get(name) || { name, fileCount: 0, count: 0, path: subBase + name };
+          const existing = subfolders.get(name) || { name, fileCount: 0, count: 0, path: subBase + name, githubPath: folderGitPath(item) };
           existing.count++;
           existing.fileCount++;
           subfolders.set(name, existing);
@@ -724,13 +729,18 @@ export function createTreeHelpers(get: GetState) {
     // Flexible folder/file browser for the related (kitabs / sources) folders.
     // Lists the immediate children under `related-folder/{relPath}`: folders
     // first (recursively counted), then the files living inside that level.
-    getRelatedFolderContents: (relFolder: string, departmentId?: string | null, relPath = ''): { subfolders: { name: string; fileCount: number; count: number; path: string }[]; files: any[] } => {
+    getRelatedFolderContents: (relFolder: string, departmentId?: string | null, relPath = ''): { subfolders: { name: string; fileCount: number; count: number; path: string; githubPath: string }[]; files: any[] } => {
       const uploadTree = get().getUploadTree();
       const prefix = relFolder + '/';
       const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
 
-      const subfolders = new Map<string, { name: string; fileCount: number; count: number; path: string }>();
+      const subfolders = new Map<string, { name: string; fileCount: number; count: number; path: string; githubPath: string }>();
       const files: any[] = [];
+
+      const folderGitPath = (i: any) => {
+        const gp = i.githubPath || i.path || '';
+        return i.type === 'tree' ? gp : gp.split('/').slice(0, -1).join('/');
+      };
 
       uploadTree.forEach((item: any) => {
         if (departmentId) {
@@ -760,7 +770,7 @@ export function createTreeHelpers(get: GetState) {
         if (fileName === '.gitkeep') {
           if (tail.length >= 2) {
             const name = tail[0];
-            if (name && !subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: base + name });
+            if (name && !subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: base + name, githubPath: folderGitPath(item) });
           }
           return;
         }
@@ -769,7 +779,7 @@ export function createTreeHelpers(get: GetState) {
           if (tail.length === 1) {
             const name = tail[0];
             if (name && name !== '.') {
-              if (!subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: base + name });
+              if (!subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: base + name, githubPath: folderGitPath(item) });
             }
           }
           return;
@@ -781,7 +791,7 @@ export function createTreeHelpers(get: GetState) {
         if (tail.length === 1) {
           files.push(item);
         } else {
-          const existing = subfolders.get(name) || { name, fileCount: 0, count: 0, path: base + name };
+          const existing = subfolders.get(name) || { name, fileCount: 0, count: 0, path: base + name, githubPath: folderGitPath(item) };
           existing.count++;
           existing.fileCount++;
           subfolders.set(name, existing);

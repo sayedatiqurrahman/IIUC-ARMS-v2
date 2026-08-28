@@ -19,6 +19,8 @@ interface RelatedFolderViewProps {
   actionLoading: string;
   canCreateFolder?: boolean;
   onCreateFolderAt?: (relPath: string) => void;
+  canDeleteFolder?: boolean;
+  onDeleteFolder?: (target: { path: string; name: string }) => void;
 }
 
 export default function RelatedFolderView({
@@ -36,6 +38,8 @@ export default function RelatedFolderView({
   actionLoading,
   canCreateFolder,
   onCreateFolderAt,
+  canDeleteFolder,
+  onDeleteFolder,
 }: RelatedFolderViewProps) {
   const [relPath, setRelPath] = useState('');
   const treeLen = useAppStore(s => s.tree.length);
@@ -96,6 +100,8 @@ export default function RelatedFolderView({
         actionLoading={actionLoading}
         canCreateFolder={canCreateFolder}
         onCreateFolder={canCreateFolder && onCreateFolderAt ? () => onCreateFolderAt(relPath) : undefined}
+        canDeleteFolder={canDeleteFolder}
+        onDeleteFolder={onDeleteFolder}
       />
     </section>
   );
