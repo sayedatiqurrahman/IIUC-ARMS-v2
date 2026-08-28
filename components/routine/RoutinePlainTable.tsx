@@ -2,8 +2,10 @@
 
 import type { RoutineItem, RoutinePeriod, RoutineSlot } from './types';
 import { getDepartmentDisplayName } from '@/lib/departments';
+import { useTeacherPhones } from './useTeacherPhones';
 
 export default function RoutinePlainTable({ routine }: { routine: RoutineItem }) {
+  const phones = useTeacherPhones();
   const classPeriods = routine.periods.filter(p => !p.isBreak);
   const isOffDay = (day: string) => classPeriods.every((_, i) => !routine.slots.find(s => s.day === day && s.period === i));
   const isBoth = routine.gender === 'both';
@@ -110,9 +112,14 @@ export default function RoutinePlainTable({ routine }: { routine: RoutineItem })
             <tbody>
               {routine.courses.map(c => (
                 <tr key={c.code}>
-                  <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 700 }}>{c.code}</td>
+                  <td style={{ border: '1px solid #000', padding: '4px 8px', fontWeight: 700 }}>{c.code}{c.credit ? `(${c.credit})` : ''}</td>
                   <td style={{ border: '1px solid #000', padding: '4px 8px' }}>{c.title}</td>
-                  <td style={{ border: '1px solid #000', padding: '4px 8px' }}>{c.teacher}</td>
+                  <td style={{ border: '1px solid #000', padding: '4px 8px' }}>
+                    {c.teacher}
+                    {c.teacher && phones[c.teacher.trim().toLowerCase()] && (
+                      <div style={{ fontSize: '0.65rem', color: '#555' }}>{phones[c.teacher.trim().toLowerCase()]}</div>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

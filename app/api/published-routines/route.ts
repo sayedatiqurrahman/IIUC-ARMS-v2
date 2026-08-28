@@ -25,6 +25,42 @@ async function cleanupOldActivityLogs(prisma: any) {
   return deleted.count;
 }
 
+// Mirror one department's published routines into the cloud data repo after a
+// publish/unpublish so they survive without the database.
+async function backupDepartmentToCloud(prisma: any, department: string, byEmail: string) {
+  try {
+    const { saveDepartmentRoutinesToCloud } = await import('@/lib/github-folders');
+    const rows = await prisma.publishedRoutine.findMany({
+      where: { status: 'published', department },
+      orderBy: { publishedAt: 'desc' },
+    });
+    const routines = rows.map((r: any) => ({
+      id: r.routineId,
+      semester: r.semester,
+      session: r.session,
+      branch: r.branch,
+      gender: r.gender,
+      academicYear: r.academicYear,
+      department: r.department,
+      university: r.university,
+      room: r.room,
+      periods: typeof r.periods === 'string' ? JSON.parse(r.periods || '[]') : (r.periods || []),
+      days: typeof r.days === 'string' ? JSON.parse(r.days || '[]') : (r.days || []),
+      courses: typeof r.courses === 'string' ? JSON.parse(r.courses || '[]') : (r.courses || []),
+      slots: typeof r.slots === 'string' ? JSON.parse(r.slots || '[]') : (r.slots || []),
+      malePeriods: r.malePeriods ? (typeof r.malePeriods === 'string' ? JSON.parse(r.malePeriods) : r.malePeriods) : undefined,
+      femalePeriods: r.femalePeriods ? (typeof r.femalePeriods === 'string' ? JSON.parse(r.femalePeriods) : r.femalePeriods) : undefined,
+      maleSlots: r.maleSlots ? (typeof r.maleSlots === 'string' ? JSON.parse(r.maleSlots) : r.maleSlots) : undefined,
+      femaleSlots: r.femaleSlots ? (typeof r.femaleSlots === 'string' ? JSON.parse(r.femaleSlots) : r.femaleSlots) : undefined,
+      publishedBy: r.publishedBy ? { name: r.publishedBy } : undefined,
+      publishedAt: r.publishedAt.getTime(),
+      published: true,
+      isDraft: false,
+    }));
+    await saveDepartmentRoutinesToCloud(department, byEmail, routines);
+  } catch {}
+}
+
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.general);
   if (!rl.success) return rl.response!;
@@ -227,6 +263,12 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
+    // Back up the affected departments to the cloud data repo.
+    try {
+      const depts = Array.from(new Set(routines.map(r => r.department).filter(Boolean))) as string[];
+      for (const dept of depts) await backupDepartmentToCloud(prisma, dept, email);
+    } catch {}
+
     return NextResponse.json({ success: true, count: routines.length });
   } catch (err: any) {
     return NextResponse.json({ error: 'Failed to publish' }, { status: 500 });
@@ -250,12 +292,19 @@ export async function DELETE(req: NextRequest) {
     const url = new URL(req.url);
     const routineId = url.searchParams.get('id');
 
+    const deptsToBackup = new Set<string>();
     if (routineId) {
+      const existing = await prisma.publishedRoutine.findMany({ where: { routineId }, select: { department: true } });
+      for (const e of existing) if (e.department) deptsToBackup.add(e.department);
       await prisma.publishedRoutine.deleteMany({ where: { routineId } });
     } else {
-      // Unpublish all
+      const existing = await prisma.publishedRoutine.findMany({ select: { department: true } });
+      for (const e of existing) if (e.department) deptsToBackup.add(e.department);
       await prisma.publishedRoutine.deleteMany();
     }
+
+    // Keep the cloud data repo in sync.
+    for (const dept of Array.from(deptsToBackup)) await backupDepartmentToCloud(prisma, dept, email);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

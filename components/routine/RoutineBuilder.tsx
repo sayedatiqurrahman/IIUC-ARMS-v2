@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import TeacherAutocomplete from '@/components/TeacherAutocomplete';
 import CustomSelect from '@/components/CustomSelect';
-import RoutineImportControl from './RoutineImportControl';
-import { mergeBlocks } from '@/lib/routine-import';
+import { mergeBlocks, type RoutineImportData } from '@/lib/routine-import';
 import { resolveDepartment, getDepartmentSelectOptions } from '@/lib/departments';
 import { getOnboardingData } from '@/lib/onboarding-storage';
 import type { RoutineItem, RoutinePeriod, RoutineCourse, RoutineSlot, BuilderStep, DraftData } from './types';
@@ -13,7 +12,12 @@ import { getDefaultSession, getSlot, loadDraft, saveDraft, clearDraft, to24h, to
 import { showToast } from '@/lib/utils';
 import { useAppStore } from '@/lib/store';
 
-export default function RoutineBuilder({ existing, onSave, onCancel }: { existing: RoutineItem | null; onSave: (r: RoutineItem) => void; onCancel: () => void }) {
+export default function RoutineBuilder({ existing, onSave, onCancel, initialImport }: {
+  existing: RoutineItem | null;
+  onSave: (r: RoutineItem) => void;
+  onCancel: () => void;
+  initialImport?: RoutineImportData | null;
+}) {
   const [step, setStep] = useState<BuilderStep>('info');
   const [semester, setSemester] = useState(existing?.semester || SEMESTERS[0]);
   const [branch, setBranch] = useState(existing?.branch || '');
@@ -51,7 +55,6 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
   const [cloudCourses, setCloudCourses] = useState<{ code: string; title: string; teacher: string; room: string }[]>([]);
   const [cloudLoading, setCloudLoading] = useState(false);
   const [codeSuggestions, setCodeSuggestions] = useState<{ idx: number; matches: { code: string; title: string; teacher: string; room: string }[] } | null>(null);
-  const [savingMap, setSavingMap] = useState(false);
 
   useEffect(() => {
     if (!semester) { setSemesterCourses([]); return; }
@@ -81,7 +84,7 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
   }, [department, semester]);
 
   useEffect(() => {
-    if (existing) return;
+    if (existing || initialImport) return;
     const draft = loadDraft();
     if (draft) {
       if (draft.semester) setSemester(draft.semester);
@@ -103,6 +106,14 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
       showToast('Draft restored from previous session', 'success');
     }
   }, []);
+
+  // When an imported routine is passed from the manager header, apply it on
+  // mount so whole-department routines can be built at once.
+  useEffect(() => {
+    if (existing || !initialImport) return;
+    handleImport(initialImport);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existing]);
 
   const listToUse = cloudCourses.length > 0 ? cloudCourses : semesterCourses;
 
@@ -212,29 +223,18 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
     }
   };
 
-  // Save the current course → teacher list as the remembered mapping, so it
+  // Remember the current course → teacher list automatically on save, so it
   // auto-loads next time (routines are mostly the same every semester).
-  const saveTeacherMapping = async () => {
+  const persistTeacherMapping = async () => {
     const valid = courses.filter(c => String(c.code || '').trim());
-    if (valid.length === 0) { showToast('Add courses first', 'error'); return; }
-    setSavingMap(true);
+    if (valid.length === 0 || !department || !semester) return;
     try {
-      const res = await fetch('/api/cloud-courses', {
+      fetch('/api/cloud-courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ department, semester, courses: valid }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast('Teacher mapping saved — it will auto-load next time', 'success');
-      } else {
-        showToast(data.error || 'Failed to save mapping', 'error');
-      }
-    } catch {
-      showToast('Failed to save mapping', 'error');
-    } finally {
-      setSavingMap(false);
-    }
+      }).catch(() => {});
+    } catch {}
   };
 
   const handleImport = (data: import('@/lib/routine-import').RoutineImportData) => {
@@ -248,7 +248,8 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
     if (block.branch) setBranch(block.branch);
     if (block.gender) setGender(block.gender);
     if (block.session) setSession(block.session);
-    showToast('Routine data imported', 'success');
+    if (block.slots.length > 0) { setStep('assign'); }
+    else if (block.courses.length > 0) { setStep('courses'); }
   };
   const toInitials = (name: string): string => {
     if (!name) return '';
@@ -312,6 +313,8 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
       createdAt: existing?.createdAt || Date.now(),
       isDraft: true,
     };
+    // Auto-remember the teacher map so the same setup loads next time.
+    persistTeacherMapping();
     justSaved.current = true;
     clearDraft();
     onSave(routine);
@@ -419,10 +422,6 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
                 <i className={`fas ${cloudLoading ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt'}`}></i> {cloudLoading ? 'Loading…' : 'Load course list'}
               </button>
               <button className="routine-add-btn" onClick={addCourse}><i className="fas fa-plus"></i> Add Course</button>
-              <RoutineImportControl onImport={handleImport} preferSemester={semester} />
-              <button className="routine-add-btn" onClick={saveTeacherMapping} disabled={savingMap}>
-                <i className={`fas ${savingMap ? 'fa-spinner fa-spin' : 'fa-save'}`}></i> {savingMap ? 'Saving…' : 'Save teacher map'}
-              </button>
             </div>
           </div>
           {cloudLoading && courses.length === 0 && (
@@ -437,8 +436,9 @@ export default function RoutineBuilder({ existing, onSave, onCancel }: { existin
                 <div key={idx} className="routine-course-item">
                   <div className="routine-course-num">{idx + 1}</div>
                   <div className="routine-course-fields" style={{ position: 'relative' }}>
-                    <div style={{ position: 'relative' }}>
-                      <input className="routine-input-sm" placeholder="Code (e.g. QSM-3601)" value={c.code} onChange={e => updateCourse(idx, 'code', e.target.value)} onBlur={() => setTimeout(() => setCodeSuggestions(null), 200)} />
+                    <div style={{ position: 'relative', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      <input className="routine-input-sm routine-course-code-input" placeholder="Code (e.g. ACC-3501)" value={c.code} onChange={e => updateCourse(idx, 'code', e.target.value)} onBlur={() => setTimeout(() => setCodeSuggestions(null), 200)} />
+                      <input className="routine-input-sm" style={{ width: 74, flexShrink: 0 }} placeholder="Credit" title="Course credit (optional) — shown like ACC-3501(3)" value={c.credit ?? ''} onChange={e => updateCourse(idx, 'credit', e.target.value)} />
                       {codeSuggestions?.idx === idx && codeSuggestions.matches.length > 0 && (
                         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, maxHeight: 160, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
                           {codeSuggestions.matches.map((m, mi) => (

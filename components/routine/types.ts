@@ -12,6 +12,7 @@ export interface RoutineCourse {
   title: string;
   teacher: string;
   room: string;
+  credit?: string;
 }
 
 export interface RoutineSlot {

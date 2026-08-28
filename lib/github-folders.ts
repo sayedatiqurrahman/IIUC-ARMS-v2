@@ -156,6 +156,36 @@ export async function saveTeacherMapping(mapping: CloudTeacherMap, byEmail: stri
   return res;
 }
 
+export interface CloudRoutineBackup {
+  version?: number;
+  updatedAt?: number;
+  updatedBy?: string;
+  department?: string;
+  routines: any[];
+}
+
+// Back up one department's published routines into the data repo so they
+// survive even without the database (same pattern as the faculty directory).
+// Called after every publish / unpublish.
+export async function saveDepartmentRoutinesToCloud(
+  department: string,
+  byEmail: string,
+  routines: any[],
+): Promise<{ success: boolean; error?: string }> {
+  const payload: CloudRoutineBackup = {
+    version: 1,
+    updatedAt: Date.now(),
+    updatedBy: byEmail,
+    department,
+    routines,
+  };
+  return writeCloudFile(
+    `${config.routineDataFolder}/department-routines/${getDepartmentFolder(department)}.json`,
+    JSON.stringify(payload, null, 2),
+    `Update routine backup — ${department}`,
+  );
+}
+
 function parseCourseFolder(name: string): { code: string; title: string } | null {
   return matchCourseFolder(name);
 }

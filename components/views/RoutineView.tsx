@@ -25,6 +25,8 @@ import RoutinePlainTable from '@/components/routine/RoutinePlainTable';
 import TeacherContacts from '@/components/routine/TeacherContacts';
 import AllSemesterView from '@/components/routine/AllSemesterView';
 import RoutineBuilder from '@/components/routine/RoutineBuilder';
+import RoutineImportControl from '@/components/routine/RoutineImportControl';
+import type { RoutineImportData } from '@/lib/routine-import';
 import PageLoader from '@/components/PageLoader';
 import SchedulePublishModal from '@/components/SchedulePublishModal';
 
@@ -48,6 +50,7 @@ export default function RoutineView({ dept }: { dept: string }) {
   const [publishedRoutines, setPublishedRoutines] = useState<RoutineItem[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [importPayload, setImportPayload] = useState<RoutineImportData | null>(null);
   const [exportMode, setExportMode] = useState<'themed' | 'plain'>('themed');
   const [scheduleTarget, setScheduleTarget] = useState<RoutineItem | null>(null);
 
@@ -355,12 +358,20 @@ export default function RoutineView({ dept }: { dept: string }) {
     }
     setEditingId(null);
     setViewMode('manager');
+    setImportPayload(null);
     showToast(editingId ? 'Routine updated!' : 'Routine created!', 'success');
   }, [myRoutines, editingId, persistMyRoutines, publishedRoutines]);
 
   const handleCancelBuilder = useCallback(() => {
     setEditingId(null);
     setViewMode('manager');
+    setImportPayload(null);
+  }, []);
+
+  const openBuilderWithImport = useCallback((data: RoutineImportData) => {
+    setImportPayload(data);
+    setEditingId(null);
+    setViewMode('builder');
   }, []);
 
   if (routineLoading && myRoutines.length === 0) {
@@ -395,7 +406,9 @@ export default function RoutineView({ dept }: { dept: string }) {
               )}
             </div>
             <div className="routine-page-actions">
+              <RoutineImportControl onImport={openBuilderWithImport} />
               <button className="routine-btn routine-btn-primary" onClick={() => {
+                setImportPayload(null);
                 setEditingId(null);
                 setViewMode('builder');
               }}>
@@ -431,7 +444,7 @@ export default function RoutineView({ dept }: { dept: string }) {
               <div className="routine-empty-icon"><i className="fas fa-calendar-plus"></i></div>
               <h4>No Routines Yet</h4>
               <p>Create your first class routine to get started.</p>
-              <button className="routine-btn routine-btn-primary" onClick={() => { setEditingId(null); setViewMode('builder'); }}>
+              <button className="routine-btn routine-btn-primary" onClick={() => { setImportPayload(null); setEditingId(null); setViewMode('builder'); }}>
                 <i className="fas fa-plus"></i> Create Your First Routine
               </button>
             </div>
@@ -513,6 +526,7 @@ export default function RoutineView({ dept }: { dept: string }) {
             existing={editingId ? (myRoutines.find(r => r.id === editingId) || publishedRoutines.find(r => r.id === editingId) || null) : null}
             onSave={handleSaveBuilder}
             onCancel={handleCancelBuilder}
+            initialImport={!editingId ? importPayload : null}
           />
         </>
       )}

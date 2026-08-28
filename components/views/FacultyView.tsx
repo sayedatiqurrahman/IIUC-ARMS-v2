@@ -24,6 +24,10 @@ interface FacultyMember {
   sortOrder: number;
 }
 
+// Legacy/typo member types (e.g. "staf") are treated as staff so they still
+// render at the end of the department list instead of disappearing.
+const memberKind = (m: FacultyMember) => (m.memberType === 'staff' || m.memberType === 'staf') ? 'staff' : 'faculty';
+
 export default function FacultyView() {
   const { data: session } = useSession();
   const { confirm, confirmDialog } = useConfirm();
@@ -92,8 +96,8 @@ export default function FacultyView() {
     return counts;
   }, [members]);
 
-  const facultyCount = members.filter(m => m.memberType === 'faculty').length;
-  const staffCount = members.filter(m => m.memberType === 'staff').length;
+  const facultyCount = members.filter(m => memberKind(m) === 'faculty').length;
+  const staffCount = members.filter(m => memberKind(m) === 'staff').length;
 
   // Mirrors server-side canManageFaculty (app/api/faculty + lib/can-manage-faculty.ts):
   // admins & teachers manage any department; managers and custom "Manage Faculty"
@@ -168,7 +172,7 @@ export default function FacultyView() {
 
   const renderMemberCard = (m: FacultyMember) => {
     const isEditing = editingId === m.id;
-    const isStaff = m.memberType === 'staff';
+    const isStaff = memberKind(m) === 'staff';
     return (
       <div key={m.id} className={`bg-dark-bg2 border rounded-xl p-4 transition-all group ${isEditing ? 'border-qsis' : 'border-dark-border hover:border-qsis/50'}`}>
         <div className="flex items-start gap-3">
@@ -357,8 +361,8 @@ export default function FacultyView() {
         </div>
       ) : (
         Array.from(grouped.entries()).map(([deptLabel, deptMembers]) => {
-          const facultyMembers = deptMembers.filter(m => m.memberType === 'faculty');
-          const staffMembers = deptMembers.filter(m => m.memberType === 'staff');
+          const facultyMembers = deptMembers.filter(m => memberKind(m) === 'faculty');
+          const staffMembers = deptMembers.filter(m => memberKind(m) === 'staff');
           return (
             <div key={deptLabel} className="mb-6">
               <h3 className="text-[0.9rem] font-bold text-dark-text mb-3 flex items-center gap-2">

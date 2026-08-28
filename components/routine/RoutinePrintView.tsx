@@ -4,8 +4,10 @@ import { forwardRef } from 'react';
 import type { RoutineItem } from './types';
 import { getDepartmentDisplayName } from '@/lib/departments';
 import RoutineTable from './RoutineTable';
+import { useTeacherPhones } from './useTeacherPhones';
 
 const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({ routine }, ref) => {
+  const phones = useTeacherPhones();
   const isBoth = routine.gender === 'both';
   const hasMaleData = isBoth && routine.malePeriods && routine.malePeriods.length > 0;
   const hasFemaleData = isBoth && routine.femalePeriods && routine.femalePeriods.length > 0;
@@ -93,9 +95,14 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
               <tbody>
                 {routine.courses.map(c => (
                   <tr key={c.code}>
-                    <td className="routine-legend-code-cell">{c.code}</td>
+                    <td className="routine-legend-code-cell">{c.code}{c.credit ? `(${c.credit})` : ''}</td>
                     <td>{c.title}</td>
-                    <td>{c.teacher}</td>
+                    <td>
+                      {c.teacher}
+                      {c.teacher && phones[c.teacher.trim().toLowerCase()] && (
+                        <div style={{ fontSize: '0.68rem', color: '#555', marginTop: 2 }}>{phones[c.teacher.trim().toLowerCase()]}</div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
