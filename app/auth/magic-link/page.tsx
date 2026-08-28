@@ -20,6 +20,8 @@ export default function MagicLinkPage() {
   const [totpCode, setTotpCode] = useState('');
   const [totpLoading, setTotpLoading] = useState(false);
   const [pendingCreds, setPendingCreds] = useState<{ idToken: string; email: string; name: string; image: string } | null>(null);
+  const [needEmail, setNeedEmail] = useState(false);
+  const [reEntry, setReEntry] = useState('');
 
   useEffect(() => {
     if (!isMagicLink()) {
@@ -73,6 +75,11 @@ export default function MagicLinkPage() {
           setError('This link has expired. Please request a new magic link. Check your spam/junk folder and "All Mail" if the email was missed.');
         } else if (err.code === 'auth/email-already-in-use') {
           setError('This email is already registered. Please sign in with your password.');
+        } else if (err.message?.includes('No email found') || err.code === 'auth/missing-email') {
+          // The email could not be recovered from the URL or this browser's
+          // storage (e.g. the link was opened in a different browser/device).
+          setNeedEmail(true);
+          setError('');
         } else {
           setError(err.message || 'Failed to verify link. Please try again.');
         }
@@ -127,6 +134,46 @@ export default function MagicLinkPage() {
     }
   };
 
+  const handleEmailReEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reEntry.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reEntry)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    setError('');
+    setStep(1);
+    try {
+      const { getAuth, signInWithEmailLink } = await import('firebase/auth');
+      const auth = getAuth();
+      const url = window.location.href;
+      const result = await signInWithEmailLink(auth, reEntry.trim(), url);
+      window.localStorage.removeItem('emailForSignIn');
+      setStep(2);
+      const idToken = await result.user.getIdToken();
+      await fetch('/api/auth/firebase-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken, expiresIn: 3600 }),
+      });
+      const email = result.user.email || reEntry.trim();
+      const authResult = await signIn('credentials', {
+        idToken,
+        email,
+        name: result.user.displayName || email.split('@')[0],
+        image: result.user.photoURL || '',
+        redirect: false,
+      });
+      if (authResult?.ok) {
+        setStep(3);
+        setTimeout(() => router.push('/dashboard'), 1000);
+      } else {
+        setError('Sign-in failed. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err.code === 'auth/email-already-in-use' ? 'This email is already registered. Please sign in with your password.' : (err.message || 'Failed to verify link.'));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4">
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-8 max-w-md w-full text-center">
@@ -143,6 +190,34 @@ export default function MagicLinkPage() {
             >
               <i className="fas fa-arrow-left"></i> Back to Home
             </a>
+          </>
+        )}
+
+        {!error && needEmail && !totpRequired && (
+          <>
+            <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
+              <i className="fas fa-envelope text-2xl text-blue-400"></i>
+            </div>
+            <h1 className="text-lg font-bold text-dark-text mb-2">Confirm your email</h1>
+            <p className="text-[0.82rem] text-dark-text2 mb-4">We couldn't automatically match this link. Enter the email you used to log in (the one this magic link was sent to).</p>
+            <form onSubmit={handleEmailReEntry}>
+              <input
+                type="email"
+                value={reEntry}
+                onChange={e => setReEntry(e.target.value)}
+                placeholder="you@example.com"
+                autoFocus
+                className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors mb-4"
+              />
+              <button type="submit" className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-[0.85rem] border-none cursor-pointer hover:opacity-90 transition-opacity">
+                <i className="fas fa-check-circle mr-2"></i>Continue
+              </button>
+            </form>
+            <div className="mt-4">
+              <a href="/" className="text-[0.78rem] text-dark-text2 hover:text-qsis no-underline">
+                <i className="fas fa-arrow-left mr-1"></i>Back to Home
+              </a>
+            </div>
           </>
         )}
 

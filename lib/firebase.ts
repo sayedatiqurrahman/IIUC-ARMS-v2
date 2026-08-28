@@ -110,8 +110,13 @@ export async function resetPassword(email: string) {
 }
 
 export async function sendMagicLink(email: string) {
+  // Include the email in the link URL so the sign-in works even when the link is
+  // opened on a different device/browser (where localStorage — the classic
+  // "emailForSignIn" storage — is empty). We still store it locally as a
+  // fallback for the same-device case.
+  const emailParam = encodeURIComponent(email);
   const actionCodeSettings = {
-    url: `${window.location.origin}/auth/magic-link`,
+    url: `${window.location.origin}/auth/magic-link?email=${emailParam}`,
     // Must be true so the oobCode is carried through to our in-app callback
     // (/auth/magic-link). With false, Firebase's hosted handler consumes the
     // code and the link never resolves as a sign-in link in our app.
@@ -126,7 +131,10 @@ export function isMagicLink(): boolean {
 }
 
 export async function completeMagicLinkSignIn() {
-  const email = window.localStorage.getItem('emailForSignIn');
+  // Prefer the email carried in the link URL (works cross-device/cross-browser),
+  // falling back to the locally-stored email from when the link was requested.
+  const urlEmail = new URLSearchParams(window.location.search).get('email');
+  const email = urlEmail || window.localStorage.getItem('emailForSignIn');
   if (!email) throw new Error('No email found. Please enter your email again.');
   const result = await signInWithEmailLink(getFirebaseAuth(), email, window.location.href);
   window.localStorage.removeItem('emailForSignIn');

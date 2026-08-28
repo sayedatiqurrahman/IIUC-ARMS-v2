@@ -97,7 +97,6 @@ export async function GET(req: NextRequest) {
     }
 
     let profiles: any[] = [];
-    let totalCount = 0;
     // Auto-heal: university / owner accounts are pre-approved and should never sit
     // in the pending queue. If any are stuck pending, activate them before listing.
     if (filterDomain === 'pending') {
@@ -117,13 +116,13 @@ export async function GET(req: NextRequest) {
         console.error('[Admin Users] Auto-activate pending IIUC accounts failed:', e?.message);
       }
     }
+    // Fetch ALL matching DB profiles (not a bounded "page" of them). Bounding the
+    // DB query while the Firebase listing below is unbounded caused profiles saved
+    // in the DB to silently disappear from the merged "All Users" list beyond the
+    // first page. The DB is small (a few thousand rows), so this is safe.
     try {
-      totalCount = await prisma.profile.count({ where });
       profiles = await prisma.profile.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
-        skip: offset,
-        take: limit,
         select: {
           userId: true, email: true, name: true, title: true, shortForm: true,
           role: true, isBanned: true, banReason: true, bannedBy: true,
@@ -140,17 +139,21 @@ export async function GET(req: NextRequest) {
       profiles = [];
     }
 
+    // Fetch ALL Firebase auth users by walking every page (not just the first
+    // 1000), so nobody with a Firebase account is missing from "All Users".
     let firebaseUsers: any[] = [];
-    let firebaseNextPageToken: string | undefined = undefined;
     try {
       const { getAdminAuth } = await import('@/lib/firebase-admin');
       const auth = getAdminAuth();
       if (auth) {
-        const pageToken = url.searchParams.get('firebasePageToken') || undefined;
-        const listResult = await auth.listUsers(1000, pageToken);
-        const usersArray = Array.isArray(listResult?.users) ? listResult.users : [];
-        firebaseUsers = usersArray;
-        firebaseNextPageToken = listResult?.pageToken || undefined;
+        let pageToken: string | undefined = await auth.listUsers(1000).then(r => (firebaseUsers = r.users, r.pageToken));
+        let guard = 0;
+        while (pageToken && guard < 20) {
+          guard++;
+          const page = await auth.listUsers(1000, pageToken);
+          firebaseUsers = firebaseUsers.concat(page.users || []);
+          pageToken = page.pageToken;
+        }
       }
     } catch (err: any) {
       console.error('[Admin Users] Firebase listUsers failed:', err?.message, err?.code);
@@ -240,7 +243,6 @@ export async function GET(req: NextRequest) {
     });
 
     let result = Array.from(merged.values());
-    const total = result.length;
 
     // Server-side search filter for Firebase users
     if (search) {
@@ -294,13 +296,19 @@ export async function GET(req: NextRequest) {
       result = result.filter(u => u.role === filterRole);
     }
 
+    // Sort the merged list (most recently created first) so pagination is stable
+    // and predictable across the All / filtered views.
+    result.sort((a, b) => (a.createdAt && b.createdAt ? (b.createdAt < a.createdAt ? -1 : 1) : 0));
+
+    const total = result.length;
+    const paged = result.slice(offset, offset + limit);
+
     return NextResponse.json({
-      users: result,
+      users: paged,
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
-      firebaseNextPageToken: firebaseNextPageToken || null,
     });
   } catch (err: any) {
     console.error('[Admin Users] GET error:', err?.message, err?.stack);

@@ -168,7 +168,7 @@ export default function UsersTab({
           >
             <i className={`fas ${sub.icon} ${userSubTab === sub.key ? 'text-white' : sub.color}`}></i>
             {sub.label}
-            {userSubTab === sub.key && <span className="ml-1 text-[0.65rem] opacity-80">({sub.key === 'pending' ? displayedUsers.length : users.length})</span>}
+            {userSubTab === sub.key && <span className="ml-1 text-[0.65rem] opacity-80">({userSubTab === 'pending' ? displayedUsers.length : totalUsers})</span>}
           </button>
         ))}
       </div>
@@ -198,8 +198,7 @@ export default function UsersTab({
           {userSubTab === 'student' && <><i className="fas fa-user-graduate text-blue-400 mr-1"></i>Students</>}
           {userSubTab === 'external' && <><i className="fas fa-globe text-purple-400 mr-1"></i>External Accounts</>}
             {userSubTab === 'pending' && <><i className="fas fa-clock text-yellow-400 mr-1"></i>Pending Approval</>}
-          <span className="text-dark-text3 ml-1">({displayedUsers.length})</span>
-        </h3>
+          <span className="text-dark-text3 ml-1">({userSubTab === 'pending' ? displayedUsers.length : totalUsers})</span>        </h3>
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
           {userSubTab === 'pending' && isAdmin && (
             <button
