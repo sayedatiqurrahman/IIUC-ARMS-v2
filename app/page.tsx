@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { config } from '@/lib/config';
 import { DEFAULT_PERMISSIONS } from '@/lib/permission-defaults';
-import { FACULTIES, getDepartmentFolder } from '@/lib/departments';
+import { FACULTIES, getDepartmentFolder, getFacultyIdForDepartment } from '@/lib/departments';
 import { useAppStore } from '@/lib/store';
 import { getMimeFromExt, extractYear, showToast } from '@/lib/utils';
 import { CreateCourseResult } from '@/components/upload';
@@ -22,6 +22,7 @@ const SemestersView = dynamic(() => import('@/components/browse/SemestersView'),
 const CoursesView = dynamic(() => import('@/components/browse/CoursesView'), { ssr: false });
 const CategoriesView = dynamic(() => import('@/components/browse/CategoriesView'), { ssr: false });
 const SubFolderView = dynamic(() => import('@/components/browse/SubFolderView'), { ssr: false });
+const RelatedFolderView = dynamic(() => import('@/components/browse/RelatedFolderView'), { ssr: false });
 const FileGrid = dynamic(() => import('@/components/browse/FileGrid'), { ssr: false });
 const FolderCard = dynamic(() => import('@/components/browse/FolderCard'), { ssr: false });
 const BrowseModals = dynamic(() => import('@/components/browse/BrowseModals'), { ssr: false });
@@ -53,6 +54,7 @@ export default function BrowsePage() {
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState<{ show: boolean; message: string; contact: string }>({ show: false, message: '', contact: '' });
   const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [relatedCreatePath, setRelatedCreatePath] = useState('');
   const [shareItem, setShareItem] = useState<ShareItem | null>(null);
   const loading = useAppStore(s => s.loading);
   const error = useAppStore(s => s.error);
@@ -260,7 +262,15 @@ export default function BrowsePage() {
     const catFolder = s.currentCat
       ? config.categories[s.currentCat as keyof typeof config.categories]?.folder || s.currentCat
       : '';
-    const parts = [deptFolder, s.currentSem, courseFolder, s.currentMidFinal, catFolder, s.currentSubPath, folderName].filter(Boolean);
+    let parts;
+    if (s.currentSem === config.relatedKitabsFolder || s.currentSem === config.relatedSourcesFolder) {
+      const rootFolder = s.currentSem === config.relatedKitabsFolder
+        ? config.relatedKitabsParent
+        : getFacultyIdForDepartment(s.currentDept) || deptFolder || s.currentDept;
+      parts = [rootFolder, s.currentSem, relatedCreatePath, folderName].filter(Boolean);
+    } else {
+      parts = [deptFolder, s.currentSem, courseFolder, s.currentMidFinal, catFolder, s.currentSubPath, folderName].filter(Boolean);
+    }
     const folderPath = `${config.uploadPath}/${parts.join('/')}`;
     const res = await fetch('/api/github/create-folder', {
       method: 'POST',
@@ -272,7 +282,7 @@ export default function BrowsePage() {
     showToast(`Folder "${folderName}" created`, 'success');
     useAppStore.getState().invalidateTreeCache();
     loadTree(session?.accessToken || '');
-  }, [session?.accessToken, loadTree]);
+  }, [session?.accessToken, loadTree, relatedCreatePath]);
 
   const handleFileShare = useCallback((path: string, name: string, isFolder: boolean) => {
     const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
@@ -596,6 +606,9 @@ export default function BrowsePage() {
     ? getSubfolderContents(currentSem, currentCourseCode, currentDept || userDeptId, currentMidFinal || null, currentCat, currentSubPath)
     : { subfolders: [], files: [] };
   const subPathSegments = currentSubPath ? currentSubPath.split('/') : [];
+  const isRelatedSem = currentSem === config.relatedKitabsFolder || currentSem === config.relatedSourcesFolder;
+  const isRelatedKitabs = currentSem === config.relatedKitabsFolder;
+  const relatedLabel = isRelatedKitabs ? 'Related Kitabs' : 'Related Sources';
   const filteredFiles = (() => {
     if (!currentCat || !currentCourseCode || !currentSem) return [];
     return subfolderContents.files.filter((f: any) => {
@@ -660,7 +673,24 @@ export default function BrowsePage() {
           userSemesterId={userSemesterId} navigateToSemester={navigateToSemester}
         />
       )}
-      {!loading && !error && !isSearching && view === 'courses' && (
+      {!loading && !error && !isSearching && view === 'courses' && (isRelatedSem ? (
+        <RelatedFolderView
+          relFolder={currentSem || ''}
+          label={relatedLabel}
+          departmentId={currentDept}
+          onExit={goBack}
+          onOpenFile={openFile}
+          filePerms={filePerms}
+          onMove={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
+          onCopy={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
+          onRename={(p, n) => setRenameTarget({ path: p, name: n })}
+          onDelete={(p, n) => setDeleteConfirm({ path: p, name: n })}
+          onShare={handleFileShare}
+          actionLoading={actionLoading}
+          canCreateFolder={canCreateFolder}
+          onCreateFolderAt={(rp) => { setRelatedCreatePath(rp); setShowCreateFolder(true); }}
+        />
+      ) : (
         <CoursesView
           semesterCourses={semesterCourses} filteredCourses={filteredCourses}
           coursePerms={coursePerms} navigateToCourse={navigateToCourse}
@@ -669,7 +699,7 @@ export default function BrowsePage() {
           currentDept={currentDept} currentSem={currentSem}
           userDeptId={userDeptId} isOwner={isOwner}
         />
-      )}
+      ))}
       {!loading && !error && !isSearching && view === 'categories' && (
         <CategoriesView
           currentMidFinal={currentMidFinal} goBack={goBack}
@@ -819,7 +849,9 @@ export default function BrowsePage() {
         const deptFolder = getDepartmentFolder(currentDept);
         const courseFolder = currentCourseCode && currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : '';
         const catFolder = currentCat ? config.categories[currentCat as keyof typeof config.categories]?.folder || currentCat : '';
-        const parentPath = [deptFolder, currentSem, courseFolder, currentMidFinal, catFolder, currentSubPath].filter(Boolean).join('/');
+        const parentPath = isRelatedSem
+          ? [isRelatedKitabs ? config.relatedKitabsParent : getFacultyIdForDepartment(currentDept) || deptFolder || currentDept, currentSem, relatedCreatePath].filter(Boolean).join('/')
+          : [deptFolder, currentSem, courseFolder, currentMidFinal, catFolder, currentSubPath].filter(Boolean).join('/');
         return (
           <CreateFolderModal
             isOpen={showCreateFolder}

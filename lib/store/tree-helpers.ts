@@ -721,6 +721,86 @@ export function createTreeHelpers(get: GetState) {
       };
     },
 
+    // Flexible folder/file browser for the related (kitabs / sources) folders.
+    // Lists the immediate children under `related-folder/{relPath}`: folders
+    // first (recursively counted), then the files living inside that level.
+    getRelatedFolderContents: (relFolder: string, departmentId?: string | null, relPath = ''): { subfolders: { name: string; fileCount: number; count: number; path: string }[]; files: any[] } => {
+      const uploadTree = get().getUploadTree();
+      const prefix = relFolder + '/';
+      const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
+
+      const subfolders = new Map<string, { name: string; fileCount: number; count: number; path: string }>();
+      const files: any[] = [];
+
+      uploadTree.forEach((item: any) => {
+        if (departmentId) {
+          const matchesDept = item.department === departmentId;
+          const matchesFaculty = facultyId && item.department === facultyId;
+          if (!matchesDept && !matchesFaculty) return;
+        }
+        if (!item.path.startsWith(prefix)) return;
+        const rel = item.path.substring(prefix.length);
+        if (!rel) return;
+        const parts = rel.split('/');
+
+        let rest: string;
+        if (relPath) {
+          if (rel === relPath) return; // the current folder itself
+          if (!rel.startsWith(relPath + '/')) return;
+          rest = rel.substring(relPath.length + 1);
+          if (!rest) return;
+        } else {
+          rest = rel;
+        }
+
+        const base = relPath ? relPath + '/' : '';
+        const tail = rest.split('/');
+        const fileName = tail[tail.length - 1] || '';
+
+        if (fileName === '.gitkeep') {
+          if (tail.length >= 2) {
+            const name = tail[0];
+            if (name && !subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: base + name });
+          }
+          return;
+        }
+
+        if (item.type === 'tree') {
+          if (tail.length === 1) {
+            const name = tail[0];
+            if (name && name !== '.') {
+              if (!subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: base + name });
+            }
+          }
+          return;
+        }
+
+        const name = tail[0];
+        if (!name) return;
+
+        if (tail.length === 1) {
+          files.push(item);
+        } else {
+          const existing = subfolders.get(name) || { name, fileCount: 0, count: 0, path: base + name };
+          existing.count++;
+          existing.fileCount++;
+          subfolders.set(name, existing);
+        }
+      });
+
+      return {
+        subfolders: Array.from(subfolders.values()).sort((a, b) => a.name.localeCompare(b.name)),
+        files: files.sort((a: any, b: any) => {
+          const ya = parseInt(extractYear(a.path) || '0');
+          const yb = parseInt(extractYear(b.path) || '0');
+          if (yb !== ya) return yb - ya;
+          const aSpring = /spring/i.test(a.path) ? 1 : 0;
+          const bSpring = /spring/i.test(b.path) ? 1 : 0;
+          return bSpring - aSpring;
+        }),
+      };
+    },
+
     getCourseMidFinal: (semId: string, courseCode: string, departmentId?: string | null) => {
       if (departmentId) departmentId = resolveDepartmentId(departmentId);
       const uploadTree = get().getUploadTree();
