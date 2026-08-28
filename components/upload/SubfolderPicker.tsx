@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, Fragment } from 'react';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { getDepartmentFolder } from '@/lib/departments';
@@ -19,8 +19,8 @@ interface SubfolderPickerProps {
 }
 
 /**
- * Extracts existing subfolder names from the tree for a given course+category path.
- * Subfolders are the directory segments between the category and the actual files.
+ * Extracts the immediate subfolders present under a given folder path inside a
+ * course+category. `parentPath` is the relative path (empty = category root).
  */
 function extractSubfolders(
   tree: any[],
@@ -28,23 +28,30 @@ function extractSubfolders(
   semester: string,
   courseFolder: string,
   category: string,
-  midFinal?: string,
+  midFinal: string | undefined,
+  parentPath: string,
 ): string[] {
   const prefix = `${deptFolder}/${semester}/${courseFolder}/`;
   const midFinalPart = midFinal ? `${midFinal}/` : '';
   const catPrefix = `${prefix}${midFinalPart}${category}/`;
+  const base = parentPath ? `${catPrefix}${parentPath}/` : catPrefix;
   const subfolders = new Set<string>();
 
   for (const item of tree) {
     const path = item.githubPath || item.path || '';
-    if (!path.startsWith(catPrefix)) continue;
-    const rel = path.substring(catPrefix.length);
+    if (!path.startsWith(base)) continue;
+    const rel = path.substring(base.length);
     if (!rel || rel === '.gitkeep') continue;
-    const parts = rel.split('/');
-    // The first segment after category is the subfolder (or a file at root)
-    if (parts.length > 1) {
-      subfolders.add(parts[0]);
+
+    // A tree entry at exactly one segment below base is an (empty) folder.
+    if (item.type === 'tree') {
+      const first = rel.split('/')[0];
+      if (first) subfolders.add(first);
+      continue;
     }
+
+    const parts = rel.split('/');
+    if (parts.length > 1) subfolders.add(parts[0]);
   }
 
   return Array.from(subfolders).sort();
@@ -76,12 +83,14 @@ export default function SubfolderPicker({
     ? (courseTitle ? `${courseCode} - ${courseTitle}` : courseCode)
     : '';
 
-  const existingSubfolders = useMemo(() => {
+  const pathSegments = value ? value.split('/').filter(Boolean) : [];
+
+  const children = useMemo(() => {
     if (!deptFolder || !semester || !courseFolder || !category) return [];
     const isExamCat = category === config.categories.notes.folder || category === config.categories.questions.folder;
     const mf = isExamCat ? midFinal : undefined;
-    return extractSubfolders(tree, deptFolder, semester, courseFolder, category, mf);
-  }, [tree, treeLength, deptFolder, semester, courseFolder, category, midFinal]);
+    return extractSubfolders(tree, deptFolder, semester, courseFolder, category, mf, value);
+  }, [tree, treeLength, deptFolder, semester, courseFolder, category, midFinal, value]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -102,14 +111,23 @@ export default function SubfolderPicker({
     if (creating) inputRef.current?.focus();
   }, [creating]);
 
+  const handleNavigate = (segment: string) => {
+    onChange(value ? `${value}/${segment}` : segment);
+    setOpen(true);
+  };
+
+  const handleBreadcrumb = (segments: string[]) => {
+    onChange(segments.join('/'));
+    setOpen(true);
+  };
+
   const handleCreate = async () => {
-    const name = newName.trim();
+    const name = newName.trim().replace(/[\/\\]/g, '');
     if (!name) return;
 
-    // Build the folder path for creation
     const isExamCat = category === config.categories.notes.folder || category === config.categories.questions.folder;
     const mfPart = isExamCat && midFinal ? `${midFinal}/` : '';
-    const folderPath = `${config.uploadPath}/${deptFolder}/${semester}/${courseFolder}/${mfPart}${category}/${name}`;
+    const folderPath = `${config.uploadPath}/${deptFolder}/${semester}/${courseFolder}/${mfPart}${category}/${value ? value + '/' : ''}${name}`;
 
     setCreatingFolder(true);
     try {
@@ -120,10 +138,12 @@ export default function SubfolderPicker({
       });
       const data = await res.json();
       if (data.success) {
-        onChange(name);
-        setOpen(false);
+        onChange(value ? `${value}/${name}` : name);
+        setOpen(true);
         setCreating(false);
         setNewName('');
+        useAppStore.getState().invalidateTreeCache();
+        useAppStore.getState().loadTree();
       }
     } catch {}
     setCreatingFolder(false);
@@ -149,79 +169,100 @@ export default function SubfolderPicker({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-xl border border-dark-border bg-dark-bg2 shadow-xl overflow-hidden">
-          {/* Root option */}
-          <button
-            type="button"
-            onClick={() => { onChange(''); setOpen(false); }}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-[0.78rem] text-left border-none cursor-pointer transition ${
-              !value ? 'bg-qsis/10 text-qsis font-medium' : 'bg-transparent text-dark-text2 hover:bg-dark-bg3'
-            }`}
-          >
-            <i className="fas fa-home text-[0.7rem] w-4 text-center"></i>
-            Root (upload to category folder)
-            {!value && <i className="fas fa-check text-[0.6rem] ml-auto text-qsis"></i>}
-          </button>
+        <div className="absolute z-50 mt-1 w-full max-h-[340px] overflow-y-auto rounded-xl border border-dark-border bg-dark-bg2 shadow-xl">
+          {/* Header hint */}
+          <div className="px-3 py-1.5 text-[0.62rem] text-dark-text3 uppercase tracking-wider font-semibold bg-dark-bg3/50">
+            Upload to folder
+          </div>
 
-          {/* Existing subfolders */}
-          {existingSubfolders.length > 0 && (
-            <div className="border-t border-dark-border">
-              <div className="px-3 py-1 text-[0.62rem] text-dark-text3 uppercase tracking-wider font-semibold bg-dark-bg3/50">
-                Existing subfolders
-              </div>
-              {existingSubfolders.map(sf => (
+          {/* Breadcrumb navigation */}
+          <div className="flex flex-wrap items-center gap-1 px-3 py-2 border-b border-dark-border">
+            <button
+              type="button"
+              onClick={() => handleBreadcrumb([])}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[0.74rem] border-none cursor-pointer transition ${
+                pathSegments.length === 0 ? 'bg-qsis/10 text-qsis font-semibold' : 'bg-transparent text-dark-text2 hover:text-qsis'
+              }`}
+            >
+              <i className="fas fa-home text-[0.65rem]"></i>
+              Root
+            </button>
+            {pathSegments.map((seg, i) => (
+              <Fragment key={`${seg}-${i}`}>
+                <span className="text-dark-text3 text-[0.7rem]">/</span>
                 <button
-                  key={sf}
                   type="button"
-                  onClick={() => { onChange(sf); setOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-[0.78rem] text-left border-none cursor-pointer transition ${
-                    value === sf ? 'bg-qsis/10 text-qsis font-medium' : 'bg-transparent text-dark-text2 hover:bg-dark-bg3'
+                  onClick={() => handleBreadcrumb(pathSegments.slice(0, i + 1))}
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[0.74rem] border-none cursor-pointer transition ${
+                    i === pathSegments.length - 1 ? 'text-qsis font-semibold' : 'bg-transparent text-dark-text2 hover:text-qsis'
                   }`}
                 >
-                  <i className="fas fa-folder text-[0.7rem] w-4 text-center text-dark-text3"></i>
-                  <span className="truncate">{sf}</span>
-                  {value === sf && <i className="fas fa-check text-[0.6rem] ml-auto text-qsis"></i>}
+                  <i className="fas fa-folder text-[0.65rem]"></i>
+                  {seg}
+                </button>
+              </Fragment>
+            ))}
+          </div>
+
+          {/* Subfolders at the current path */}
+          {children.length === 0 ? (
+            <div className="px-3 py-3 text-[0.72rem] text-dark-text3">
+              <i className="fas fa-folder-open mr-1.5 opacity-60"></i>
+              No subfolders in this folder.
+            </div>
+          ) : (
+            <div>
+              {children.map(child => (
+                <button
+                  key={child}
+                  type="button"
+                  onClick={() => handleNavigate(child)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-[0.78rem] text-left border-none cursor-pointer transition bg-transparent text-dark-text2 hover:bg-dark-bg3 hover:text-dark-text"
+                >
+                  <i className="fas fa-folder text-[0.7rem] w-4 text-center text-qsis"></i>
+                  <span className="flex-1 truncate">{child}</span>
+                  <i className="fas fa-chevron-right text-[0.6rem] text-dark-text3"></i>
                 </button>
               ))}
             </div>
           )}
 
-          {/* Create new */}
+          {/* Create nested folder at the current path */}
           {canCreateFolder && (
             <div className="border-t border-dark-border">
               {!creating ? (
-              <button
-                type="button"
-                onClick={() => setCreating(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-[0.78rem] text-left bg-transparent border-none cursor-pointer text-qsis hover:bg-qsis/5 transition"
-              >
-                <i className="fas fa-plus text-[0.7rem] w-4 text-center"></i>
-                Create new subfolder
-              </button>
-            ) : (
-              <div className="p-2 bg-dark-bg3/50">
-                <div className="flex gap-1.5">
-                  <input
-                    ref={inputRef}
-                    value={newName}
-                    onChange={e => setNewName(e.target.value.replace(/[\/\\]/g, ''))}
-                    onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') { setCreating(false); setNewName(''); } }}
-                    placeholder="Folder name..."
-                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-[0.78rem] text-dark-text focus:border-qsis outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCreate}
-                    disabled={!newName.trim() || creatingFolder}
-                    className="px-2.5 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold border-none cursor-pointer hover:brightness-110 disabled:opacity-50"
-                  >
-                    {creatingFolder ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-plus"></i>}
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => setCreating(true)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-[0.78rem] text-left bg-transparent border-none cursor-pointer text-qsis hover:bg-qsis/5 transition"
+                >
+                  <i className="fas fa-plus text-[0.7rem] w-4 text-center"></i>
+                  Create new subfolder here
+                </button>
+              ) : (
+                <div className="p-2 bg-dark-bg3/50">
+                  <div className="flex gap-1.5">
+                    <input
+                      ref={inputRef}
+                      value={newName}
+                      onChange={e => setNewName(e.target.value.replace(/[\/\\]/g, ''))}
+                      onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') { setCreating(false); setNewName(''); } }}
+                      placeholder="Folder name..."
+                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-[0.78rem] text-dark-text focus:border-qsis outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreate}
+                      disabled={!newName.trim() || creatingFolder}
+                      className="px-2.5 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold border-none cursor-pointer hover:brightness-110 disabled:opacity-50"
+                    >
+                      {creatingFolder ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-plus"></i>}
+                    </button>
+                  </div>
+                  <p className="text-[0.6rem] text-dark-text3 mt-1 px-0.5">Creating inside: {value ? `Root / ${value}` : 'Root'}. Press Enter to create, Esc to cancel.</p>
                 </div>
-                <p className="text-[0.6rem] text-dark-text3 mt-1 px-0.5">Press Enter to create, Esc to cancel</p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
           )}
         </div>
       )}
