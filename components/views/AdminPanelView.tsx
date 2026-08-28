@@ -28,6 +28,7 @@ import AdminSidebar from '@/components/admin/AdminSidebar';
 import { filterAdminNav } from '@/components/admin/nav';
 import { useUrlTab } from '@/lib/use-url-tabs';
 import { useUserAccess } from '@/lib/useUserAccess';
+import { resolveDepartment, getDepartmentDisplayName } from '@/lib/departments';
 
 // Deep-linkable tabs: /admin?tab=users&sub=pending (the `tab` param is only
 // owned here when the panel is rendered standalone — when embedded inside the
@@ -577,7 +578,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const canEditFacultyMember = (m: any) => {
     if (!(isAdmin || isManager || effectiveRole === 'teacher' || has('manageFaculty'))) return false;
     if (effectiveRole === 'admin' || effectiveRole === 'teacher') return true;
-    if (profile?.department) return m.department === profile.department;
+    if (profile?.department) return resolveDepartment(m.department) === resolveDepartment(profile.department);
     return true;
   };
 
@@ -681,7 +682,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const groupedFaculty = useMemo(() => {
     const map = new Map<string, any[]>();
     for (const m of facultyList) {
-      const dept = m.department || 'Unknown';
+      const dept = getDepartmentDisplayName(m.department || 'Unknown');
       if (!map.has(dept)) map.set(dept, []);
       map.get(dept)!.push(m);
     }

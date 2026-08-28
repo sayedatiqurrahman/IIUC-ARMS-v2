@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { canManageFaculty } from '@/lib/can-manage-faculty';
+import { getDepartmentDisplayName, normalizeMemberType } from '@/lib/departments';
+
+interface BulkMember {
+  department?: string;
+  name?: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  shortForm?: string;
+  shortform?: string;
+  short?: string;
+  memberType?: string;
+  membertype?: string;
+  type?: string;
+  role?: string;
+}
+
+function pick<V>(...vals: (V | undefined)[]): V | undefined {
+  for (const v of vals) if (v !== undefined && v !== null && v !== '') return v;
+  return undefined;
+}
 
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.faculty);
@@ -15,15 +36,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { members, mode } = body as {
-      members: Array<{
-        department?: string;
-        name?: string;
-        title?: string;
-        email?: string;
-        phone?: string;
-        shortForm?: string;
-        memberType?: string;
-      }>;
+      members: BulkMember[];
       mode?: 'skip' | 'replace';
     };
 
@@ -40,33 +53,46 @@ export async function POST(req: NextRequest) {
     let updated = 0;
     const errors: string[] = [];
 
-    for (const m of members) {
-      if (!m.department || !m.name) {
+    for (const raw of members) {
+      const department = pick(raw.department);
+      const name = pick(raw.name);
+      const title = pick(raw.title);
+      const email = pick(raw.email);
+      const phone = pick(raw.phone);
+      const shortForm = pick(raw.shortForm, raw.shortform, raw.short);
+      const memberType = pick(raw.memberType, raw.type, raw.membertype, raw.role);
+
+      if (!department || !name) {
         errors.push(`Skipped: missing department or name`);
         skipped++;
         continue;
       }
 
-      if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, m.department))) {
-        errors.push(`No permission for dept: ${m.department}`);
+      // Store the canonical department name so members match the department
+      // dropdown regardless of the spelling the importer used.
+      const storedDept = getDepartmentDisplayName(department);
+      const storedType = normalizeMemberType(memberType);
+
+      if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, storedDept))) {
+        errors.push(`No permission for dept: ${department}`);
         skipped++;
         continue;
       }
 
-      const existing = m.email
-        ? await prisma.facultyMember.findFirst({ where: { email: m.email } })
+      const existing = email
+        ? await prisma.facultyMember.findFirst({ where: { email } })
         : null;
 
       if (existing && mode === 'replace') {
         await prisma.facultyMember.update({
           where: { id: existing.id },
           data: {
-            department: m.department,
-            name: m.name,
-            title: m.title || null,
-            phone: m.phone || null,
-            shortForm: m.shortForm?.toUpperCase() || null,
-            memberType: m.memberType || 'faculty',
+            department: storedDept,
+            name,
+            title: title || null,
+            phone: phone || null,
+            shortForm: shortForm?.toUpperCase() || null,
+            memberType: storedType,
           },
         });
         updated++;
@@ -74,19 +100,19 @@ export async function POST(req: NextRequest) {
         skipped++;
       } else {
         const maxSort = await prisma.facultyMember.aggregate({
-          where: { department: m.department },
+          where: { department: storedDept },
           _max: { sortOrder: true },
         });
 
         await prisma.facultyMember.create({
           data: {
-            department: m.department,
-            name: m.name,
-            title: m.title || null,
-            email: m.email || null,
-            phone: m.phone || null,
-            shortForm: m.shortForm?.toUpperCase() || null,
-            memberType: m.memberType || 'faculty',
+            department: storedDept,
+            name,
+            title: title || null,
+            email: email || null,
+            phone: phone || null,
+            shortForm: shortForm?.toUpperCase() || null,
+            memberType: storedType,
             sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
           },
         });

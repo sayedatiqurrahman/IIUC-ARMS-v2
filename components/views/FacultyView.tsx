@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
-import { FACULTIES, TEACHER_TITLES, STAFF_DESIGNATIONS, findDepartment } from '@/lib/departments';
+import { FACULTIES, TEACHER_TITLES, STAFF_DESIGNATIONS, findDepartment, resolveDepartment, getDepartmentDisplayName } from '@/lib/departments';
 import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
@@ -67,8 +67,7 @@ export default function FacultyView() {
   const grouped = useMemo(() => {
     const map = new Map<string, FacultyMember[]>();
     for (const m of members) {
-      const found = findDepartment(m.department);
-      const key = found ? found.department.name : m.department;
+      const key = getDepartmentDisplayName(m.department);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(m);
     }
@@ -92,7 +91,7 @@ export default function FacultyView() {
   const canEditMember = (m: FacultyMember) => {
     if (!canEdit) return false;
     if (effectiveRole === 'admin' || effectiveRole === 'teacher') return true;
-    if (myDept) return m.department === myDept;
+    if (myDept) return resolveDepartment(m.department) === resolveDepartment(myDept);
     return true;
   };
 

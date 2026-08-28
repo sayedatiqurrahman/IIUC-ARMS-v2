@@ -172,9 +172,14 @@ export function resolveDepartment(input: string): string {
     }
   }
   // Fuzzy match for variants like "Department of Qur'anic Sciences & Islamic
-  // Studies" (normalize: strip "Department of", "&" -> "and", non-alpha -> space).
+  // Studies" or "Center for General Education" (normalize: strip common
+  // prefixes, "&" -> "and", non-alpha -> space).
   const norm = (s: string) =>
-    s.toLowerCase().replace(/department\s+of\s+/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+    s.toLowerCase()
+      .replace(/department\s+of\s+/g, '')
+      .replace(/center\s+for\s+|centre\s+for\s+|faculty\s+of\s+|school\s+of\s+|institute\s+of\s+/g, '')
+      .replace(/&/g, 'and')
+      .replace(/[^a-z0-9]+/g, ' ').trim();
   const nInput = norm(input);
   if (nInput) {
     for (const { department } of all) {
@@ -224,6 +229,13 @@ export function getDepartmentSelectOptions(): DepartmentSelectOption[] {
 export function isShariahDepartmentId(id: string): boolean {
   const canonical = resolveDepartmentId(id);
   return canonical === 'shariah' || canonical === 'qsis' || canonical === 'dawah' || canonical === 'hadith';
+}
+
+// Normalize a member-type value (e.g. user-entered "staf" typo) to a valid choice.
+export function normalizeMemberType(type?: string | null): string {
+  const t = (type || '').trim().toLowerCase();
+  if (t === 'staff' || t === 'staf') return 'staff';
+  return 'faculty';
 }
 
 export function findFaculty(facultyId: string): Faculty | undefined {

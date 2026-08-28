@@ -4,6 +4,7 @@ import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { config } from '@/lib/config';
 import { hasPermission } from '@/lib/permissions';
 import { canManageFaculty } from '@/lib/can-manage-faculty';
+import { getDepartmentDisplayName, normalizeMemberType } from '@/lib/departments';
 
 async function canReviewFaculty(email: string, profileRole?: string): Promise<boolean> {
   const role = config.getEffectiveRole(email, profileRole);
@@ -111,25 +112,26 @@ export async function PUT(req: NextRequest) {
     }
 
     if (action === 'approve') {
+      const storedDept = getDepartmentDisplayName(request.department);
       const existing = request.email
         ? await prisma.facultyMember.findFirst({ where: { email: request.email } })
         : null;
 
       if (!existing) {
         const maxSort = await prisma.facultyMember.aggregate({
-          where: { department: request.department },
+          where: { department: storedDept },
           _max: { sortOrder: true },
         });
 
         await prisma.facultyMember.create({
           data: {
-            department: request.department,
+            department: storedDept,
             name: request.name,
             title: request.title,
             email: request.email,
             phone: request.phone,
             shortForm: request.shortForm,
-            memberType: request.memberType,
+            memberType: normalizeMemberType(request.memberType),
             sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
           },
         });

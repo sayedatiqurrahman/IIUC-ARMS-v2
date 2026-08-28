@@ -1,5 +1,6 @@
 import { config } from '@/lib/config';
 import { hasPermission } from '@/lib/permissions';
+import { resolveDepartment } from '@/lib/departments';
 
 /**
  * Whether a caller may manage faculty/staff members.
@@ -17,6 +18,7 @@ export async function canManageFaculty(
 ): Promise<boolean> {
   const role = config.getEffectiveRole(email, profileRole);
   if (!(await hasPermission('manageFaculty', role, false, email))) return false;
-  if (role !== 'admin' && role !== 'teacher' && profileDept && profileDept !== targetDept) return false;
+  if (role !== 'admin' && role !== 'teacher' && profileDept && targetDept
+    && resolveDepartment(profileDept) !== resolveDepartment(targetDept)) return false;
   return true;
 }

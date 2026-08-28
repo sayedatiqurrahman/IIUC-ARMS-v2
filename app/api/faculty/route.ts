@@ -3,7 +3,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { canManageFaculty } from '@/lib/can-manage-faculty';
-import { findDepartment } from '@/lib/departments';
+import { findDepartment, resolveDepartment, getDepartmentDisplayName, normalizeMemberType } from '@/lib/departments';
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.faculty);
@@ -25,38 +25,65 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ members: claimed ? [claimed] : [] });
     }
 
-    const where: any = {};
+    // All conditions are combined with AND so a department filter no longer gets
+    // overwritten when a search term is also present.
+    const conditions: any[] = [];
     if (department) {
       const found = findDepartment(department);
       if (found) {
-        where.OR = [
-          { department: found.department.id },
-          { department: found.department.name },
-          ...(found.department.folder ? [{ department: found.department.folder }] : []),
-          ...(found.department.shortName ? [{ department: found.department.shortName }] : []),
-        ];
+        conditions.push({
+          OR: [
+            { department: found.department.id },
+            { department: found.department.name },
+            ...(found.department.folder ? [{ department: found.department.folder }] : []),
+            ...(found.department.shortName ? [{ department: found.department.shortName }] : []),
+          ],
+        });
       } else {
-        where.department = department;
+        conditions.push({ department });
       }
     }
-    if (memberType) where.memberType = memberType;
-    if (title) where.title = title;
+    if (memberType) {
+      // "staf" is a common typo for "staff" — treat both as the same value.
+      const variants = memberType.toLowerCase() === 'staff' || memberType.toLowerCase() === 'staf'
+        ? ['staff', 'staf']
+        : [memberType];
+      conditions.push({ memberType: { in: variants } });
+    }
+    if (title) conditions.push({ title });
     if (search) {
       const q = search.toLowerCase();
-      where.OR = [
-        { name: { contains: q, mode: 'insensitive' } },
-        { shortForm: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
-        { title: { contains: q, mode: 'insensitive' } },
-      ];
+      conditions.push({
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { shortForm: { contains: q, mode: 'insensitive' } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { title: { contains: q, mode: 'insensitive' } },
+        ],
+      });
     }
+
+    const where: any = {};
+    if (conditions.length > 0) where.AND = conditions;
 
     const members = await prisma.facultyMember.findMany({
       where,
       orderBy: [{ department: 'asc' }, { sortOrder: 'asc' }],
     });
 
-    return NextResponse.json({ members });
+    // Department values in the DB are not always the canonical id/name/short
+    // form (e.g. "Finance" vs "Department of Finance"). Resolve every stored
+    // value to its canonical id so members always show under the right
+    // department, no matter how they were entered.
+    let filtered = members;
+    if (department) {
+      const canonical = resolveDepartment(department);
+      if (canonical && findDepartment(canonical)) {
+        filtered = members.filter(m => resolveDepartment(m.department) === canonical);
+      }
+    }
+
+    return NextResponse.json({ members: filtered });
   } catch {
     return NextResponse.json({ error: 'Failed to load faculty' }, { status: 500 });
   }
@@ -67,7 +94,8 @@ export async function POST(req: NextRequest) {
   if (!rl.success) return rl.response!;
   try {
     const body = await req.json();
-    const { department, name, title, email, phone, shortForm, memberType } = body;
+    const { department, name, title, email, phone, shortForm } = body;
+    const memberType = body.memberType ?? body.type ?? body.role;
 
     if (!department || !name) {
       return NextResponse.json({ error: 'department and name required' }, { status: 400 });
@@ -76,24 +104,26 @@ export async function POST(req: NextRequest) {
     const callerEmail = await getUserEmail(req);
     if (!callerEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const storedDept = getDepartmentDisplayName(department);
+
     const { prisma } = await import('@/lib/prisma');
     const callerProfile = await prisma.profile.findUnique({ where: { userId: callerEmail } });
 
-    if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, department))) {
+    if (!(await canManageFaculty(callerEmail, callerProfile?.role || undefined, callerProfile?.department || undefined, storedDept))) {
       return NextResponse.json({ error: 'You do not have permission to add faculty to this department' }, { status: 403 });
     }
 
-    const maxSort = await prisma.facultyMember.aggregate({ where: { department }, _max: { sortOrder: true } });
+    const maxSort = await prisma.facultyMember.aggregate({ where: { department: storedDept }, _max: { sortOrder: true } });
 
     const member = await prisma.facultyMember.create({
       data: {
-        department,
+        department: storedDept,
         name,
         title: title || null,
         email: email || null,
         phone: phone || null,
         shortForm: shortForm || null,
-        memberType: memberType || 'faculty',
+        memberType: normalizeMemberType(memberType),
         sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
       },
     });
