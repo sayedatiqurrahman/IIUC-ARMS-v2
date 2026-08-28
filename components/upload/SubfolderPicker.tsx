@@ -142,8 +142,12 @@ export default function SubfolderPicker({
         setOpen(true);
         setCreating(false);
         setNewName('');
+        const s = useAppStore.getState();
+        const entryPath = `${folderPath}/.gitkeep`;
+        if (!s.tree.some(it => it.path === entryPath)) {
+          useAppStore.setState({ tree: [...s.tree, { type: 'blob', path: entryPath }] });
+        }
         useAppStore.getState().invalidateTreeCache();
-        useAppStore.getState().loadTree();
       }
     } catch {}
     setCreatingFolder(false);
