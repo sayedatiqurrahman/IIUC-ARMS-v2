@@ -125,6 +125,7 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
         }
         // Populate semesters that have saved courses
         setDraft(prev => {
+          if (!prev) return prev;
           const updated = { ...prev };
           updated.semesters = prev.semesters.map(sem => {
             const saved = courseMap[sem.name];
@@ -142,6 +143,7 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
 
   // Save courses to DB when they change (debounced)
   useEffect(() => {
+    if (!draft) return;
     const timer = setTimeout(() => {
       for (const sem of draft.semesters) {
         if (sem.courses.length === 0) continue;
@@ -153,7 +155,7 @@ export default function AllSemesterView({ publishedRoutines, onView, onPublish, 
       }
     }, 2000);
     return () => clearTimeout(timer);
-  }, [draft.semesters]);
+  }, [draft]);
 
   const updateDraft = (patch: Partial<AllSemesterDraft>) => setDraft(prev => ({ ...prev, ...patch }));
   const toggle = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));

@@ -84,12 +84,22 @@ export default function SubfolderPicker({
     ? (courseTitle ? `${courseCode} - ${courseTitle}` : courseCode)
     : '';
 
+  // Human-friendly root name for the picker = the category (with Mid/Final when applicable).
+  const catLabels: Record<string, string> = {
+    [config.categories.sheet.folder]: config.categories.sheet.label,
+    [config.categories.notes.folder]: config.categories.notes.label,
+    [config.categories.questions.folder]: config.categories.questions.label,
+    [config.categories.syllabus.folder]: config.categories.syllabus.label,
+    [config.categories.other.folder]: config.categories.other.label,
+  };
+  const isExamCat = category === config.categories.notes.folder || category === config.categories.questions.folder;
+  const rootName = `${catLabels[category] || category}${isExamCat && midFinal ? ` · ${midFinal}` : ''}`;
+
   // Browse location = the folder whose contents are visible.
   const pathSegments = browse ? browse.split('/').filter(Boolean) : [];
 
   const children = useMemo(() => {
     if (!deptFolder || !semester || !courseFolder || !category) return [];
-    const isExamCat = category === config.categories.notes.folder || category === config.categories.questions.folder;
     const mf = isExamCat ? midFinal : undefined;
     return extractSubfolders(tree, deptFolder, semester, courseFolder, category, mf, browse);
   }, [tree, treeLength, deptFolder, semester, courseFolder, category, midFinal, browse]);
@@ -144,7 +154,6 @@ export default function SubfolderPicker({
     const name = newName.trim().replace(/[\/\\]/g, '');
     if (!name) return;
 
-    const isExamCat = category === config.categories.notes.folder || category === config.categories.questions.folder;
     const mfPart = isExamCat && midFinal ? `${midFinal}/` : '';
     const folderPath = `${config.uploadPath}/${deptFolder}/${semester}/${courseFolder}/${mfPart}${category}/${browse ? browse + '/' : ''}${name}`;
     const newPath = browse ? `${browse}/${name}` : name;
@@ -174,7 +183,7 @@ export default function SubfolderPicker({
     setCreatingFolder(false);
   };
 
-  const displayLabel = value || 'Root (category folder)';
+  const displayLabel = value ? `${rootName} / ${value}` : rootName;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -200,7 +209,7 @@ export default function SubfolderPicker({
             <span>Upload to folder</span>
             <span className="flex items-center gap-1 normal-case font-medium text-qsis">
               <i className="fas fa-check-circle text-[0.65rem]"></i>
-              {value ? `Root / ${value}` : 'Root'}
+              {value ? `${rootName} / ${value}` : rootName}
             </span>
           </div>
 
@@ -213,8 +222,8 @@ export default function SubfolderPicker({
                 pathSegments.length === 0 ? 'bg-qsis/10 text-qsis font-semibold' : 'bg-transparent text-dark-text2 hover:text-qsis'
               }`}
             >
-              <i className="fas fa-home text-[0.65rem]"></i>
-              Root
+              <i className="fas fa-folder text-[0.65rem]"></i>
+              {rootName}
             </button>
             {pathSegments.map((seg, i) => (
               <Fragment key={`${seg}-${i}`}>
@@ -281,7 +290,7 @@ export default function SubfolderPicker({
                   className="w-full flex items-center gap-2 px-3 py-2 text-[0.78rem] text-left bg-transparent border-none cursor-pointer text-qsis hover:bg-qsis/5 transition"
                 >
                   <i className="fas fa-plus text-[0.7rem] w-4 text-center"></i>
-                  Create new subfolder inside {browse ? `Root / ${browse}` : 'Root'}
+                  Create new subfolder inside {browse ? `${rootName} / ${browse}` : rootName}
                 </button>
               ) : (
                 <div className="p-2 bg-dark-bg3/50">
@@ -303,7 +312,7 @@ export default function SubfolderPicker({
                       {creatingFolder ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-plus"></i>}
                     </button>
                   </div>
-                  <p className="text-[0.6rem] text-dark-text3 mt-1 px-0.5">Creating inside {browse ? `Root / ${browse}` : 'Root'}. Press Enter to create, Esc to cancel.</p>
+                  <p className="text-[0.6rem] text-dark-text3 mt-1 px-0.5">Creating inside {browse ? `${rootName} / ${browse}` : rootName}. Press Enter to create, Esc to cancel.</p>
                 </div>
               )}
             </div>
