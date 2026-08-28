@@ -40,6 +40,8 @@ export async function POST(req: NextRequest) {
       claimedBy: m.claimedBy || undefined,
       id: m.id,
       sortOrder: m.sortOrder,
+      isCR: m.isCR || false,
+      isVisible: m.isVisible || false,
     }));
 
     const result = await seedFacultyToGithub(members as any);

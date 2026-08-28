@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
     let skipped = 0;
     let updated = 0;
     const errors: string[] = [];
+    const affectedDepts = new Set<string>();
 
     for (const raw of members) {
       const department = pick(raw.department);
@@ -84,21 +85,22 @@ export async function POST(req: NextRequest) {
         : null;
 
       if (existing && mode === 'replace') {
-        await prisma.facultyMember.update({
-          where: { id: existing.id },
-          data: {
-            department: storedDept,
-            name,
-            title: title || null,
-            phone: phone || null,
-            shortForm: shortForm?.toUpperCase() || null,
-            memberType: storedType,
-          },
-        });
-        updated++;
-      } else if (existing) {
-        skipped++;
-      } else {
+          await prisma.facultyMember.update({
+            where: { id: existing.id },
+            data: {
+              department: storedDept,
+              name,
+              title: title || null,
+              phone: phone || null,
+              shortForm: shortForm?.toUpperCase() || null,
+              memberType: storedType,
+            },
+          });
+          updated++;
+          affectedDepts.add(storedDept);
+        } else if (existing) {
+          skipped++;
+        } else {
         const maxSort = await prisma.facultyMember.aggregate({
           where: { department: storedDept },
           _max: { sortOrder: true },
@@ -117,8 +119,15 @@ export async function POST(req: NextRequest) {
           },
         });
         inserted++;
+        affectedDepts.add(storedDept);
       }
     }
+
+    // Keep the cloud data repo in sync with every affected department.
+    try {
+      const { mirrorDepartmentToCloud } = await import('@/lib/faculty-data');
+      for (const dept of Array.from(affectedDepts)) await mirrorDepartmentToCloud(dept);
+    } catch {}
 
     return NextResponse.json({
       success: true,

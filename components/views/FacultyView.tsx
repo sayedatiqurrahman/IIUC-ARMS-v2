@@ -7,6 +7,7 @@ import { config } from '@/lib/config';
 import { useAppStore } from '@/lib/store';
 import { showToast } from '@/lib/utils';
 import CustomSelect from '@/components/CustomSelect';
+import Modal from '@/components/ui/Modal';
 import { useConfirm } from '@/components/ConfirmModal';
 import { useUserAccess } from '@/lib/useUserAccess';
 
@@ -48,8 +49,17 @@ export default function FacultyView() {
   const [editForm, setEditForm] = useState<Partial<FacultyMember>>({});
   const [saving, setSaving] = useState(false);
   const isEditing = useRef(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({ department: '', name: '', title: '', email: '', phone: '', shortForm: '', memberType: 'faculty' });
+  const [addSaving, setAddSaving] = useState(false);
 
   const fetchMembers = useCallback(() => {
+    // By default show nothing — members appear only when a department is chosen.
+    if (!deptFilter) {
+      setMembers([]);
+      setLoading(false);
+      return;
+    }
     const params = new URLSearchParams();
     if (deptFilter) params.set('department', deptFilter);
     if (search) params.set('search', search);
@@ -129,6 +139,33 @@ export default function FacultyView() {
 
   const editInputClass = 'px-2 py-1 rounded border border-qsis/50 bg-dark-bg text-dark-text text-[0.78rem] outline-none w-full';
 
+  const handleAddMember = async () => {
+    if (!addForm.department || !addForm.name.trim()) return;
+    setAddSaving(true);
+    try {
+      const res = await fetch('/api/faculty', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(addForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`${addForm.name} added to directory`, 'success');
+        const addedDept = addForm.department;
+        setShowAdd(false);
+        setAddForm({ department: '', name: '', title: '', email: '', phone: '', shortForm: '', memberType: 'faculty' });
+        if (!deptFilter || deptFilter !== addedDept) setDeptFilter(addedDept);
+        else fetchMembers();
+      } else {
+        showToast(data.error || 'Failed to add', 'error');
+      }
+    } catch {
+      showToast('Failed to add', 'error');
+    } finally {
+      setAddSaving(false);
+    }
+  };
+
   const renderMemberCard = (m: FacultyMember) => {
     const isEditing = editingId === m.id;
     const isStaff = m.memberType === 'staff';
@@ -199,14 +236,24 @@ export default function FacultyView() {
 
   return (
     <section className="mb-5">
-      <div className="mb-6">
-        <h2 className="text-[1.3rem] font-bold text-dark-text mb-1">
-          <i className="fas fa-chalkboard-teacher text-qsis mr-2"></i>Faculty & Staff Directory
-        </h2>
-        <p className="text-[0.82rem] text-dark-text2">
-          Browse faculty members across all departments
-          {canEdit && <span className="text-qsis ml-2">— You can edit members by clicking the edit icon</span>}
-        </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-[1.3rem] font-bold text-dark-text mb-1">
+            <i className="fas fa-chalkboard-teacher text-qsis mr-2"></i>Faculty & Staff Directory
+          </h2>
+          <p className="text-[0.82rem] text-dark-text2">
+            Browse faculty members across all departments
+            {canEdit && <span className="text-qsis ml-2">— You can edit members by clicking the edit icon</span>}
+          </p>
+        </div>
+        {canEdit && (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="px-4 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none transition-all flex items-center gap-1.5"
+          >
+            <i className="fas fa-user-plus text-[0.85rem]"></i>Add Member
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -229,9 +276,9 @@ export default function FacultyView() {
               onChange={(val) => setMemberTypeFilter(val as 'all' | 'faculty' | 'staff')}
               placeholder="All"
               options={[
-                { value: 'all', label: `All (${members.length})`, icon: 'fa-users' },
-                { value: 'faculty', label: `Faculty (${facultyCount})`, icon: 'fa-chalkboard-teacher' },
-                { value: 'staff', label: `Staff (${staffCount})`, icon: 'fa-headset' },
+                { value: 'all', label: deptFilter ? `All (${members.length})` : 'All', icon: 'fa-users' },
+                { value: 'faculty', label: deptFilter ? `Faculty (${facultyCount})` : 'Faculty', icon: 'fa-chalkboard-teacher' },
+                { value: 'staff', label: deptFilter ? `Staff (${staffCount})` : 'Staff', icon: 'fa-headset' },
               ]}
               size="md"
             />
@@ -261,7 +308,7 @@ export default function FacultyView() {
               onChange={setTitleFilter}
               placeholder="All"
               options={[
-                { value: '', label: `All (${titleCounts.size})`, icon: 'fa-user-tie' },
+                { value: '', label: deptFilter ? `All (${titleCounts.size})` : 'All', icon: 'fa-user-tie' },
                 ...TEACHER_TITLES.map(t => ({
                   value: t,
                   label: `${t} (${titleCounts.get(t) || 0})`,
@@ -295,6 +342,12 @@ export default function FacultyView() {
         <div className="text-center py-10">
           <i className="fas fa-spinner fa-spin text-2xl text-qsis mb-3 block"></i>
           <p className="text-[0.82rem] text-dark-text2">Loading faculty members...</p>
+        </div>
+      ) : !deptFilter ? (
+        <div className="text-center py-16">
+          <i className="fas fa-building text-3xl text-dark-text3 mb-3 block"></i>
+          <p className="text-[0.9rem] text-dark-text2 font-medium">Select a department to browse its members</p>
+          <p className="text-[0.75rem] text-dark-text3 mt-1">Choose a department above to see faculty and staff</p>
         </div>
       ) : members.length === 0 ? (
         <div className="text-center py-10">
@@ -336,6 +389,72 @@ export default function FacultyView() {
             </div>
           );
         })
+      )}
+      {showAdd && (
+        <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add Faculty / Staff Member" maxWidth="max-w-2xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Department *</label>
+              <CustomSelect
+                value={addForm.department}
+                onChange={(val) => setAddForm(f => ({ ...f, department: val }))}
+                placeholder="Select department..."
+                options={FACULTIES.flatMap(f => f.departments.map(d => ({
+                  value: d.id,
+                  label: `${d.shortName} — ${d.name}`,
+                  icon: 'fa-building',
+                  group: `${f.shortName} — ${f.name}`,
+                })))}
+              />
+            </div>
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Type *</label>
+              <CustomSelect
+                value={addForm.memberType}
+                onChange={(val) => setAddForm(f => ({ ...f, memberType: val, title: '' }))}
+                options={[
+                  { value: 'faculty', label: 'Faculty', icon: 'fa-chalkboard-teacher' },
+                  { value: 'staff', label: 'Staff', icon: 'fa-user-tie' },
+                ]}
+              />
+            </div>
+            <div className="sm:col-span-1">
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Full Name *</label>
+              <input type="text" value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Prof. Dr. Gias Uddin Hafiz" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+            </div>
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Designation</label>
+              <CustomSelect
+                value={addForm.title}
+                onChange={(val) => setAddForm(f => ({ ...f, title: val }))}
+                placeholder="Select designation..."
+                options={(addForm.memberType === 'staff' ? STAFF_DESIGNATIONS : TEACHER_TITLES).map(t => ({ value: t, label: t, icon: 'fa-chalkboard-teacher' }))}
+              />
+            </div>
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Short Form</label>
+              <input type="text" value={addForm.shortForm} onChange={e => setAddForm(f => ({ ...f, shortForm: e.target.value.toUpperCase() }))} placeholder="e.g. GH" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+            </div>
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Email</label>
+              <input type="email" value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))} placeholder="yourname@iiuc.ac.bd" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+            </div>
+            <div>
+              <label className="text-[0.7rem] text-dark-text2 block mb-1">Phone</label>
+              <input type="tel" value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} placeholder="+8801XXXXXXXXX" className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-4">
+            <button onClick={handleAddMember} disabled={addSaving || !addForm.department || !addForm.name.trim()}
+              className="px-4 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50 flex items-center gap-1.5">
+              {addSaving ? <><i className="fas fa-spinner fa-spin"></i> Adding...</> : <><i className="fas fa-user-plus"></i> Add Member</>}
+            </button>
+            <button onClick={() => setShowAdd(false)} disabled={addSaving}
+              className="px-4 py-2 rounded-lg bg-dark-bg border border-dark-border text-dark-text2 text-[0.78rem] font-semibold cursor-pointer hover:text-dark-text disabled:opacity-50">
+              Cancel
+            </button>
+          </div>
+        </Modal>
       )}
       {confirmDialog}
     </section>

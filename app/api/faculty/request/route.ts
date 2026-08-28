@@ -136,6 +136,9 @@ export async function PUT(req: NextRequest) {
           },
         });
       }
+
+      // Keep the cloud data repo in sync.
+      try { const { mirrorDepartmentToCloud } = await import('@/lib/faculty-data'); await mirrorDepartmentToCloud(storedDept); } catch {}
     }
 
     await prisma.facultyRequest.update({

@@ -65,6 +65,22 @@ export default function FacultyTab({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', title: '', email: '', phone: '', shortForm: '', memberType: 'faculty' });
   const [editingSaving, setEditingSaving] = useState(false);
+  const [syncingCloud, setSyncingCloud] = useState(false);
+  const [cloudSyncResult, setCloudSyncResult] = useState<string | null>(null);
+
+  const handleCloudSync = async () => {
+    setSyncingCloud(true);
+    setCloudSyncResult(null);
+    try {
+      const res = await fetch('/api/faculty/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setCloudSyncResult(`Cloud backup complete: ${data.written} members across ${data.depts} departments`);
+        showToast('Faculty directory backed up to cloud!', 'success');
+      } else showToast(data.error || 'Backup failed', 'error');
+    } catch { showToast('Backup failed', 'error'); }
+    finally { setSyncingCloud(false); }
+  };
 
   const startEdit = (m: any) => {
     setEditingId(m.id);
@@ -113,7 +129,14 @@ export default function FacultyTab({
           className={`px-4 py-2 rounded-lg text-[0.78rem] font-semibold cursor-pointer border transition-all ${bulkMode ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-dark-bg2 text-dark-text2 border-dark-border hover:text-dark-text'}`}>
           <i className="fas fa-file-import mr-1"></i>{bulkMode ? 'Single Entry Mode' : 'Bulk Import'}
         </button>
+        <button onClick={handleCloudSync} disabled={syncingCloud}
+          className="px-4 py-2 rounded-lg text-[0.78rem] font-semibold cursor-pointer border transition-all bg-dark-bg2 text-dark-text2 border-dark-border hover:text-qsis hover:border-qsis/50 disabled:opacity-50">
+          {syncingCloud ? <><i className="fas fa-spinner fa-spin mr-1"></i>Backing Up...</> : <><i className="fas fa-cloud-upload-alt mr-1"></i>Back up to cloud</>}
+        </button>
       </div>
+      {cloudSyncResult && (
+        <p className="text-[0.72rem] text-green-400 mb-4"><i className="fas fa-check-circle mr-1"></i>{cloudSyncResult} — the directory now loads from the data repo.</p>
+      )}
 
       {/* Bulk Import Mode */}
       {bulkMode ? (

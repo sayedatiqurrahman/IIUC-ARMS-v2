@@ -62,6 +62,10 @@ export async function POST(req: NextRequest) {
       await prisma.facultyMember.update({ where: { id: member.id }, data: { shortForm } });
     }
 
+    // The claim connection (account ↔ faculty profile) must also live in the
+    // cloud data repo, so mirror this department's file.
+    try { const { mirrorDepartmentToCloud } = await import('@/lib/faculty-data'); await mirrorDepartmentToCloud(member.department); } catch {}
+
     const updated = await prisma.profile.update({
       where: { userId: email },
       data: {
