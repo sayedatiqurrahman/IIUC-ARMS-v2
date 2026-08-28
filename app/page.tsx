@@ -125,7 +125,7 @@ export default function BrowsePage() {
             canDelete: perms.deleteCourse.includes(isCR ? 'cr' : role),
             canEditLinks: perms.editLinks.includes(isCR ? 'cr' : role),
           });
-          setCanCreateFolder(!!email);
+          setCanCreateFolder(!!session?.user);
           return;
         }
         const perms = data.permissions || {};
@@ -155,7 +155,7 @@ export default function BrowsePage() {
           canDelete: check('deleteCourse'),
           canEditLinks: check('editLinks'),
         });
-        setCanCreateFolder(!!email);
+        setCanCreateFolder(!!session?.user);
       } catch {
         // Fall back to default permissions
         const perms = await import('@/lib/permission-defaults').then(m => m.DEFAULT_PERMISSIONS);
@@ -171,11 +171,11 @@ export default function BrowsePage() {
           canDelete: perms.deleteCourse.includes(isCR ? 'cr' : role),
           canEditLinks: perms.editLinks.includes(isCR ? 'cr' : role),
         });
-        setCanCreateFolder(!!email);
+        setCanCreateFolder(!!session?.user);
       }
     };
     loadPerms();
-  }, [email, profile.isCR]);
+  }, [email, profile.isCR, session?.user]);
   const handleFileAction = useCallback(async (action: string, from: string, to?: string, newName?: string) => {
     const opLabels: Record<string, string> = {
       delete: 'Deleting…',
