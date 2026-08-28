@@ -194,18 +194,19 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     const course = p.get('course');
     const mf = p.get('mf');
     const cat = p.get('cat');
+    const sub = p.get('sub') || '';
     if (dept) setDepartment(resolveDepartmentId(dept));
     if (sem) setSemester(sem);
     if (cat) {
       const catKey = Object.keys(config.categories).find(
         k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat
       );
-      if (catKey) setCategory(catKey);
+      if (catKey) setCategory(config.categories[catKey as keyof typeof config.categories].folder || catKey);
     }
     if (course) {
       const code = course.toUpperCase();
       const found = allKnownCourses.find(c => c.code.toUpperCase() === code);
-      setCourses(prev => [{ ...prev[0], selectedCourseCode: code, selectedCourseTitle: found?.title || '', midFinal: mf || '' }]);
+      setCourses(prev => [{ ...prev[0], selectedCourseCode: code, selectedCourseTitle: found?.title || '', midFinal: mf || '', customFolder: sub }]);
     }
   }, [allKnownCourses]);
 

@@ -628,6 +628,99 @@ export function createTreeHelpers(get: GetState) {
       return resultCats.filter(c => c.count > 0 || c.hasLinks || c.hasMd);
     },
 
+    getSubfolderContents: (semId, courseCode, departmentId, midFinal, category, subPath) => {
+      const uploadTree = get().getUploadTree();
+      const prefix = semId + '/';
+      const code = normalizeCourseCode(courseCode);
+      const facultyId = departmentId ? getFacultyIdForDepartment(departmentId) : null;
+
+      const subfolders = new Map<string, { name: string; fileCount: number; count: number; path: string }>();
+      const files: any[] = [];
+
+      const matchesDept = (item: any) => {
+        if (!departmentId) return true;
+        return item.department === departmentId || (facultyId && item.department === facultyId);
+      };
+
+      uploadTree.forEach((item: any) => {
+        if (!matchesDept(item)) return;
+        if (!item.path.startsWith(prefix)) return;
+        const rel = item.path.substring(prefix.length);
+        const parts = rel.split('/');
+        const first = parts[0] || '';
+        const courseMatch = matchCourseFolder(first);
+        if (!courseMatch || courseMatch.code !== code) return;
+
+        let mf: string | null = null;
+        let catIdx = 1;
+        if (parts.length > 2 && (parts[1] === 'Mid' || parts[1] === 'Final')) {
+          mf = parts[1];
+          catIdx = 2;
+        }
+        if (mf !== midFinal) return;
+        const catFolder = parts[catIdx];
+        if (!catFolder || detectCategory(catFolder) !== category) return;
+
+        const rest = parts.slice(catIdx + 1);
+        const restStr = rest.join('/');
+        if (!restStr) return;
+
+        let relAfter: string;
+        if (subPath) {
+          if (restStr === subPath) relAfter = '';
+          else if (restStr.startsWith(subPath + '/')) relAfter = restStr.substring(subPath.length + 1);
+          else return;
+        } else {
+          relAfter = restStr;
+        }
+        if (!relAfter) return;
+
+        const tail = relAfter.split('/');
+        const fileName = tail[tail.length - 1] || '';
+        const subBase = `${catFolder}/${subPath ? subPath + '/' : ''}`;
+
+        if (fileName === '.gitkeep') {
+          if (tail.length >= 2) {
+            const name = tail[0];
+            if (!subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: subBase + name });
+          }
+          return;
+        }
+
+        if (item.type === 'tree') {
+          if (tail.length === 1) {
+            const name = tail[0];
+            if (name && name !== '.') {
+              if (!subfolders.has(name)) subfolders.set(name, { name, fileCount: 0, count: 0, path: subBase + name });
+            }
+          }
+          return;
+        }
+
+        if (tail.length === 1) {
+          files.push(item);
+        } else if (tail.length >= 2) {
+          const name = tail[0];
+          const existing = subfolders.get(name) || { name, fileCount: 0, count: 0, path: subBase + name };
+          existing.count++;
+          existing.fileCount++;
+          subfolders.set(name, existing);
+        }
+      });
+
+      return {
+        subfolders: Array.from(subfolders.values()).sort((a, b) => a.name.localeCompare(b.name)),
+        files: files.sort((a: any, b: any) => {
+          const ya = parseInt(extractYear(a.path) || '0');
+          const yb = parseInt(extractYear(b.path) || '0');
+          if (yb !== ya) return yb - ya;
+          const aSpring = /spring/i.test(a.path) ? 1 : 0;
+          const bSpring = /spring/i.test(b.path) ? 1 : 0;
+          return bSpring - aSpring;
+        }),
+      };
+    },
+
     getCourseMidFinal: (semId: string, courseCode: string, departmentId?: string | null) => {
       if (departmentId) departmentId = resolveDepartmentId(departmentId);
       const uploadTree = get().getUploadTree();

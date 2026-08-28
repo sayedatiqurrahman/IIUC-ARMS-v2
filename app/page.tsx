@@ -21,6 +21,7 @@ const DepartmentsView = dynamic(() => import('@/components/browse/DepartmentsVie
 const SemestersView = dynamic(() => import('@/components/browse/SemestersView'), { ssr: false });
 const CoursesView = dynamic(() => import('@/components/browse/CoursesView'), { ssr: false });
 const CategoriesView = dynamic(() => import('@/components/browse/CategoriesView'), { ssr: false });
+const SubFolderView = dynamic(() => import('@/components/browse/SubFolderView'), { ssr: false });
 const FileGrid = dynamic(() => import('@/components/browse/FileGrid'), { ssr: false });
 const FolderCard = dynamic(() => import('@/components/browse/FolderCard'), { ssr: false });
 const BrowseModals = dynamic(() => import('@/components/browse/BrowseModals'), { ssr: false });
@@ -79,6 +80,7 @@ export default function BrowsePage() {
   const navigateToCategory = useAppStore(s => s.navigateToCategory);
   const navigateToCourse = useAppStore(s => s.navigateToCourse);
   const navigateToMidFinal = useAppStore(s => s.navigateToMidFinal);
+  const navigateToSubFolder = useAppStore(s => s.navigateToSubFolder);
   const goBack = useAppStore(s => s.goBack);
   const openFile = useAppStore(s => s.openFile);
   const openRecentFile = useAppStore(s => s.openRecentFile);
@@ -86,6 +88,7 @@ export default function BrowsePage() {
   const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
   const getCourseCategories = useAppStore(s => s.getCourseCategories);
   const getCourseMidFinal = useAppStore(s => s.getCourseMidFinal);
+  const getSubfolderContents = useAppStore(s => s.getSubfolderContents);
   const getUploadTree = useAppStore(s => s.getUploadTree);
   const getSearchResults = useAppStore(s => s.getSearchResults);
   const getUploadDepartments = useAppStore(s => s.getUploadDepartments);
@@ -93,6 +96,7 @@ export default function BrowsePage() {
   const currentCourseCode = useAppStore(s => s.currentCourseCode);
   const currentCourseTitle = useAppStore(s => s.currentCourseTitle);
   const currentMidFinal = useAppStore(s => s.currentMidFinal);
+  const currentSubPath = useAppStore(s => s.currentSubPath);
   useEffect(() => {
     loadCourses();
     setShowWelcome(localStorage.getItem('qs-welcome-dismissed') !== 'true');
@@ -253,9 +257,11 @@ export default function BrowsePage() {
     const courseFolder = s.currentCourseCode && s.currentCourseTitle
       ? `${s.currentCourseCode} - ${s.currentCourseTitle}`
       : '';
-    const parts = [deptFolder, s.currentSem, courseFolder, s.currentMidFinal, s.currentCat].filter(Boolean);
-    const parentPath = parts.join('/');
-    const folderPath = `${config.uploadPath}/${parentPath}/${folderName}`;
+    const catFolder = s.currentCat
+      ? config.categories[s.currentCat as keyof typeof config.categories]?.folder || s.currentCat
+      : '';
+    const parts = [deptFolder, s.currentSem, courseFolder, s.currentMidFinal, catFolder, s.currentSubPath, folderName].filter(Boolean);
+    const folderPath = `${config.uploadPath}/${parts.join('/')}`;
     const res = await fetch('/api/github/create-folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -279,6 +285,7 @@ export default function BrowsePage() {
       const catMeta = config.categories[currentCat as keyof typeof config.categories];
       params.set('cat', catMeta?.label || currentCat);
     }
+    if (currentSubPath) params.set('sub', currentSubPath);
     const qs = params.toString();
     const pageUrl = qs ? `${SITE_URL}/?${qs}` : SITE_URL;
     if (isFolder) {
@@ -287,7 +294,7 @@ export default function BrowsePage() {
     } else {
       setShareItem({ title: name, url: pageUrl, type: 'file', githubPath: path });
     }
-  }, [currentDept, currentSem, currentCourseCode, currentMidFinal, currentCat]);
+  }, [currentDept, currentSem, currentCourseCode, currentMidFinal, currentCat, currentSubPath]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -298,6 +305,24 @@ export default function BrowsePage() {
     const course = p.get('course') || '';
     const mf = p.get('mf') || '';
     const cat = p.get('cat') || '';
+    const sub = p.get('sub') || '';
+    // Navigates through nested subfolder segments after reaching the category.
+    const runSubNav = (delay = 300) => {
+      const st = useAppStore.getState();
+      if (sub && st.currentCat && st.view === 'files') {
+        const segs = sub.split('/').filter(Boolean);
+        if (segs.length > 0) {
+          segs.forEach((seg, i) => {
+            setTimeout(() => {
+              useAppStore.getState().navigateToSubFolder(seg);
+              if (i === segs.length - 1) deepLinkingRef.current = false;
+            }, 150 * (i + 1));
+          });
+          return;
+        }
+      }
+      deepLinkingRef.current = false;
+    };
     // A shallow dept/sem URL on a personalized user is almost always a stale
     // position (e.g. the old profile-load bug left ?sem=6th-semister in the
     // URL), not an intentional share. Only deep links (course/category/file/
@@ -326,20 +351,20 @@ export default function BrowsePage() {
                       setTimeout(() => {
                         const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
                         if (catKey) useAppStore.getState().navigateToCategory(catKey);
-                        setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                        setTimeout(() => { runSubNav(delay); }, delay);
                       }, 150);
                     } else {
-                      setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                      setTimeout(() => { runSubNav(delay); }, delay);
                     }
                   }, 150);
                 } else if (cat) {
                   setTimeout(() => {
                     const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
                     if (catKey) useAppStore.getState().navigateToCategory(catKey);
-                    setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                    setTimeout(() => { runSubNav(delay); }, delay);
                   }, 150);
                 } else {
-                  setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                  setTimeout(() => { runSubNav(delay); }, delay);
                 }
               };
               finishNav();
@@ -357,20 +382,20 @@ export default function BrowsePage() {
                           setTimeout(() => {
                             const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
                             if (catKey) useAppStore.getState().navigateToCategory(catKey);
-                            setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                            setTimeout(() => { runSubNav(delay); }, delay);
                           }, 150);
                         } else {
-                          setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                          setTimeout(() => { runSubNav(delay); }, delay);
                         }
                       }, 150);
                     } else if (cat) {
                       setTimeout(() => {
                         const catKey = Object.keys(config.categories).find(k => config.categories[k as keyof typeof config.categories].label.toLowerCase() === cat.toLowerCase() || k === cat);
                         if (catKey) useAppStore.getState().navigateToCategory(catKey);
-                        setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                        setTimeout(() => { runSubNav(delay); }, delay);
                       }, 150);
                     } else {
-                      setTimeout(() => { deepLinkingRef.current = false; }, delay);
+                      setTimeout(() => { runSubNav(delay); }, delay);
                     }
                   };
                   finishRetryNav();
@@ -512,13 +537,14 @@ export default function BrowsePage() {
       if (currentMidFinal) params.set('mf', currentMidFinal);
       const catMeta = config.categories[currentCat as keyof typeof config.categories];
       params.set('cat', catMeta?.label || currentCat);
+      if (currentSubPath) params.set('sub', currentSubPath);
     } else if (isSearching && searchQuery) {
       params.set('q', searchQuery);
     }
     const qs = params.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState({}, '', url);
-  }, [mounted, view, currentDept, currentSem, currentCourseCode, currentCat, currentMidFinal, searchQuery, isSearching]);
+  }, [mounted, view, currentDept, currentSem, currentCourseCode, currentCat, currentMidFinal, currentSubPath, searchQuery, isSearching]);
   const filteredSemesters = semesters.filter(sem => {
     const matchLabel = !searchQuery || sem.label.toLowerCase().includes(searchQuery.toLowerCase());
     const matchSearch = matchLabel || uploadTree.some((item: any) => {
@@ -566,11 +592,13 @@ export default function BrowsePage() {
     const q = searchQuery.toLowerCase();
     return c.code.toLowerCase().includes(q) || c.title.toLowerCase().includes(q);
   });
+  const subfolderContents = currentSem && currentCat && currentCourseCode
+    ? getSubfolderContents(currentSem, currentCourseCode, currentDept || userDeptId, currentMidFinal || null, currentCat, currentSubPath)
+    : { subfolders: [], files: [] };
+  const subPathSegments = currentSubPath ? currentSubPath.split('/') : [];
   const filteredFiles = (() => {
     if (!currentCat || !currentCourseCode || !currentSem) return [];
-    const cat = courseCategories.find(c => c.key === currentCat);
-    if (!cat) return [];
-    return cat.files.filter((f: any) => {
+    return subfolderContents.files.filter((f: any) => {
       const fileName = f.path.split('/').pop() || '';
       const ext = fileName.split('.').pop()?.toLowerCase() || '';
       const matchSearch = !searchQuery || fileName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -650,34 +678,23 @@ export default function BrowsePage() {
         />
       )}
       {!loading && !error && !isSearching && view === 'files' && currentSem && currentCat && (
-        <section className="mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[1.05rem] font-semibold flex items-center gap-2"><i className="fas fa-folder-open"></i> Files</h3>
-            <div className="flex items-center gap-2">
-              {canCreateFolder && !(currentMidFinal && (currentCat === 'NOTES' || currentCat === 'Previous Questions')) && (
-                <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-qsis/40 bg-qsis/10 text-qsis cursor-pointer text-[0.75rem] font-semibold hover:bg-qsis/20 transition" onClick={() => setShowCreateFolder(true)}>
-                  <i className="fas fa-folder-plus"></i> New Folder
-                </button>
-              )}
-              <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={goBack}>
-                <i className="fas fa-arrow-left"></i> Back
-              </button>
-            </div>
-          </div>
-          {filteredFiles.length === 0 && (
-            <div className="text-center py-8 text-dark-text2">
-              <i className="fas fa-search text-3xl mb-3 block opacity-40"></i>
-              <p>No files match your search.</p>
-            </div>
-          )}
-          <FileGrid items={filteredFiles} onOpen={openFile} filePerms={filePerms}
-            onMove={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
-            onCopy={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
-            onRename={(p, n) => setRenameTarget({ path: p, name: n })}
-            onDelete={(p, n) => setDeleteConfirm({ path: p, name: n })}
-            onShare={handleFileShare}
-            actionLoading={actionLoading} />
-        </section>
+        <SubFolderView
+          subfolders={subfolderContents.subfolders}
+          files={filteredFiles}
+          subPathSegments={subPathSegments}
+          onOpenFolder={navigateToSubFolder}
+          onGoBack={goBack}
+          onOpenFile={openFile}
+          filePerms={filePerms}
+          onMove={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
+          onCopy={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
+          onRename={(p, n) => setRenameTarget({ path: p, name: n })}
+          onDelete={(p, n) => setDeleteConfirm({ path: p, name: n })}
+          onShare={handleFileShare}
+          actionLoading={actionLoading}
+          canCreateFolder={canCreateFolder}
+          onCreateFolder={() => setShowCreateFolder(true)}
+        />
       )}
       {!loading && !error && isSearching && (
         <section className="mb-5">
@@ -738,7 +755,7 @@ export default function BrowsePage() {
         <div className="mt-6">
           <ReadmeEditor
             folder={view === 'files' && currentMidFinal && currentCat
-              ? `${getDepartmentFolder(currentDept)}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}/${currentMidFinal}/${config.categories[currentCat]?.folder || currentCat}`
+              ? `${getDepartmentFolder(currentDept)}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}/${currentMidFinal}/${config.categories[currentCat]?.folder || currentCat}${currentSubPath ? '/' + currentSubPath : ''}`
               : `${getDepartmentFolder(currentDept)}/${currentSem}/${currentCourseCode} - ${currentCourseTitle}${currentMidFinal ? '/' + currentMidFinal : ''}`
             }
             isOwner={isOwner}
@@ -801,7 +818,8 @@ export default function BrowsePage() {
       {(() => {
         const deptFolder = getDepartmentFolder(currentDept);
         const courseFolder = currentCourseCode && currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : '';
-        const parentPath = [deptFolder, currentSem, courseFolder, currentMidFinal, currentCat].filter(Boolean).join('/');
+        const catFolder = currentCat ? config.categories[currentCat as keyof typeof config.categories]?.folder || currentCat : '';
+        const parentPath = [deptFolder, currentSem, courseFolder, currentMidFinal, catFolder, currentSubPath].filter(Boolean).join('/');
         return (
           <CreateFolderModal
             isOpen={showCreateFolder}

@@ -35,7 +35,7 @@ export default function CreateFolderModal({ isOpen, onClose, parentPath, onCreat
         <input
           autoFocus
           value={name}
-          onChange={e => setName(e.target.value)}
+          onChange={e => setName(e.target.value.replace(/[\/\\]/g, ''))}
           onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
           placeholder="Folder name"
           className="w-full px-3 py-2 rounded-xl bg-dark-bg3 border border-dark-border text-[0.85rem] text-dark-text focus:border-qsis outline-none"

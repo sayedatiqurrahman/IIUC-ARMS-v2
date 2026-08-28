@@ -66,6 +66,7 @@ export const useAppStore = create<AppState>((set, get) => {
     currentCourseCode: '',
     currentCourseTitle: '',
     currentMidFinal: '',
+    currentSubPath: '',
     breadcrumbs: [],
 
     searchQuery: '',
@@ -329,6 +330,7 @@ export const useAppStore = create<AppState>((set, get) => {
         currentCat: '',
         currentCourseCode: '',
         currentCourseTitle: '',
+        currentSubPath: '',
         view: 'semesters',
         breadcrumbs: [
           { label: 'Departments', icon: 'fa-building', onClick: () => get().goHome() },
@@ -360,6 +362,7 @@ export const useAppStore = create<AppState>((set, get) => {
         currentCat: '',
         currentCourseCode: '',
         currentCourseTitle: '',
+        currentSubPath: '',
         view: 'courses',
         breadcrumbs: [
           { label: 'Departments', icon: 'fa-building', onClick: () => get().goHome() },
@@ -375,12 +378,39 @@ export const useAppStore = create<AppState>((set, get) => {
 
       set({
         currentCat: catKey,
+        currentSubPath: '',
         view: 'files',
         breadcrumbs: [
           ...breadcrumbs,
           { label: catConfig?.label || catKey, icon: 'fa-folder' },
         ],
       });
+    },
+
+    navigateToSubFolder: (subFolder) => {
+      const { currentSubPath, breadcrumbs } = get();
+      const label = subFolder.split('/').pop() || subFolder;
+      const newSubPath = currentSubPath ? `${currentSubPath}/${subFolder}` : subFolder;
+      set({
+        currentSubPath: newSubPath,
+        breadcrumbs: [...breadcrumbs, { label, icon: 'fa-folder' }],
+      });
+    },
+
+    navigateUpSubFolder: () => {
+      const { currentSubPath, breadcrumbs } = get();
+      if (!currentSubPath) return;
+      const segments = currentSubPath.split('/');
+      segments.pop();
+      const newSubPath = segments.join('/');
+      set({
+        currentSubPath: newSubPath,
+        breadcrumbs: breadcrumbs.slice(0, -1),
+      });
+    },
+
+    resetSubPath: () => {
+      set({ currentSubPath: '' });
     },
 
     navigateToCourse: (courseCode, courseTitle) => {
@@ -390,6 +420,7 @@ export const useAppStore = create<AppState>((set, get) => {
         currentCourseCode: courseCode,
         currentCourseTitle: courseTitle,
         currentMidFinal: '',
+        currentSubPath: '',
         view: 'categories',
         breadcrumbs: [
           ...breadcrumbs,
@@ -403,6 +434,7 @@ export const useAppStore = create<AppState>((set, get) => {
       set({
         currentMidFinal: midFinal,
         currentCat: '',
+        currentSubPath: '',
         view: 'categories',
         breadcrumbs: [
           { label: 'Departments', icon: 'fa-building', onClick: () => get().goHome() },
@@ -458,8 +490,10 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     goBack: () => {
-      const { view, currentDept, currentSem, currentCourseCode, currentCourseTitle, currentMidFinal, breadcrumbs } = get();
-      if (view === 'files') {
+      const { view, currentDept, currentSem, currentCourseCode, currentCourseTitle, currentMidFinal, currentSubPath, breadcrumbs } = get();
+      if (view === 'files' && currentSubPath) {
+        get().navigateUpSubFolder();
+      } else if (view === 'files') {
         get().navigateToCourse(currentCourseCode, currentCourseTitle);
       } else if (view === 'categories' && currentMidFinal) {
         set({
@@ -490,6 +524,7 @@ export const useAppStore = create<AppState>((set, get) => {
         currentCourseCode: '',
         currentCourseTitle: '',
         currentMidFinal: '',
+        currentSubPath: '',
         breadcrumbs: [],
         searchQuery: '',
         fileTypeFilter: '',

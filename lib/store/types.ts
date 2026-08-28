@@ -102,6 +102,7 @@ export interface AppState {
   currentCourseCode: string;
   currentCourseTitle: string;
   currentMidFinal: string;
+  currentSubPath: string;
   breadcrumbs: Breadcrumb[];
 
   searchQuery: string;
@@ -158,6 +159,9 @@ export interface AppState {
   navigateToCourse: (courseCode: string, courseTitle: string) => void;
   navigateToMidFinal: (midFinal: string) => void;
   navigateToCategory: (catKey: string) => void;
+  navigateToSubFolder: (subFolder: string) => void;
+  navigateUpSubFolder: () => void;
+  resetSubPath: () => void;
   navigateToHistory: () => void;
   navigateToContributors: () => void;
   navigateToRoutine: () => void;
@@ -199,6 +203,7 @@ export interface AppState {
   getSemesterCourses: (semId: string, departmentId?: string | null) => { code: string; title: string; folderPath: string; categories: { key: string; label: string; icon: string; count: number }[]; totalFiles: number; hasMidFinal: boolean }[];
   getCourseCategories: (semId: string, courseCode: string, departmentId?: string | null, midFinal?: string | null) => { key: string; label: string; icon: string; count: number; files: any[] }[];
   getCourseMidFinal: (semId: string, courseCode: string, departmentId?: string | null) => { mid: number; final: number; root: number };
+  getSubfolderContents: (semId: string, courseCode: string, departmentId: string | null, midFinal: string | null, category: string, subPath: string) => { subfolders: { name: string; fileCount: number; count: number; path: string }[]; files: any[] };
   getCategories: (semId: string, departmentId?: string | null) => Category[];
   getCourses: (semId: string, catKey: string, departmentId?: string | null) => [string, any[]][];
   getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string, departmentId?: string | null) => { files: any[]; folders: any[] };
