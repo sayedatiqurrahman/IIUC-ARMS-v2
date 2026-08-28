@@ -15,20 +15,21 @@ const TEMPLATE_ITEMS: [TemplateFormat, string, string][] = [
 export default function RoutineImportControl({
   onImport,
   preferSemester,
-  buttonLabel = 'Import',
 }: {
   onImport: (data: RoutineImportData) => void;
   preferSemester?: string;
-  buttonLabel?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
 
+  const close = () => setOpen(false);
+
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    close();
     setBusy(true);
     try {
       const data = await parseRoutineFile(file, preferSemester);
@@ -42,7 +43,7 @@ export default function RoutineImportControl({
   };
 
   const handleTemplate = async (format: TemplateFormat) => {
-    setOpen(false);
+    close();
     try {
       const { name, blob } = await downloadRoutineTemplate(format);
       const url = URL.createObjectURL(blob);
@@ -58,51 +59,64 @@ export default function RoutineImportControl({
     }
   };
 
+  const menuItemStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '6px 12px',
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    textAlign: 'left',
+    fontSize: '0.75rem',
+    color: 'var(--text)',
+  };
+
   return (
-    <>
+    <div style={{ position: 'relative', display: 'inline-block' }}>
       <button
         type="button"
         className="routine-btn routine-btn-outline"
-        onClick={() => inputRef.current?.click()}
+        onClick={() => setOpen(o => !o)}
         disabled={busy}
-        title="Import a routine from JSON, CSV, Excel (.xlsx) or Word (.docx)"
+        title="Import a routine file or download a blank template"
       >
         <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-file-import'}`} style={{ marginRight: 5 }}></i>
-        {busy ? 'Importing…' : buttonLabel}
+        {busy ? 'Importing…' : 'Import / Template'}
+        <i className="fas fa-caret-down" style={{ marginLeft: 6, fontSize: '0.6rem' }}></i>
       </button>
       <input ref={inputRef} type="file" accept={ROUTINE_IMPORT_ACCEPT} className="hidden" onChange={handleFile} />
-
-      <div style={{ position: 'relative', display: 'inline-block' }}>
-        <button type="button" className="routine-btn routine-btn-outline" onClick={() => setOpen(o => !o)} title="Download a blank template to fill in">
-          <i className="fas fa-download" style={{ marginRight: 5 }}></i>
-          Template
-          <i className="fas fa-caret-down" style={{ marginLeft: 5, fontSize: '0.6rem' }}></i>
-        </button>
-        {open && (
-          <div
-            style={{
-              position: 'absolute', top: '100%', right: 0, zIndex: 60, background: 'var(--bg2)',
-              border: '1px solid var(--border)', borderRadius: 8, minWidth: 190, padding: '4px 0',
-              boxShadow: '0 8px 24px rgba(0,0,0,.3)',
-            }}
-          >
-            {TEMPLATE_ITEMS.map(([fmt, label, icon]) => (
-              <button
-                key={fmt}
-                type="button"
-                onClick={() => handleTemplate(fmt)}
-                style={{ width: '100%', padding: '6px 12px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text)' }}
-              >
-                <i className={`fas ${icon}`} style={{ marginRight: 8, color: 'var(--text3)' }}></i>
-                {label}
-              </button>
-            ))}
-            <div style={{ padding: '6px 12px', fontSize: '0.65rem', color: 'var(--text3)', borderTop: '1px solid var(--border)', marginTop: 4 }}>
-              1. Download a template · 2. Fill the rows · 3. Import it
-            </div>
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            zIndex: 60,
+            background: 'var(--bg2)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            minWidth: 200,
+            padding: '4px 0',
+            boxShadow: '0 8px 24px rgba(0,0,0,.3)',
+          }}
+        >
+          <button type="button" onClick={() => { close(); inputRef.current?.click(); }} style={menuItemStyle}>
+            <i className="fas fa-upload" style={{ marginRight: 8, color: 'var(--text3)' }}></i>
+            Import from file
+          </button>
+          <div style={{ padding: '6px 12px', fontSize: '0.65rem', color: 'var(--text3)', borderTop: '1px solid var(--border)', marginTop: 4 }}>
+            Download a blank template to fill in
           </div>
-        )}
-      </div>
-    </>
+          {TEMPLATE_ITEMS.map(([fmt, label, icon]) => (
+            <button key={fmt} type="button" onClick={() => handleTemplate(fmt)} style={menuItemStyle}>
+              <i className={`fas ${icon}`} style={{ marginRight: 8, color: 'var(--text3)' }}></i>
+              {label}
+            </button>
+          ))}
+          <div style={{ padding: '6px 12px', fontSize: '0.65rem', color: 'var(--text3)', borderTop: '1px solid var(--border)', marginTop: 4 }}>
+            1. Download a template · 2. Fill the rows · 3. Import it
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

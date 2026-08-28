@@ -51,6 +51,7 @@ export default function RoutineView({ dept }: { dept: string }) {
   const [selectedId, setSelectedId] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [importPayload, setImportPayload] = useState<RoutineImportData | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [exportMode, setExportMode] = useState<'themed' | 'plain'>('themed');
   const [scheduleTarget, setScheduleTarget] = useState<RoutineItem | null>(null);
 
@@ -406,19 +407,33 @@ export default function RoutineView({ dept }: { dept: string }) {
               )}
             </div>
             <div className="routine-page-actions">
-              <RoutineImportControl onImport={openBuilderWithImport} />
-              <button className="routine-btn routine-btn-primary" onClick={() => {
-                setImportPayload(null);
-                setEditingId(null);
-                setViewMode('builder');
-              }}>
-                <i className="fas fa-plus"></i> Create New
-              </button>
-              {canPublish && (
-                <button className="routine-btn routine-btn-accent" onClick={() => setViewMode('allBranch')}>
-                  <i className="fas fa-layer-group"></i> All Semester Routine
+              <div style={{ position: 'relative', display: 'inline-block' }}>
+                <button className="routine-btn routine-btn-primary" onClick={() => setCreateOpen(o => !o)}>
+                  <i className="fas fa-plus"></i> Create
+                  <i className="fas fa-caret-down" style={{ marginLeft: 6, fontSize: '0.6rem' }}></i>
                 </button>
-              )}
+                {createOpen && (
+                  <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 60, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, minWidth: 210, padding: '4px 0', boxShadow: '0 8px 24px rgba(0,0,0,.3)' }}>
+                    <button
+                      className="routine-menu-item"
+                      style={{ width: '100%', padding: '6px 12px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text)' }}
+                      onClick={() => { setCreateOpen(false); setImportPayload(null); setEditingId(null); setViewMode('builder'); }}
+                    >
+                      <i className="fas fa-plus" style={{ marginRight: 8, color: 'var(--text3)' }}></i> New Routine
+                    </button>
+                    {canPublish && (
+                      <button
+                        className="routine-menu-item"
+                        style={{ width: '100%', padding: '6px 12px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text)' }}
+                        onClick={() => { setCreateOpen(false); setViewMode('allBranch'); }}
+                      >
+                        <i className="fas fa-layer-group" style={{ marginRight: 8, color: 'var(--text3)' }}></i> All Semester Routine
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              <RoutineImportControl onImport={openBuilderWithImport} />
               <button className="routine-btn routine-btn-ghost" onClick={() => router.push('/')}><i className="fas fa-arrow-left"></i> Back</button>
             </div>
           </div>
