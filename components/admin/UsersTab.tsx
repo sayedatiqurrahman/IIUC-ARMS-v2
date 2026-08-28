@@ -17,6 +17,8 @@ interface UsersTabProps {
   loading: boolean;
   loadingMore: boolean;
   firebaseNextPageToken: string | null;
+  firebaseListFailed: boolean;
+  firebaseOnlyCount: number;
   userSubTab: UserSubTab;
   setUserSubTab: (tab: UserSubTab) => void;
   searchQuery: string;
@@ -65,6 +67,8 @@ export default function UsersTab({
   loading,
   loadingMore,
   firebaseNextPageToken,
+  firebaseListFailed,
+  firebaseOnlyCount,
   userSubTab,
   setUserSubTab,
   searchQuery,
@@ -185,6 +189,22 @@ export default function UsersTab({
               <button onClick={handleAddAdmin} disabled={!newAdminEmail.trim()} className="px-4 py-2 rounded-lg bg-qsis text-white text-[0.78rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">Add</button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* All Users info: this view is sourced from Firebase auth accounts and
+          enriched with database profiles; accounts without a DB record still
+          appear, auto-labelled Student/Teacher from their email domain. */}
+      {userSubTab === 'all' && !firebaseListFailed && firebaseOnlyCount > 0 && (
+        <p className="text-[0.72rem] text-cyan-400 mb-3">
+          <i className="fas fa-cloud mr-1"></i>
+          All Users is pulled from Firebase — {firebaseOnlyCount} of {totalUsers} accounts have no database profile yet and are shown anyway with an auto-detected role.
+        </p>
+      )}
+      {firebaseListFailed && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4 text-[0.72rem] text-red-400">
+          <i className="fas fa-exclamation-triangle mr-1"></i>
+          Could not load Firebase accounts — showing database users only. Check that the Firebase service account keys are configured.
         </div>
       )}
 

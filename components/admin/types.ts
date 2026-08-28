@@ -22,6 +22,7 @@ export interface UserRecord {
   batchId?: number;
   providers?: string[];
   hasProfile?: boolean;
+  source?: 'firebase' | 'db';
   customPermissions?: Record<string, boolean>;
   createdAt?: string;
   accountStatus?: string;

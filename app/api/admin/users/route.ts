@@ -141,21 +141,29 @@ export async function GET(req: NextRequest) {
 
     // Fetch ALL Firebase auth users by walking every page (not just the first
     // 1000), so nobody with a Firebase account is missing from "All Users".
+    // clearOnDeploy check: some SDK versions name the next-page field
+    // "pageToken", others "nextPageToken" — read both.
     let firebaseUsers: any[] = [];
+    let firebaseListFailed = false;
     try {
       const { getAdminAuth } = await import('@/lib/firebase-admin');
       const auth = getAdminAuth();
       if (auth) {
-        let pageToken: string | undefined = await auth.listUsers(1000).then(r => (firebaseUsers = r.users, r.pageToken));
+        let first = await auth.listUsers(1000);
+        firebaseUsers = first.users || [];
+        let pageToken = first.pageToken ?? first.nextPageToken;
         let guard = 0;
-        while (pageToken && guard < 20) {
+        while (pageToken && guard < 50) {
           guard++;
           const page = await auth.listUsers(1000, pageToken);
           firebaseUsers = firebaseUsers.concat(page.users || []);
-          pageToken = page.pageToken;
+          pageToken = page.pageToken ?? page.nextPageToken;
         }
+      } else {
+        firebaseListFailed = true;
       }
     } catch (err: any) {
+      firebaseListFailed = true;
       console.error('[Admin Users] Firebase listUsers failed:', err?.message, err?.code);
     }
 
@@ -163,7 +171,7 @@ export async function GET(req: NextRequest) {
     const merged = new Map<string, any>();
 
     for (const fu of firebaseUsers) {
-      const userEmail = fu.email?.toLowerCase();
+      const userEmail = (fu.email || fu.phoneNumber || fu.uid || '').toLowerCase();
       if (!userEmail) continue;
       const profile = profileMap.get(userEmail);
       merged.set(userEmail, {
@@ -189,6 +197,7 @@ export async function GET(req: NextRequest) {
         telegramChatId: profile?.telegramChatId || null,
         batchId: profile?.batchId || null,
         hasProfile: !!profile,
+        source: profile ? 'db' : 'firebase',
         lastSignIn: fu.lastSignInTime || null,
         createdAt: profile?.createdAt?.toISOString?.() || fu.metadata?.creationTime || null,
         providers: fu.providerData?.map((p: any) => p.providerId) || [],
@@ -227,6 +236,7 @@ export async function GET(req: NextRequest) {
           telegramChatId: profile.telegramChatId || null,
           batchId: profile.batchId || null,
           hasProfile: true,
+          source: 'db',
           lastSignIn: null,
           createdAt: profile.createdAt?.toISOString?.() || null,
           providers: [],
@@ -309,6 +319,9 @@ export async function GET(req: NextRequest) {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+      firebaseUserCount: firebaseUsers.length,
+      firebaseOnlyCount: result.filter(u => !u.hasProfile).length,
+      firebaseListFailed,
     });
   } catch (err: any) {
     console.error('[Admin Users] GET error:', err?.message, err?.stack);

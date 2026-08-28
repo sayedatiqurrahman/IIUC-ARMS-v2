@@ -67,18 +67,20 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Per-sub-tab pagination state so tabs never share each other's lists/pages
-  const [userStates, setUserStates] = useState<Partial<Record<UserSubTab, { users: UserRecord[]; total: number; page: number; search: string; nextToken: string | null }>>>({});
-  const userState = userStates[userSubTab] ?? { users: [] as UserRecord[], total: 0, page: 1, search: '', nextToken: null as string | null };
+  const [userStates, setUserStates] = useState<Partial<Record<UserSubTab, { users: UserRecord[]; total: number; page: number; search: string; nextToken: string | null; firebaseListFailed: boolean; firebaseOnlyCount: number }>>>({});
+  const userState = userStates[userSubTab] ?? { users: [] as UserRecord[], total: 0, page: 1, search: '', nextToken: null as string | null, firebaseListFailed: false, firebaseOnlyCount: 0 };
   const users = userState.users;
   const totalUsers = userState.total;
   const currentPage = userState.page;
   const searchQuery = userState.search;
   const firebaseNextPageToken = userState.nextToken;
+  const firebaseListFailed = userState.firebaseListFailed;
+  const firebaseOnlyCount = userState.firebaseOnlyCount;
 
   const patchUserState = (tab: UserSubTab, patch: Partial<typeof userState>) => {
     setUserStates(prev => ({
       ...prev,
-      [tab]: { users: [], total: 0, page: 1, search: '', nextToken: null, ...prev[tab], ...patch },
+      [tab]: { users: [], total: 0, page: 1, search: '', nextToken: null, firebaseListFailed: false, firebaseOnlyCount: 0, ...prev[tab], ...patch },
     }));
   };
   const setCurrentPage = (page: number) => patchUserState(userSubTab, { page });
@@ -191,6 +193,8 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
               total: data.total || data.users?.length || 0,
               nextToken: data.firebaseNextPageToken || null,
               page: page || cur.page,
+              firebaseListFailed: data.firebaseListFailed || false,
+              firebaseOnlyCount: data.firebaseOnlyCount || 0,
             },
           };
         });
@@ -793,6 +797,8 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           loading={loading}
           loadingMore={loadingMore}
           firebaseNextPageToken={firebaseNextPageToken}
+          firebaseListFailed={firebaseListFailed}
+          firebaseOnlyCount={firebaseOnlyCount}
           userSubTab={userSubTab}
           setUserSubTab={setSubWithUrl}
           searchQuery={searchQuery}
