@@ -71,25 +71,26 @@ export async function GET(req: NextRequest) {
         }];
         where.accountStatus = { notIn: ['pending', 'rejected'] };
       } else if (filterDomain === 'external') {
-        // External = active non-university accounts. Anyone assigned role
-        // 'student' was promoted to the Students list, so exclude them here.
+        // External = active non-university accounts that were given an explicit
+        // role (e.g. a custom club/organization role). Role-less accounts
+        // (still 'user', 'external' or null) belong on the pending list until a
+        // role is chosen, and 'student'/'teacher' accounts have their own tabs.
         where.email = { not: { endsWith: '.iiuc.ac.bd' } };
         where.accountStatus = 'active';
-        where.AND = [...(where.AND || []), {
-          OR: [{ role: { not: 'student' } }, { role: null }],
-        }];
+        where.role = { notIn: ['user', 'external', 'student', 'teacher', 'admin', 'manager'] };
       } else if (filterDomain === 'pending') {
-        // Pending = external applicants who tried to sign in with a personal
-        // email and have NO role assigned yet. Assigning any role activates
-        // them (see setRole) and moves them to the matching list.
-        where.accountStatus = 'pending';
-        where.AND = [...(where.AND || []), {
-          OR: [{ role: 'user' }, { role: null }],
-        }];
+        // Pending = non-university accounts with NO role assigned yet: fresh
+        // signups who were blocked at login AND accounts that can already sign
+        // in but were never given a role. Assigning any role activates them
+        // (see setRole) and moves them to the matching list.
         where.email = {
           not: { endsWith: '.iiuc.ac.bd' },
           notIn: config.ownerEmails.map(e => e.toLowerCase()),
         };
+        where.accountStatus = { not: 'rejected' };
+        where.AND = [...(where.AND || []), {
+          OR: [{ role: 'user' }, { role: 'external' }, { role: null }],
+        }];
       }
     }
     // The "All Users" view is the only entry point that must surface EVERY
@@ -325,10 +326,13 @@ export async function GET(req: NextRequest) {
           return u.accountStatus !== 'pending' && u.accountStatus !== 'rejected' && eff === 'teacher';
         }
         if (filterDomain === 'external') {
-          return !u.email?.endsWith('.iiuc.ac.bd') && u.accountStatus === 'active' && eff !== 'student' && eff !== 'teacher' && eff !== 'admin' && eff !== 'manager';
+          return !u.email?.endsWith('.iiuc.ac.bd') && u.accountStatus === 'active' &&
+            !!u.role && !['user', 'external', 'student', 'teacher', 'admin', 'manager'].includes(u.role);
         }
         if (filterDomain === 'pending') {
-          return u.accountStatus === 'pending' && !u.email?.endsWith('.iiuc.ac.bd') && !config.ownerEmails.includes(u.email?.toLowerCase());
+          return u.accountStatus !== 'rejected' && !u.email?.endsWith('.iiuc.ac.bd') &&
+            !config.ownerEmails.includes(u.email?.toLowerCase()) &&
+            (!u.role || u.role === 'user' || u.role === 'external');
         }
         return true;
       });

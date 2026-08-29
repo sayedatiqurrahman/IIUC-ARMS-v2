@@ -450,7 +450,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
 
   const [approveAllLoading, setApproveAllLoading] = useState(false);
   const handleApproveAll = async () => {
-    if (!await confirm({ message: 'Approve ALL pending external accounts? They will gain access immediately.', title: 'Approve All Pending', danger: true })) return;
+    if (!await confirm({ message: 'Approve logins for all still-blocked pending accounts? Only ones that signed up but could not log in yet are affected — roles still need to be assigned separately.', title: 'Approve Pending Logins', danger: true })) return;
     setApproveAllLoading(true);
     try {
       const res = await fetch('/api/admin/users', {

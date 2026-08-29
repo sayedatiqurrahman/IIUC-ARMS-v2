@@ -112,7 +112,7 @@ export default function UserRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[0.82rem] sm:text-[0.85rem] font-semibold text-dark-text truncate">{u.name || u.email.split('@')[0]}</span>
-            {isPendingRow && uRole === 'user' && <span className="px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-semibold" title="No role assigned yet — assign a role to activate and move this account to the matching list">No role</span>}
+            {(isPendingRow && (uRole === 'user' || uRole === 'external')) && <span className="px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-semibold" title="No role assigned yet — assign a role to move this account to the matching list">No role</span>}
             {!isPendingRow && getRoleBadge(u.role, customRoles)}
             {u.isCR && <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 text-[0.6rem] font-bold">CR</span>}
             {u.isACR && <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 text-[0.6rem] font-bold">ACR</span>}
@@ -201,7 +201,7 @@ export default function UserRow({
             {actionLoading === u.email + 'email' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-envelope mr-0.5"></i>Email</>}
           </button>
         )}
-        {isPendingRow && handleApprove && (
+        {isPendingRow && u.accountStatus === 'pending' && handleApprove && (
           <button onClick={() => handleApprove(u.email)} disabled={actionLoading === u.email + 'approve'}
             className="px-2 sm:px-2.5 py-1 rounded-lg bg-green-500/15 text-green-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-green-500/25 border border-green-500/20 disabled:opacity-50">
             {actionLoading === u.email + 'approve' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Approve</>}

@@ -114,15 +114,17 @@ export default function UsersTab({
 }: UsersTabProps) {
   const totalPages = Math.ceil(totalUsers / PER_PAGE);
 
-  // Safety net: never surface university / owner / non-pending accounts in the
-  // pending queue, regardless of what the API returns.
+  // Safety net: never surface university / owner / rejected accounts in the
+  // pending queue, regardless of what the API returns. Pending = non-university
+  // accounts with no role assigned (null, 'user' or the detected 'external').
   const isPendingTab = userSubTab === 'pending';
   const displayedUsers = useMemo(() => {
     if (!isPendingTab) return users;
     return users.filter(u =>
-      u.accountStatus === 'pending' &&
+      u.accountStatus !== 'rejected' &&
       !/@iiuc\.ac\.bd$/i.test(u.email) &&
-      !config.ownerEmails.includes(u.email.toLowerCase())
+      !config.ownerEmails.includes(u.email.toLowerCase()) &&
+      (!u.role || u.role === 'user' || u.role === 'external')
     );
   }, [isPendingTab, users]);
 
@@ -185,7 +187,7 @@ export default function UsersTab({
       {userSubTab === 'pending' && (
         <div className="bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-3 mb-4 text-[0.72rem] text-yellow-300">
           <i className="fas fa-clock mr-1"></i>
-          Accounts who tried to sign in with a personal email and have <span className="font-semibold">no role assigned yet</span>. Assign a role (Student, Teacher, etc.) to activate them — they'll move to the matching list automatically.
+          Accounts that haven't been given a role yet — including some who can already sign in. Assign a role (Student, Teacher, etc.) and they'll move to the matching list automatically. Use <span className="font-semibold">Approve</span> to let a brand-new signup log in.
         </div>
       )}
 
@@ -238,7 +240,7 @@ export default function UsersTab({
               disabled={approveAllLoading || displayedUsers.length === 0}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/15 text-green-400 text-[0.78rem] font-semibold hover:bg-green-500/25 transition-colors disabled:opacity-50"
             >
-              {approveAllLoading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check-double"></i>} Approve All
+              {approveAllLoading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check-double"></i>} Approve Logins
             </button>
           )}
           {(isAdmin || isManager) && handleBulkEmail && (
