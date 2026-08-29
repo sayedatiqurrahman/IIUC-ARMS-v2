@@ -55,6 +55,9 @@ export default function BrowsePage() {
   const [permissionDenied, setPermissionDenied] = useState<{ show: boolean; message: string; contact: string }>({ show: false, message: '', contact: '' });
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [relatedCreatePath, setRelatedCreatePath] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [quickUploading, setQuickUploading] = useState(false);
+  const quickInputRef = useRef<HTMLInputElement>(null);
   const [shareItem, setShareItem] = useState<ShareItem | null>(null);
   const loading = useAppStore(s => s.loading);
   const error = useAppStore(s => s.error);
@@ -92,7 +95,6 @@ export default function BrowsePage() {
   const getCourseMidFinal = useAppStore(s => s.getCourseMidFinal);
   const getSubfolderContents = useAppStore(s => s.getSubfolderContents);
   const getUploadTree = useAppStore(s => s.getUploadTree);
-  const setUploadOpen = useAppStore(s => s.setUploadOpen);
   const getSearchResults = useAppStore(s => s.getSearchResults);
   const getUploadDepartments = useAppStore(s => s.getUploadDepartments);
   const currentDept = useAppStore(s => s.currentDept);
@@ -287,6 +289,44 @@ export default function BrowsePage() {
     useAppStore.getState().invalidateTreeCache();
     loadTree(session?.accessToken || '');
   }, [session?.accessToken, loadTree, relatedCreatePath]);
+
+  // Direct "upload to the folder you're browsing" — no form, no modal. The
+  // target is the current folder's GitHub path (relative to the upload root).
+  const handleQuickUpload = useCallback(async (target: string, files: File[]) => {
+    if (!files.length || !target) return;
+    const payload = files.slice(0, 5);
+    for (const f of payload) {
+      if (f.size > config.maxSingleFileUploadMB * 1024 * 1024) {
+        showToast(`${f.name} is larger than ${config.maxSingleFileUploadMB}MB`, 'error');
+        return;
+      }
+    }
+    setQuickUploading(true);
+    try {
+      const formData = new FormData();
+      for (const f of payload) formData.append('files', f, `${target}/${f.name}`);
+      formData.append('message', `Upload ${payload.length === 1 ? payload[0].name : `${payload.length} files`} to ${target}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 85000);
+      try {
+        const res = await fetch('/api/github/upload', { method: 'POST', body: formData, signal: controller.signal });
+        const data = await res.json().catch(() => ({}));
+        if (data.success) {
+          showToast(`Uploaded ${payload.length} file${payload.length !== 1 ? 's' : ''} to ${target}`, 'success');
+          useAppStore.getState().invalidateTreeCache();
+          loadTree(session?.accessToken || '');
+        } else {
+          showToast(data.error || 'Upload failed', 'error');
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch {
+      showToast('Upload failed — please try again', 'error');
+    } finally {
+      setQuickUploading(false);
+    }
+  }, [session?.accessToken, loadTree]);
 
   const handleFileShare = useCallback((path: string, name: string, isFolder: boolean) => {
     const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
@@ -635,16 +675,67 @@ export default function BrowsePage() {
         departments={departments} recentReads={recentReads} openRecentFile={openRecentFile}
       />
       {view === 'departments' && <LatestNotices />}
-      {view !== 'departments' && !loading && !error && !isSearching && (
-        <div className="flex justify-end mb-3">
-          <button
-            onClick={() => setUploadOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.78rem] font-semibold cursor-pointer border-none hover:opacity-90 transition-opacity shadow-lg shadow-qsis/20"
-          >
-            <i className="fas fa-cloud-upload-alt text-[0.85rem]"></i>Upload Files
-          </button>
-        </div>
-      )}
+      {view === 'files' && !loading && !error && !isSearching && (() => {
+        const deptFolder = getDepartmentFolder(currentDept);
+        const courseFolder = currentCourseCode && currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : '';
+        const catFolder = currentCat
+          ? config.categories[currentCat as keyof typeof config.categories]?.folder || currentCat
+          : '';
+        const quickTarget = [deptFolder, currentSem, courseFolder, currentMidFinal, catFolder, currentSubPath].filter(Boolean).join('/');
+        return (
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <span className="text-[0.7rem] text-dark-text2 min-w-0">
+              <i className="fas fa-arrow-right text-[0.6rem] text-qsis mr-1"></i>
+              Uploading into: <span className="font-mono text-qsis">./{quickTarget}</span>
+            </span>
+            <div className="relative">
+              <input
+                ref={quickInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.csv,.md,.markdown,.txt,.json,.html,.css,.js,.ts,.py,.zip"
+                onChange={e => { const fl = Array.from(e.target.files || []); setMenuOpen(false); if (fl.length) handleQuickUpload(quickTarget, fl); setImmediate(() => { e.target.value = ''; }); }}
+              />
+              <button
+                onClick={() => setMenuOpen(o => !o)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.78rem] font-semibold cursor-pointer border-none hover:opacity-90 transition-opacity shadow-lg shadow-qsis/20"
+              >
+                <i className="fas fa-plus text-[0.8rem]"></i>New
+                <i className={`fas fa-chevron-down text-[0.55rem] ml-1 transition-transform ${menuOpen ? 'rotate-180' : ''}`}></i>
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-[45]" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 z-[60] w-72 rounded-xl border border-dark-border bg-dark-bg2 shadow-2xl overflow-hidden">
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-dark-bg3 transition-colors cursor-pointer border-none bg-transparent"
+                      onClick={() => { setMenuOpen(false); setRelatedCreatePath(''); setShowCreateFolder(true); }}
+                    >
+                      <span className="w-8 h-8 rounded-lg bg-qsis/15 flex items-center justify-center shrink-0"><i className="fas fa-folder-plus text-qsis text-sm"></i></span>
+                      <span className="flex flex-col min-w-0 text-left">
+                        <span className="text-[0.8rem] font-semibold text-dark-text">New Folder</span>
+                        <span className="text-[0.65rem] text-dark-text3">Create a folder inside this location</span>
+                      </span>
+                    </button>
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-dark-bg3 transition-colors cursor-pointer border-none bg-transparent border-t border-dark-border disabled:opacity-50"
+                      disabled={quickUploading}
+                      onClick={() => { setMenuOpen(false); if (!quickUploading) quickInputRef.current?.click(); }}
+                    >
+                      <span className="w-8 h-8 rounded-lg bg-qsis/15 flex items-center justify-center shrink-0"><i className="fas fa-cloud-upload-alt text-qsis text-sm"></i></span>
+                      <span className="flex flex-col min-w-0 text-left">
+                        <span className="text-[0.8rem] font-semibold text-dark-text">{quickUploading ? 'Uploading...' : 'Upload File'}</span>
+                        <span className="text-[0.65rem] text-dark-text3">Upload directly here — no form</span>
+                      </span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
       <BrowseHeader
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchSemester={searchSemester} setSearchSemester={setSearchSemester}
@@ -705,6 +796,9 @@ export default function BrowsePage() {
           onCreateFolderAt={(rp) => { setRelatedCreatePath(rp); setShowCreateFolder(true); }}
           canDeleteFolder={!!session?.user}
           onDeleteFolder={(t) => setDeleteConfirm({ ...t, kind: 'folder' })}
+          canUpload={!!session?.user}
+          onUploadFiles={handleQuickUpload}
+          uploading={quickUploading}
         />
       ) : (
         <CoursesView

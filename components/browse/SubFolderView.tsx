@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import FileGrid from './FileGrid';
 import FileActionsMenu from '@/components/FileActionsMenu';
 
@@ -7,6 +8,7 @@ interface SubFolderViewProps {
   subfolders: { name: string; fileCount: number; count: number; path: string; githubPath: string }[];
   files: any[];
   subPathSegments: string[];
+  rootLabel?: string;
   onOpenFolder: (name: string) => void;
   onGoBack: () => void;
   onOpenFile: (item: any) => void;
@@ -21,12 +23,17 @@ interface SubFolderViewProps {
   onCreateFolder?: () => void;
   canDeleteFolder?: boolean;
   onDeleteFolder?: (target: { path: string; name: string }) => void;
+  canUpload?: boolean;
+  uploadTo?: string;
+  onUploadFiles?: (target: string, files: File[]) => void;
+  uploading?: boolean;
 }
 
 export default function SubFolderView({
   subfolders,
   files,
   subPathSegments,
+  rootLabel,
   onOpenFolder,
   onGoBack,
   onOpenFile,
@@ -41,30 +48,73 @@ export default function SubFolderView({
   onCreateFolder,
   canDeleteFolder,
   onDeleteFolder,
+  canUpload,
+  uploadTo,
+  onUploadFiles,
+  uploading,
 }: SubFolderViewProps) {
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   return (
     <section className="mb-5">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h3 className="text-[1.05rem] font-semibold flex items-center gap-2">
           <i className="fas fa-folder-open"></i>
-          <span className="flex items-center flex-wrap gap-1 text-[0.9rem]">
-            <i className="fas fa-folder text-dark-text3 text-[0.8rem]"></i>
-            <span className="text-dark-text2">/</span>
-            {subPathSegments.length === 0 ? (
-              <span className="text-dark-text">Files</span>
-            ) : (
-              subPathSegments.map((seg, i) => (
-                <span key={`${seg}-${i}`} className="flex items-center gap-1">
-                  <span className={`${i === subPathSegments.length - 1 ? 'text-qsis' : 'text-dark-text2'}`}>{seg}</span>
-                  {i < subPathSegments.length - 1 && (
-                    <span className="text-dark-text3">/</span>
-                  )}
-                </span>
-              ))
-            )}
-          </span>
+          {rootLabel ? (
+            <span className="flex items-center flex-wrap gap-1 text-[0.9rem]">
+              <span className="text-dark-text font-semibold">{rootLabel}</span>
+              {subPathSegments.length > 0 && (
+                <>
+                  <span className="text-dark-text3">/</span>
+                  {subPathSegments.map((seg, i) => (
+                    <span key={`${seg}-${i}`} className="flex items-center gap-1">
+                      <span className={`${i === subPathSegments.length - 1 ? 'text-qsis' : 'text-dark-text2'}`}>{seg}</span>
+                      {i < subPathSegments.length - 1 && (
+                        <span className="text-dark-text3">/</span>
+                      )}
+                    </span>
+                  ))}
+                </>
+              )}
+            </span>
+          ) : (
+            <span className="flex items-center flex-wrap gap-1 text-[0.9rem]">
+              <i className="fas fa-folder text-dark-text3 text-[0.8rem]"></i>
+              <span className="text-dark-text2">/</span>
+              {subPathSegments.length === 0 ? (
+                <span className="text-dark-text">Files</span>
+              ) : (
+                subPathSegments.map((seg, i) => (
+                  <span key={`${seg}-${i}`} className="flex items-center gap-1">
+                    <span className={`${i === subPathSegments.length - 1 ? 'text-qsis' : 'text-dark-text2'}`}>{seg}</span>
+                    {i < subPathSegments.length - 1 && (
+                      <span className="text-dark-text3">/</span>
+                    )}
+                  </span>
+                ))
+              )}
+            </span>
+          )}
         </h3>
         <div className="flex items-center gap-2">
+          {canUpload && onUploadFiles && (
+            <>
+              <input
+                ref={uploadInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.csv,.md,.markdown,.txt,.json,.html,.css,.js,.ts,.py,.zip"
+                onChange={e => { const fl = Array.from(e.target.files || []); if (fl.length) { onUploadFiles(uploadTo || '', fl); setImmediate(() => { e.target.value = ''; }); } }}
+              />
+              <button
+                disabled={uploading}
+                onClick={() => uploadInputRef.current?.click()}
+                className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-qsis/40 bg-qsis/10 text-qsis cursor-pointer text-[0.75rem] font-semibold hover:bg-qsis/20 transition disabled:opacity-50"
+              >
+                {uploading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-cloud-upload-alt"></i>} {uploading ? 'Uploading...' : 'Upload File'}
+              </button>
+            </>
+          )}
           {canCreateFolder && (
             <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-qsis/40 bg-qsis/10 text-qsis cursor-pointer text-[0.75rem] font-semibold hover:bg-qsis/20 transition" onClick={onCreateFolder}>
               <i className="fas fa-folder-plus"></i> New Folder

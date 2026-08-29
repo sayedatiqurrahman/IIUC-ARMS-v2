@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '@/lib/store';
+import { config } from '@/lib/config';
+import { getFacultyIdForDepartment, getDepartmentFolder } from '@/lib/departments';
 import SubFolderView from './SubFolderView';
 
 interface RelatedFolderViewProps {
@@ -21,6 +23,9 @@ interface RelatedFolderViewProps {
   onCreateFolderAt?: (relPath: string) => void;
   canDeleteFolder?: boolean;
   onDeleteFolder?: (target: { path: string; name: string }) => void;
+  canUpload?: boolean;
+  onUploadFiles?: (target: string, files: File[]) => void;
+  uploading?: boolean;
 }
 
 export default function RelatedFolderView({
@@ -40,6 +45,9 @@ export default function RelatedFolderView({
   onCreateFolderAt,
   canDeleteFolder,
   onDeleteFolder,
+  canUpload,
+  onUploadFiles,
+  uploading,
 }: RelatedFolderViewProps) {
   const [relPath, setRelPath] = useState('');
   const treeLen = useAppStore(s => s.tree.length);
@@ -52,6 +60,26 @@ export default function RelatedFolderView({
     () => useAppStore.getState().getRelatedFolderContents(relFolder, departmentId || null, relPath),
     [relFolder, departmentId, relPath, treeLen],
   );
+
+  // Real GitHub path of the folder currently being browsed (relative to the
+  // upload root), so files can be uploaded straight into it. Content mapped
+  // under different faculty prefixes (e.g. qsis/related-kitabs vs
+  // shariah/related-kitabs) must resolve to its actual location, so look up
+  // the current folder from the parent listing rather than guessing.
+  const uploadTo = useMemo(() => {
+    if (!relPath) return '';
+    const segs = relPath.split('/');
+    const last = segs[segs.length - 1].toLowerCase();
+    const parent = segs.slice(0, -1).join('/');
+    const kids = useAppStore.getState().getRelatedFolderContents(relFolder, departmentId || null, parent);
+    const match = kids.subfolders.find(s => s.name.toLowerCase() === last);
+    if (match) return match.githubPath;
+    const facId = departmentId ? (getFacultyIdForDepartment(departmentId) || getDepartmentFolder(departmentId) || departmentId) : '';
+    const root = relFolder === config.relatedKitabsFolder
+      ? `${config.relatedKitabsParent}/${config.relatedKitabsFolder}`
+      : `${facId}/${config.relatedSourcesFolder}`;
+    return `${root}/${relPath}`;
+  }, [relFolder, departmentId, relPath, treeLen]);
 
   const subPathSegments = useMemo(
     () => (relPath ? relPath.split('/') : []),
@@ -72,22 +100,11 @@ export default function RelatedFolderView({
 
   return (
     <section>
-      <div className="flex items-center gap-2 mb-3 text-[0.9rem]">
-        <i className="fas fa-folder-open text-qsis"></i>
-        <span className="flex items-center flex-wrap gap-1">
-          <span className="font-semibold">{label}</span>
-          {subPathSegments.map((seg, i) => (
-            <span key={`${seg}-${i}`} className="flex items-center gap-1">
-              <span className="text-dark-text3">/</span>
-              <span className={i === subPathSegments.length - 1 ? 'text-qsis' : 'text-dark-text2'}>{seg}</span>
-            </span>
-          ))}
-        </span>
-      </div>
       <SubFolderView
         subfolders={contents.subfolders}
         files={contents.files}
         subPathSegments={subPathSegments}
+        rootLabel={label}
         onOpenFolder={openFolder}
         onGoBack={goBack}
         onOpenFile={onOpenFile}
@@ -102,6 +119,10 @@ export default function RelatedFolderView({
         onCreateFolder={canCreateFolder && onCreateFolderAt ? () => onCreateFolderAt(relPath) : undefined}
         canDeleteFolder={canDeleteFolder}
         onDeleteFolder={onDeleteFolder}
+        canUpload={canUpload && relPath ? true : false}
+        uploadTo={uploadTo}
+        onUploadFiles={onUploadFiles}
+        uploading={uploading}
       />
     </section>
   );
