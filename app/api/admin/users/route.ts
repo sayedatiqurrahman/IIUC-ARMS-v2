@@ -4,6 +4,7 @@ import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { invalidatePermissionsCache } from '@/lib/permissions';
 import { invalidateStatusCache } from '@/lib/auth-options';
+import { addDeletedEmail, removeDeletedEmail } from '@/lib/deleted-emails';
 
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.admin);
@@ -621,9 +622,11 @@ export async function POST(req: NextRequest) {
       }
       await prisma.profile.upsert({
         where: { userId: targetEmail },
-        update: { accountStatus: 'active' },
+        update: { accountStatus: 'active', isBanned: false, banReason: null, bannedBy: null },
         create: { userId: targetEmail, email: targetEmail, accountStatus: 'active' },
       });
+      // Approving restores sign-in for a previously deleted email.
+      await removeDeletedEmail(prisma as any, targetEmail);
       invalidateStatusCache(targetEmail);
       return NextResponse.json({ success: true, message: `Account approved for ${targetEmail}` });
     }
@@ -688,8 +691,20 @@ export async function POST(req: NextRequest) {
       // Delete from DB
       try {
         await prisma.profile.delete({ where: { userId: targetEmail } });
-      } catch {
-        // Profile may not exist
+      } catch (dbErr: any) {
+        if (dbErr?.code === 'P2025') {
+          // Profile already gone — fine.
+        } else {
+          console.error('[Admin Users] DB delete error:', dbErr?.message);
+          return NextResponse.json({
+            error: `Firebase account deleted, but the database record could not be removed. You can now use Create User to repair this account.`,
+          }, { status: 500 });
+        }
+      }
+      // Block the email so their next Google/Firebase sign-in cannot silently
+      // re-create a pending account (the "deleted but shows up again" loop).
+      if (!/@iiuc\.ac\.bd$/i.test(targetEmail) && !config.ownerEmails.some(o => o.toLowerCase() === targetEmail.toLowerCase())) {
+        await addDeletedEmail(prisma as any, targetEmail);
       }
       return NextResponse.json({ success: true, message: `User ${targetEmail} deleted from Firebase and database` });
     }

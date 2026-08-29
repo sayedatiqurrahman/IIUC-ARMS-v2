@@ -148,6 +148,7 @@ model SiteSettings {
   postingChannels          Json?
   telegramChats            Json?
   emailSettings            Json?
+  deletedEmails            Json?    @default("[]")
 }
 
 model SemesterCourse {

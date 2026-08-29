@@ -50,6 +50,9 @@ export function invalidateStatusCache(email?: string) {
 
 async function ensurePendingProfile(email: string, name?: string): Promise<void> {
   try {
+    // Never re-provision a pending account for an email an admin has deleted.
+    const { isDeletedEmail } = await import('@/lib/deleted-emails');
+    if (await isDeletedEmail(email)) return;
     const { prisma } = await import('@/lib/prisma');
     const { roleForEmail } = await import('@/lib/roles');
     const existing = await prisma.profile.findUnique({ where: { userId: email }, select: { accountStatus: true } });
@@ -112,11 +115,15 @@ export const authOptions: NextAuthOptions = {
         if (decoded) {
           let email = decoded.email || credentials.email;
           if (!email) { console.log('[Auth] authorize: no email from token'); return null; }
+          // A deleted blocklisted email can never sign in.
+          const { isDeletedEmail } = await import('@/lib/deleted-emails');
+          if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
           let allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
           // A linked (personal) email signs into the primary account
           if (!allowed) {
             const { resolveSignInEmail } = await import('@/lib/linked-accounts');
             email = await resolveSignInEmail(email);
+            if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) linked email', email); return null; }
             allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
           }
           console.log('[Auth] authorize: email =', email, 'allowed =', allowed);
@@ -153,10 +160,13 @@ export const authOptions: NextAuthOptions = {
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
           let email = credentials.email || payload.email;
           if (!email) return null;
+          const { isDeletedEmail } = await import('@/lib/deleted-emails');
+          if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
           let allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
           if (!allowed) {
             const { resolveSignInEmail } = await import('@/lib/linked-accounts');
             email = await resolveSignInEmail(email);
+            if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) linked email', email); return null; }
             allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
           }
           if (!allowed) return null;
@@ -188,6 +198,10 @@ export const authOptions: NextAuthOptions = {
         }
         console.log('[Auth] signIn callback — email:', email, 'provider:', account?.provider);
         if (!email) { console.log('[Auth] signIn: no email, rejecting'); return '/auth/error?error=invalid-email'; }
+
+        // A deleted blocklisted email can never sign in.
+        const { isDeletedEmail } = await import('@/lib/deleted-emails');
+        if (await isDeletedEmail(email)) { console.log('[Auth] signIn: blocklisted (deleted) email', email); return '/auth/error?error=account-deleted'; }
 
         // Allow if it's a standard IIUC email OR if user has an admin-created profile
         const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);

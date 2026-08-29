@@ -33,17 +33,18 @@ export async function POST(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     const { getAdminAuth } = await import('@/lib/firebase-admin');
     const { invalidateStatusCache } = await import('@/lib/auth-options');
+    const { removeDeletedEmail } = await import('@/lib/deleted-emails');
 
-    // Check if user already exists
+    // Is there already a DB record? It may be a stale/rejected/pending leftover,
+    // a profile re-created by the person's own Google sign-in (so Firebase was
+    // deleted but the row kept coming back), or a real existing account. Treat
+    // "Create User" as create-or-repair: take the account over, grant active
+    // access, and make sure Firebase holds a working sign-in.
     const existing = await prisma.profile.findUnique({ where: { userId: normalizedEmail } });
-    if (existing) {
-      return NextResponse.json({ error: 'User already exists. Use the Users tab to manage them.' }, { status: 409 });
-    }
 
-    // Create Firebase Auth user. A DB profile alone cannot sign in — Firebase
-    // must hold the account (password/password-setup email/Google) so the
-    // person can actually log in.
-    let firebaseUid = '';
+    // A DB profile alone cannot sign in — Firebase must hold the account
+    // (password / password-setup email / Google). Ensure it exists and that the
+    // person can set a password.
     const auth = getAdminAuth();
     if (!auth) {
       return NextResponse.json({
@@ -51,24 +52,41 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
     try {
-      const firebaseUser = await auth.createUser({
-        email: normalizedEmail,
-        displayName: normalizedEmail.split('@')[0],
-        emailVerified: true,
-        ...(password ? { password } : {}),
-      });
-      firebaseUid = firebaseUser.uid;
-      // Send password setup email so they can set/recover their password.
-      await auth.generatePasswordResetLink(normalizedEmail);
-    } catch (firebaseErr: any) {
-      // If user already exists in Firebase, continue
-      if (firebaseErr.code !== 'auth/email-already-exists') {
-        console.error('[create-user] Firebase error:', firebaseErr.message);
+      let firebaseExists = false;
+      try {
+        const firebaseUser = await auth.getUserByEmail(normalizedEmail);
+        firebaseExists = true;
+        if (password) {
+          try { await auth.updateUser(firebaseUser.uid, { password }); } catch {}
+        }
+      } catch (lookupErr: any) {
+        const code = lookupErr?.code || lookupErr?.errorInfo?.code || '';
+        if (code !== 'auth/user-not-found') throw lookupErr;
+        // No Firebase account — create one (repairs the "deleted from Firebase
+        // but stuck in DB / couldn't log in" state).
+        const firebaseUser = await auth.createUser({
+          email: normalizedEmail,
+          displayName: normalizedEmail.split('@')[0],
+          emailVerified: true,
+          ...(password ? { password } : {}),
+        });
+        firebaseExists = !!firebaseUser?.uid;
       }
+      if (firebaseExists) {
+        // Always send a password-setup link so the person can actually sign in
+        // (fresh creates and recoveries alike). Non-fatal if it fails.
+        try { await auth.generatePasswordResetLink(normalizedEmail); } catch (linkErr: any) {
+          console.error('[create-user] reset link failed:', linkErr?.message);
+        }
+      }
+    } catch (firebaseErr: any) {
+      console.error('[create-user] Firebase error:', firebaseErr?.message || firebaseErr);
+      return NextResponse.json({ error: `Firebase error: ${firebaseErr?.message || 'unknown'}` }, { status: 500 });
     }
 
-    // Create profile in database — an admin-created account is granted
-    // access immediately, so it is active (not pending).
+    // Create or repair the profile — admin-created/repaired accounts are active
+    // (never pending), un-banned, and get the requested role & department. An
+    // existing stale record is taken over rather than rejected.
     await prisma.profile.upsert({
       where: { userId: normalizedEmail },
       create: {
@@ -82,8 +100,14 @@ export async function POST(req: NextRequest) {
         role: role || 'user',
         department: department || undefined,
         accountStatus: 'active',
+        isBanned: false,
+        banReason: null,
+        bannedBy: null,
       },
     });
+
+    // Lift any delete-blocklist entry so this account can sign in again.
+    await removeDeletedEmail(prisma as any, normalizedEmail);
     invalidateStatusCache(normalizedEmail);
 
     // Log the action
@@ -105,8 +129,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `User ${normalizedEmail} created with role "${role || 'user'}"`,
-      user: { email: normalizedEmail, role: role || 'user' },
+      message: existing
+        ? `Account ${normalizedEmail} repaired — access granted (${role || 'user'}). A password-setup email was sent.`
+        : `User ${normalizedEmail} created with role "${role || 'user'}". A password-setup email was sent.`,
+      user: { email: normalizedEmail, role: role || 'user', repaired: !!existing },
     });
   } catch (e: any) {
     console.error('[create-user] error:', e?.message || e);

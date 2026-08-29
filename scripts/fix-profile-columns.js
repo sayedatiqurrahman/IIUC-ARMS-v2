@@ -138,7 +138,8 @@ async function main() {
     "supportConfig" TEXT,
     "postingChannels" TEXT,
     "telegramChats" TEXT,
-    "emailSettings" TEXT
+    "emailSettings" TEXT,
+    "deletedEmails" TEXT DEFAULT '[]'
   )`, 'SiteSettings');
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "SemesterCourse" (

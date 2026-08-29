@@ -13,6 +13,7 @@ function AuthErrorContent() {
     'invalid-email': 'Only IIUC departmental emails are allowed (e.g. your_id@ugrad.iiuc.ac.bd or name@iiuc.ac.bd). Please sign in with your university email.',
     'account-banned': 'Your account has been suspended by an administrator. You cannot access the system. Contact admin for more information.',
     'account-rejected': 'Your account request has been rejected by an administrator. You cannot access the system. Contact admin for more information.',
+    'account-deleted': 'Your account has been deleted by an administrator. You cannot sign in. Contact admin if you believe this is a mistake.',
     'CredentialsSignin': 'Invalid email or password. Please try again.',
     'default': 'An authentication error occurred. Please try again.',
   };
