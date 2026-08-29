@@ -32,6 +32,7 @@ interface UploadFormProps {
   loadExistingLinks: (courseId: number, courseCode: string, courseTitle: string) => void;
   existingCourses: { code: string; title: string; totalFiles: number }[];
   courseOptions: { value: string; label: string; icon: string }[];
+  relatedCollections: { name: string; githubPath: string }[];
   createCourseFor: number | null;
   setCreateCourseFor: (v: number | null) => void;
   handleFilesForCourse: (courseId: number, e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -71,7 +72,7 @@ export default function UploadForm({
   category, setCategory,
   courses, updateCourse, removeCourse,
   addLink, removeLink, loadExistingLinks,
-  existingCourses, courseOptions,
+  existingCourses, courseOptions, relatedCollections,
   createCourseFor, setCreateCourseFor,
   handleFilesForCourse, fileInputRefs, onOpenScanner,
   totalFiles, totalSizeMB,
@@ -89,6 +90,14 @@ export default function UploadForm({
   const [mdContent, setMdContent] = useState('');
   const [mdFilename, setMdFilename] = useState('notes.md');
   const mdFileRef = useRef<HTMLInputElement>(null);
+  const [linkCourseId, setLinkCourseId] = useState<number | null>(null);
+  const [linkTitle, setLinkTitle] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [newRelOpen, setNewRelOpen] = useState(false);
+  const [newRelName, setNewRelName] = useState('');
+
+  const isRelatedSem = semester === config.relatedKitabsFolder || semester === config.relatedSourcesFolder;
+  const relUnitLabel = semester === config.relatedKitabsFolder ? 'kitab' : 'source';
 
   const userDeptId = (() => {
     const deptVal = profile.department || '';
@@ -200,8 +209,7 @@ export default function UploadForm({
     try {
       const text = await f.text();
       setMdContent(text);
-      const lower = f.name.toLowerCase();
-      setMdFilename(lower.endsWith('.md') || lower.endsWith('.markdown') ? f.name : `${f.name}.md`);
+      setMdFilename(f.name);
     } catch {}
     if (mdFileRef.current) mdFileRef.current.value = '';
   }
@@ -209,9 +217,7 @@ export default function UploadForm({
   function handleMdAdd() {
     if (mdCourseId === null) return;
     const name = mdFilename.trim() || 'notes.md';
-    const lower = name.toLowerCase();
-    const safeName = lower.endsWith('.md') || lower.endsWith('.markdown') ? name : `${name}.md`;
-    const file = new File([mdContent], safeName, { type: 'text/markdown' });
+    const file = new File([mdContent], name, { type: 'text/plain' });
     onAddMarkdown(mdCourseId, file);
     setMdCourseId(null);
     setMdContent('');
@@ -319,10 +325,15 @@ export default function UploadForm({
             ]} />
           </div>
           <div ref={catRef}>
-            <label className="text-[0.72rem] text-dark-text2 block mb-1">Category *</label>
-            <CustomSelect value={category} onChange={v => { setCategory(v); clearInvalid('category'); }} error={!!invalid.category} placeholder="Select..." className={!semester ? 'opacity-50 pointer-events-none' : ''} options={
-              semester === config.relatedKitabsFolder
-                ? Object.entries(config.relatedKitabsCategories).map(([key, cat]) => ({ value: key, label: cat.label, icon: 'fa-book' }))
+            <label className="text-[0.72rem] text-dark-text2 block mb-1">
+              Category * <span className="text-dark-text3">({isRelatedSem ? `existing ${relUnitLabel}s loaded from the cloud` : 'typical file type'})</span>
+            </label>
+            <CustomSelect value={category} onChange={v => { if (v === '__new_related') { setNewRelName(''); setNewRelOpen(true); } else { setNewRelOpen(false); setCategory(v); clearInvalid('category'); } }} error={!!invalid.category} placeholder="Select..." className={!semester ? 'opacity-50 pointer-events-none' : ''} options={
+              isRelatedSem
+                ? [
+                    ...relatedCollections.map(c => ({ value: c.name, label: c.name, icon: semester === config.relatedKitabsFolder ? 'fa-book' : 'fa-book-open' })),
+                    { value: '__new_related', label: `➕ Create new ${relUnitLabel} folder`, icon: 'fa-plus' },
+                  ]
                 : semester === config.relatedSourcesFolder
                   ? [{ value: config.relatedSourcesFolder, label: 'Related Sources', icon: 'fa-folder-open' }]
                   : [
@@ -334,6 +345,35 @@ export default function UploadForm({
                       { value: config.categories.other.folder, label: config.categories.other.label, icon: 'fa-folder', group: 'Root Categories' },
                     ]
             } />
+            {newRelOpen && (
+              <div className="mt-2 rounded-xl border border-qsis/30 bg-qsis/5 p-2.5">
+                <label className="text-[0.65rem] text-dark-text2 block mb-1">Name of the new {relUnitLabel} folder *</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newRelName}
+                    onChange={e => setNewRelName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newRelName.trim()) { setCategory(newRelName.trim()); setNewRelOpen(false); clearInvalid('category'); } }}
+                    placeholder={`e.g. ${semester === config.relatedKitabsFolder ? 'Tafsir Ibn Kathir' : 'Mushkilat al-Hadith'}`}
+                    className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.78rem] outline-none focus:border-qsis"
+                  />
+                  <button
+                    className="px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.72rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
+                    onClick={() => { if (newRelName.trim()) { setCategory(newRelName.trim()); setNewRelOpen(false); clearInvalid('category'); } }}
+                    disabled={!newRelName.trim()}
+                  >
+                    Create
+                  </button>
+                  <button
+                    className="px-3 py-1.5 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.72rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2"
+                    onClick={() => { setNewRelOpen(false); setNewRelName(''); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <p className="text-[0.62rem] text-dark-text3 mt-1.5">Files uploaded to a new {relUnitLabel} are stored there; it appears in Browse after the cloud syncs.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -397,19 +437,23 @@ export default function UploadForm({
           {/* Course Selector */}
           {!noCoursesAvailable ? (
             <div className="mb-2">
-              <label className="text-[0.72rem] text-dark-text2 block mb-1">Select Course *</label>
+              <label className="text-[0.72rem] text-dark-text2 block mb-1">{isRelatedSem ? `Folder in ${category || 'this collection'} *` : 'Select Course *'}</label>
               <div className="grid grid-cols-[minmax(0,70%)_minmax(0,1fr)] gap-2 sm:flex">
                 <div className="min-w-0 sm:flex-1" data-course-select>
                   <CustomSelect
                     value={course.selectedCourseCode}
                     onChange={v => {
                       const found = existingCourses.find(c => c.code === v);
-                      updateCourse(course.id, { selectedCourseCode: v, selectedCourseTitle: found?.title || '', links: [] });
+                      updateCourse(course.id, {
+                        selectedCourseCode: v,
+                        selectedCourseTitle: isRelatedSem && v === '__root__' ? category : (found?.title || ''),
+                        links: [],
+                      });
                       clearInvalid(`course-${course.id}`);
-                      if (found) loadExistingLinks(course.id, v, found.title);
+                      if (!isRelatedSem && found) loadExistingLinks(course.id, v, found.title);
                     }}
                     error={courseInvalid}
-                    placeholder={department && semester ? "Choose a course..." : "Select dept & semester first"}
+                    placeholder={department && semester ? (isRelatedSem ? "Choose a folder, or pick 'directly into'…" : "Choose a course...") : "Select dept & semester first"}
                     searchable
                     className={!department || !semester ? 'opacity-50 pointer-events-none' : ''}
                     options={courseOptions}
@@ -424,20 +468,36 @@ export default function UploadForm({
                   <i className="fas fa-plus"></i> New
                 </button>
               </div>
-              {selectedCourse && (
+              {selectedCourse && (() => {
+                const isRoot = isRelatedSem && selectedCourse.code === '__root__';
+                return (
                 <div className="mt-1.5 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-qsis/5 border border-qsis/10">
-                  <i className="fas fa-check-circle text-qsis text-[0.65rem]"></i>
+                  <i className={`fas ${isRoot ? 'fa-folder-open' : 'fa-check-circle'} text-qsis text-[0.65rem]`}></i>
                   <span className="text-[0.72rem] text-dark-text2">
-                    <span className="font-mono font-bold text-qsis">{selectedCourse.code}</span>
-                    <span className="mx-1">—</span>
-                    <span>{selectedCourse.title}</span>
-                    <span className="text-dark-text3 ml-1">({selectedCourse.totalFiles} files)</span>
+                    {isRoot ? (
+                      <><span className="font-semibold text-qsis">Upload files directly into</span> <span className="font-mono text-dark-text">/{selectedCourse.title}</span></>
+                    ) : (
+                      <>
+                        <span className="font-mono font-bold text-qsis">{selectedCourse.code}</span>
+                        <span className="mx-1">—</span>
+                        <span>{selectedCourse.title}</span>
+                        <span className="text-dark-text3 ml-1">({selectedCourse.totalFiles} files)</span>
+                      </>
+                    )}
                   </span>
                 </div>
-              )}
+                );
+              })()}
               {courseInvalid && (
                 <p className="mt-1 text-[0.68rem] text-red-400"><i className="fas fa-exclamation-triangle mr-1"></i>Select a course or create one to continue</p>
               )}
+            </div>
+          ) : isRelatedSem && !category ? (
+            <div className="mb-2 p-3 rounded-lg bg-dark-bg border border-amber-500/20">
+              <span className="text-[0.72rem] font-semibold text-dark-text block mb-1">
+                <i className="fas fa-list text-amber-400 mr-1"></i>Pick a {relUnitLabel} above first
+              </span>
+              <p className="text-[0.68rem] text-dark-text3">Choose an existing {relUnitLabel} folder (loaded from the cloud) or create a new one — then pick where inside it your files go.</p>
             </div>
           ) : (
             <div className="mb-2 p-3 rounded-lg bg-dark-bg border border-qsis/30">
@@ -471,8 +531,8 @@ export default function UploadForm({
             <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-qsis/5 border border-qsis/10">
               <span className="text-[0.62rem] text-qsis font-mono">
                 <i className="fas fa-folder mr-1"></i>
-                {semester === config.relatedKitabsFolder
-                  ? `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${courseFolder}/`
+                {isRelatedSem
+                  ? `${semester}/${category}${course.selectedCourseCode === '__root__' ? '/' : '/' + (course.selectedCourseTitle || course.selectedCourseCode) + '/'}`
                   : semester === config.relatedSourcesFolder
                     ? `${getFacultyIdForDepartment(department) || department}/${config.relatedSourcesFolder}/${courseFolder}/`
                     : isExamCategory && course.examSession
@@ -484,7 +544,7 @@ export default function UploadForm({
           )}
 
           {/* Subfolder Picker */}
-          {course.selectedCourseCode && category && (
+          {!isRelatedSem && course.selectedCourseCode && category && (
             <div className="mb-3">
               <label className="text-[0.72rem] text-dark-text2 block mb-1"><i className="fas fa-folder-tree mr-1 text-dark-text3"></i>Subfolder (optional)</label>
               <SubfolderPicker
@@ -578,8 +638,21 @@ export default function UploadForm({
                           <i className="fas fa-file-lines text-lg text-qsis"></i>
                         </div>
                         <span className="flex flex-col min-w-0">
-                          <span className="text-[0.82rem] font-bold text-dark-text">Markdown (.md)</span>
-                          <span className="text-[0.65rem] text-dark-text2">Write notes &amp; preview them live</span>
+                          <span className="text-[0.82rem] font-bold text-dark-text">Markdown / Code</span>
+                          <span className="text-[0.65rem] text-dark-text2">Write notes &amp; preview them live, or add code files</span>
+                        </span>
+                        <i className="fas fa-chevron-right ml-auto text-qsis/70"></i>
+                      </button>
+                      <button
+                        className="w-full flex items-center gap-3 px-4 py-4 text-left rounded-xl border-2 border-qsis/40 bg-qsis/10 hover:bg-qsis/20 hover:border-qsis active:scale-[0.98] transition-all cursor-pointer"
+                        onClick={() => { if (compressing) return; setLinkCourseId(course.id); setLinkTitle(''); setLinkUrl(''); }}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-qsis/20 flex items-center justify-center shrink-0">
+                          <i className="fas fa-link text-lg text-qsis"></i>
+                        </div>
+                        <span className="flex flex-col min-w-0">
+                          <span className="text-[0.82rem] font-bold text-dark-text">Link</span>
+                          <span className="text-[0.65rem] text-dark-text2">Embed a web link &amp; upload it with the course</span>
                         </span>
                         <i className="fas fa-chevron-right ml-auto text-qsis/70"></i>
                       </button>
@@ -601,9 +674,9 @@ export default function UploadForm({
                     <div className="px-4 pt-4 pb-3 flex items-center justify-between">
                       <div>
                         <h4 className="text-[0.95rem] font-bold text-dark-text flex items-center gap-2">
-                          <i className="fas fa-file-lines text-qsis"></i> Markdown (.md)
+                          <i className="fas fa-file-lines text-qsis"></i> Markdown / Code
                         </h4>
-                        <p className="text-[0.7rem] text-dark-text3 mt-0.5">Write or browse a .md file — preview updates live</p>
+                        <p className="text-[0.7rem] text-dark-text3 mt-0.5">Write or browse a .md / code file — preview updates live</p>
                       </div>
                       <button className="w-8 h-8 rounded-lg bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 cursor-pointer hover:text-dark-text" onClick={() => { setMdCourseId(null); setMdContent(''); }}>
                         <i className="fas fa-times text-sm"></i>
@@ -611,9 +684,9 @@ export default function UploadForm({
                     </div>
                     <div className="px-4 pb-3 flex flex-col gap-2.5 overflow-y-auto">
                       <div className="flex items-center gap-2">
-                        <input ref={mdFileRef} type="file" accept=".md,.markdown,.txt" className="hidden" onChange={handleMdBrowse} />
+                        <input ref={mdFileRef} type="file" accept=".md,.markdown,.txt,.py,.js,.ts,.tsx,.jsx,.c,.cpp,.h,.java,.sql,.sh,.json,.yml,.yaml,.html,.htm,.css,.xml,.php,.rb,.go,.rs,.cs,.swift,.kt,.scala,.r,.pl,.lua" className="hidden" onChange={handleMdBrowse} />
                         <button className="px-3 py-1.5 rounded-lg border border-qsis/40 bg-qsis/5 text-qsis text-[0.72rem] font-semibold cursor-pointer hover:bg-qsis/10 flex items-center gap-1.5" onClick={() => mdFileRef.current?.click()}>
-                          <i className="fas fa-folder-open"></i> Browse .md
+                          <i className="fas fa-folder-open"></i> Browse .md / code
                         </button>
                         <input
                           className="flex-1 px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.72rem] outline-none focus:border-qsis font-mono"
@@ -644,6 +717,59 @@ export default function UploadForm({
                   </div>
                 </>
               )}
+
+              {linkCourseId === course.id && (
+                <>
+                  <div className="fixed inset-0 z-[250] bg-black/60" onClick={() => setLinkCourseId(null)} />
+                  <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[260] w-[calc(100%-2rem)] max-w-[420px] rounded-2xl border border-dark-border bg-dark-bg2 shadow-2xl overflow-hidden">
+                    <div className="px-4 pt-4 pb-3 flex items-center justify-between">
+                      <div>
+                        <h4 className="text-[0.95rem] font-bold text-dark-text flex items-center gap-2">
+                          <i className="fas fa-link text-qsis"></i> Embed Link
+                        </h4>
+                        <p className="text-[0.7rem] text-dark-text3 mt-0.5">Link is saved with the course and shown to everyone who opens it</p>
+                      </div>
+                      <button className="w-8 h-8 rounded-lg bg-dark-bg3 border border-dark-border flex items-center justify-center text-dark-text2 cursor-pointer hover:text-dark-text" onClick={() => setLinkCourseId(null)}>
+                        <i className="fas fa-times text-sm"></i>
+                      </button>
+                    </div>
+                    <div className="px-4 pb-3 flex flex-col gap-2.5">
+                      <div>
+                        <label className="text-[0.65rem] text-dark-text2 block mb-1">Link title *</label>
+                        <input
+                          type="text"
+                          value={linkTitle}
+                          onChange={e => setLinkTitle(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter' && linkTitle.trim() && linkUrl.trim()) { addLink(course.id, linkTitle.trim(), linkUrl.trim()); setLinkCourseId(null); } }}
+                          placeholder="e.g. Lecture slides on Google Drive"
+                          className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.78rem] outline-none focus:border-qsis"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[0.65rem] text-dark-text2 block mb-1">URL *</label>
+                        <input
+                          type="url"
+                          value={linkUrl}
+                          onChange={e => setLinkUrl(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter' && linkTitle.trim() && linkUrl.trim()) { addLink(course.id, linkTitle.trim(), linkUrl.trim()); setLinkCourseId(null); } }}
+                          placeholder="https://drive.google.com/..."
+                          className="w-full px-2.5 py-2 rounded-lg border border-dark-border bg-dark-bg3 text-dark-text text-[0.78rem] outline-none focus:border-qsis"
+                        />
+                      </div>
+                    </div>
+                    <div className="px-4 py-3 border-t border-dark-border flex gap-2">
+                      <button className="flex-1 py-2.5 rounded-lg bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.78rem] font-semibold border-none cursor-pointer hover:opacity-90 disabled:opacity-50"
+                        disabled={!linkTitle.trim() || !linkUrl.trim()}
+                        onClick={() => { addLink(course.id, linkTitle.trim(), linkUrl.trim()); setLinkCourseId(null); }}>
+                        <i className="fas fa-plus mr-1"></i> Add link
+                      </button>
+                      <button className="px-4 py-2.5 rounded-lg bg-dark-bg3 text-dark-text2 text-[0.78rem] font-semibold border border-dark-border cursor-pointer hover:bg-dark-bg2" onClick={() => setLinkCourseId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <div className="border-2 border-dashed border-dark-border/60 rounded-lg p-4 text-center">
@@ -655,12 +781,12 @@ export default function UploadForm({
                     value={course.selectedCourseCode}
                     onChange={v => {
                       const found = existingCourses.find(c => c.code === v);
-                      updateCourse(course.id, { selectedCourseCode: v, selectedCourseTitle: found?.title || '', links: [] });
+                      updateCourse(course.id, { selectedCourseCode: v, selectedCourseTitle: isRelatedSem && v === '__root__' ? category : (found?.title || ''), links: [] });
                       clearInvalid(`course-${course.id}`);
-                      if (found) loadExistingLinks(course.id, v, found.title);
+                      if (!isRelatedSem && found) loadExistingLinks(course.id, v, found.title);
                     }}
                     error={courseInvalid}
-                    placeholder={department && semester ? "Choose a course..." : "Select dept & semester first"}
+                    placeholder={department && semester ? (isRelatedSem ? "Choose a folder, or pick 'directly into'…" : "Choose a course...") : "Select dept & semester first"}
                     searchable
                     className={!department || !semester ? 'opacity-50 pointer-events-none' : ''}
                     options={courseOptions}

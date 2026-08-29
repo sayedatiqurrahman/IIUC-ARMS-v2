@@ -92,6 +92,7 @@ export default function BrowsePage() {
   const getCourseMidFinal = useAppStore(s => s.getCourseMidFinal);
   const getSubfolderContents = useAppStore(s => s.getSubfolderContents);
   const getUploadTree = useAppStore(s => s.getUploadTree);
+  const setUploadOpen = useAppStore(s => s.setUploadOpen);
   const getSearchResults = useAppStore(s => s.getSearchResults);
   const getUploadDepartments = useAppStore(s => s.getUploadDepartments);
   const currentDept = useAppStore(s => s.currentDept);
@@ -634,6 +635,16 @@ export default function BrowsePage() {
         departments={departments} recentReads={recentReads} openRecentFile={openRecentFile}
       />
       {view === 'departments' && <LatestNotices />}
+      {view !== 'departments' && !loading && !error && !isSearching && (
+        <div className="flex justify-end mb-3">
+          <button
+            onClick={() => setUploadOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.78rem] font-semibold cursor-pointer border-none hover:opacity-90 transition-opacity shadow-lg shadow-qsis/20"
+          >
+            <i className="fas fa-cloud-upload-alt text-[0.85rem]"></i>Upload Files
+          </button>
+        </div>
+      )}
       <BrowseHeader
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchSemester={searchSemester} setSearchSemester={setSearchSemester}

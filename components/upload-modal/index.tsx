@@ -28,6 +28,7 @@ function buildUploadPaths(opts: {
   department: string;
   profile: Profile;
   email: string;
+  relatedBase?: string;
 }): { files: { path: string; meta: FileWithMeta }[]; readmePath: string } {
   const { course, category, semester, department } = opts;
   const courseCode = course.selectedCourseCode;
@@ -41,13 +42,11 @@ function buildUploadPaths(opts: {
     const ext = fileMeta.file.name.split('.').pop() || 'pdf';
     const customPart = course.customFolder ? `/${course.customFolder}` : '';
     let filePath: string;
-    if (semester === config.relatedKitabsFolder) {
-      const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
-      filePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${fn}/${fileMeta.file.name}`;
-    } else if (semester === config.relatedSourcesFolder) {
-      const facId = getFacultyIdForDepartment(department) || department;
-      const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
-      filePath = `${facId}/${config.relatedSourcesFolder}/${fn}/${fileMeta.file.name}`;
+    if (semester === config.relatedKitabsFolder || semester === config.relatedSourcesFolder) {
+      const base = opts.relatedBase || (semester === config.relatedKitabsFolder
+        ? `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}`
+        : `${getFacultyIdForDepartment(department) || department}/${config.relatedSourcesFolder}`);
+      filePath = `${base}/${fileMeta.file.name}`;
     } else if (isExamSpecific && course.examSession) {
       const yearPart = isPdf(fileMeta.file.name) ? (fileMeta.yearRange || '') : (fileMeta.year || '');
       const renamedFile = `${courseCode} ${course.examSession} ${CURRENT_YEAR} - ${authorName}.${ext}`;
@@ -63,13 +62,11 @@ function buildUploadPaths(opts: {
 
   let readmePath = '';
   if (course.links.length > 0) {
-    if (semester === config.relatedKitabsFolder) {
-      const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
-      readmePath = `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}/${fn}/README.md`;
-    } else if (semester === config.relatedSourcesFolder) {
-      const facId = getFacultyIdForDepartment(department) || department;
-      const fn = courseTitle.trim() ? `${courseCode}-${courseTitle.trim()}` : courseCode;
-      readmePath = `${facId}/${config.relatedSourcesFolder}/${fn}/README.md`;
+    if (semester === config.relatedKitabsFolder || semester === config.relatedSourcesFolder) {
+      const base = opts.relatedBase || (semester === config.relatedKitabsFolder
+        ? `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${category}`
+        : `${getFacultyIdForDepartment(department) || department}/${config.relatedSourcesFolder}`);
+      readmePath = `${base}/README.md`;
     } else {
       readmePath = `${getDepartmentFolder(department)}/${semester}/${courseFolder}/README.md`;
     }
@@ -96,6 +93,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   const setGithubToken = useAppStore(s => s.setGithubToken);
   const onboardData = useAppStore(s => s.onboardingData);
   const getSemesterCourses = useAppStore(s => s.getSemesterCourses);
+  const getRelatedFolderContents = useAppStore(s => s.getRelatedFolderContents);
   const dbCourses = useAppStore(s => s.dbCourses);
   const uploadBg = useAppStore(s => s.uploadBg);
   const setUploadBg = useAppStore(s => s.setUploadBg);
@@ -156,9 +154,39 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   }, [uploadBg, setUploadBg, onClose]);
 
   const existingCourses = useMemo(() => {
-    if (!department || !semester || semester === config.relatedKitabsFolder || semester === config.relatedSourcesFolder) return [];
+    if (!department || !semester) return [];
+    // Related Kitabs / Related Sources: first-level folders under the chosen
+    // collection come straight from the live tree, plus a "__root__" option so a
+    // user can drop files directly INTO the collection folder itself.
+    if (semester === config.relatedKitabsFolder || semester === config.relatedSourcesFolder) {
+      if (!category) return [];
+      const { subfolders } = getRelatedFolderContents(semester, department, category);
+      return [
+        { code: '__root__', title: category, totalFiles: 0 },
+        ...subfolders.map(s => ({ code: s.name, title: s.name, totalFiles: s.count })),
+      ];
+    }
     return getSemesterCourses(semester, department);
-  }, [department, semester, getSemesterCourses, treeLength]);
+  }, [department, semester, category, getSemesterCourses, getRelatedFolderContents, treeLength]);
+
+  // For related folders, the list of top-level collections (a kitab folder for
+  // Related Kitabs, a source folder for Related Sources). Their `githubPath` is
+  // the REAL location on GitHub, which the upload uses so files land directly in
+  // the existing folder instead of creating a duplicate elsewhere.
+  const relatedCollections = useMemo(() => {
+    if (semester !== config.relatedKitabsFolder && semester !== config.relatedSourcesFolder) return [];
+    const { subfolders } = getRelatedFolderContents(semester, department, '');
+    return subfolders.map(s => ({ name: s.name, githubPath: s.githubPath }));
+  }, [semester, department, getRelatedFolderContents, treeLength]);
+
+  const resolveRelatedBase = useCallback((categoryName: string): string => {
+    const name = String(categoryName || '').trim();
+    const found = relatedCollections.find(c => c.name.toLowerCase() === name.toLowerCase());
+    if (found) return found.githubPath;
+    if (semester === config.relatedKitabsFolder) return `${config.relatedKitabsParent}/${config.relatedKitabsFolder}/${name}`;
+    const facId = getFacultyIdForDepartment(department) || department;
+    return `${facId}/${config.relatedSourcesFolder}/${name}`;
+  }, [relatedCollections, semester, department]);
 
   const allKnownCourses = useMemo(() => {
     if (!department) return [];
@@ -594,7 +622,17 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
 
 
       const uploads = validCourses.map(course => {
-        const built = buildUploadPaths({ course, category, semester, department, profile, email });
+        let relatedBase = '';
+        if (semester === config.relatedKitabsFolder || semester === config.relatedSourcesFolder) {
+          let base = resolveRelatedBase(category);
+          if (course.selectedCourseCode && course.selectedCourseCode !== '__root__') {
+            const { subfolders } = getRelatedFolderContents(semester, department, category);
+            const sec = subfolders.find(s => s.name.toLowerCase() === String(course.selectedCourseCode).toLowerCase());
+            base = sec ? sec.githubPath : `${base}/${course.selectedCourseCode} - ${course.selectedCourseTitle || course.selectedCourseCode}`;
+          }
+          relatedBase = base;
+        }
+        const built = buildUploadPaths({ course, category, semester, department, profile, email, relatedBase });
         return { course, files: built.files, readmePath: built.readmePath };
       });
 
@@ -716,6 +754,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
   }
 
   const courseOptions = useMemo(() => {
+    const isRelated = semester === config.relatedKitabsFolder || semester === config.relatedSourcesFolder;
     const seen = new Set<string>();
     const opts: { value: string; label: string; icon: string }[] = [];
     const add = (code: string, title: string) => {
@@ -727,6 +766,29 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     for (const c of existingCourses) add(c.code, c.title);
     for (const c of dbCourses) { if (c.department === department && c.semester === semester) add(c.code, c.title); }
     for (const c of recentlyCreated) add(c.code, c.title);
+    if (isRelated) {
+      // Related folders are named folders (not "CODE — Title"), so show the raw
+      // name and surface the "__root__" option as "upload directly into".
+      const seenRel = new Set<string>();
+      const relOpts: { value: string; label: string; icon: string }[] = [];
+      for (const c of existingCourses) {
+        const key = c.code.toUpperCase();
+        if (seenRel.has(key)) continue;
+        seenRel.add(key);
+        relOpts.push({
+          value: key,
+          label: c.code === '__root__' ? `Upload directly into ${c.title}` : c.title,
+          icon: c.code === '__root__' ? 'fa-folder-open' : 'fa-book',
+        });
+      }
+      for (const c of recentlyCreated) {
+        const key = c.code.toUpperCase();
+        if (seenRel.has(key)) continue;
+        seenRel.add(key);
+        relOpts.push({ value: key, label: c.title, icon: 'fa-book' });
+      }
+      return relOpts;
+    }
     return opts;
   }, [existingCourses, dbCourses, department, semester, recentlyCreated]);
 
@@ -754,6 +816,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
             courses={courses} updateCourse={updateCourse} removeCourse={removeCourse}
             addLink={addLink} removeLink={removeLink} loadExistingLinks={loadExistingLinks}
             existingCourses={existingCourses} courseOptions={courseOptions}
+            relatedCollections={relatedCollections}
             createCourseFor={createCourseFor} setCreateCourseFor={setCreateCourseFor}
             handleFilesForCourse={handleFilesForCourse} fileInputRefs={fileInputRefs} onOpenScanner={openScanner}
             totalFiles={totalFiles} totalSizeMB={totalSizeMB} uploading={uploading} result={result}
