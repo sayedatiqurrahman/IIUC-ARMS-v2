@@ -46,6 +46,17 @@ function formatDate(d: string) {
   });
 }
 
+// Opens Gmail's compose window prefilled for an external/pending user: asks for
+// their university ID to verify their account and nudges them to sign in with
+// their university email (which is pre-approved).
+function gmailComposeHref(email: string, name: string) {
+  const subject = encodeURIComponent('Verify your account — IIUC-ARMS');
+  const body = encodeURIComponent(
+    `Hi${name ? ' ' + name : ''},\n\nYou signed in to IIUC Academic Resource Management System (IIUC-ARMS) with your personal email: ${email}.\n\nTo verify your account, please reply with your IIUC Student/Employee ID.\n\nFor full access, please also sign in with your university email (e.g. name@ugrad.iiuc.ac.bd or name@iiuc.ac.bd). University accounts are pre-approved, so you can get in immediately without waiting.\n\nIf you already signed up with your personal email, we can link your university email from your account once verified.\n\nThanks,\nIIUC-ARMS Support`
+  );
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
+}
+
 interface UserRowProps {
   u: UserRecord;
   email: string;
@@ -91,6 +102,7 @@ export default function UserRow({
   const isUniversityEmail = /@iiuc\.ac\.bd$/i.test(u.email);
   const isPendingRow = isPendingTab || u.accountStatus === 'pending';
   const canSendToPending = isAdmin && !isSelf && !isOwnerUser && !isUniversityEmail && u.accountStatus === 'active' && !isPendingTab;
+  const canEmail = (isAdmin || isManager) && !isSelf && !isOwnerUser && !isUniversityEmail;
   const canEditRole = !isSelf && !isOwnerUser && (isAdmin || (isManager && uRole !== 'admin' && uRole !== 'manager'));
   const canBan = !isSelf && !isOwnerUser && uRole !== 'admin' && (isAdmin || isManager);
   const canToggleCR = !isSelf && (isAdmin || isManager);
@@ -189,6 +201,17 @@ export default function UserRow({
               {actionLoading === u.email + 'ban' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-ban mr-0.5"></i>Ban</>}
             </button>
           )
+        )}
+        {canEmail && (
+          <a
+            href={gmailComposeHref(u.email, u.name || '')}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-2 sm:px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-cyan-500/20 border border-cyan-500/20"
+            title="Open Gmail compose: ask for their university ID and suggest logging in with a university email"
+          >
+            <i className="fas fa-envelope mr-0.5"></i>Email
+          </a>
         )}
         {isPendingRow && handleApprove && (
           <button onClick={() => handleApprove(u.email)} disabled={actionLoading === u.email + 'approve'}

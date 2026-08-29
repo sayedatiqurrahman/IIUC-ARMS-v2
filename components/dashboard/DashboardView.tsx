@@ -479,6 +479,9 @@ export default function DashboardView() {
               </div>
             )}
 
+            {/* Email connection */}
+            <AccountLinkingSection email={email} linkedEmails={(profile as any).linkedEmails || []} onRefresh={loadProfile} />
+
             {/* Quick Actions */}
             <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
               <h4 className="text-[0.95rem] font-semibold mb-3"><i className="fas fa-bolt text-qsis mr-2"></i>Quick Actions</h4>
@@ -576,6 +579,7 @@ export default function DashboardView() {
               patValid={patValid} patReplacing={patReplacing} setPatReplacing={setPatReplacing}
               handlePastePAT={handlePastePAT} handleDisconnect={handleDisconnect}
             />
+            <AccountLinkingSection email={email} linkedEmails={(profile as any).linkedEmails || []} onRefresh={loadProfile} />
             <TelegramVerify
               telegramChatId={(profile as any).telegramChatId}
               telegramVerified={(profile as any).telegramVerified}
@@ -587,7 +591,9 @@ export default function DashboardView() {
 
       case 'security':
         return (
-          <SecuritySection
+          <div>
+            <AccountLinkingSection email={email} linkedEmails={(profile as any).linkedEmails || []} onRefresh={loadProfile} />
+            <SecuritySection
             totpEnabled={totpEnabled} totpLoading={totpLoading} totpSetupMode={totpSetupMode}
             totpQR={totpQR} totpSecret={totpSecret} totpCode={totpCode}
             totpMsg={totpMsg} totpErrMsg={totpErrMsg} totpDisableMode={totpDisableMode}
@@ -598,6 +604,7 @@ export default function DashboardView() {
             handleTotpSetup={handleTotpSetup} handleTotpVerify={handleTotpVerify}
             handleTotpDisable={handleTotpDisable} handleTotpMethodsSave={handleTotpMethodsSave}
           />
+          </div>
         );
 
       case 'teacher-info':
