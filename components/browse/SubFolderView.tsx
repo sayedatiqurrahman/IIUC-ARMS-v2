@@ -100,15 +100,6 @@ export default function SubFolderView({
               </div>
               <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                 <span className="text-[0.7rem] text-dark-text2 mr-1">{sf.fileCount} file{sf.fileCount !== 1 ? 's' : ''}</span>
-                {onShare && (
-                  <button
-                    title="Share"
-                    onClick={(e) => { e.stopPropagation(); onShare(sf.githubPath || sf.path, sf.name, true); }}
-                    className="w-[30px] h-[30px] rounded-md inline-flex items-center justify-center text-[0.8rem] bg-transparent border border-dark-border text-dark-text2 hover:bg-dark-bg3 hover:text-green-400 hover:border-green-400/40 transition-all"
-                  >
-                    <i className="fas fa-share-nodes"></i>
-                  </button>
-                )}
                 {canDeleteFolder && onDeleteFolder && (
                   <FileActionsMenu
                     filePath={sf.githubPath || sf.path}
