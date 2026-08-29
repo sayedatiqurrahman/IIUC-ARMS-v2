@@ -218,6 +218,20 @@ export default function EmailSettingsTab({ email, profileName, profileWhatsapp, 
             </div>
           </div>
 
+          {/* Community & Help Links */}
+          <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
+            <h3 className="text-[0.85rem] font-semibold text-dark-text mb-3"><i className="fas fa-hands-helping text-qsis mr-1.5"></i>Community & Help Links</h3>
+            <p className="text-[0.68rem] text-dark-text3 mb-3">Automatically attached to the bottom of every email so recipients can get updates, join the community and find help. Leave a field empty to hide that link. Pre-filled with the official channels.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="WhatsApp Channel URL"><TextInput value={settings.theme.whatsappChannel} onChange={v => setTheme({ whatsappChannel: v })} placeholder="https://www.whatsapp.com/channel/..." /></Field>
+              <Field label="WhatsApp Community URL" hint="Group invite link"><TextInput value={settings.theme.whatsappCommunity} onChange={v => setTheme({ whatsappCommunity: v })} placeholder="https://chat.whatsapp.com/..." /></Field>
+              <Field label="Telegram Channel URL"><TextInput value={settings.theme.telegramChannel} onChange={v => setTheme({ telegramChannel: v })} placeholder="https://t.me/iiuc_arms" /></Field>
+              <Field label="Telegram Group URL"><TextInput value={settings.theme.telegramGroup} onChange={v => setTheme({ telegramGroup: v })} placeholder="https://t.me/iiuc_arms_chat" /></Field>
+              <Field label="Telegram Bot URL"><TextInput value={settings.theme.telegramBot} onChange={v => setTheme({ telegramBot: v })} placeholder="https://t.me/iiuc_arms_bot" /></Field>
+              <Field label="Support Page URL"><TextInput value={settings.theme.supportUrl} onChange={v => setTheme({ supportUrl: v })} placeholder="https://iiuc-arms.eu.cc/support" /></Field>
+            </div>
+          </div>
+
           {/* Templates */}
           <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">

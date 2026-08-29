@@ -5,6 +5,7 @@ import {
   mergeEmailSettings, renderEmailHtml, emailPlainParts,
   type EmailSettings, type EmailTemplate,
 } from '@/lib/email-theme';
+import { copyRichHtml } from '@/lib/copy-html';
 import { type UserRecord } from './types';
 
 interface EmailComposerProps {
@@ -14,25 +15,6 @@ interface EmailComposerProps {
   senderWhatsapp?: string;
   senderTelegram?: string;
   onClose: () => void;
-}
-
-function copySelection(html: string): boolean {
-  const host = document.createElement('div');
-  host.style.cssText = 'position:fixed;left:-99999px;top:0;width:1px;height:1px;overflow:hidden;';
-  host.innerHTML = html;
-  document.body.appendChild(host);
-  try {
-    const range = document.createRange();
-    range.selectNodeContents(host);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    const ok = document.execCommand('copy');
-    sel?.removeAllRanges();
-    return ok;
-  } finally {
-    document.body.removeChild(host);
-  }
 }
 
 export default function EmailComposer({ user, senderEmail, senderName, senderWhatsapp, senderTelegram, onClose }: EmailComposerProps) {
@@ -117,9 +99,9 @@ export default function EmailComposer({ user, senderEmail, senderName, senderWha
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const copyHtml = () => {
-    const ok = copySelection(html);
-    setFlashMsg(ok ? 'Formatted email copied — open Gmail compose and paste (Ctrl+V) to keep the theme & logo.' : 'Could not copy automatically — use the plain-text options instead.');
+  const copyHtml = async () => {
+    const res = await copyRichHtml(html, plain.body);
+    setFlashMsg(res === 'fail' ? 'Could not copy automatically — use "Copy plain text" instead.' : 'Formatted HTML email copied — open Gmail compose and paste (Ctrl+V) to keep the theme, logo & links.');
     setTimeout(() => setFlashMsg(''), 5000);
   };
 

@@ -13,6 +13,12 @@ export interface EmailTheme {
   whatsapp: string;
   telegram: string;
   supportEmail: string;
+  whatsappChannel: string;
+  whatsappCommunity: string;
+  telegramChannel: string;
+  telegramGroup: string;
+  telegramBot: string;
+  supportUrl: string;
 }
 
 export interface EmailTemplate {
@@ -44,6 +50,12 @@ export const DEFAULT_EMAIL_SETTINGS: EmailSettings = {
     whatsapp: '',
     telegram: '',
     supportEmail: '',
+    whatsappChannel: '',
+    whatsappCommunity: 'https://chat.whatsapp.com/JQbkkwbDTvj9G0Xly9N771',
+    telegramChannel: 'https://t.me/iiuc_arms',
+    telegramGroup: 'https://t.me/iiuc_arms_chat',
+    telegramBot: 'https://t.me/iiuc_arms_bot',
+    supportUrl: 'https://iiuc-arms.eu.cc/support',
   },
   templates: [
     {
@@ -64,6 +76,12 @@ export const DEFAULT_EMAIL_SETTINGS: EmailSettings = {
       subject: 'Notice from {{appName}}',
       body: 'Hi {{name}},\n\n{{message}}\n\nThanks,\n{{senderName}}',
     },
+    {
+      key: 'announce',
+      label: 'Announcement',
+      subject: 'Announcement from {{appName}}',
+      body: 'Hi {{name}},\n\n{{message}}\n\nFor updates, announcements and community discussion, join our official channels below — or open the support page if you need any help.\n\nThanks,\n{{senderName}}',
+    },
   ],
   defaultTemplate: 'verify',
 };
@@ -81,6 +99,7 @@ export const EMAIL_PLACEHOLDERS: { token: string; label: string }[] = [
   { token: '{{whatsapp}}', label: 'Sender WhatsApp' },
   { token: '{{telegram}}', label: 'Sender Telegram' },
   { token: '{{supportEmail}}', label: 'Support email' },
+  { token: '{{supportUrl}}', label: 'Support page link' },
 ];
 
 export function mergeEmailSettings(partial?: Partial<EmailSettings> | null): EmailSettings {
@@ -119,6 +138,7 @@ export const EMAIL_VARS = (settings: EmailSettings, opts: { name?: string; email
     whatsapp: t.whatsapp,
     telegram: t.telegram,
     supportEmail: t.supportEmail,
+    supportUrl: t.supportUrl,
   };
 };
 
@@ -148,6 +168,22 @@ export function renderEmailHtml(settings: EmailSettings, tpl: EmailTemplate, opt
     contactChips.push(`<a href="mailto:${t.supportEmail}" style="display:inline-block;padding:7px 14px;margin:4px;border-radius:9999px;background:${t.primaryColor}22;color:${t.primaryColor};text-decoration:none;font-size:12px;font-weight:600">Email Support</a>`);
   }
 
+  // Community & help links — automatically attached to every email so
+  // recipients know where to get updates and support.
+  const helpChips: string[] = [];
+  const helpLinks: { href: string; label: string }[] = [
+    { href: t.whatsappChannel, label: 'WhatsApp Channel' },
+    { href: t.whatsappCommunity, label: 'WhatsApp Community' },
+    { href: t.telegramChannel, label: 'Telegram Channel' },
+    { href: t.telegramGroup, label: 'Telegram Group' },
+    { href: t.telegramBot, label: 'Telegram Bot' },
+    { href: t.supportUrl, label: 'Get Help' },
+  ];
+  for (const link of helpLinks) {
+    if (!link.href) continue;
+    helpChips.push(`<a href="${escapeHtml(link.href)}" style="display:inline-block;padding:7px 14px;margin:4px;border-radius:9999px;background:${t.primaryColor}22;color:${t.primaryColor};text-decoration:none;font-size:12px;font-weight:600;border:1px solid ${t.primaryColor}33">${link.label}</a>`);
+  }
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -175,6 +211,13 @@ export function renderEmailHtml(settings: EmailSettings, tpl: EmailTemplate, opt
           <tr>
             <td align="center" style="padding:8px 28px 8px 28px">${contactChips.join('')}</td>
           </tr>
+          ${helpChips.length > 0 ? `
+          <tr>
+            <td style="padding:0 28px 4px 28px">
+              <div style="font-size:11px;color:${t.mutedColor};text-align:center;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px">Get updates &amp; support</div>
+              <div style="text-align:center">${helpChips.join('')}</div>
+            </td>
+          </tr>` : ''}
           <tr>
             <td style="padding:16px 28px 24px 28px;border-top:1px solid ${t.primaryColor}22">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -208,6 +251,17 @@ export function emailPlainParts(settings: EmailSettings, tpl: EmailTemplate, opt
   if (settings.theme.whatsapp) footer.push(`WhatsApp: ${settings.theme.whatsapp}`);
   if (settings.theme.telegram) footer.push(`Telegram: ${settings.theme.telegram}`);
   if (settings.theme.supportEmail) footer.push(`Email: ${settings.theme.supportEmail}`);
+  if (settings.theme.supportUrl) footer.push(`Support: ${settings.theme.supportUrl}`);
+
+  const community: string[] = [];
+  if (settings.theme.telegramChannel) community.push(`Telegram Channel: ${settings.theme.telegramChannel}`);
+  if (settings.theme.telegramGroup) community.push(`Telegram Group: ${settings.theme.telegramGroup}`);
+  if (settings.theme.telegramBot) community.push(`Telegram Bot: ${settings.theme.telegramBot}`);
+  if (settings.theme.whatsappCommunity) community.push(`WhatsApp Community: ${settings.theme.whatsappCommunity}`);
+  if (settings.theme.whatsappChannel) community.push(`WhatsApp Channel: ${settings.theme.whatsappChannel}`);
+  if (community.length > 0) {
+    footer.push(`Get updates & support:`, ...community.map(c => `• ${c}`));
+  }
   footer.push(settings.theme.footerText);
   return { subject, body: `${body.trim()}\n\n${footer.join('\n')}\n` };
 }

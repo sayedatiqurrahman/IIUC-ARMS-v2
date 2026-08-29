@@ -5,6 +5,7 @@ import {
   mergeEmailSettings, renderEmailHtml, emailPlainParts,
   type EmailSettings, type EmailTemplate,
 } from '@/lib/email-theme';
+import { copyRichHtml } from '@/lib/copy-html';
 
 interface Recipient {
   email: string;
@@ -74,7 +75,8 @@ export default function BulkEmailComposer({ senderEmail, senderName, senderWhats
       if (!t.whatsapp && senderWhatsapp) t.whatsapp = senderWhatsapp;
       if (!t.telegram && senderTelegram) t.telegram = senderTelegram;
       if (mounted) {
-        const def = s.templates.find(x => x.key === s.defaultTemplate) || s.templates[0];
+        const defaultKey = s.defaultTemplate || s.templates[0]?.key || '';
+        const def = s.templates.find(x => x.key === 'announce') || s.templates.find(x => x.key === defaultKey) || s.templates[0];
         setSettings(s);
         setSelectedKey(def?.key || '');
         setSubject(def?.subject || '');
@@ -185,6 +187,12 @@ export default function BulkEmailComposer({ senderEmail, senderName, senderWhats
     setTimeout(() => setFlashMsg(''), 5000);
   };
 
+  const copyHtml = async () => {
+    const res = await copyRichHtml(html, plain.body);
+    setFlashMsg(res === 'fail' ? 'Could not copy automatically — use the plain-text option instead.' : 'Formatted HTML email copied — paste into Gmail compose to keep the theme, logo & links.');
+    setTimeout(() => setFlashMsg(''), 5000);
+  };
+
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl w-full max-w-5xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -288,11 +296,7 @@ export default function BulkEmailComposer({ senderEmail, senderName, senderWhats
                     <i className="fas fa-envelope-open-text"></i> Open Gmail compose (BCC {recipients.length > 0 ? recipients.length : ''})
                   </button>
                   <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => {
-                      const ok = copySelection(html);
-                      setFlashMsg(ok ? 'Formatted email copied — paste into Gmail compose to keep the theme & logo.' : 'Could not copy automatically — use the plain-text option instead.');
-                      setTimeout(() => setFlashMsg(''), 5000);
-                    }} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-qsis/15 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/25 transition-colors">
+                    <button onClick={copyHtml} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-qsis/15 text-qsis text-[0.75rem] font-semibold cursor-pointer hover:bg-qsis/25 transition-colors">
                       <i className="fas fa-copy"></i> Copy formatted
                     </button>
                     <button onClick={copyBccText} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-dark-bg border border-dark-border text-dark-text2 text-[0.75rem] font-semibold cursor-pointer hover:bg-dark-bg3 transition-colors">
@@ -316,23 +320,4 @@ export default function BulkEmailComposer({ senderEmail, senderName, senderWhats
       </div>
     </div>
   );
-}
-
-function copySelection(html: string): boolean {
-  const host = document.createElement('div');
-  host.style.cssText = 'position:fixed;left:-99999px;top:0;width:1px;height:1px;overflow:hidden;';
-  host.innerHTML = html;
-  document.body.appendChild(host);
-  try {
-    const range = document.createRange();
-    range.selectNodeContents(host);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-    const ok = document.execCommand('copy');
-    sel?.removeAllRanges();
-    return ok;
-  } finally {
-    document.body.removeChild(host);
-  }
 }
