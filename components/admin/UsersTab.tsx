@@ -181,6 +181,14 @@ export default function UsersTab({
         ))}
       </div>
 
+      {/* Pending tab explainer */}
+      {userSubTab === 'pending' && (
+        <div className="bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-3 mb-4 text-[0.72rem] text-yellow-300">
+          <i className="fas fa-clock mr-1"></i>
+          Accounts who tried to sign in with a personal email and have <span className="font-semibold">no role assigned yet</span>. Assign a role (Student, Teacher, etc.) to activate them — they'll move to the matching list automatically.
+        </div>
+      )}
+
       {/* Add Admin (only on admin sub-tab) */}
       {userSubTab === 'admin' && isSuperAdmin && (
         <div className="mb-4">

@@ -51,8 +51,14 @@ export async function GET(req: NextRequest) {
     }
     if (filterDomain && filterDomain !== 'all') {
       if (filterDomain === 'student') {
-        // Students = @ugrad.iiuc.ac.bd email, never pending
-        where.email = { endsWith: '@ugrad.iiuc.ac.bd' };
+        // Students = @ugrad.iiuc.ac.bd email OR any account assigned role 'student'
+        // (e.g. an external applicant promoted to Student), never pending
+        where.AND = [...(where.AND || []), {
+          OR: [
+            { email: { endsWith: '@ugrad.iiuc.ac.bd' } },
+            { role: 'student' },
+          ],
+        }];
         where.accountStatus = { notIn: ['pending', 'rejected'] };
       } else if (filterDomain === 'teacher') {
         // Teachers = faculty email domain (@iiuc.ac.bd, NOT @ugrad student) OR role 'teacher'
@@ -65,10 +71,21 @@ export async function GET(req: NextRequest) {
         }];
         where.accountStatus = { notIn: ['pending', 'rejected'] };
       } else if (filterDomain === 'external') {
+        // External = active non-university accounts. Anyone assigned role
+        // 'student' was promoted to the Students list, so exclude them here.
         where.email = { not: { endsWith: '.iiuc.ac.bd' } };
         where.accountStatus = 'active';
+        where.AND = [...(where.AND || []), {
+          OR: [{ role: { not: 'student' } }, { role: null }],
+        }];
       } else if (filterDomain === 'pending') {
+        // Pending = external applicants who tried to sign in with a personal
+        // email and have NO role assigned yet. Assigning any role activates
+        // them (see setRole) and moves them to the matching list.
         where.accountStatus = 'pending';
+        where.AND = [...(where.AND || []), {
+          OR: [{ role: 'user' }, { role: null }],
+        }];
         where.email = {
           not: { endsWith: '.iiuc.ac.bd' },
           notIn: config.ownerEmails.map(e => e.toLowerCase()),
@@ -655,8 +672,8 @@ export async function POST(req: NextRequest) {
       }
       await prisma.profile.upsert({
         where: { userId: targetEmail },
-        update: { accountStatus: 'pending' },
-        create: { userId: targetEmail, email: targetEmail, accountStatus: 'pending' },
+        update: { accountStatus: 'pending', role: 'user' },
+        create: { userId: targetEmail, email: targetEmail, accountStatus: 'pending', role: 'user' },
       });
       invalidateStatusCache(targetEmail);
       return NextResponse.json({ success: true, message: `Account ${targetEmail} moved back to pending approval` });

@@ -112,7 +112,8 @@ export default function UserRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[0.82rem] sm:text-[0.85rem] font-semibold text-dark-text truncate">{u.name || u.email.split('@')[0]}</span>
-            {getRoleBadge(u.role, customRoles)}
+            {isPendingRow && uRole === 'user' && <span className="px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-semibold" title="No role assigned yet — assign a role to activate and move this account to the matching list">No role</span>}
+            {!isPendingRow && getRoleBadge(u.role, customRoles)}
             {u.isCR && <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 text-[0.6rem] font-bold">CR</span>}
             {u.isACR && <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 text-[0.6rem] font-bold">ACR</span>}
             {isOwnerUser && <span className="px-1.5 py-0.5 rounded-md bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-bold"><i className="fas fa-star mr-0.5"></i>Owner</span>}
