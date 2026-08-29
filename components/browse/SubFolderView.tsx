@@ -1,6 +1,7 @@
 'use client';
 
 import FileGrid from './FileGrid';
+import FileActionsMenu from '@/components/FileActionsMenu';
 
 interface SubFolderViewProps {
   subfolders: { name: string; fileCount: number; count: number; path: string; githubPath: string }[];
@@ -97,16 +98,30 @@ export default function SubFolderView({
                 <div className="text-[0.85rem] font-semibold">{sf.name}</div>
                 <div className="text-[0.65rem] text-dark-text2 font-mono truncate">{sf.path}</div>
               </div>
-              <span className="text-[0.7rem] text-dark-text2 flex-shrink-0">{sf.fileCount} file{sf.fileCount !== 1 ? 's' : ''}</span>
-              {canDeleteFolder && onDeleteFolder && (
-                <button
-                  title="Delete folder"
-                  onClick={(e) => { e.stopPropagation(); onDeleteFolder({ path: sf.githubPath || sf.path, name: sf.name }); }}
-                  className="bg-transparent border-none text-dark-text2 cursor-pointer w-[30px] h-[30px] rounded-md inline-flex items-center justify-center text-[0.78rem] hover:bg-red-500/10 hover:text-red-400 transition-all"
-                >
-                  <i className="fas fa-trash"></i>
-                </button>
-              )}
+              <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                <span className="text-[0.7rem] text-dark-text2 mr-1">{sf.fileCount} file{sf.fileCount !== 1 ? 's' : ''}</span>
+                {onShare && (
+                  <button
+                    title="Share"
+                    onClick={(e) => { e.stopPropagation(); onShare(sf.githubPath || sf.path, sf.name, true); }}
+                    className="w-[30px] h-[30px] rounded-md inline-flex items-center justify-center text-[0.8rem] bg-transparent border border-dark-border text-dark-text2 hover:bg-dark-bg3 hover:text-green-400 hover:border-green-400/40 transition-all"
+                  >
+                    <i className="fas fa-share-nodes"></i>
+                  </button>
+                )}
+                {canDeleteFolder && onDeleteFolder && (
+                  <FileActionsMenu
+                    filePath={sf.githubPath || sf.path}
+                    fileName={sf.name}
+                    isFolder
+                    onMove={() => onMove(sf.githubPath || sf.path, sf.name, 'move')}
+                    onCopy={() => onCopy(sf.githubPath || sf.path, sf.name, 'copy')}
+                    onRename={() => onRename(sf.githubPath || sf.path, sf.name)}
+                    onDelete={() => onDeleteFolder({ path: sf.githubPath || sf.path, name: sf.name })}
+                    onShare={onShare ? () => onShare(sf.githubPath || sf.path, sf.name, true) : undefined}
+                  />
+                )}
+              </div>
               <i className="fas fa-chevron-right text-dark-text2 text-[0.65rem] flex-shrink-0"></i>
             </div>
           ))}

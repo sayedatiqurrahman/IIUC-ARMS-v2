@@ -65,12 +65,10 @@ export default function FileActionsMenu({ filePath, fileName, isFolder, onMove, 
                   <i className="fas fa-copy text-teal-400 w-5 text-center"></i>
                   <span className="text-[0.85rem]">Copy</span>
                 </button>
-                {!isFolder && (
-                  <button onClick={() => { setOpen(false); onRename(); }} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-dark-bg text-left transition-colors">
-                    <i className="fas fa-i-cursor text-amber-400 w-5 text-center"></i>
-                    <span className="text-[0.85rem]">Rename</span>
-                  </button>
-                )}
+                <button onClick={() => { setOpen(false); onRename(); }} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-dark-bg text-left transition-colors">
+                  <i className="fas fa-i-cursor text-amber-400 w-5 text-center"></i>
+                  <span className="text-[0.85rem]">Rename</span>
+                </button>
                 <button onClick={() => { setOpen(false); onDelete(); }} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 text-left transition-colors">
                   <i className="fas fa-trash text-red-400 w-5 text-center"></i>
                   <span className="text-[0.85rem] text-red-400">Delete</span>
@@ -106,11 +104,9 @@ export default function FileActionsMenu({ filePath, fileName, isFolder, onMove, 
           <button onClick={() => { setOpen(false); onCopy(); }} className="flex items-center gap-2.5 px-4 py-2 w-full text-left hover:bg-dark-bg text-[0.82rem] transition-colors">
             <i className="fas fa-copy text-teal-400 w-4 text-center text-[0.75rem]"></i> Copy
           </button>
-          {!isFolder && (
-            <button onClick={() => { setOpen(false); onRename(); }} className="flex items-center gap-2.5 px-4 py-2 w-full text-left hover:bg-dark-bg text-[0.82rem] transition-colors">
-              <i className="fas fa-i-cursor text-amber-400 w-4 text-center text-[0.75rem]"></i> Rename
-            </button>
-          )}
+          <button onClick={() => { setOpen(false); onRename(); }} className="flex items-center gap-2.5 px-4 py-2 w-full text-left hover:bg-dark-bg text-[0.82rem] transition-colors">
+            <i className="fas fa-i-cursor text-amber-400 w-4 text-center text-[0.75rem]"></i> Rename
+          </button>
           <div className="my-1 border-t border-dark-border"></div>
           <button onClick={() => { setOpen(false); onDelete(); }} className="flex items-center gap-2.5 px-4 py-2 w-full text-left hover:bg-red-500/10 text-[0.82rem] text-red-400 transition-colors">
             <i className="fas fa-trash w-4 text-center text-[0.75rem]"></i> Delete
