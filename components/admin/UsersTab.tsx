@@ -53,6 +53,7 @@ interface UsersTabProps {
   handleDeleteUser: (email: string) => void;
   handleSendToPending: (email: string) => void;
   handleEmail?: (u: UserRecord) => void;
+  handleBulkEmail?: () => void;
   handleApproveAll: () => void;
   approveAllLoading: boolean;
   loadUsers: (role?: string, search?: string, pageToken?: string, append?: boolean, domain?: string, page?: number) => void;
@@ -109,6 +110,7 @@ export default function UsersTab({
   setCreateUserError,
   setCreateUserSuccess,
   handleEmail,
+  handleBulkEmail,
 }: UsersTabProps) {
   const totalPages = Math.ceil(totalUsers / PER_PAGE);
 
@@ -229,6 +231,11 @@ export default function UsersTab({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/15 text-green-400 text-[0.78rem] font-semibold hover:bg-green-500/25 transition-colors disabled:opacity-50"
             >
               {approveAllLoading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check-double"></i>} Approve All
+            </button>
+          )}
+          {(isAdmin || isManager) && handleBulkEmail && (
+            <button onClick={handleBulkEmail} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 text-rose-400 text-[0.78rem] font-semibold hover:bg-rose-500/25 transition-colors">
+              <i className="fas fa-envelope-open-text"></i> Bulk Email
             </button>
           )}
           {isAdmin && (

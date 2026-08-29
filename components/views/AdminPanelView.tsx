@@ -21,6 +21,7 @@ import UsersTab from '@/components/admin/UsersTab';
 import FacultyTab from '@/components/admin/FacultyTab';
 import EmailSettingsTab from '@/components/admin/EmailSettingsTab';
 import EmailComposer from '@/components/admin/EmailComposer';
+import BulkEmailComposer from '@/components/admin/BulkEmailComposer';
 import ActivityLogTab from '@/components/admin/ActivityLogTab';
 import NoticesTab from '@/components/admin/NoticesTab';
 import CronJobTab from '@/components/admin/CronJobTab';
@@ -117,6 +118,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const [createUserError, setCreateUserError] = useState('');
   const [createUserSuccess, setCreateUserSuccess] = useState('');
   const [emailTarget, setEmailTarget] = useState<UserRecord | null>(null);
+  const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
 
   const email = session?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
@@ -836,6 +838,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           handleDeleteUser={handleDeleteUser}
           handleSendToPending={handleSendToPending}
           handleEmail={setEmailTarget}
+          handleBulkEmail={() => setBulkEmailOpen(true)}
           handleApproveAll={handleApproveAll}
           approveAllLoading={approveAllLoading}
           loadUsers={loadUsers}
@@ -846,7 +849,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
 
       {/* Email Settings Tab */}
       {activeTab === 'email' && (
-        <EmailSettingsTab email={email} profileName={profile.name} profileWhatsapp={profile.whatsapp} profileTelegram={profile.telegramId} />
+        <EmailSettingsTab email={email} profileName={profile.name} profileWhatsapp={profile.whatsapp} profileTelegram={profile.telegramId} onOpenBulk={() => setBulkEmailOpen(true)} />
       )}
 
       {/* Faculty Tab */}
@@ -928,6 +931,15 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           senderWhatsapp={profile.whatsapp}
           senderTelegram={profile.telegramId}
           onClose={() => setEmailTarget(null)}
+        />
+      )}
+      {bulkEmailOpen && (
+        <BulkEmailComposer
+          senderEmail={email}
+          senderName={profile.name}
+          senderWhatsapp={profile.whatsapp}
+          senderTelegram={profile.telegramId}
+          onClose={() => setBulkEmailOpen(false)}
         />
       )}
     </section>

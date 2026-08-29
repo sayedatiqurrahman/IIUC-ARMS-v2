@@ -12,6 +12,7 @@ interface EmailSettingsTabProps {
   profileName?: string;
   profileWhatsapp?: string;
   profileTelegram?: string;
+  onOpenBulk?: () => void;
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -48,7 +49,7 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
   );
 }
 
-export default function EmailSettingsTab({ email, profileName, profileWhatsapp, profileTelegram }: EmailSettingsTabProps) {
+export default function EmailSettingsTab({ email, profileName, profileWhatsapp, profileTelegram, onOpenBulk }: EmailSettingsTabProps) {
   const [settings, setSettings] = useState<EmailSettings>(() => mergeEmailSettings(null));
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -165,6 +166,17 @@ export default function EmailSettingsTab({ email, profileName, profileWhatsapp, 
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-dark-text"><i className="fas fa-envelope text-qsis mr-1.5"></i>Email</h2>
+          <p className="text-[0.68rem] text-dark-text3">Customize the email <b>theme</b> (colors, logo, sender contacts) and the email <b>text</b> (templates). Changes are global for every admin.</p>
+        </div>
+        {onOpenBulk && (
+          <button onClick={onOpenBulk} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 text-rose-400 text-[0.78rem] font-semibold hover:bg-rose-500/25 transition-colors">
+            <i className="fas fa-envelope-open-text"></i> Bulk Email (BCC)
+          </button>
+        )}
+      </div>
       {success && <div className="px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-xs"><i className="fas fa-check mr-1"></i>{success}</div>}
       {error && <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs"><i className="fas fa-exclamation-triangle mr-1"></i>{error}</div>}
 
