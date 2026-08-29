@@ -44,7 +44,7 @@ export default function PermissionsTab({ customRoles = [] }: { customRoles?: Cus
       if (data.success) setPermissions(data.permissions);
     } catch {}
     try {
-      const res = await fetch('/api/admin/users');
+      const res = await fetch('/api/admin/users?limit=1000');
       const data = await res.json();
       if (data.users) setAllUsers(data.users);
     } catch {}
@@ -253,6 +253,10 @@ export default function PermissionsTab({ customRoles = [] }: { customRoles?: Cus
   const specialUsers = useMemo(() => {
     const customRoleKeys = new Set((customRoles || []).map(r => r.key));
     return allUsers.filter(u =>
+      // Firebase accounts with no database profile are included too, so they can
+      // be granted a role / scopes straight from here (editing one creates the
+      // profile record on save).
+      !u.hasProfile ||
       u.role === 'admin' || u.role === 'manager' || u.isCR || u.isACR ||
       customRoleKeys.has(u.role) ||
       (u.customPermissions && Object.values(u.customPermissions).some(Boolean))
@@ -628,7 +632,8 @@ export default function PermissionsTab({ customRoles = [] }: { customRoles?: Cus
         {/* Users with special roles / scopes */}
         {specialUsers.length > 0 && (
           <div className="mt-4 border-t border-dark-border pt-3">
-            <div className="text-[0.72rem] text-dark-text3 mb-2"><i className="fas fa-list mr-1"></i>Users with special roles or scopes ({specialUsers.length})</div>
+            <div className="text-[0.72rem] text-dark-text3 mb-1"><i className="fas fa-list mr-1"></i>Users with special roles or scopes ({specialUsers.length})</div>
+            <p className="text-[0.65rem] text-dark-text3 mb-2">Includes Firebase accounts without a profile yet — click any user to grant them a role or permissions.</p>
             <div className="space-y-1.5">
               {specialUsers.map((u, i) => {
                 const badge = roleBadge(u.role);
@@ -639,6 +644,7 @@ export default function PermissionsTab({ customRoles = [] }: { customRoles?: Cus
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[0.72rem] font-semibold text-dark-text truncate">{u.name || u.email}</span>
+                        {!u.hasProfile && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 shrink-0" title="Exists in Firebase — no profile in the database yet"><i className="fas fa-cloud mr-0.5"></i>Firebase</span>}
                         <span className={`text-[0.55rem] px-1.5 py-0.5 rounded bg-dark-bg2 border border-dark-border ${badge.color} shrink-0`}><i className={`fas ${badge.icon} mr-0.5`}></i>{badge.label}</span>
                         {u.isCR && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 shrink-0">CR</span>}
                         {u.isACR && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-400 border border-teal-500/30 shrink-0">ACR</span>}
