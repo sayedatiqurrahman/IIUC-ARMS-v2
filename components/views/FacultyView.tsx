@@ -282,7 +282,7 @@ export default function FacultyView() {
               options={[
                 { value: 'all', label: deptFilter ? `All (${members.length})` : 'All', icon: 'fa-users' },
                 { value: 'faculty', label: deptFilter ? `Faculty (${facultyCount})` : 'Faculty', icon: 'fa-chalkboard-teacher' },
-                { value: 'staff', label: deptFilter ? `Staff (${staffCount})` : 'Staff', icon: 'fa-headset' },
+                { value: 'staff', label: deptFilter ? `Staffs (${staffCount})` : 'Staffs', icon: 'fa-headset' },
               ]}
               size="md"
             />
@@ -360,39 +360,56 @@ export default function FacultyView() {
           <p className="text-[0.75rem] text-dark-text3 mt-1">Try adjusting your filters</p>
         </div>
       ) : (
-        Array.from(grouped.entries()).map(([deptLabel, deptMembers]) => {
-          const facultyMembers = deptMembers.filter(m => memberKind(m) === 'faculty');
-          const staffMembers = deptMembers.filter(m => memberKind(m) === 'staff');
-          return (
-            <div key={deptLabel} className="mb-6">
-              <h3 className="text-[0.9rem] font-bold text-dark-text mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-qsis"></span>
-                {deptLabel}
-                <span className="text-[0.72rem] text-dark-text3 font-normal">({deptMembers.length})</span>
-              </h3>
-              {facultyMembers.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-[0.78rem] font-semibold text-green-400 mb-2 flex items-center gap-1.5">
-                    <i className="fas fa-chalkboard-teacher"></i> Faculty ({facultyMembers.length})
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {facultyMembers.map(m => renderMemberCard(m))}
-                  </div>
+        <>
+          {/* Teachers segment */}
+          {Array.from(grouped.entries()).map(([deptLabel, deptMembers]) => {
+            const teachers = deptMembers.filter(m => memberKind(m) === 'faculty');
+            if (teachers.length === 0) return null;
+            return (
+              <div key={deptLabel} className="mb-6">
+                <h3 className="text-[0.9rem] font-bold text-dark-text mb-3 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-qsis"></span>
+                  {deptLabel}
+                  <span className="text-[0.72rem] text-dark-text3 font-normal">({teachers.length})</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {teachers.map(m => renderMemberCard(m))}
                 </div>
-              )}
-              {staffMembers.length > 0 && (
-                <div>
-                  <h4 className="text-[0.78rem] font-semibold text-blue-400 mb-2 flex items-center gap-1.5">
-                    <i className="fas fa-headset"></i> Staff ({staffMembers.length})
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {staffMembers.map(m => renderMemberCard(m))}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })
+              </div>
+            );
+          })}
+
+          {/* Staffs segment */}
+          {(() => {
+            const staffGroups = Array.from(grouped.entries()).filter(([, dm]) => dm.some(m => memberKind(m) === 'staff'));
+            if (staffGroups.length === 0) return null;
+            const totalStaff = staffGroups.reduce((sum, [, dm]) => sum + dm.filter(m => memberKind(m) === 'staff').length, 0);
+            return (
+              <div className="mt-4 rounded-xl border border-blue-500/25 bg-blue-500/5 p-4">
+                <h3 className="text-[1rem] font-bold text-blue-400 mb-3 flex items-center gap-2">
+                  <i className="fas fa-headset"></i> Staffs
+                  <span className="text-[0.72rem] text-dark-text3 font-normal">({totalStaff})</span>
+                </h3>
+                {staffGroups.map(([deptLabel, deptMembers]) => {
+                  const staffMembers = deptMembers.filter(m => memberKind(m) === 'staff');
+                  if (staffMembers.length === 0) return null;
+                  return (
+                    <div key={deptLabel} className="mb-3">
+                      {staffGroups.length > 1 && (
+                        <h4 className="text-[0.72rem] font-semibold text-dark-text2 mb-2 flex items-center gap-1.5">
+                          <span className="w-1 h-1 rounded-full bg-blue-400"></span>{deptLabel}
+                        </h4>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {staffMembers.map(m => renderMemberCard(m))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </>
       )}
       {showAdd && (
         <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add Faculty / Staff Member" maxWidth="max-w-2xl">
