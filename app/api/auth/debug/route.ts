@@ -38,6 +38,16 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // 3b. Admin SDK initialized (service account usable)?
+  try {
+    const { getAdminAuth } = await import('@/lib/firebase-admin');
+    const auth = getAdminAuth();
+    debug.firebase.adminReady = !!auth;
+    if (!auth) debug.firebase.adminError = 'Firebase Admin SDK did not initialize — check the service-account credentials';
+  } catch (err: any) {
+    debug.firebase.adminError = err.message;
+  }
+
   // 4. Check DB connection
   try {
     const { prisma } = await import('@/lib/prisma');
@@ -63,7 +73,10 @@ export async function GET(req: NextRequest) {
     hasNextauthUrl: !!process.env.NEXTAUTH_URL,
     nextauthUrl: process.env.NEXTAUTH_URL,
     hasDatabaseUrl: !!process.env.DATABASE_URL,
-    hasFirebaseAdminKey: !!process.env.FIREBASE_PRIVATE_KEY,
+    hasFirebaseServiceAccount: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+    hasFirebasePrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+    hasFirebaseClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+    hasFirebaseProjectId: !!(process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID),
   };
 
   return NextResponse.json(debug, { status: 200 });
