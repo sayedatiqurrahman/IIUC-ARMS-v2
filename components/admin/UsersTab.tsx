@@ -204,7 +204,7 @@ export default function UsersTab({
       {firebaseListFailed && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4 text-[0.72rem] text-red-400">
           <i className="fas fa-exclamation-triangle mr-1"></i>
-          Could not load Firebase accounts — showing database users only. Check that the Firebase service account keys are configured.
+          Could not load Firebase accounts — showing database users only. Firebase service-account keys are not configured on the server (FIREBASE_PRIVATE_KEY / FIREBASE_CLIENT_EMAIL). Until they are added, <span className="font-semibold">Create User</span> cannot create a real sign-in account, so people you grant access to still won't be able to log in.
         </div>
       )}
 

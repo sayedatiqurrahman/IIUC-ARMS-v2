@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
 
     const { prisma } = await import('@/lib/prisma');
     const { getAdminAuth } = await import('@/lib/firebase-admin');
+    const { invalidateStatusCache } = await import('@/lib/auth-options');
 
     // Check if user already exists
     const existing = await prisma.profile.findUnique({ where: { userId: normalizedEmail } });
@@ -39,30 +40,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'User already exists. Use the Users tab to manage them.' }, { status: 409 });
     }
 
-    // Create Firebase Auth user. If a password was supplied it is set directly,
-    // otherwise (or as well) a password-setup email is sent via Firebase.
+    // Create Firebase Auth user. A DB profile alone cannot sign in — Firebase
+    // must hold the account (password/password-setup email/Google) so the
+    // person can actually log in.
     let firebaseUid = '';
     const auth = getAdminAuth();
-    if (auth) {
-      try {
-        const firebaseUser = await auth.createUser({
-          email: normalizedEmail,
-          displayName: normalizedEmail.split('@')[0],
-          emailVerified: true,
-          ...(password ? { password } : {}),
-        });
-        firebaseUid = firebaseUser.uid;
-        // Send password setup email so they can set/recover their password.
-        await auth.generatePasswordResetLink(normalizedEmail);
-      } catch (firebaseErr: any) {
-        // If user already exists in Firebase, continue
-        if (firebaseErr.code !== 'auth/email-already-exists') {
-          console.error('[create-user] Firebase error:', firebaseErr.message);
-        }
+    if (!auth) {
+      return NextResponse.json({
+        error: 'Firebase Admin SDK is not configured on the server (FIREBASE_PRIVATE_KEY / FIREBASE_CLIENT_EMAIL missing). Create User without it cannot create a real sign-in account, so the user would never be able to log in. Add the Firebase service-account keys to the server environment and try again.',
+      }, { status: 500 });
+    }
+    try {
+      const firebaseUser = await auth.createUser({
+        email: normalizedEmail,
+        displayName: normalizedEmail.split('@')[0],
+        emailVerified: true,
+        ...(password ? { password } : {}),
+      });
+      firebaseUid = firebaseUser.uid;
+      // Send password setup email so they can set/recover their password.
+      await auth.generatePasswordResetLink(normalizedEmail);
+    } catch (firebaseErr: any) {
+      // If user already exists in Firebase, continue
+      if (firebaseErr.code !== 'auth/email-already-exists') {
+        console.error('[create-user] Firebase error:', firebaseErr.message);
       }
     }
 
-    // Create profile in database
+    // Create profile in database — an admin-created account is granted
+    // access immediately, so it is active (not pending).
     await prisma.profile.upsert({
       where: { userId: normalizedEmail },
       create: {
@@ -70,12 +76,15 @@ export async function POST(req: NextRequest) {
         email: normalizedEmail,
         role: role || 'user',
         department: department || null,
+        accountStatus: 'active',
       },
       update: {
         role: role || 'user',
         department: department || undefined,
+        accountStatus: 'active',
       },
     });
+    invalidateStatusCache(normalizedEmail);
 
     // Log the action
     try {
