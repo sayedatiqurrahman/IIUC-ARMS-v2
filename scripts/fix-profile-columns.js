@@ -134,7 +134,11 @@ async function main() {
     "blockedTelegramChats" TEXT DEFAULT '[]',
     "blockedTelegramUsernames" TEXT DEFAULT '[]',
     "customRoles" TEXT DEFAULT '[]',
-    "broadcastTargets" TEXT DEFAULT '[]'
+    "broadcastTargets" TEXT DEFAULT '[]',
+    "supportConfig" TEXT,
+    "postingChannels" TEXT,
+    "telegramChats" TEXT,
+    "emailSettings" TEXT
   )`, 'SiteSettings');
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "SemesterCourse" (

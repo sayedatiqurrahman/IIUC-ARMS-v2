@@ -147,6 +147,7 @@ model SiteSettings {
   supportConfig            Json?
   postingChannels          Json?
   telegramChats            Json?
+  emailSettings            Json?
 }
 
 model SemesterCourse {

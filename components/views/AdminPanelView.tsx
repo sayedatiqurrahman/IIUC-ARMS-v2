@@ -19,6 +19,8 @@ import TelegramTab from '@/components/admin/TelegramTab';
 import OverviewTab from '@/components/admin/OverviewTab';
 import UsersTab from '@/components/admin/UsersTab';
 import FacultyTab from '@/components/admin/FacultyTab';
+import EmailSettingsTab from '@/components/admin/EmailSettingsTab';
+import EmailComposer from '@/components/admin/EmailComposer';
 import ActivityLogTab from '@/components/admin/ActivityLogTab';
 import NoticesTab from '@/components/admin/NoticesTab';
 import CronJobTab from '@/components/admin/CronJobTab';
@@ -114,6 +116,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const [createUserLoading, setCreateUserLoading] = useState(false);
   const [createUserError, setCreateUserError] = useState('');
   const [createUserSuccess, setCreateUserSuccess] = useState('');
+  const [emailTarget, setEmailTarget] = useState<UserRecord | null>(null);
 
   const email = session?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
@@ -832,12 +835,18 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           handleReject={handleReject}
           handleDeleteUser={handleDeleteUser}
           handleSendToPending={handleSendToPending}
+          handleEmail={setEmailTarget}
           handleApproveAll={handleApproveAll}
           approveAllLoading={approveAllLoading}
           loadUsers={loadUsers}
           setCreateUserError={setCreateUserError}
           setCreateUserSuccess={setCreateUserSuccess}
         />
+      )}
+
+      {/* Email Settings Tab */}
+      {activeTab === 'email' && (
+        <EmailSettingsTab email={email} profileName={profile.name} profileWhatsapp={profile.whatsapp} profileTelegram={profile.telegramId} />
       )}
 
       {/* Faculty Tab */}
@@ -911,6 +920,16 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
         </div>{/* end flex-1 min-w-0 */}
       </div>{/* end flex gap-4 */}
       {confirmDialog}
+      {emailTarget && (
+        <EmailComposer
+          user={emailTarget}
+          senderEmail={email}
+          senderName={profile.name}
+          senderWhatsapp={profile.whatsapp}
+          senderTelegram={profile.telegramId}
+          onClose={() => setEmailTarget(null)}
+        />
+      )}
     </section>
   );
 }

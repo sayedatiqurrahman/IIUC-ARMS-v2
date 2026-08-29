@@ -68,6 +68,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     items: [
       { key: 'permissions', label: 'Permissions', icon: 'fa-key', color: 'text-amber-400', show: ctx => ctx.isAdmin },
       { key: 'roles', label: 'Roles', icon: 'fa-user-tag', color: 'text-blue-400', show: ctx => ctx.isAdmin },
+      { key: 'email', label: 'Email', icon: 'fa-envelope', color: 'text-rose-400', show: ctx => ctx.isAdmin },
       { key: 'contributors', label: 'Contributors', icon: 'fa-users', color: 'text-teal-400', show: ctx => ctx.isAdmin },
       { key: 'cronJobs', label: 'Cron Jobs', icon: 'fa-clock', color: 'text-orange-400', show: ctx => ctx.isAdmin || ctx.has('manageCronJobs') },
     ],

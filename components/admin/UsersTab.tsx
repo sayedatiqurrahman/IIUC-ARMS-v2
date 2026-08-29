@@ -52,6 +52,7 @@ interface UsersTabProps {
   handleReject: (email: string) => void;
   handleDeleteUser: (email: string) => void;
   handleSendToPending: (email: string) => void;
+  handleEmail?: (u: UserRecord) => void;
   handleApproveAll: () => void;
   approveAllLoading: boolean;
   loadUsers: (role?: string, search?: string, pageToken?: string, append?: boolean, domain?: string, page?: number) => void;
@@ -107,6 +108,7 @@ export default function UsersTab({
   loadUsers,
   setCreateUserError,
   setCreateUserSuccess,
+  handleEmail,
 }: UsersTabProps) {
   const totalPages = Math.ceil(totalUsers / PER_PAGE);
 
@@ -317,6 +319,7 @@ export default function UsersTab({
             handleReject={handleReject}
             handleDeleteUser={handleDeleteUser}
             handleSendToPending={handleSendToPending}
+            handleEmail={handleEmail}
           />
         ))}
       </div>
