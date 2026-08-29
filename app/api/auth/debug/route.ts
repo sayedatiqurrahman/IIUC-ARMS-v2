@@ -40,10 +40,10 @@ export async function GET(req: NextRequest) {
 
   // 3b. Admin SDK initialized (service account usable)?
   try {
-    const { getAdminAuth } = await import('@/lib/firebase-admin');
+    const { getAdminAuth, getFirebaseInitError } = await import('@/lib/firebase-admin');
     const auth = getAdminAuth();
     debug.firebase.adminReady = !!auth;
-    if (!auth) debug.firebase.adminError = 'Firebase Admin SDK did not initialize — check the service-account credentials';
+    if (!auth) debug.firebase.adminError = getFirebaseInitError() || 'Firebase Admin SDK did not initialize — check the service-account credentials';
   } catch (err: any) {
     debug.firebase.adminError = err.message;
   }
