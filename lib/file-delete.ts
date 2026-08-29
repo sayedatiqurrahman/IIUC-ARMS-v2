@@ -1,7 +1,13 @@
 // Shared GitHub deletion for files/folders. Always driven by the repo bot token
 // (server-side GitHub App), so deletions never depend on a user's PAT. Removes
 // the given paths — each may be a single file OR a folder prefix — in ONE atomic
-// commit (tree → commit → ref) instead of one Contents-API call per file.
+// commit (tree → commit → ref).
+//
+// Unlike the old full-tree rewrite (which re-posted EVERY blob of the repo in a
+// single `git/trees` call and 504'd on large repositories), the new tree is built
+// from `base_tree` plus a tiny delta: one entry per requested path with
+// `sha: null`. According to the Git Database API, a null sha removes the entry —
+// for a `tree` entry that removes its whole subtree atomically.
 
 import { config } from '@/lib/config';
 import { getRepoBotToken } from '@/lib/github-app';
@@ -55,48 +61,64 @@ export async function deleteRepoEntries(paths: string[], fallbackToken?: string)
   }
   const fullTree = (await treeRes.json()).tree || [];
 
-  // Collect every entry under any requested path (exact file or folder prefix).
+  // Verify + count what will be removed. (Deletion itself no longer re-uploads
+  // the whole tree, so a large listing only undercounts the log.)
   const deletePaths = new Set<string>();
+  const folderTargets = new Set<string>();
   for (const item of fullTree) {
     const p = String(item.path || '');
     for (const target of paths) {
-      if (p === target || p.startsWith(`${target}/`)) {
+      if (p === target) {
+        if (item.type === 'tree') folderTargets.add(target);
         deletePaths.add(p);
-        break;
+      } else if (p.startsWith(`${target}/`)) {
+        deletePaths.add(p);
       }
     }
   }
   if (deletePaths.size === 0) throw new Error(`No matching files found in repo for: ${paths.join(', ')}`);
 
-  // Only blob (and submodule) entries go into the new tree — tree entries are
-  // rebuilt by GitHub from the blob paths. Passing the old subtree entries with
-  // their shas would reference the PRE-DELETE folders and silently restore the
-  // deleted files. No base_tree either (it would retain unlisted paths).
-  const treeItems = fullTree
-    .filter((item: any) => item.type !== 'tree' && !deletePaths.has(String(item.path || '')))
-    .map((item: any) => ({
-      path: item.path,
-      mode: item.mode,
-      type: item.type,
-      sha: item.sha,
-    }));
+  // Delta: ONE `sha: null` entry per requested path combined with `base_tree`.
+  // A tree entry with sha:null removes its whole subtree atomically; a blob
+  // entry removes the single file.
+  const matched = paths.filter(
+    (t) => deletePaths.has(t) || Array.from(deletePaths).some((d) => d.startsWith(`${t}/`)),
+  );
+  const makeChanges = (): { path: string; mode: string; type: string; sha: null }[] =>
+    matched.map((t) => {
+      const exact = fullTree.find((i: any) => String(i.path) === t);
+      const isFolder =
+        folderTargets.has(t)
+        || exact?.type === 'tree'
+        || Array.from(deletePaths).some((d) => d.startsWith(`${t}/`) && d !== t);
+      return { path: t, mode: isFolder ? '040000' : '100644', type: isFolder ? 'tree' : 'blob', sha: null };
+    });
 
-  // GitHub limits tree items per request; if the repo is very large, warn.
-  if (treeItems.length > 10000) {
-    console.warn(`[delete] Tree has ${treeItems.length} items — may hit GitHub API limits`);
-  }
-
-  const newTreeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
+  let treesRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
     method: 'POST',
     headers: ghHeaders(token),
-    body: JSON.stringify({ tree: treeItems }),
+    body: JSON.stringify({ base_tree: baseTreeSha, tree: makeChanges() }),
   });
-  if (!newTreeRes.ok) {
-    const body = await newTreeRes.text().catch(() => '');
-    console.error('[delete] Cannot create tree:', newTreeRes.status, body.slice(0, 300));
-    throw new Error(`Cannot create new tree (${newTreeRes.status}): ${body.slice(0, 200) || 'token may lack write permission'}`);
+  if (!treesRes.ok) {
+    // Fallback: null every affected entry individually (always supported).
+    const allRemoved = Array.from(deletePaths);
+    for (const t of Array.from(folderTargets)) if (!allRemoved.includes(t)) allRemoved.push(t);
+    const changes = allRemoved.map((p: string) => {
+      const ex = fullTree.find((i: any) => String(i.path) === p);
+      return { path: p, mode: ex?.mode || '100644', type: ex?.type === 'tree' ? 'tree' : 'blob', sha: null };
+    });
+    treesRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
+      method: 'POST',
+      headers: ghHeaders(token),
+      body: JSON.stringify({ base_tree: baseTreeSha, tree: changes }),
+    });
   }
-  const newTreeSha = (await newTreeRes.json()).sha;
+  if (!treesRes.ok) {
+    const body = await treesRes.text().catch(() => '');
+    console.error('[delete] Cannot create tree:', treesRes.status, body.slice(0, 300));
+    throw new Error(`Cannot create new tree (${treesRes.status}): ${body.slice(0, 200) || 'token may lack write permission'}`);
+  }
+  const newTreeSha = (await treesRes.json()).sha;
 
   const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
     method: 'POST',
