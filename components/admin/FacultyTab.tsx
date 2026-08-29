@@ -320,69 +320,94 @@ export default function FacultyTab({
                       </button>
                     </div>
                   </div>
-                  {/* Members */}
-                  {members.map((m: any) => {
-                    const isEditing = editingId === m.id;
-                    return (
-                    <div key={m.id} className={`px-4 py-2.5 flex items-center gap-3 transition-colors group ${isEditing ? 'bg-qsis/5' : 'hover:bg-dark-bg/50'}`}>
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-qsis/20 to-accent/20 border border-dark-border flex items-center justify-center flex-shrink-0">
-                        <span className="text-[0.68rem] font-bold text-qsis">{m.shortForm || m.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}</span>
-                      </div>
-                      {isEditing ? (
-                        <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                          <input type="text" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" className={editInputClass} />
-                          <input type="text" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} placeholder="Designation" className={editInputClass} />
-                          <input type="text" value={editForm.shortForm} onChange={e => setEditForm(f => ({ ...f, shortForm: e.target.value.toUpperCase() }))} placeholder="Short form" className={editInputClass} />
-                          <input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder="Email" className={editInputClass} />
-                          <input type="tel" value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="Phone" className={editInputClass} />
-                          <select value={editForm.memberType} onChange={e => setEditForm(f => ({ ...f, memberType: e.target.value }))} className={`${editInputClass} cursor-pointer`}>
-                            <option value="faculty">Faculty</option>
-                            <option value="staff">Staff</option>
-                          </select>
+                  {/* Members — faculty and staff rendered in separate sections */}
+                  {(() => {
+                    const staffKind = (m: any) => m.memberType === 'staff' || m.memberType === 'staf';
+                    const teachers = members.filter(m => !staffKind(m));
+                    const staff = members.filter(m => staffKind(m));
+                    const renderRow = (m: any) => {
+                      const isEditing = editingId === m.id;
+                      const isStaff = staffKind(m);
+                      return (
+                      <div key={m.id} className={`px-4 py-2.5 flex items-center gap-3 transition-colors group ${isEditing ? 'bg-qsis/5' : 'hover:bg-dark-bg/50'}`}>
+                        <div className={`w-9 h-9 rounded-full border border-dark-border flex items-center justify-center flex-shrink-0 ${isStaff ? 'bg-gradient-to-br from-blue-500/20 to-blue-400/10' : 'bg-gradient-to-br from-qsis/20 to-accent/20'}`}>
+                          <span className={`text-[0.68rem] font-bold ${isStaff ? 'text-blue-400' : 'text-qsis'}`}>{m.shortForm || m.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}</span>
                         </div>
-                      ) : (
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[0.82rem] font-medium text-dark-text truncate">{m.name}</span>
-                            {m.title && <span className="text-[0.65rem] text-qsis">{m.title}</span>}
-                            {m.memberType === 'staff' && <span className="text-[0.6rem] px-1 py-0.5 rounded bg-orange-500/15 text-orange-400">Staff</span>}
+                        {isEditing ? (
+                          <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                            <input type="text" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" className={editInputClass} />
+                            <input type="text" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} placeholder="Designation" className={editInputClass} />
+                            <input type="text" value={editForm.shortForm} onChange={e => setEditForm(f => ({ ...f, shortForm: e.target.value.toUpperCase() }))} placeholder="Short form" className={editInputClass} />
+                            <input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder="Email" className={editInputClass} />
+                            <input type="tel" value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="Phone" className={editInputClass} />
+                            <select value={editForm.memberType} onChange={e => setEditForm(f => ({ ...f, memberType: e.target.value }))} className={`${editInputClass} cursor-pointer`}>
+                              <option value="faculty">Faculty</option>
+                              <option value="staff">Staff</option>
+                            </select>
                           </div>
-                          <p className="text-[0.7rem] text-dark-text3">{m.email ? `${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</p>
-                        </div>
-                      )}
-                      {isEditing ? (
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button onClick={() => saveEdit(m.id)} disabled={editingSaving} className="px-2 py-1 rounded bg-qsis text-white text-[0.62rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">
-                            {editingSaving ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Save</>}
-                          </button>
-                          <button onClick={cancelEdit} disabled={editingSaving} className="px-2 py-1 rounded bg-dark-bg border border-dark-border text-dark-text2 text-[0.62rem] font-semibold cursor-pointer hover:text-dark-text disabled:opacity-50">
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <button onClick={() => handleToggleVisibility(m.id, m.isVisible)}
-                            className={`px-2 py-1 rounded text-[0.62rem] font-semibold cursor-pointer border transition-all ${
-                              m.isVisible
-                                ? 'bg-green-500/15 text-green-400 border-green-500/30 hover:bg-green-500/25'
-                                : 'bg-dark-bg3 text-dark-text3 border-dark-border hover:text-dark-text'
-                            }`} title={m.isVisible ? 'Visible publicly — click to hide' : 'Hidden — click to show publicly'}>
-                            <i className={`fas ${m.isVisible ? 'fa-eye' : 'fa-eye-slash'} mr-0.5`}></i>
-                            {m.isVisible ? 'Public' : 'Hidden'}
-                          </button>
-                          {canEditFacultyMember(m) && (
-                            <button onClick={() => startEdit(m)} className="px-2 py-1 rounded bg-dark-bg text-dark-text2 text-[0.65rem] cursor-pointer hover:text-qsis border border-dark-border opacity-0 group-hover:opacity-100 transition-opacity" title="Edit member">
-                              <i className="fas fa-pen"></i>
+                        ) : (
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[0.82rem] font-medium text-dark-text truncate">{m.name}</span>
+                              {m.title && <span className={`text-[0.65rem] ${isStaff ? 'text-blue-400' : 'text-qsis'}`}>{m.title}</span>}
+                            </div>
+                            <p className="text-[0.7rem] text-dark-text3">{m.email ? `${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</p>
+                          </div>
+                        )}
+                        {isEditing ? (
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button onClick={() => saveEdit(m.id)} disabled={editingSaving} className="px-2 py-1 rounded bg-qsis text-white text-[0.62rem] font-semibold cursor-pointer hover:opacity-90 border-none disabled:opacity-50">
+                              {editingSaving ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Save</>}
                             </button>
-                          )}
-                          <button onClick={() => handleDeleteFaculty(m.id, m.name)} className="px-2 py-1 rounded bg-red-500/10 text-red-400 text-[0.65rem] cursor-pointer hover:bg-red-500/20 border-none opacity-0 group-hover:opacity-100 transition-opacity" title="Remove">
-                            <i className="fas fa-trash"></i>
-                          </button>
-                        </>
-                      )}
-                    </div>
+                            <button onClick={cancelEdit} disabled={editingSaving} className="px-2 py-1 rounded bg-dark-bg border border-dark-border text-dark-text2 text-[0.62rem] font-semibold cursor-pointer hover:text-dark-text disabled:opacity-50">
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button onClick={() => handleToggleVisibility(m.id, m.isVisible)}
+                              className={`px-2 py-1 rounded text-[0.62rem] font-semibold cursor-pointer border transition-all ${
+                                m.isVisible
+                                  ? 'bg-green-500/15 text-green-400 border-green-500/30 hover:bg-green-500/25'
+                                  : 'bg-dark-bg3 text-dark-text3 border-dark-border hover:text-dark-text'
+                              }`} title={m.isVisible ? 'Visible publicly — click to hide' : 'Hidden — click to show publicly'}>
+                              <i className={`fas ${m.isVisible ? 'fa-eye' : 'fa-eye-slash'} mr-0.5`}></i>
+                              {m.isVisible ? 'Public' : 'Hidden'}
+                            </button>
+                            {canEditFacultyMember(m) && (
+                              <button onClick={() => startEdit(m)} className="px-2 py-1 rounded bg-dark-bg text-dark-text2 text-[0.65rem] cursor-pointer hover:text-qsis border border-dark-border opacity-0 group-hover:opacity-100 transition-opacity" title="Edit member">
+                                <i className="fas fa-pen"></i>
+                              </button>
+                            )}
+                            <button onClick={() => handleDeleteFaculty(m.id, m.name)} className="px-2 py-1 rounded bg-red-500/10 text-red-400 text-[0.65rem] cursor-pointer hover:bg-red-500/20 border-none opacity-0 group-hover:opacity-100 transition-opacity" title="Remove">
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      );
+                    };
+                    return (
+                      <>
+                        {teachers.length > 0 && (
+                          <div>
+                            <div className="px-4 py-1.5 bg-dark-bg text-[0.62rem] font-semibold text-dark-text2 uppercase tracking-wide border-t border-dark-border">
+                              <i className="fas fa-chalkboard-teacher text-qsis mr-1"></i>Faculty ({teachers.length})
+                            </div>
+                            {teachers.map(renderRow)}
+                          </div>
+                        )}
+                        {staff.length > 0 && (
+                          <div>
+                            <div className="px-4 py-1.5 bg-blue-500/5 text-[0.62rem] font-semibold text-blue-400 uppercase tracking-wide border-t border-dark-border">
+                              <i className="fas fa-headset mr-1"></i>Staffs ({staff.length})
+                            </div>
+                            {staff.map(renderRow)}
+                          </div>
+                        )}
+                      </>
                     );
-                  })}
+                  })()}
                 </div>
               );
             })}
