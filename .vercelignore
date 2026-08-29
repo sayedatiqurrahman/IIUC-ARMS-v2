@@ -1,0 +1,4 @@
+# secrets — never upload to Vercel
+*-firebase-adminsdk-*.json
+.env*
+*.pem
