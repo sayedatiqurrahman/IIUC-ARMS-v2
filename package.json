@@ -64,6 +64,9 @@
     "@mapbox/node-pre-gyp": "^2.0.3",
     "deepmerge-ts": "^8.0.0",
     "lodash-es": "^4.18.1",
+    "jwks-rsa": {
+      "jose": "^5.9.6"
+    },
     "@excalidraw/mermaid-to-excalidraw": {
       "nanoid": "^5.1.16"
     },
