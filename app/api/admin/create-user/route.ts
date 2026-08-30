@@ -52,25 +52,48 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
     try {
+      // Merge by email: if Firebase already holds this email (Google sign-in,
+      // earlier sign-up, or a previous Create User), update that SAME record —
+      // never create a duplicate. A record created with email/password on the
+      // client that was never verified is force-verified here so the person can
+      // actually sign in once the admin creates/repairs the account.
       let firebaseExists = false;
       try {
         const firebaseUser = await auth.getUserByEmail(normalizedEmail);
         firebaseExists = true;
-        if (password) {
-          try { await auth.updateUser(firebaseUser.uid, { password }); } catch {}
+        try {
+          await auth.updateUser(firebaseUser.uid, {
+            ...(password ? { password } : {}),
+            emailVerified: true,
+          });
+        } catch (updErr: any) {
+          console.error('[create-user] updateUser failed:', updErr?.message || updErr);
         }
       } catch (lookupErr: any) {
         const code = lookupErr?.code || lookupErr?.errorInfo?.code || '';
-        if (code !== 'auth/user-not-found') throw lookupErr;
-        // No Firebase account — create one (repairs the "deleted from Firebase
-        // but stuck in DB / couldn't log in" state).
-        const firebaseUser = await auth.createUser({
-          email: normalizedEmail,
-          displayName: normalizedEmail.split('@')[0],
-          emailVerified: true,
-          ...(password ? { password } : {}),
-        });
-        firebaseExists = !!firebaseUser?.uid;
+        if (code !== 'auth/user-not-found' && code !== 'auth/email-already-exists') throw lookupErr;
+        try {
+          // No Firebase account — create one (repairs the "deleted from Firebase
+          // but stuck in DB / couldn't log in" state).
+          const firebaseUser = await auth.createUser({
+            email: normalizedEmail,
+            displayName: normalizedEmail.split('@')[0],
+            emailVerified: true,
+            ...(password ? { password } : {}),
+          });
+          firebaseExists = !!firebaseUser?.uid;
+        } catch (createErr: any) {
+          const createCode = createErr?.code || createErr?.errorInfo?.code || '';
+          if (createCode !== 'auth/email-already-exists') throw createErr;
+          // Race / stale lookup: the email exists in Firebase after all — merge
+          // into the existing record instead of failing with a duplicate error.
+          const existingUser = await auth.getUserByEmail(normalizedEmail);
+          await auth.updateUser(existingUser.uid, {
+            ...(password ? { password } : {}),
+            emailVerified: true,
+          });
+          firebaseExists = true;
+        }
       }
       if (firebaseExists) {
         // Always send a password-setup link so the person can actually sign in

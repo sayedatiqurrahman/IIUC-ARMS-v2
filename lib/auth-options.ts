@@ -10,13 +10,14 @@ const OWNER_EMAILS = [
 ];
 
 function isAllowedEmail(email: string): boolean {
-  return IIUC_STUDENT_REGEX.test(email) || IIUC_TEACHER_REGEX.test(email) || OWNER_EMAILS.includes(email);
+  const e = email.toLowerCase();
+  return IIUC_STUDENT_REGEX.test(e) || IIUC_TEACHER_REGEX.test(e) || OWNER_EMAILS.includes(e);
 }
 
 async function hasAdminCreatedProfile(email: string): Promise<boolean> {
   try {
     const { prisma } = await import('@/lib/prisma');
-    const profile = await prisma.profile.findUnique({ where: { userId: email } });
+    const profile = await prisma.profile.findUnique({ where: { userId: email.toLowerCase() } });
     if (!profile) return false;
     return !isAllowedEmail(email);
   } catch {
@@ -29,13 +30,14 @@ const statusCache = new Map<string, { status: string; ts: number }>();
 const STATUS_CACHE_TTL = 60_000;
 
 async function getAccountStatus(email: string): Promise<string | null> {
-  const cached = statusCache.get(email);
+  const key = email.toLowerCase();
+  const cached = statusCache.get(key);
   if (cached && Date.now() - cached.ts < STATUS_CACHE_TTL) return cached.status;
   try {
     const { prisma } = await import('@/lib/prisma');
-    const profile = await prisma.profile.findUnique({ where: { userId: email }, select: { accountStatus: true } });
+    const profile = await prisma.profile.findUnique({ where: { userId: key }, select: { accountStatus: true } });
     const status = profile?.accountStatus || 'active';
-    statusCache.set(email, { status, ts: Date.now() });
+    statusCache.set(key, { status, ts: Date.now() });
     return status;
   } catch {
     return cached?.status || null;
@@ -55,12 +57,13 @@ async function ensurePendingProfile(email: string, name?: string): Promise<void>
     if (await isDeletedEmail(email)) return;
     const { prisma } = await import('@/lib/prisma');
     const { roleForEmail } = await import('@/lib/roles');
-    const existing = await prisma.profile.findUnique({ where: { userId: email }, select: { accountStatus: true } });
+    const normalized = email.toLowerCase();
+    const existing = await prisma.profile.findUnique({ where: { userId: normalized }, select: { accountStatus: true } });
     const isNew = !existing;
     await prisma.profile.upsert({
-      where: { userId: email },
+      where: { userId: normalized },
       update: {},
-      create: { userId: email, email, name: name || email.split('@')[0], role: roleForEmail(email), accountStatus: 'pending' },
+      create: { userId: normalized, email: normalized, name: name || normalized.split('@')[0], role: roleForEmail(email), accountStatus: 'pending' },
     });
     if (isNew) {
       const { notifyAdminsPendingAccount } = await import('@/lib/telegram/notifications');
@@ -113,7 +116,7 @@ export const authOptions: NextAuthOptions = {
         const decoded = await verifyFirebaseToken(credentials.idToken);
         console.log('[Auth] authorize: Firebase token decoded =', !!decoded, decoded?.email);
         if (decoded) {
-          let email = decoded.email || credentials.email;
+          let email = (decoded.email || credentials.email || '').toLowerCase();
           if (!email) { console.log('[Auth] authorize: no email from token'); return null; }
           // A deleted blocklisted email can never sign in.
           const { isDeletedEmail } = await import('@/lib/deleted-emails');
@@ -122,7 +125,7 @@ export const authOptions: NextAuthOptions = {
           // A linked (personal) email signs into the primary account
           if (!allowed) {
             const { resolveSignInEmail } = await import('@/lib/linked-accounts');
-            email = await resolveSignInEmail(email);
+            email = (await resolveSignInEmail(email) || '').toLowerCase();
             if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) linked email', email); return null; }
             allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
           }
@@ -158,14 +161,14 @@ export const authOptions: NextAuthOptions = {
           const parts = credentials.idToken.split('.');
           if (parts.length !== 3) return null;
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
-          let email = credentials.email || payload.email;
+          let email = (credentials.email || payload.email || '').toLowerCase();
           if (!email) return null;
           const { isDeletedEmail } = await import('@/lib/deleted-emails');
           if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
           let allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
           if (!allowed) {
             const { resolveSignInEmail } = await import('@/lib/linked-accounts');
-            email = await resolveSignInEmail(email);
+            email = (await resolveSignInEmail(email) || '').toLowerCase();
             if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) linked email', email); return null; }
             allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
           }
@@ -191,10 +194,10 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }) {
       try {
-        let email = user.email || (profile as any)?.email;
+        let email = (user.email || (profile as any)?.email || '').toLowerCase();
         if (email) {
           const { resolveSignInEmail } = await import('@/lib/linked-accounts');
-          email = await resolveSignInEmail(email);
+          email = (await resolveSignInEmail(email) || '').toLowerCase();
         }
         console.log('[Auth] signIn callback — email:', email, 'provider:', account?.provider);
         if (!email) { console.log('[Auth] signIn: no email, rejecting'); return '/auth/error?error=invalid-email'; }

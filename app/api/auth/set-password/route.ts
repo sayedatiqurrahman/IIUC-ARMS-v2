@@ -27,15 +27,25 @@ export async function POST(req: NextRequest) {
     try {
       const userRecord = await adminAuth.getUserByEmail(resolvedEmail);
       uid = userRecord.uid;
-    } catch {
+    } catch (lookupErr: any) {
       // No Firebase identity for this email yet — create one (and keep the
-      // password) so email+password login works going forward.
-      const created = await adminAuth.createUser({
-        email: resolvedEmail,
-        emailVerified: true,
-        password: newPassword,
-      });
-      uid = created.uid;
+      // password) so email+password login works going forward. If the lookup
+      // missed but a record actually exists (race), merge into it instead.
+      const code = lookupErr?.code || lookupErr?.errorInfo?.code || '';
+      if (code !== 'auth/user-not-found' && code !== 'auth/email-already-exists') throw lookupErr;
+      try {
+        const created = await adminAuth.createUser({
+          email: resolvedEmail,
+          emailVerified: true,
+          password: newPassword,
+        });
+        uid = created.uid;
+      } catch (createErr: any) {
+        const createCode = createErr?.code || createErr?.errorInfo?.code || '';
+        if (createCode !== 'auth/email-already-exists') throw createErr;
+        const existingUser = await adminAuth.getUserByEmail(resolvedEmail);
+        uid = existingUser.uid;
+      }
     }
 
     await adminAuth.updateUser(uid, { password: newPassword });
