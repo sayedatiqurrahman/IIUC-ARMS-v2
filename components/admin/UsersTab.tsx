@@ -137,8 +137,8 @@ export default function UsersTab({
 
   // Safety net: never surface university / owner / rejected / approved accounts
   // in the pending queue, regardless of what the API returns. Pending =
-  // non-university accounts still waiting for approval with no role assigned
-  // (null, 'user' or the detected 'external').
+  // non-university accounts still waiting for approval with no role / privilege
+  // assigned (not CR, not ACR, role is null, 'user' or the detected 'external').
   const isPendingTab = userSubTab === 'pending';
   const displayedUsers = useMemo(() => {
     if (!isPendingTab) return users;
@@ -146,6 +146,8 @@ export default function UsersTab({
       u.accountStatus === 'pending' &&
       !/@iiuc\.ac\.bd$/i.test(u.email) &&
       !config.ownerEmails.includes(u.email.toLowerCase()) &&
+      !u.isCR &&
+      !u.isACR &&
       (!u.role || u.role === 'user' || u.role === 'external')
     );
   }, [isPendingTab, users]);
@@ -209,7 +211,7 @@ export default function UsersTab({
       {userSubTab === 'pending' && (
         <div className="bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-3 mb-4 text-[0.72rem] text-yellow-300">
           <i className="fas fa-clock mr-1"></i>
-          Non-university accounts that haven't been approved yet — most requested access by submitting their student ID (and, optionally, a WhatsApp/Telegram number). Verify the ID, then <span className="font-semibold">Approve</span> to let them log in, or <span className="font-semibold">Reject</span> if it doesn&apos;t check out. Assigning a role (Student, Teacher, etc.) also activates them.
+          Non-university accounts that haven't been approved yet — most requested access by submitting their student ID (and, optionally, a WhatsApp/Telegram number). Verify the ID, then <span className="font-semibold">Approve</span> to let them log in, or <span className="font-semibold">Reject</span> if it doesn&apos;t check out. Assigning a role (Student, Teacher, etc.) or making them CR/ACR also activates them and removes them from this list.
         </div>
       )}
 

@@ -84,13 +84,16 @@ export async function GET(req: NextRequest) {
         // Pending = accounts waiting to be approved: a non-university account
         // with a pending-request profile (or a Firebase account with no profile
         // at all) that hasn't been given a role yet. Approving (action
-        // `approve`) or assigning any role sets accountStatus to 'active',
-        // which automatically removes the account from this list.
+        // `approve`), assigning a role, or granting CR/ACR sets accountStatus to
+        // 'active', which automatically removes the account from this list.
         where.email = {
           not: { endsWith: '.iiuc.ac.bd' },
           notIn: config.ownerEmails.map(e => e.toLowerCase()),
         };
         where.accountStatus = 'pending';
+        where.isCR = false;
+        where.isACR = false;
+        where.role = { in: ['user', 'external', null] };
         where.AND = [...(where.AND || []), {
           OR: [{ role: 'user' }, { role: 'external' }, { role: null }],
         }];
@@ -121,6 +124,8 @@ export async function GET(req: NextRequest) {
     let profiles: any[] = [];
     // Auto-heal: university / owner accounts are pre-approved and should never sit
     // in the pending queue. If any are stuck pending, activate them before listing.
+    // Same for accounts that were already granted a role, CR or ACR by an admin —
+    // being assigned any of those IS approval, so they must leave Pending too.
     if (filterDomain === 'pending') {
       try {
         await prisma.profile.updateMany({
@@ -130,6 +135,9 @@ export async function GET(req: NextRequest) {
               { email: { endsWith: '@ugrad.iiuc.ac.bd' } },
               { email: { endsWith: '@iiuc.ac.bd', not: { endsWith: '@ugrad.iiuc.ac.bd' } } },
               { email: { in: config.ownerEmails.map(e => e.toLowerCase()) } },
+              { role: { in: ['admin', 'manager', 'teacher', 'student'] } },
+              { isCR: true },
+              { isACR: true },
             ],
           },
           data: { accountStatus: 'active' },
@@ -340,11 +348,12 @@ export async function GET(req: NextRequest) {
         }
         if (filterDomain === 'pending') {
           // An account needs approval unless it has a profile marked 'active'
-          // (approve / setRole both do that). Firebase-only accounts get the
-          // default 'pending' below, so they show here — and once approved or
-          // given a role they move out automatically.
+          // (approve / setRole / CR / ACR all do that). Firebase-only accounts
+          // get the default 'pending' below, so they show here — and once
+          // approved or given a role / CR they move out automatically.
           return u.accountStatus === 'pending' && !u.email?.endsWith('.iiuc.ac.bd') &&
             !config.ownerEmails.includes(u.email?.toLowerCase()) &&
+            !u.isCR && !u.isACR &&
             (!u.role || u.role === 'user' || u.role === 'external');
         }
         return true;
@@ -568,6 +577,14 @@ export async function POST(req: NextRequest) {
         }
       }
       await prisma.profile.update({ where: { userId: targetEmail }, data: { isCR: !!isCR, ...(isCR ? { isACR: false } : {}) } });
+      // Granting the CR privilege is an explicit admin action — it approves the
+      // account too, so a pending external user promoted to CR leaves the
+      // Pending queue immediately (matching setRole behaviour).
+      if (isCR) {
+        await prisma.profile.update({ where: { userId: targetEmail }, data: { accountStatus: 'active' } });
+        await removeDeletedEmail(prisma as any, targetEmail);
+        invalidateStatusCache(targetEmail.toLowerCase());
+      }
       return NextResponse.json({ success: true, message: isCR ? 'Made CR' : 'Removed CR' });
     }
 
@@ -587,6 +604,13 @@ export async function POST(req: NextRequest) {
         }
       }
       await prisma.profile.update({ where: { userId: targetEmail }, data: { isACR: !!isACR } });
+      // Like CR, granting the ACR privilege is an explicit admin action —
+      // approving a pending external user so they leave the Pending queue.
+      if (isACR) {
+        await prisma.profile.update({ where: { userId: targetEmail }, data: { accountStatus: 'active' } });
+        await removeDeletedEmail(prisma as any, targetEmail);
+        invalidateStatusCache(targetEmail.toLowerCase());
+      }
       return NextResponse.json({ success: true, message: isACR ? 'Made ACR' : 'Removed ACR' });
     }
 
