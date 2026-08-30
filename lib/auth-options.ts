@@ -36,6 +36,51 @@ async function hasAdminCreatedProfile(email: string): Promise<boolean> {
   }
 }
 
+// Authoritative "may this email sign in?" decision used by both authorize and
+// the signIn callback. Returns true when the address is:
+//   - a standard IIUC / owner email, OR
+//   - an admin-approved external account (profile exists with an active status
+//     or an assigned role/privilege), OR
+//   - a linked (secondary) identity whose primary account is itself allowed.
+// This is the single source of truth so a user can never be mis-routed to the
+// approval gate once their account (or an account it resolves to) is approved.
+async function isAccountAllowed(email: string): Promise<boolean> {
+  const e = (email || '').toLowerCase().trim();
+  if (!e) return false;
+  if (isAllowedEmail(e) || isIiucEmail(e)) return true;
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findUnique({
+      where: { userId: e },
+      select: { accountStatus: true, role: true, isCR: true, isACR: true },
+    });
+    if (!profile) return false;
+    if (profile.accountStatus === 'rejected' || profile.accountStatus === 'banned') return false;
+    // A profile with an active status, or any assigned role / CR / ACR counts as
+    // approved — assigning any of those IS approval.
+    if (profile.accountStatus === 'active') return true;
+    if (profile.accountStatus === 'pending' || profile.accountStatus === null || profile.accountStatus === undefined) {
+      if (profile.role && profile.role !== 'user' && profile.role !== 'external') return true;
+      if (profile.isCR || profile.isACR) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// The email a sign-in should be treated as. Resolves linked (secondary) emails
+// to their primary, then re-checks whether that resolved account is allowed.
+async function resolveAndAllow(email: string): Promise<{ resolved: string; allowed: boolean }> {
+  const lower = (email || '').toLowerCase().trim();
+  if (!lower) return { resolved: lower, allowed: false };
+  if (isAllowedEmail(lower)) return { resolved: lower, allowed: true };
+  const { resolveSignInEmail } = await import('@/lib/linked-accounts');
+  let resolved = (await resolveSignInEmail(lower) || '').toLowerCase();
+  if (!resolved) resolved = lower;
+  return { resolved, allowed: await isAccountAllowed(resolved) };
+}
+
 // Cache account status for 60s to avoid DB hit on every 30s session poll
 const statusCache = new Map<string, { status: string; ts: number }>();
 const STATUS_CACHE_TTL = 60_000;
@@ -107,33 +152,28 @@ export const authOptions: NextAuthOptions = {
         if (decoded) {
           let email = (decoded.email || credentials.email || '').toLowerCase();
           if (!email) { console.log('[Auth] authorize: no email from token'); return null; }
-          // A linked (secondary) email ALWAYS belongs to its primary account.
-          // Resolve it before any other check so a leftover/stale profile row
-          // for the secondary address can never detach the login from the
-          // original account.
+          // Resolve linked (secondary) emails to their primary, then decide
+          // authoritatively whether the (resolved) account is allowed. A linked
+          // email ALWAYS belongs to its primary account, so it must never be
+          // treated as an unapproved standalone address.
           if (!isIiucEmail(email)) {
-            const { resolveSignInEmail } = await import('@/lib/linked-accounts');
-            const resolved = (await resolveSignInEmail(email) || '').toLowerCase();
-            if (resolved && resolved !== email) email = resolved;
-          }
-          // A deleted blocklisted email can never sign in.
-          const { isDeletedEmail } = await import('@/lib/deleted-emails');
-          if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
-          let allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
-          console.log('[Auth] authorize: email =', email, 'allowed =', allowed);
-
-          if (!allowed) {
-            // Not an approved account. No pending profile is auto-created here —
-            // a pending account may ONLY be provisioned through the explicit
-            // request-access flow (which collects a student ID). The signIn
-            // callback redirects this user to that gate.
-            console.log('[Auth] authorize: NOT ALLOWED — redirecting to request-access for', email);
-            return {
-              id: decoded.sub || email,
-              email,
-              name: credentials.name || decoded.name || email.split('@')[0],
-              image: credentials.image || decoded.picture || null,
-            } as any;
+            const { resolved, allowed } = await resolveAndAllow(email);
+            email = resolved;
+            if (!allowed) {
+              console.log('[Auth] authorize: NOT ALLOWED — redirecting to request-access for', resolved);
+              return {
+                id: decoded.sub || email,
+                email,
+                name: credentials.name || decoded.name || email.split('@')[0],
+                image: credentials.image || decoded.picture || null,
+              } as any;
+            }
+            // A deleted blocklisted email can never sign in.
+            const { isDeletedEmail } = await import('@/lib/deleted-emails');
+            if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
+          } else {
+            const { isDeletedEmail } = await import('@/lib/deleted-emails');
+            if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
           }
           if (decoded.email_verified === false) { console.log('[Auth] authorize: email not verified'); return null; }
           try {
@@ -158,14 +198,12 @@ export const authOptions: NextAuthOptions = {
           let email = (credentials.email || payload.email || '').toLowerCase();
           if (!email) return null;
           if (!isIiucEmail(email)) {
-            const { resolveSignInEmail } = await import('@/lib/linked-accounts');
-            const resolved = (await resolveSignInEmail(email) || '').toLowerCase();
-            if (resolved && resolved !== email) email = resolved;
+            const { resolved, allowed } = await resolveAndAllow(email);
+            email = resolved;
+            if (!allowed) return null;
           }
           const { isDeletedEmail } = await import('@/lib/deleted-emails');
           if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
-          let allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
-          if (!allowed) return null;
           if (payload.email_verified === false) return null;
           try {
             const { prisma } = await import('@/lib/prisma');
@@ -187,21 +225,23 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }) {
       try {
-        let email = (user.email || (profile as any)?.email || '').toLowerCase();
-        if (email) {
-          const { resolveSignInEmail } = await import('@/lib/linked-accounts');
-          email = (await resolveSignInEmail(email) || '').toLowerCase();
+        const rawEmail = (user.email || (profile as any)?.email || '').toLowerCase();
+        let email = rawEmail;
+        let allowed = isAllowedEmail(email);
+        if (!allowed && email) {
+          const r = await resolveAndAllow(email);
+          email = r.resolved;
+          allowed = r.allowed;
         }
-        console.log('[Auth] signIn callback — email:', email, 'provider:', account?.provider);
+        console.log('[Auth] signIn callback — email:', email, 'provider:', account?.provider, 'allowed:', allowed);
         if (!email) { console.log('[Auth] signIn: no email, rejecting'); return absolutePath('/auth/error?error=invalid-email'); }
 
         // A deleted blocklisted email can never sign in.
         const { isDeletedEmail } = await import('@/lib/deleted-emails');
         if (await isDeletedEmail(email)) { console.log('[Auth] signIn: blocklisted (deleted) email', email); return absolutePath('/auth/error?error=account-deleted'); }
 
-        // Allow if it's a standard IIUC email OR if user has an admin-created profile
-        const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
-        console.log('[Auth] signIn: allowed =', allowed, 'isAllowed =', isAllowedEmail(email));
+        // Allow if it's a standard IIUC email OR if the (possibly linked/resolved)
+        // account is admin-approved. Approved / linked accounts never hit the gate.
         if (!allowed) {
           return absolutePath(`/auth/request-access?email=${encodeURIComponent(email)}`);
         }
