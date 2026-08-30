@@ -14,10 +14,10 @@ export default function PendingPage() {
         </div>
         <h1 className="text-lg font-bold text-dark-text mb-2">Account Pending Approval</h1>
         <p className="text-[0.85rem] text-dark-text2 mb-2">
-          Your account <strong className="text-dark-text">{(session?.user as any)?.email || 'your email'}</strong> is waiting for admin approval.
+          Your account <strong className="text-dark-text">{(session?.user as any)?.email || 'your email'}</strong> is waiting for a manager to approve it.
         </p>
         <p className="text-[0.82rem] text-dark-text2 mb-6">
-          You&apos;ll receive access once an administrator reviews and approves your account. This usually happens within 24 hours.
+          You&apos;ll be able to sign in once a manager reviews and approves your account. This usually happens within 24 hours of your request.
         </p>
 
         <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 mb-6 text-left">
@@ -25,7 +25,8 @@ export default function PendingPage() {
             <i className="fas fa-exclamation-triangle mr-2 text-yellow-400"></i>No access until approved
           </h3>
           <p className="text-[0.78rem] text-dark-text2">
-            While your account is pending you cannot log in or use the app (no write access, no profile editing). If you need access sooner, contact an <strong className="text-dark-text">Admin</strong>, <strong className="text-dark-text">Manager</strong>, or <strong className="text-dark-text">Teacher</strong>.
+            While your account is pending you cannot log in or use the app. If you haven&apos;t submitted your student ID yet, a manager can&apos;t verify you —{' '}
+            <Link href="/auth/request-access" className="text-qsis font-semibold no-underline">request access with your ID here</Link>.
           </p>
         </div>
 
@@ -36,7 +37,7 @@ export default function PendingPage() {
           <ul className="text-[0.78rem] text-dark-text2 space-y-1.5">
             <li className="flex items-start gap-2">
               <i className="fas fa-check text-qsis mt-0.5 text-[0.7rem]"></i>
-              <span>An admin will review your account request</span>
+              <span>A manager verifies your student ID and approves the request</span>
             </li>
             <li className="flex items-start gap-2">
               <i className="fas fa-check text-qsis mt-0.5 text-[0.7rem]"></i>

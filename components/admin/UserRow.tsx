@@ -52,6 +52,7 @@ interface UserRowProps {
   isAdmin: boolean;
   isManager: boolean;
   isSuperAdmin: boolean;
+  canApprovePending?: boolean;
   actionLoading: string;
   isPendingTab?: boolean;
   handleToggleCR: (email: string, current: boolean) => void;
@@ -74,6 +75,7 @@ export default function UserRow({
   isAdmin,
   isManager,
   isSuperAdmin,
+  canApprovePending = false,
   actionLoading,
   isPendingTab,
   handleToggleCR,
@@ -210,13 +212,13 @@ export default function UserRow({
             {actionLoading === u.email + 'link' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-link mr-0.5"></i>Link Email</>}
           </button>
         )}
-        {isPendingRow && u.accountStatus === 'pending' && handleApprove && (
+        {isPendingRow && u.accountStatus === 'pending' && handleApprove && (isAdmin || canApprovePending) && (
           <button onClick={() => handleApprove(u.email)} disabled={actionLoading === u.email + 'approve'}
             className="px-2 sm:px-2.5 py-1 rounded-lg bg-green-500/15 text-green-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-green-500/25 border border-green-500/20 disabled:opacity-50">
             {actionLoading === u.email + 'approve' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-check mr-0.5"></i>Approve</>}
           </button>
         )}
-        {isPendingRow && handleReject && (
+        {isPendingRow && handleReject && (isAdmin || canApprovePending) && (
           <button onClick={() => handleReject(u.email)} disabled={actionLoading === u.email + 'reject'}
             className="px-2 sm:px-2.5 py-1 rounded-lg bg-red-500/15 text-red-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-red-500/25 border border-red-500/20 disabled:opacity-50">
             {actionLoading === u.email + 'reject' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-times mr-0.5"></i>Reject</>}

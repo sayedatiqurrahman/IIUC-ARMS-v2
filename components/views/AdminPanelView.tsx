@@ -127,7 +127,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
 
   const email = session?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
-  const { loading: accessLoading, has, hasAdminPanelAccess, hasCoursePerms, customRoles } = useUserAccess(
+  const { loading: accessLoading, has, hasAdminPanelAccess, hasCoursePerms, customRoles, permissions } = useUserAccess(
     email,
     effectiveRole,
     profile?.isCR || false,
@@ -138,6 +138,8 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const isOwner = config.ownerEmails.includes(email.toLowerCase());
   const hasAdminAccess = hasAdminPanelAccess;
   const canViewExternalUsers = isAdmin || isManager;
+  const pendingApprovers = (Array.isArray((permissions as any)?.pendingApprovers) ? (permissions as any).pendingApprovers as string[] : []).map(e => e.toLowerCase());
+  const canApprovePending = isAdmin || pendingApprovers.includes(email.toLowerCase());
   const canManageFacultyDepts = isAdmin || isManager || has('manageFacultyDepts');
   const isSuperAdmin = config.ownerEmails.includes(email);
   const useSidebar = showSidebar !== false;
@@ -866,6 +868,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           isAdmin={isAdmin}
           isManager={isManager}
           canViewExternalUsers={canViewExternalUsers}
+          canApprovePending={canApprovePending}
           email={email}
           actionLoading={actionLoading}
           handleCreateUser={handleCreateUser}

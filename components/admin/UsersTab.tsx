@@ -37,6 +37,7 @@ interface UsersTabProps {
   isSuperAdmin: boolean;
   isAdmin: boolean;
   isManager: boolean;
+  canApprovePending?: boolean;
   canViewExternalUsers: boolean;
   email: string;
   actionLoading: string;
@@ -90,6 +91,7 @@ export default function UsersTab({
   isSuperAdmin,
   isAdmin,
   isManager,
+  canApprovePending = false,
   canViewExternalUsers,
   email,
   actionLoading,
@@ -186,7 +188,7 @@ export default function UsersTab({
           { key: 'teacher' as UserSubTab, label: 'Teachers', icon: 'fa-chalkboard-teacher', color: 'text-green-400' },
           { key: 'student' as UserSubTab, label: 'Students', icon: 'fa-user-graduate', color: 'text-blue-400' },
           { key: 'external' as UserSubTab, label: 'External', icon: 'fa-globe', color: 'text-purple-400', show: canViewExternalUsers },
-          { key: 'pending' as UserSubTab, label: 'Pending', icon: 'fa-clock', color: 'text-yellow-400', show: isAdmin },
+          { key: 'pending' as UserSubTab, label: 'Pending', icon: 'fa-clock', color: 'text-yellow-400', show: isAdmin || canApprovePending },
         ]).filter(s => s.show !== false).map(sub => (
           <button
             key={sub.key}
@@ -206,7 +208,7 @@ export default function UsersTab({
       {userSubTab === 'pending' && (
         <div className="bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-3 mb-4 text-[0.72rem] text-yellow-300">
           <i className="fas fa-clock mr-1"></i>
-          Accounts that haven't been given a role yet — including some who can already sign in. Assign a role (Student, Teacher, etc.) and they'll move to the matching list automatically. Use <span className="font-semibold">Approve</span> to let a brand-new signup log in.
+          Non-university accounts that haven't been approved yet — most requested access by submitting their student ID. Verify the ID, then <span className="font-semibold">Approve</span> to let them log in, or <span className="font-semibold">Reject</span> if it doesn&apos;t check out. Assigning a role (Student, Teacher, etc.) also activates them.
         </div>
       )}
 
@@ -343,6 +345,7 @@ export default function UsersTab({
             isAdmin={isAdmin}
             isManager={isManager}
             isSuperAdmin={isSuperAdmin}
+            canApprovePending={canApprovePending}
             actionLoading={actionLoading}
             isPendingTab={isPendingTab}
             handleToggleCR={handleToggleCR}

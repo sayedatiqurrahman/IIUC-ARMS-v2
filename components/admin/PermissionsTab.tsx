@@ -19,6 +19,107 @@ interface CustomRole {
   permissions: string[];
 }
 
+// Multi-select user picker used to assign who approves/rejects pending accounts
+// and who receives the Telegram notification for new access requests. Selections
+// are stored directly as lists inside the site-settings permissions map.
+function AssigneePicker({
+  label,
+  desc,
+  value = [],
+  users,
+  onChange,
+  saving,
+}: {
+  label: string;
+  desc: string;
+  value: string[];
+  users: any[];
+  onChange: (list: string[]) => void;
+  saving: boolean;
+}) {
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const lowerSearch = search.toLowerCase().trim();
+  const results = (lowerSearch
+    ? users.filter(u =>
+        ((u.email || '').toLowerCase().includes(lowerSearch) || (u.name || '').toLowerCase().includes(lowerSearch)))
+    : users.slice(0, 25))
+    .filter(u => !value.includes((u.email || '').toLowerCase()))
+    .slice(0, 25);
+
+  const nameFor = (em: string) => {
+    const found = users.find(u => (u.email || '').toLowerCase() === em);
+    return found?.name || em;
+  };
+
+  const add = (em: string) => {
+    if (!value.includes(em)) onChange([...value, em]);
+    setOpen(false);
+    setSearch('');
+  };
+
+  const remove = (em: string) => onChange(value.filter(e => e !== em));
+
+  return (
+    <div ref={ref} className="relative">
+      <p className="text-[0.72rem] font-semibold text-dark-text2 mb-1">{label}</p>
+      <p className="text-[0.65rem] text-dark-text3 mb-2">{desc}</p>
+      <div className="flex flex-wrap gap-1 mb-2 min-h-[28px]">
+        {value.length === 0 && (
+          <span className="text-[0.65rem] text-dark-text3 italic">{saving ? 'Saving…' : 'None selected'}</span>
+        )}
+        {value.map(em => (
+          <span key={em} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-dark-bg3 border border-dark-border text-[0.68rem] text-dark-text" title={em}>
+            {nameFor(em)}
+            <button onClick={() => remove(em)} className="text-dark-text3 hover:text-red-400 bg-transparent border-none cursor-pointer text-[0.65rem]" title={`Remove ${em}`}>
+              <i className="fas fa-times"></i>
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="relative">
+        <i className="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-dark-text3 text-[0.62rem]"></i>
+        <input
+          value={search}
+          onFocus={() => setOpen(true)}
+          onChange={e => { setSearch(e.target.value); setOpen(true); }}
+          placeholder="Search users to add…"
+          className="w-full pl-7 pr-2 py-1.5 bg-dark-bg border border-dark-border rounded-lg text-dark-text text-[0.75rem] outline-none focus:border-qsis"
+        />
+        {open && (
+          <div className="absolute z-[200] top-full left-0 right-0 mt-1 bg-dark-bg2 border border-dark-border rounded-xl shadow-2xl max-h-52 overflow-y-auto">
+            {results.length === 0 && <p className="px-3 py-2 text-[0.7rem] text-dark-text3">No users found</p>}
+            {results.map(u => (
+              <button
+                key={u.email}
+                onMouseDown={e => { e.preventDefault(); add((u.email || '').toLowerCase()); }}
+                className="w-full text-left px-3 py-2 hover:bg-qsis/10 text-dark-text flex items-center gap-2 border-none bg-transparent cursor-pointer transition-colors border-b border-dark-border/30 last:border-0"
+              >
+                {u.githubAvatar ? <img src={u.githubAvatar} className="w-5 h-5 rounded-full" alt="" /> : <div className="w-5 h-5 rounded-full bg-dark-bg3 flex items-center justify-center"><i className="fas fa-user text-dark-text3 text-[0.5rem]"></i></div>}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[0.72rem] font-semibold truncate">{u.name || u.email}</div>
+                  <div className="text-[0.62rem] text-dark-text3 truncate">{u.email}</div>
+                </div>
+                <span className="text-[0.58rem] px-1.5 py-0.5 rounded bg-dark-bg border border-dark-border text-dark-text3">{u.role || 'user'}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PermissionsTab({ customRoles = [] }: { customRoles?: CustomRole[] }) {
   const [permissions, setPermissions] = useState<Record<string, string[] | boolean>>({});
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -89,6 +190,12 @@ export default function PermissionsTab({ customRoles = [] }: { customRoles?: Cus
       if (res.ok) flash('Saved', 'ok'); else flash('Failed to save', 'err');
     } catch { flash('Network error', 'err'); }
     setSaving(false);
+  };
+
+  const setAssignee = (key: 'pendingApprovers' | 'pendingNotifTargets') => async (list: string[]) => {
+    const newPerms = { ...permissions, [key]: list };
+    setPermissions(newPerms);
+    await savePermissions(newPerms);
   };
 
   const toggleRole = async (action: string, role: string) => {
@@ -426,11 +533,42 @@ export default function PermissionsTab({ customRoles = [] }: { customRoles?: Cus
               <div className="text-xs font-semibold text-dark-text">Notify admins on new pending accounts</div>
               <div className="text-[0.68rem] text-dark-text3">
                 {permissions.notifyPendingAccounts !== false
-                  ? 'Admins with Telegram connected will be notified when a non-university email signs up'
+                  ? 'Admins with Telegram connected will be notified when a non-university email requests access'
                   : 'Admins will not receive Telegram notifications for pending accounts'}
               </div>
             </div>
           </label>
+          </div>
+        </div>
+
+      {/* Account Requests & Approval */}
+      <div className="bg-dark-bg2 border border-dark-border rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-1">
+          <i className="fas fa-clipboard-check text-emerald-400"></i>
+          <span className="text-[0.82rem] font-semibold text-dark-text">Account Requests &amp; Approval</span>
+        </div>
+        <p className="text-[0.7rem] text-dark-text3 mb-4">Owner-controlled: choose who approves/rejects pending accounts (admins always can) and who gets the Telegram notification when someone requests access with their student ID.</p>
+        <div className="space-y-5">
+          <div className="p-3 rounded-lg bg-dark-bg border border-dark-border">
+            <AssigneePicker
+              label="Managers who can approve / reject"
+              desc="These users get the Pending tab and can approve or reject requests after verifying the student ID."
+              value={Array.isArray(permissions.pendingApprovers) ? permissions.pendingApprovers as string[] : []}
+              users={allUsers}
+              onChange={setAssignee('pendingApprovers')}
+              saving={saving}
+            />
+          </div>
+          <div className="p-3 rounded-lg bg-dark-bg border border-dark-border">
+            <AssigneePicker
+              label="Managers who receive the Telegram notification"
+              desc="Notified when someone requests access. Empty = all admins with Telegram connected."
+              value={Array.isArray(permissions.pendingNotifTargets) ? permissions.pendingNotifTargets as string[] : []}
+              users={allUsers}
+              onChange={setAssignee('pendingNotifTargets')}
+              saving={saving}
+            />
+          </div>
         </div>
       </div>
 

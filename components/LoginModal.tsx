@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, sendMagicLink } from '@/lib/firebase';
 import { useTurnstile } from '@/lib/useTurnstile';
 import { LoginForm, SignupForm, ForgotPassword } from '@/components/auth';
+import AccessGate from '@/components/auth/AccessGate';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
   const [linkExisting, setLinkExisting] = useState<{ email: string; sent: boolean } | null>(null);
   const [linkPassword, setLinkPassword] = useState('');
   const [linkedEmailHint, setLinkedEmailHint] = useState('');
+  const [accessGate, setAccessGate] = useState<{ email: string; status?: string | null } | null>(null);
   const turnstileContainerId = 'login-turnstile-container';
   const { renderWidget, getToken, reset } = useTurnstile();
   const isDev = process.env.NODE_ENV === 'development';
@@ -60,6 +62,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       setBanReason(null); setBannedBy(null);
       setLinkExisting(null); setLinkPassword('');
       setLinkedEmailHint('');
+      setAccessGate(null);
       try { window.localStorage.removeItem('pendingGoogleLink'); } catch {}
     }
   }, [isOpen]);
@@ -86,6 +89,17 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
   function isValidEmail(email: string): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
+
+  const isUniversityEmail = (e: string) => e.endsWith('@ugrad.iiuc.ac.bd') || e.endsWith('@iiuc.ac.bd');
+
+  const queryAccountStatus = async (mail: string) => {
+    try {
+      const res = await fetch(`/api/auth/account-status?email=${encodeURIComponent(mail.toLowerCase())}`);
+      return await res.json();
+    } catch {
+      return null;
+    }
+  };
 
   async function verifyTurnstileToken(): Promise<boolean> {
     if (isDev) return true;
@@ -128,6 +142,20 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         }
       }
 
+      // Gate: non-university, non-linked emails that aren't approved yet cannot
+      // sign in or sign up here. They must use their university email first, or
+      // request access with their student ID. The status endpoint also lets us
+      // tell them if their request is still pending/rejected.
+      const e = email.trim().toLowerCase();
+      if (!isUniversityEmail(e)) {
+        const status = await queryAccountStatus(e);
+        if (status?.needsApproval) {
+          setAccessGate({ email: e, status: status.status || null });
+          setLoading(false);
+          return;
+        }
+      }
+
       let user: any;
       if (isSignUp) {
         const turnstileValid = await verifyTurnstileToken();
@@ -135,10 +163,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
 
         const result = await signUpWithEmail(email, password);
         user = result.user;
-        const isUni = isUniversityEmail(email);
-        setSuccess(isUni
-          ? 'Account created! A verification email has been sent to your inbox. Please verify your email before signing in. Check your spam/junk folder and "All Mail" if you don\'t see it.'
-          : 'Account created! A verification email has been sent to your inbox. Note: Non-university emails require admin approval before you can access the system. Please verify your email, then wait for admin approval. Check your spam/junk folder and "All Mail" if you don\'t see it.');
+        setSuccess('Account created! A verification email has been sent to your inbox. Please verify your email before signing in. Check your spam/junk folder and "All Mail" if you don\'t see it.');
         setIsSignUp(false);
         setLoading(false);
         return;
@@ -192,6 +217,19 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
     }
 
     const result = await signIn('credentials', { idToken, redirect: false });
+
+    // The signIn callback may return the gate redirect either in result.url or
+    // (next-auth style) packed into result.error. Either way, surface the gate
+    // for non-approved accounts instead of showing a raw failure.
+    const gateTarget = (typeof result?.url === 'string' && result.url.includes('/auth/')) ? result.url
+      : (typeof result?.error === 'string' && result.error.includes('/auth/')) ? result.error : '';
+    if (gateTarget) {
+      let gateEmail = fbUser.email || '';
+      try { gateEmail = new URL(gateTarget, window.location.origin).searchParams.get('email') || gateEmail; } catch {}
+      setPendingCredentials(null); setTotpStep(false); setTotpAvailable(false);
+      setAccessGate({ email: gateEmail, status: null });
+      return;
+    }
 
     if (result?.error) {
       const email = fbUser.email || '';
@@ -311,8 +349,6 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
     setSuccess('');
   };
 
-  const isUniversityEmail = (e: string) => e.endsWith('@ugrad.iiuc.ac.bd') || e.endsWith('@iiuc.ac.bd');
-
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setSuccess('');
     if (!isValidEmail(email)) { setError('Please enter a valid email address'); return; }
@@ -325,7 +361,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       setMagicLinkSent(true);
       setSuccess(isUni
         ? 'Magic link sent! Check your email inbox, spam/junk folder, and "All Mail" if you don\'t see it within 2 minutes.'
-        : 'Magic link sent! Note: Non-university emails require admin approval before you can access the system. You\'ll be redirected to a pending page after signing in. Check your spam/junk folder and "All Mail" if you don\'t see it within 2 minutes.');
+        : 'Magic link sent! Note: non-university accounts need admin approval — if yours isn\'t approved yet, you\'ll be asked to request access with your student ID after signing in. Check your spam/junk folder and "All Mail" if you don\'t see it within 2 minutes.');
     } catch (err: any) {
       console.error('[MagicLink] Send error:', err?.code, err?.message);
       const msg = err.code === 'auth/user-not-found' ? 'No account found with this email. Please sign up first.'
@@ -358,7 +394,16 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         login: pendingCredentials!.email.split('@')[0], redirect: false,
       });
 
-      if (result?.error) { setError('Login failed'); reset(); }
+      if (result?.error) {
+        if (typeof result.error === 'string' && result.error.includes('/auth/')) {
+          let gateEmail = pendingCredentials!.email;
+          try { gateEmail = new URL(result.error, window.location.origin).searchParams.get('email') || gateEmail; } catch {}
+          setPendingCredentials(null); setTotpStep(false); setTotpAvailable(false);
+          setAccessGate({ email: gateEmail, status: null });
+          return;
+        }
+        setError('Login failed'); reset();
+      }
       else if (result?.ok) { onClose(); return; }
       else { setError('Login failed. Please try again.'); reset(); }
     } catch { setError('Verification failed'); }
@@ -417,6 +462,15 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
             </>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (accessGate) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+        onClick={(e) => { if (e.target === e.currentTarget) setAccessGate(null); }}>
+        <AccessGate email={accessGate.email} status={accessGate.status} onClose={() => setAccessGate(null)} />
       </div>
     );
   }

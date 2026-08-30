@@ -61,28 +61,6 @@ export function invalidateStatusCache(email?: string) {
   else statusCache.clear();
 }
 
-async function ensurePendingProfile(email: string, name?: string): Promise<void> {
-  try {
-    // Never re-provision a pending account for an email an admin has deleted.
-    const { isDeletedEmail } = await import('@/lib/deleted-emails');
-    if (await isDeletedEmail(email)) return;
-    const { prisma } = await import('@/lib/prisma');
-    const { roleForEmail } = await import('@/lib/roles');
-    const normalized = email.toLowerCase();
-    const existing = await prisma.profile.findUnique({ where: { userId: normalized }, select: { accountStatus: true } });
-    const isNew = !existing;
-    await prisma.profile.upsert({
-      where: { userId: normalized },
-      update: {},
-      create: { userId: normalized, email: normalized, name: name || normalized.split('@')[0], role: roleForEmail(email), accountStatus: 'pending' },
-    });
-    if (isNew) {
-      const { notifyAdminsPendingAccount } = await import('@/lib/telegram/notifications');
-      await notifyAdminsPendingAccount(email, name);
-    }
-  } catch {}
-}
-
 async function verifyFirebaseToken(idToken: string) {
   try {
     const { adminAuth } = await import('@/lib/firebase-admin');
@@ -145,8 +123,11 @@ export const authOptions: NextAuthOptions = {
           console.log('[Auth] authorize: email =', email, 'allowed =', allowed);
 
           if (!allowed) {
-            console.log('[Auth] authorize: NOT ALLOWED — creating pending profile for', email);
-            await ensurePendingProfile(email, credentials.name);
+            // Not an approved account. No pending profile is auto-created here —
+            // a pending account may ONLY be provisioned through the explicit
+            // request-access flow (which collects a student ID). The signIn
+            // callback redirects this user to that gate.
+            console.log('[Auth] authorize: NOT ALLOWED — redirecting to request-access for', email);
             return {
               id: decoded.sub || email,
               email,
@@ -222,8 +203,7 @@ export const authOptions: NextAuthOptions = {
         const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
         console.log('[Auth] signIn: allowed =', allowed, 'isAllowed =', isAllowedEmail(email));
         if (!allowed) {
-          await ensurePendingProfile(email, user.name || undefined);
-          return absolutePath('/auth/pending');
+          return absolutePath(`/auth/request-access?email=${encodeURIComponent(email)}`);
         }
 
         // Check if user is banned or rejected

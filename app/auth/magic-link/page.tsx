@@ -140,6 +140,15 @@ export default function MagicLinkPage() {
         setTotpRequired(false);
         setTimeout(() => router.push('/dashboard'), 1000);
       } else {
+        if (typeof result?.error === 'string' && result.error.includes('/auth/')) {
+          try {
+            const target = new URL(result.error, window.location.origin);
+            if (!target.pathname.endsWith('/auth/magic-link')) {
+              router.push(target.pathname + target.search);
+              return;
+            }
+          } catch {}
+        }
         setError('Sign-in failed. Please try again.');
       }
     } catch {
@@ -207,6 +216,19 @@ export default function MagicLinkPage() {
   // /dashboard then bounces the user back home silently, so follow the server's
   // URL instead whenever a real session isn't present.
   const handleSignInResult = async (result: { ok?: boolean; error?: string | null; url?: string | null }) => {
+    // The signIn callback may return the gate redirect either in result.url or
+    // packed into result.error. Forward it (e.g. to /auth/request-access).
+    const gateTarget = (typeof result?.url === 'string' && result.url.includes('/auth/')) ? result.url
+      : (typeof result?.error === 'string' && result.error.includes('/auth/')) ? result.error : '';
+    if (gateTarget) {
+      try {
+        const target = new URL(gateTarget, window.location.origin);
+        if (!target.pathname.endsWith('/auth/magic-link')) {
+          router.push(target.pathname + target.search);
+          return;
+        }
+      } catch {}
+    }
     if (result?.error) { setError('Sign-in failed. Please try again.'); return; }
     const session = await getSession();
     if (session) {

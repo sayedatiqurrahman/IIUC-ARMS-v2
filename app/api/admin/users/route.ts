@@ -3,6 +3,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { invalidatePermissionsCache } from '@/lib/permissions';
+import { canApprovePending } from '@/lib/permissions';
 import { invalidateStatusCache } from '@/lib/auth-options';
 import { addDeletedEmail, removeDeletedEmail } from '@/lib/deleted-emails';
 
@@ -14,7 +15,8 @@ export async function GET(req: NextRequest) {
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const effectiveRole = config.getEffectiveRole(email);
-    if (effectiveRole !== 'admin' && effectiveRole !== 'manager') {
+    const isApprover = await canApprovePending(email, effectiveRole);
+    if (effectiveRole !== 'admin' && effectiveRole !== 'manager' && !isApprover) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -366,6 +368,7 @@ export async function GET(req: NextRequest) {
       firebaseUserCount: firebaseUsers.length,
       firebaseOnlyCount: result.filter(u => !u.hasProfile).length,
       firebaseListFailed,
+      canApprovePending: isApprover,
     });
   } catch (err: any) {
     console.error('[Admin Users] GET error:', err?.message, err?.stack);
@@ -646,8 +649,9 @@ export async function POST(req: NextRequest) {
 
     // ─── APPROVE PENDING ACCOUNT ───
     if (action === 'approve') {
-      if (effectiveRole !== 'admin') {
-        return NextResponse.json({ error: 'Only admins can approve accounts' }, { status: 403 });
+      const approver = await canApprovePending(email, effectiveRole);
+      if (!approver) {
+        return NextResponse.json({ error: 'Only admins or assigned managers can approve accounts' }, { status: 403 });
       }
       await prisma.profile.upsert({
         where: { userId: targetEmail },
@@ -662,8 +666,9 @@ export async function POST(req: NextRequest) {
 
     // ─── REJECT PENDING ACCOUNT ───
     if (action === 'reject') {
-      if (effectiveRole !== 'admin') {
-        return NextResponse.json({ error: 'Only admins can reject accounts' }, { status: 403 });
+      const approver = await canApprovePending(email, effectiveRole);
+      if (!approver) {
+        return NextResponse.json({ error: 'Only admins or assigned managers can reject accounts' }, { status: 403 });
       }
       await prisma.profile.upsert({
         where: { userId: targetEmail },
@@ -676,8 +681,9 @@ export async function POST(req: NextRequest) {
 
     // ─── SEND ACTIVE EXTERNAL USER BACK TO PENDING ───
     if (action === 'sendToPending') {
-      if (effectiveRole !== 'admin') {
-        return NextResponse.json({ error: 'Only admins can move accounts back to pending' }, { status: 403 });
+      const approver = await canApprovePending(email, effectiveRole);
+      if (!approver) {
+        return NextResponse.json({ error: 'Only admins or assigned managers can move accounts back to pending' }, { status: 403 });
       }
       if (/@iiuc\.ac\.bd$/i.test(targetEmail)) {
         return NextResponse.json({ error: 'University accounts are pre-approved and cannot be moved to pending' }, { status: 400 });

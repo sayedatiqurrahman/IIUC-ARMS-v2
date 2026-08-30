@@ -51,6 +51,39 @@ export function invalidatePermissionsCache() {
   lastFetch = 0;
 }
 
+// Emails the owner has assigned to approve/reject pending accounts. Admins and
+// owners can always approve — this list extends that to managers/teachers etc.
+export async function getPendingApprovers(): Promise<string[]> {
+  try {
+    const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
+    const perms = (settings?.permissions as Record<string, any>) || {};
+    return Array.isArray(perms.pendingApprovers) ? (perms.pendingApprovers as string[]).map(e => String(e).toLowerCase().trim()) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Emails that receive the Telegram notification when someone requests access.
+// Empty = fall back to all admins.
+export async function getPendingNotifTargets(): Promise<string[]> {
+  try {
+    const settings = await prisma.siteSettings.findUnique({ where: { id: 'site-settings' } });
+    const perms = (settings?.permissions as Record<string, any>) || {};
+    return Array.isArray(perms.pendingNotifTargets) ? (perms.pendingNotifTargets as string[]).map(e => String(e).toLowerCase().trim()) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function canApprovePending(email: string, role?: string): Promise<boolean> {
+  if (!email) return false;
+  const lower = email.toLowerCase();
+  if (role === 'admin') return true;
+  if (config.ownerEmails.some(o => o.toLowerCase() === lower)) return true;
+  const approvers = await getPendingApprovers();
+  return approvers.includes(lower);
+}
+
 export async function getCustomRoles(): Promise<CustomRole[]> {
   const now = Date.now();
   if (cachedRoles && now - lastFetch < CACHE_TTL) return cachedRoles;

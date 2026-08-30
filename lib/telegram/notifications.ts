@@ -346,7 +346,7 @@ export async function getConnectedUsersCount(): Promise<number> {
 
 // ─── Pending Account Admin Notification ───────────────────────────
 
-export async function notifyAdminsPendingAccount(email: string, name?: string): Promise<void> {
+export async function notifyAdminsPendingAccount(email: string, name?: string, universityId?: string): Promise<void> {
   try {
     const { prisma } = await import('@/lib/prisma');
 
@@ -355,30 +355,47 @@ export async function notifyAdminsPendingAccount(email: string, name?: string): 
     const perms = (settings?.permissions as Record<string, any>) || {};
     if (perms.notifyPendingAccounts === false) return;
 
-    // Find all admins with telegramChatId
-    const admins = await prisma.profile.findMany({
-      where: {
-        role: 'admin',
-        telegramChatId: { not: null },
-      },
-      select: { telegramChatId: true, name: true, userId: true },
-    });
+    // Who gets notified is owner-controlled: pendingNotifTargets (a list of
+    // emails) if set, otherwise every admin with Telegram connected.
+    const targets = Array.isArray(perms.pendingNotifTargets)
+      ? (perms.pendingNotifTargets as string[]).map((e: string) => e.toLowerCase())
+      : [];
 
-    if (admins.length === 0) return;
+    let recipients: { telegramChatId: string | null; name: string | null; userId: string }[] = [];
+    if (targets.length > 0) {
+      recipients = await prisma.profile.findMany({
+        where: {
+          userId: { in: targets },
+          telegramChatId: { not: null },
+        },
+        select: { telegramChatId: true, name: true, userId: true },
+      });
+    } else {
+      recipients = await prisma.profile.findMany({
+        where: {
+          role: 'admin',
+          telegramChatId: { not: null },
+        },
+        select: { telegramChatId: true, name: true, userId: true },
+      });
+    }
+
+    if (recipients.length === 0) return;
 
     const displayName = name || email.split('@')[0];
     const message = [
-      `🆕 <b>New Pending Account</b>`,
+      `🆕 <b>New Access Request</b>`,
       ``,
       `<b>Email:</b> ${email}`,
       `<b>Name:</b> ${displayName}`,
+      ...(universityId ? [`<b>Student ID:</b> ${universityId}`] : []),
       ``,
-      `A non-university email has signed up and is waiting for your approval.`,
+      `A non-university account requested approval with their ID. Verify it, then approve or reject them.`,
       ``,
       `<a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc'}/dashboard">→ Review in Admin Panel</a>`,
     ].join('\n');
 
-    for (const admin of admins) {
+    for (const admin of recipients) {
       if (!admin.telegramChatId) continue;
       try {
         const chatId = Number(admin.telegramChatId);
@@ -387,7 +404,7 @@ export async function notifyAdminsPendingAccount(email: string, name?: string): 
       } catch {}
     }
   } catch (err: any) {
-    console.error('[TG] Failed to notify admins about pending account:', err?.message);
+    console.error('[TG] Failed to notify about access request:', err?.message);
   }
 }
 
