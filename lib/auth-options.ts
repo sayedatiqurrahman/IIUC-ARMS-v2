@@ -157,6 +157,10 @@ export const authOptions: NextAuthOptions = {
         if (decoded) {
           let email = (decoded.email || credentials.email || '').toLowerCase();
           if (!email) { console.log('[Auth] authorize: no email from token'); return null; }
+          // The raw address the user is actually signing in with. It may be a
+          // linked (secondary) email, which has its own (proved) ownership even
+          // before we resolve it to the primary below.
+          const rawSignInEmail = email;
           // Resolve linked (secondary) emails to their primary, then decide
           // authoritatively whether the (resolved) account is allowed. A linked
           // email ALWAYS belongs to its primary account, so it must never be
@@ -173,14 +177,29 @@ export const authOptions: NextAuthOptions = {
                 image: credentials.image || decoded.picture || null,
               } as any;
             }
-            // A deleted blocklisted email can never sign in.
-            const { isDeletedEmail } = await import('@/lib/deleted-emails');
-            if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
           } else {
             const { isDeletedEmail } = await import('@/lib/deleted-emails');
             if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
           }
-          if (decoded.email_verified === false) { console.log('[Auth] authorize: email not verified'); return null; }
+
+          // A deleted blocklisted email can never sign in — even a linked one.
+          try {
+            const { isDeletedEmail } = await import('@/lib/deleted-emails');
+            if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
+          } catch {}
+
+          // Email-verification enforcement. A LINKED (secondary) identity is
+          // exempt: ownership is already proven by the primary account that
+          // linked it (or by completing a one-time sign-in link), and its very
+          // presence in an authorized profile's linkedEmails means it was
+          // deliberately allowed. Requiring emailVerified here makes linked
+          // logins fail with a 401 even though the account is fully allowed.
+          const isLinked = !isIiucEmail(rawSignInEmail) &&
+            !!(await import('@/lib/linked-accounts').then(m => m.resolveLinkedEmail(rawSignInEmail)));
+          if (decoded.email_verified === false && !isLinked) {
+            console.log('[Auth] authorize: email not verified (not a linked identity) —', email);
+            return null;
+          }
           try {
             const { prisma } = await import('@/lib/prisma');
             const profile = await prisma.profile.findUnique({ where: { userId: email } });
@@ -202,6 +221,7 @@ export const authOptions: NextAuthOptions = {
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
           let email = (credentials.email || payload.email || '').toLowerCase();
           if (!email) return null;
+          const rawSignInEmail = email;
           if (!isIiucEmail(email)) {
             const { resolved, allowed } = await resolveAndAllow(email);
             email = resolved;
@@ -209,7 +229,8 @@ export const authOptions: NextAuthOptions = {
           }
           const { isDeletedEmail } = await import('@/lib/deleted-emails');
           if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
-          if (payload.email_verified === false) return null;
+          const fallbackLinked = !isIiucEmail(rawSignInEmail) && !!(await import('@/lib/linked-accounts').then(m => m.resolveLinkedEmail(rawSignInEmail)));
+          if (payload.email_verified === false && !fallbackLinked) return null;
           try {
             const { prisma } = await import('@/lib/prisma');
             const profile = await prisma.profile.findUnique({ where: { userId: email } });
