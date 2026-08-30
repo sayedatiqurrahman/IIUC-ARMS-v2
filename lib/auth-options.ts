@@ -169,6 +169,22 @@ export const authOptions: NextAuthOptions = {
             const { resolved, allowed } = await resolveAndAllow(email);
             if (allowed) {
               email = resolved;
+            } else if (resolved !== email && resolved) {
+              // `resolved` != input means this address appears in some allowed
+              // profile's linkedEmails (resolveLinkedEmail found a primary). That
+              // is AUTHORITATIVE proof it is a linked (secondary) identity of an
+              // allowed account, so it must never be gated as a standalone
+              // unapproved address. Whenever the primary resolves, allow login.
+              console.log('[Auth] authorize: linked to primary —', email, '->', resolved);
+              email = resolved;
+              // Self-heal: ensure an active mirror row exists for this linked
+              // email so it is recognized as a linked identity on future logins
+              // even if the linkedEmails list can't be scanned.
+              try {
+                const { prisma } = await import('@/lib/prisma');
+                const { upsertLinkedMirror } = await import('@/lib/linked-accounts');
+                await upsertLinkedMirror(prisma, resolved, rawSignInEmail);
+              } catch {}
             } else if (await import('@/lib/linked-accounts').then(m => m.isLinkedIdentity(email))) {
               // A linked (secondary) identity whose mirror profile is active is
               // allowed to log in as ITSELF, even if resolution to the primary
