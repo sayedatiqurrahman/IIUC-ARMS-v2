@@ -240,6 +240,22 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
     if (gateTarget) {
       let gateEmail = fbUser.email || '';
       try { gateEmail = new URL(gateTarget, window.location.origin).searchParams.get('email') || gateEmail; } catch {}
+      // Defense-in-depth: a linked or approved account must NEVER be shown the
+      // request-access gate, even if a stale serverless instance / status cache
+      // redirected it here. Re-check authoritatively; if it's actually linked or
+      // approved, retry the sign-in once and proceed if it now succeeds.
+      if (!isUniversityEmail(gateEmail)) {
+        const legit = await queryAccountStatus(gateEmail);
+        if (legit && !legit.needsApproval) {
+          const retry = await signIn('credentials', { idToken, redirect: false });
+          const retryTarget = (typeof retry?.url === 'string' && retry.url.includes('/auth/')) ? retry.url
+            : (typeof retry?.error === 'string' && retry.error.includes('/auth/')) ? retry.error : '';
+          if (!retryTarget && retry?.ok) {
+            onClose();
+            return;
+          }
+        }
+      }
       setPendingCredentials(null); setTotpStep(false); setTotpAvailable(false);
       setAccessGate({ email: gateEmail, status: null });
       return;
@@ -412,6 +428,19 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         if (typeof result.error === 'string' && result.error.includes('/auth/')) {
           let gateEmail = pendingCredentials!.email;
           try { gateEmail = new URL(result.error, window.location.origin).searchParams.get('email') || gateEmail; } catch {}
+          // Linked / approved accounts are never shown the gate — retry once in
+          // case a stale serverless instance redirected them here.
+          if (!isUniversityEmail(gateEmail)) {
+            const legit = await queryAccountStatus(gateEmail);
+            if (legit && !legit.needsApproval) {
+              const retry = await signIn('credentials', {
+                idToken: freshIdToken, email: pendingCredentials!.email,
+                name: pendingCredentials!.email.split('@')[0], image: '',
+                login: pendingCredentials!.email.split('@')[0], redirect: false,
+              });
+              if (retry?.ok) { onClose(); return; }
+            }
+          }
           setPendingCredentials(null); setTotpStep(false); setTotpAvailable(false);
           setAccessGate({ email: gateEmail, status: null });
           return;
