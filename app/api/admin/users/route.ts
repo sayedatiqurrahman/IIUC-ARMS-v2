@@ -73,14 +73,13 @@ export async function GET(req: NextRequest) {
         }];
         where.accountStatus = { notIn: ['pending', 'rejected'] };
       } else if (filterDomain === 'external') {
-        // External = active non-university accounts that were given a role — a
-        // custom club/organization role OR a Student/Teacher role on a personal
-        // email (they still appear in their role tab, and here as external too).
-        // Role-less accounts (still 'user', 'external' or null) belong on the
-        // pending list until a role is chosen; admins/managers have own lists.
+        // External is NOT a role — it's a grouping of every non-university
+        // account (holders of Gmail/Yahoo/etc.), regardless of the role they
+        // were given. This is how the admin sees how many outside accounts are
+        // using the platform and manages them in one place. Pending/rejected
+        // accounts have their own list.
         where.email = { not: { endsWith: '.iiuc.ac.bd' } };
         where.accountStatus = 'active';
-        where.role = { notIn: ['user', 'external', 'admin', 'manager'] };
       } else if (filterDomain === 'pending') {
         // Pending = non-university accounts with NO role assigned yet: fresh
         // signups who were blocked at login AND accounts that can already sign
@@ -329,8 +328,9 @@ export async function GET(req: NextRequest) {
           return u.accountStatus !== 'pending' && u.accountStatus !== 'rejected' && eff === 'teacher';
         }
         if (filterDomain === 'external') {
-          return !u.email?.endsWith('.iiuc.ac.bd') && u.accountStatus === 'active' &&
-            !!u.role && !['user', 'external', 'admin', 'manager'].includes(u.role);
+          // External = all non-university accounts (not a role). Any active
+          // account whose email isn't a university address belongs here.
+          return !u.email?.endsWith('.iiuc.ac.bd') && u.accountStatus === 'active';
         }
         if (filterDomain === 'pending') {
           return u.accountStatus !== 'rejected' && !u.email?.endsWith('.iiuc.ac.bd') &&

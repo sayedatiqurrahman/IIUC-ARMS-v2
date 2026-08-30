@@ -30,7 +30,6 @@ function getRoleBadge(role: string | null, customRoles: { key: string; label: st
     case 'manager': return <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 text-[0.65rem] font-semibold">Manager</span>;
     case 'teacher': return <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 text-[0.65rem] font-semibold">Teacher</span>;
     case 'student': return <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[0.65rem] font-semibold">Student</span>;
-    case 'external': return <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 text-[0.65rem] font-semibold"><i className="fas fa-globe mr-0.5"></i>External</span>;
     default: {
       const cr = customRoles.find(r => r.key === role);
       if (cr) return <span className={`px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[0.65rem] font-semibold`}><i className={`fas ${cr.icon} mr-0.5 ${cr.color}`}></i>{cr.label}</span>;
@@ -116,8 +115,10 @@ export default function UserRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[0.82rem] sm:text-[0.85rem] font-semibold text-dark-text truncate">{u.name || u.email.split('@')[0]}</span>
-            {(isPendingRow && (uRole === 'user' || uRole === 'external')) && <span className="px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-semibold" title="No role assigned yet — assign a role to move this account to the matching list">No role</span>}
-            {!isPendingRow && getRoleBadge(u.role, customRoles)}
+            {(uRole === 'user' || uRole === 'external') && (
+              <span className="px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-semibold" title="Not a real role — external is the grouping for non-university emails. Assign a role to move this account to the matching list.">No role</span>
+            )}
+            {uRole !== 'user' && uRole !== 'external' && getRoleBadge(u.role, customRoles)}
             {u.isCR && <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 text-[0.6rem] font-bold">CR</span>}
             {u.isACR && <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 text-[0.6rem] font-bold">ACR</span>}
             {isOwnerUser && <span className="px-1.5 py-0.5 rounded-md bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-bold"><i className="fas fa-star mr-0.5"></i>Owner</span>}

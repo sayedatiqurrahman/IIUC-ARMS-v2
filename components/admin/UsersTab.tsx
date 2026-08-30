@@ -212,6 +212,14 @@ export default function UsersTab({
         </div>
       )}
 
+      {/* External tab explainer */}
+      {userSubTab === 'external' && (
+        <div className="bg-purple-500/10 border border-purple-500/25 rounded-xl p-3 mb-4 text-[0.72rem] text-purple-300">
+          <i className="fas fa-globe mr-1"></i>
+          External is a grouping for <span className="font-semibold">every non-university account</span> (not a role) — a quick way to see all outside accounts using the platform. What matters is each account&apos;s assigned role, which decides its access.
+        </div>
+      )}
+
       {/* Add Admin (only on admin sub-tab) */}
       {userSubTab === 'admin' && isSuperAdmin && (
         <div className="mb-4">
