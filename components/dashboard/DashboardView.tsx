@@ -604,6 +604,8 @@ export default function DashboardView() {
               telegramChatId={(profile as any).telegramChatId}
               telegramVerified={(profile as any).telegramVerified}
               telegramId={(profile as any).telegramId}
+              telegramName={(profile as any).telegramName}
+              telegramAvatar={(profile as any).telegramAvatar}
               email={email}
             />
           </div>

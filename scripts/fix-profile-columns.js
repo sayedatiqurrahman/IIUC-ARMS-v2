@@ -71,6 +71,7 @@ async function main() {
     "telegramVerified" INTEGER DEFAULT 0,
     "telegramOtp" TEXT, "telegramOtpExpiresAt" DATETIME,
     "telegramConnectState" TEXT,
+    "telegramName" TEXT, "telegramAvatar" TEXT,
     "linkedEmails" TEXT NOT NULL DEFAULT '[]',
     "showInContributors" INTEGER DEFAULT 1,
     "accountStatus" TEXT DEFAULT 'active',
@@ -79,6 +80,8 @@ async function main() {
 
   await safeExec(`CREATE INDEX IF NOT EXISTS "Profile_githubLogin_idx" ON "Profile"("githubLogin")`, 'Profile.githubLogin idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "Profile_email_idx" ON "Profile"("email")`, 'Profile.email idx');
+  await safeExec(`ALTER TABLE "Profile" ADD COLUMN "telegramName" TEXT`, 'Profile.telegramName col');
+  await safeExec(`ALTER TABLE "Profile" ADD COLUMN "telegramAvatar" TEXT`, 'Profile.telegramAvatar col');
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "ActivityLog" (
     "id" TEXT NOT NULL PRIMARY KEY, "action" TEXT NOT NULL,

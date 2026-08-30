@@ -13,6 +13,7 @@ export function esc(s: string): string {
 }
 
 export function buildConnectMessage(): string {
+  const connectionsUrl = `${SITE_URL}/dashboard?tab=github`;
   return (
     `🔗 <b>Connect Your Telegram to IIUC-ARMS</b>\n\n` +
     `<b>Why connect?</b>\n` +
@@ -25,7 +26,8 @@ export function buildConnectMessage(): string {
     `Option 1: Send <code>/connect yourmail@ugrad.iiuc.ac.bd</code>\n` +
     `Option 2: Tap <b>📱 Connect by Phone Number</b> below\n` +
     `          (needed if you don't have a Telegram username)\n\n` +
-    `Then open the web app → Dashboard → Connections → Telegram → Send OTP.\n\n` +
+    `Then open <a href="${connectionsUrl}">IIUC-ARMS → Dashboard → Connections → Telegram</a>,\n` +
+    `click <b>Send OTP</b>, and enter the 6-digit OTP from this chat.\n\n` +
     `<i>You can connect up to 3 Telegram accounts from\n` +
     `Dashboard → Connections in the web app.</i>`
   );

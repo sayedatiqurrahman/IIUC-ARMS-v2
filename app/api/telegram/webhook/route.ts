@@ -419,6 +419,93 @@ async function commitBotUpload(fullPath: string, contentBase64: string, message:
   });
 }
 
+// Commit with the uploader's OWN GitHub token so the contribution shows on their
+// GitHub account (green contribution graph + their name on the commit). Author
+// identity is resolved from their profile so GitHub links the commit to them.
+async function commitUserUpload(
+  profile: { githubToken: string; githubLogin?: string | null; name?: string | null },
+  fullPath: string,
+  contentBase64: string,
+  message: string
+): Promise<string> {
+  const token = profile.githubToken;
+
+  // Resolve the author's real GitHub identity (id, name, verified email) using
+  // their token. GitHub links commits to the account whose email matches — the
+  // {id}+{login}@users.noreply.github.com format is the official way to make a
+  // commit "count" on the user's contributions graph.
+  let authorEmail = '';
+  let authorName = profile.githubLogin || profile.name || 'GitHub User';
+  try {
+    const meRes = await fetch(`${GITHUB_API}/user`, { headers: ghHeaders(token) });
+    if (meRes.ok) {
+      const me = await meRes.json();
+      authorName = me?.name || me?.login || authorName;
+      if (me?.email) authorEmail = me.email;
+      else if (typeof me?.id === 'number' && me?.login) authorEmail = `${me.id}+${me.login}@users.noreply.github.com`;
+    }
+  } catch {}
+
+  // Prefer the user's primary verified email (requires user:email scope) — but
+  // only when the /user call didn't already give us a real address.
+  if (!authorEmail) {
+    try {
+      const emRes = await fetch(`${GITHUB_API}/user/emails`, { headers: ghHeaders(token) });
+      if (emRes.ok) {
+        const emails: any[] = await emRes.json();
+        const primary = emails.find((e: any) => e?.verified && e?.primary) || emails.find((e: any) => e?.verified);
+        if (primary?.email) authorEmail = primary.email;
+      }
+    } catch {}
+  }
+  if (!authorEmail) authorEmail = `${profile.githubLogin || 'github'}_contributor@users.noreply.github.com`;
+
+  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
+  if (!refRes.ok) throw new Error(`GitHub rejected your connected token (${refRes.status}) — check it in Dashboard → Connections → GitHub.`);
+  const baseSha = (await refRes.json()).object.sha;
+  const cleanName = authorName.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim() || 'GitHub User';
+
+  return commitFilesToBranch({
+    token,
+    owner: config.owner,
+    repo: config.repo,
+    branch: config.branch,
+    baseSha,
+    files: [{ path: fullPath, content: contentBase64 }],
+    message,
+    author: { name: cleanName, email: authorEmail },
+  });
+}
+
+// Try the uploader's personal GitHub token first so their contribution is
+// credited; automatically fall back to the bot token if that fails.
+async function commitUpload(
+  email: string | null,
+  fullPath: string,
+  contentBase64: string,
+  message: string,
+  senderName: string
+): Promise<{ commitSha: string; via: 'user' | 'bot'; githubUser?: string | null }> {
+  if (email) {
+    try {
+      const { prisma } = await import('@/lib/prisma');
+      const prof = await prisma.profile.findUnique({
+        where: { userId: email },
+        select: { githubToken: true, githubLogin: true, name: true },
+      });
+      if (prof?.githubToken) {
+        const commitSha = await commitUserUpload(prof as any, fullPath, contentBase64, message);
+        return { commitSha, via: 'user', githubUser: prof.githubLogin || null };
+      }
+    } catch (e: any) {
+      console.warn('[TG] User-token commit failed — falling back to bot token:', e?.message);
+    }
+  }
+
+  const commitSha = await commitBotUpload(fullPath, contentBase64, message, senderName);
+  return { commitSha, via: 'bot' };
+}
+
 async function handleUploadDocument(chatId: number, msg: any, state: UploadFlowState) {
   const doc = msg.document;
   const origName = doc?.file_name || `telegram_${doc?.file_id || Date.now()}`;
@@ -485,15 +572,21 @@ async function handleUploadDocument(chatId: number, msg: any, state: UploadFlowS
     : msg.from?.username ? `@${msg.from.username}` : `Chat ${chatId}`;
 
   let commitSha: string;
+  let commitVia: 'user' | 'bot' = 'bot';
+  let commitGithubUser: string | null = null;
   try {
-    commitSha = await commitBotUpload(
+    const res = await commitUpload(
+      state.connectedEmail || null,
       fullPath,
       dl.buffer.toString('base64'),
       `Add ${relPath} (via Telegram, ID-${universityId})`,
       senderName
     );
+    commitSha = res.commitSha;
+    commitVia = res.via;
+    commitGithubUser = res.githubUser || null;
   } catch (e: any) {
-    console.error('[TG] Bot upload commit failed:', e?.message);
+    console.error('[TG] Upload commit failed:', e?.message);
     await sendMessage(chatId, `❌ <b>Upload failed</b>\n\n${esc(e?.message || 'Unknown error')}\n\nPlease try again later.`);
     return;
   }
@@ -504,10 +597,15 @@ async function handleUploadDocument(chatId: number, msg: any, state: UploadFlowS
     ? buildCourseLink(state.courseCode, state.dept, state.sem)
     : buildBrowseLink({ dept: state.dept, sem: state.sem });
 
+  const viaLine = commitVia === 'user'
+    ? `⭐ Committed with <b>your GitHub account</b>${commitGithubUser ? ` (<code>@${esc(commitGithubUser)}</code>)` : ''} — appears on your contribution graph!`
+    : `🤖 Committed via the IIUC-ARMS bot account.`;
+
   await sendMessage(chatId,
     `✅ <b>File uploaded to GitHub!</b>\n\n` +
     `📄 <code>${esc(relPath)}</code>\n` +
     `🏷️ Uploaded by: <code>ID-${esc(universityId)}</code>\n` +
+    `${viaLine}\n\n` +
     `📚 <a href="${courseLink}">Open course on IIUC-ARMS →</a>\n\n` +
     `Thank you for contributing! 🎉`
   );
@@ -520,7 +618,7 @@ async function handleUploadDocument(chatId: number, msg: any, state: UploadFlowS
         action: 'file_upload',
         userId: state.connectedEmail || `telegram-${chatId}`,
         userName: senderName,
-        details: JSON.stringify({ files: [relPath], count: 1, source: 'telegram', universityId, commitSha, session: state.session, term: state.term }),
+        details: JSON.stringify({ files: [relPath], count: 1, source: 'telegram', universityId, commitSha, via: commitVia, githubUser: commitGithubUser, session: state.session, term: state.term }),
       },
     });
   } catch {}
@@ -683,7 +781,7 @@ async function handleUploadCallback(cq: any, chatId: number, messageId: number, 
     state.stage = 'year';
     await setUploadState(chatId, state);
     await editMessageText(chatId, messageId,
-      `<b>📤 Upload</b>\n\n📚 <code>${esc(state.courseCode || '')}</code> · ${state.term} · ${season}\n\nWhich <b>year</b>?`,
+      `<b>📤 Upload</b>\n\n📚 <code>${esc(state.courseCode || '')}</code> · ${state.term} · ${season}\n\nWhich <b>year</b>?\n\n<i>📎 After you pick the year, send me the file to upload.</i>`,
       { reply_markup: { inline_keyboard: uploadYearButtons(season) } }
     );
     return;
@@ -882,11 +980,13 @@ async function processConnectEmail(chatId: number, email: string, telegramUserna
     },
   });
 
+  const connectionsUrl = `${SITE_URL}/dashboard?tab=github`;
   await sendMessage(chatId,
     `✅ <b>Request sent successfully!</b>\n\n` +
     `📧 Account: <code>${esc(email)}</code>\n\n` +
-    `Now open <b>IIUC-ARMS web app → Dashboard → Connections → Telegram</b>,\n` +
-    `click <b>Send OTP</b>, then enter the 6-digit OTP from this chat to verify.`,
+    `Now open <a href="${connectionsUrl}">IIUC-ARMS → Dashboard → Connections → Telegram</a>,\n` +
+    `click <b>Send OTP</b>, then enter the 6-digit OTP from this chat to verify.\n\n` +
+    `<i>Or open the link above in your browser to go straight to the Connections page.</i>`,
     { parse_mode: 'HTML' }
   );
   console.log(`[TG] /connect: ${email} -> chat_id ${chatId} (pending verification)`);

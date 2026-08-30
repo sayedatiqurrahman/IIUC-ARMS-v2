@@ -7,10 +7,12 @@ interface Props {
   telegramChatId: string | null;
   telegramVerified: boolean | null;
   telegramId: string | null;
+  telegramName?: string | null;
+  telegramAvatar?: string | null;
   email: string;
 }
 
-export default function TelegramVerify({ telegramChatId, telegramVerified, telegramId, email }: Props) {
+export default function TelegramVerify({ telegramChatId, telegramVerified, telegramId, telegramName, telegramAvatar, email }: Props) {
   const loadProfile = useAppStore(s => s.loadProfile);
   const [step, setStep] = useState<'idle' | 'pending' | 'otp' | 'sending'>('idle');
   const [otp, setOtp] = useState('');
@@ -19,12 +21,25 @@ export default function TelegramVerify({ telegramChatId, telegramVerified, teleg
   const [errMsg, setErrMsg] = useState('');
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState('');
 
   useEffect(() => {
     if (telegramChatId && !telegramVerified) setStep(s => (s === 'idle' ? 'pending' : s));
     else if (telegramChatId && telegramVerified) setStep('idle');
     else setStep('idle');
   }, [telegramChatId, telegramVerified]);
+
+  // Resolve the stored Telegram avatar (file_id) into a clickable image URL.
+  useEffect(() => {
+    let alive = true;
+    if (telegramChatId && telegramVerified && telegramAvatar) {
+      fetch(`/api/telegram/avatar?file_id=${encodeURIComponent(telegramAvatar)}`)
+        .then(r => r.json())
+        .then(d => { if (alive && d.url) setAvatarUrl(d.url); })
+        .catch(() => {});
+    }
+    return () => { alive = false; };
+  }, [telegramChatId, telegramVerified, telegramAvatar]);
 
   // Auto-refresh: if not connected yet, poll so the page flips to
   // "Telegram linked — verify now" right after the user sends /connect in the bot.
@@ -85,31 +100,45 @@ export default function TelegramVerify({ telegramChatId, telegramVerified, teleg
 
   // ─── Connected state ───
   if (telegramChatId && telegramVerified) {
+    const displayName = telegramName || telegramId || 'Telegram account';
     return (
-      <div className="p-3 rounded-lg bg-dark-bg3 border border-dark-border">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <i className="fab fa-telegram text-blue-400 text-lg"></i>
-            <div>
-              <span className="text-[0.7rem] text-dark-text2 block">Telegram</span>
-              <span className="text-[0.85rem] font-semibold text-green-400">
-                <i className="fas fa-check-circle mr-1"></i>Connected
-              </span>
+      <div className="p-4 rounded-xl bg-dark-bg3 border border-dark-border">
+        <div className="flex items-center gap-3">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="Telegram avatar"
+              className="w-12 h-12 rounded-full object-cover border-2 border-qsis/40" />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-qsis/15 border-2 border-qsis/40 flex items-center justify-center font-bold text-qsis text-lg">
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <i className="fab fa-telegram text-blue-400"></i>
+              <span className="text-[0.85rem] font-semibold text-dark-text truncate">{displayName}</span>
+            </div>
+            {telegramId && <p className="text-[0.72rem] text-dark-text2 truncate">@{telegramId}</p>}
+            <div className="flex items-center gap-2 text-[0.68rem] text-emerald-400 mt-0.5">
+              <i className="fas fa-check-circle"></i>Telegram connected & verified
+              <span className="text-dark-text3">·</span>
+              <i className="fas fa-database text-dark-text3"></i>
+              <span className="text-dark-text3">Saved in your profile</span>
             </div>
           </div>
           <button
             onClick={() => setShowDisconnectConfirm(!showDisconnectConfirm)}
             className="px-2 py-1 rounded-lg border border-dark-border bg-dark-bg text-dark-text2 text-[0.65rem] cursor-pointer hover:border-red-500 hover:text-red-400 transition-colors"
+            title="Disconnect Telegram"
           >
             <i className="fas fa-unlink"></i>
           </button>
         </div>
-        {telegramId && <p className="text-[0.72rem] text-dark-text2"><i className="fab fa-telegram mr-1 text-blue-400"></i>{telegramId}</p>}
-        <p className="text-[0.6rem] text-green-400"><i className="fas fa-bell mr-0.5"></i>You&apos;ll receive notifications</p>
+
+        <p className="text-[0.6rem] text-dark-text3 mt-2"><i className="fas fa-bell text-green-400 mr-1"></i>You&apos;ll receive class routine, exam schedule &amp; file upload notifications here.</p>
 
         {showDisconnectConfirm && (
           <div className="mt-2 p-2.5 rounded-lg bg-red-500/5 border border-red-500/20">
-            <p className="text-[0.72rem] text-red-400 font-semibold mb-1.5"><i className="fas fa-exclamation-triangle mr-1"></i>Disconnect?</p>
+            <p className="text-[0.72rem] text-red-400 font-semibold mb-1.5"><i className="fas fa-exclamation-triangle mr-1"></i>Disconnect this Telegram from your account?</p>
             <div className="flex gap-2">
               <button onClick={disconnect} disabled={loading}
                 className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-[0.7rem] font-semibold cursor-pointer hover:bg-red-600 transition-colors disabled:opacity-50">
