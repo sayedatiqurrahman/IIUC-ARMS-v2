@@ -113,3 +113,119 @@ export function invalidateLinkedEmail(email?: string) {
   if (email) linkCache.delete((email || '').toLowerCase().trim());
   else linkCache.clear();
 }
+
+/**
+ * Create (or refresh) an ACTIVE mirror profile for a linked (secondary) email so
+ * the address is itself a fully allowed, role-bearing account — the same role as
+ * the primary. This makes a linked email usable even if linkedEmails resolution
+ * is stale, and it shows up in the users list with its real role. The mirror's
+ * linkedEmails stays empty to avoid reverse-resolution cycles.
+ */
+export async function upsertLinkedMirror(prisma: any, primaryEmail: string, mirrorEmail: string): Promise<void> {
+  const primary = await prisma.profile.findUnique({ where: { userId: primaryEmail.toLowerCase().trim() } });
+  const mirror = (mirrorEmail || '').toLowerCase().trim();
+  if (!primary) return;
+  await prisma.profile.upsert({
+    where: { userId: mirror },
+    update: {
+      accountStatus: 'active',
+      role: primary.role || 'user',
+      name: primary.name || undefined,
+      universityId: primary.universityId || undefined,
+      department: primary.department || undefined,
+      section: primary.section || undefined,
+      isCR: !!primary.isCR,
+      isACR: !!primary.isACR,
+      isBanned: false,
+      profileType: 'linked',
+    },
+    create: {
+      userId: mirror,
+      email: mirror,
+      accountStatus: 'active',
+      role: primary.role || 'user',
+      name: primary.name || null,
+      universityId: primary.universityId || null,
+      department: primary.department || null,
+      section: primary.section || null,
+      isCR: !!primary.isCR,
+      isACR: !!primary.isACR,
+      isBanned: false,
+      profileType: 'linked',
+    },
+  });
+}
+
+/**
+ * Promote a linked (secondary) email to be the new PRIMARY identity of the
+ * account. The whole profile moves (all fields, role, status, data) to the new
+ * address, the old address becomes a linked identity of it, and every
+ * user-scoped reference in the database is re-pointed so memberships, claims,
+ * courses, clubs and certificates keep working.
+ */
+export async function switchPrimary(prisma: any, oldEmail: string, newEmail: string): Promise<void> {
+  const oldE = (oldEmail || '').toLowerCase().trim();
+  const newE = (newEmail || '').toLowerCase().trim();
+  if (!oldE || !newE || oldE === newE) throw new Error('Cannot switch to the same email');
+
+  const existing = await prisma.profile.findUnique({ where: { userId: oldE } });
+  if (!existing) throw new Error('Primary account not found');
+
+  // The target address must be free. Linked mirrors / pending / rejected / banned
+  // placeholder rows are cleared; an active REAL account can never be taken over.
+  const target = await prisma.profile.findUnique({ where: { userId: newE } });
+  if (target) {
+    const inert = target.accountStatus === 'pending' || target.accountStatus === 'rejected' || !!target.isBanned || target.profileType === 'linked';
+    if (!inert) throw new Error('That email already belongs to another active account');
+    await prisma.profile.delete({ where: { userId: newE } });
+  }
+
+  // The new primary contains everything the old one had; the OLD address becomes
+  // a linked identity so it keeps resolving back to the (new) primary account.
+  const linked: string[] = (() => { try { return JSON.parse(existing.linkedEmails as string || '[]'); } catch { return []; } })();
+  const newLinked = linked.filter((x) => (x || '').toLowerCase() !== newE);
+  if (!newLinked.some((x) => (x || '').toLowerCase() === oldE)) newLinked.push(oldE);
+
+  const { id, userId, linkedEmails, email, createdAt, updatedAt, ...rest } = existing as any;
+  await prisma.profile.create({
+    data: { ...rest, userId: newE, email: newE, linkedEmails: JSON.stringify(newLinked) },
+  });
+  await prisma.profile.delete({ where: { userId: oldE } });
+
+  // Re-point every user-scoped column so nothing references the dead address.
+  const refs: [string, string][] = [
+    ['activityLog', 'userId'],
+    ['course', 'addedBy'],
+    ['facultyRequest', 'requesterId'],
+    ['publishedRoutine', 'publishedBy'],
+    ['publishedExamRoutine', 'publishedBy'],
+    ['telegramNotification', 'sentBy'],
+    ['club', 'createdBy'],
+    ['clubMember', 'userId'],
+    ['clubEvent', 'createdBy'],
+    ['clubClaim', 'userId'],
+    ['studioOrganization', 'createdBy'],
+    ['studioCertificate', 'issuedBy'],
+  ];
+  for (const [model, col] of refs) {
+    try {
+      await prisma[model].updateMany({ where: { [col]: oldE }, data: { [col]: newE } });
+    } catch {}
+  }
+  try {
+    await prisma.publishedExamRoutine.updateMany({ where: { publishedByEmail: oldE }, data: { publishedByEmail: newE } });
+  } catch {}
+
+  // Flush authority / link caches for both addresses.
+  try {
+    const { invalidateStatusCache } = await import('@/lib/auth-options');
+    invalidateStatusCache(oldE);
+    invalidateStatusCache(newE);
+  } catch {}
+  try {
+    const { invalidateLinkedEmail } = await import('@/lib/linked-accounts');
+    invalidateLinkedEmail(oldE);
+    invalidateLinkedEmail(newE);
+    invalidateLinkedEmail();
+  } catch {}
+}

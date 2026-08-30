@@ -23,6 +23,11 @@ export async function GET(req: NextRequest) {
 
     const method = req.nextUrl.searchParams.get('method') || 'email';
     const requested = req.nextUrl.searchParams.get('email')?.toLowerCase().trim() || null;
+    // "exact=1" (used by the dashboard per-account view) asks for the selected
+    // email's OWN config with NO fallback to the primary, so the dropdown always
+    // reflects the account you picked. Without it (sign-in flow) the primary's
+    // config is used as a fallback for linked accounts that have none.
+    const exact = req.nextUrl.searchParams.get('exact') === '1';
 
     // Dashboard per-account view: a requested email is honoured only when it is
     // the session primary account or one of its linked emails.
@@ -37,10 +42,11 @@ export async function GET(req: NextRequest) {
     }
 
     // Per-account TOTP: if the signing-in (or requested) email has its own
-    // authenticator config, use it; otherwise fall back to the primary.
+    // authenticator config, use it. In exact mode that's the end of it; in the
+    // sign-in flow a linked email with no own config falls back to the primary.
     let targetEmail = requestedTarget || rawEmail || primaryEmail || '';
     let config = targetEmail ? await getTotpForEmail(targetEmail) : null;
-    if (!config && primaryEmail && primaryEmail !== targetEmail) {
+    if (!exact && !config && primaryEmail && primaryEmail !== targetEmail) {
       targetEmail = primaryEmail;
       config = await getTotpForEmail(primaryEmail);
     }

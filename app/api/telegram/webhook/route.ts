@@ -332,15 +332,38 @@ function buildUploadFolderPreview(state: UploadFlowState): string {
   return buildUploadFolderPath(state).replace(/^upload_academic_files\//, '') + ' / <your-file>';
 }
 
-async function resolveConnectedEmail(chatId: number): Promise<string | null> {
+// Resolve which single verified account owns this Telegram chat. A chat may be
+// connected to several accounts (up to 3) — when the operator can't be pinned
+// down unambiguously we return null so the caller MUST NOT attribute work (e.g.
+// a git commit) to a guessed account. When we do resolve, it's the operator's
+// exact Telegram identity (username) if that matches exactly one bound account.
+async function resolveConnectedEmail(chatId: number, operator?: { username?: string | null; id?: number | string } | null): Promise<string | null> {
   try {
     const { prisma } = await import('@/lib/prisma');
-    const profile = await prisma.profile.findFirst({
+    const matches = await prisma.profile.findMany({
       where: { telegramChatId: String(chatId), telegramVerified: true },
-      select: { userId: true },
+      select: { userId: true, telegramId: true },
     });
-    return profile?.userId || null;
+    if (!matches.length) return null;
+    if (operator?.username) {
+      const byId = matches.filter((m: any) => m.telegramId === operator.username || m.telegramId === `@${operator.username}`);
+      if (byId.length === 1) return byId[0].userId;
+    }
+    // Multiple verified accounts on the same chat, or the operator can't be
+    // isolated: never guess. Committing as the wrong user is impersonation.
+    if (matches.length !== 1) return null;
+    return matches[0].userId;
   } catch { return null; }
+}
+
+// Count verified accounts bound to a chat (for accurate "ambiguous" messaging).
+async function boundVerifiedCount(chatId: number): Promise<number> {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    return await prisma.profile.count({
+      where: { telegramChatId: String(chatId), telegramVerified: true },
+    });
+  } catch { return 0; }
 }
 
 async function profileUniversityId(email: string): Promise<string | null> {
@@ -352,11 +375,32 @@ async function profileUniversityId(email: string): Promise<string | null> {
 }
 
 // Called once the path is fully known: resolves identity then asks for the file.
-async function askUploadMessage(chatId: number, messageId: number, state: UploadFlowState) {
-  const email = await resolveConnectedEmail(chatId);
+// `operator` is the Telegram user pressing the buttons — used to disambiguate
+// when several accounts are bound to the same chat.
+async function askUploadMessage(chatId: number, messageId: number, state: UploadFlowState, operator?: any) {
+  const email = await resolveConnectedEmail(chatId, operator);
+  const boundCount = await boundVerifiedCount(chatId);
   if (email) {
     state.connectedEmail = email;
     state.universityId = state.universityId || (await profileUniversityId(email)) || undefined;
+  }
+
+  // Ambiguous identity: several accounts are bound and we can't tell which one
+  // is acting. We must NOT use any of them (that would attribute the commit to
+  // the wrong person) — the upload continues but will commit via the bot.
+  if (!email && boundCount > 1) {
+    state.connectedEmail = undefined;
+    await setUploadState(chatId, state);
+    await editMessageText(chatId, messageId,
+      `⚠️ <b>Multiple accounts are connected to this chat.</b>\n\n` +
+      `I can't tell which one is uploading, so this file will be committed with the <b>bot's</b> identity instead of a personal account.\n\n` +
+      `To commit as yourself, keep only your account connected and use <code>/disconnect</code> to remove the others.\n\n` +
+      `Send the file to continue: <code>${esc(buildUploadFolderPreview(state))}</code>`,
+      { reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'up:cancel' }]] } }
+    );
+    state.stage = 'file';
+    await setUploadState(chatId, state);
+    return;
   }
 
   if (!state.connectedEmail && !state.universityId) {
@@ -575,8 +619,18 @@ async function handleUploadDocument(chatId: number, msg: any, state: UploadFlowS
   let commitVia: 'user' | 'bot' = 'bot';
   let commitGithubUser: string | null = null;
   try {
+    // Re-verify identity at commit time: stale state from an earlier session must
+    // never cause a commit to be authored as the wrong account. Only commit as a
+    // user when this very operator unambiguously resolves to exactly that account.
+    let verifiedEmail: string | null = null;
+    if (state.connectedEmail) {
+      const resolved = await resolveConnectedEmail(chatId, msg?.from);
+      if (resolved && resolved.toLowerCase() === state.connectedEmail.toLowerCase()) {
+        verifiedEmail = state.connectedEmail;
+      }
+    }
     const res = await commitUpload(
-      state.connectedEmail || null,
+      verifiedEmail,
       fullPath,
       dl.buffer.toString('base64'),
       `Add ${relPath} (via Telegram, ID-${universityId})`,
@@ -756,7 +810,7 @@ async function handleUploadCallback(cq: any, chatId: number, messageId: number, 
         { reply_markup: { inline_keyboard: uploadTermButtons() } }
       );
     } else {
-      await askUploadMessage(chatId, messageId, state);
+      await askUploadMessage(chatId, messageId, state, cq?.from);
     }
     return;
   }
@@ -793,7 +847,7 @@ async function handleUploadCallback(cq: any, chatId: number, messageId: number, 
     if ((season !== 'Spring' && season !== 'Autumn') || !/^\d{4}$/.test(year || '')) { await answerCallbackQuery(cq.id, 'Pick a year'); return; }
     state.season = season;
     state.session = `${season} ${year}`;
-    await askUploadMessage(chatId, messageId, state);
+    await askUploadMessage(chatId, messageId, state, cq?.from);
     return;
   }
 
@@ -1333,11 +1387,16 @@ async function handleMessage(msg: any) {
     if (cleanText === '/status') {
       try {
         const { prisma } = await import('@/lib/prisma');
-        const profile = await prisma.profile.findFirst({ where: { telegramChatId: String(chatId) }, select: { userId: true, name: true, telegramVerified: true, telegramConnectState: true } });
-        if (!profile) {
+        const profiles = await prisma.profile.findMany({ where: { telegramChatId: String(chatId) }, select: { userId: true, name: true, telegramVerified: true, telegramConnectState: true } });
+        if (!profiles.length) {
           await sendMessage(chatId, 'ℹ️ You are not connected to any IIUC-ARMS account.\n\nSend <code>/connect</code> to link.', { parse_mode: 'HTML' });
           return;
         }
+        if (profiles.length > 1) {
+          await sendMessage(chatId, `⚠️ <b>${profiles.length} accounts are connected to this chat.</b>\n\n${profiles.map(p => `• <code>${p.userId}</code> — ${p.telegramVerified ? '✅ verified' : '⏳ pending'}`).join('\n')}\n\nUse <code>/disconnect</code> to remove extras. With more than one connected account, uploads are committed via the <b>bot</b> — not a personal account.`, { parse_mode: 'HTML' });
+          return;
+        }
+        const profile = profiles[0];
         if (profile.telegramVerified) {
           await sendMessage(chatId, `✅ <b>Connected</b>\n\n📧 Account: <code>${profile.userId}</code>\n👤 Name: ${profile.name || 'Not set'}\n\nYou will receive notifications for this account.`, { parse_mode: 'HTML' });
         } else if (profile.telegramConnectState === 'awaiting_email') {

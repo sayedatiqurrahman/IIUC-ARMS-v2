@@ -171,10 +171,13 @@ export async function GET(req: NextRequest) {
 
     // Fetch ALL Firebase auth users by walking every page (not just the first
     // 1000), so nobody with a Firebase account is missing from "All Users".
-    // clearOnDeploy check: some SDK versions name the next-page field
-    // "pageToken", others "nextPageToken" — read both.
+    // The walk is capped so a huge user base never hangs the server/database
+    // round-trips for each page (clearOnDeploy notes: the SDK names the
+    // next-page field "pageToken" or "nextPageToken" — read both).
     let firebaseUsers: any[] = [];
     let firebaseListFailed = false;
+    let firebaseListTruncated = false;
+    const FIREBASE_MAX_PAGES = 40;
     try {
       const { getAdminAuth } = await import('@/lib/firebase-admin');
       const auth = getAdminAuth();
@@ -183,12 +186,13 @@ export async function GET(req: NextRequest) {
         firebaseUsers = first.users || [];
         let pageToken = first.pageToken ?? first.nextPageToken;
         let guard = 0;
-        while (pageToken && guard < 50) {
+        while (pageToken && guard < FIREBASE_MAX_PAGES) {
           guard++;
           const page = await auth.listUsers(1000, pageToken);
           firebaseUsers = firebaseUsers.concat(page.users || []);
           pageToken = page.pageToken ?? page.nextPageToken;
         }
+        if (guard >= FIREBASE_MAX_PAGES && pageToken) firebaseListTruncated = true;
       } else {
         firebaseListFailed = true;
       }
@@ -214,7 +218,43 @@ export async function GET(req: NextRequest) {
       }
     } catch {}
 
-    const profileMap = new Map(profiles.map(p => [p.email?.toLowerCase(), p]));
+    // DB "already allowed" identities: any email/address that has an ACTIVE
+    // profile, an assigned (non-default) role, or CR/ACR in the database is by
+    // definition approved. A Firebase-only account whose real profile row lives
+    // in the DB under one of these addresses must NEVER appear on the Pending
+    // list — even when the merge couldn't match it (e.g. legacy rows with a null
+    // `email` column). Without this, approved/role-given users would keep
+    // re-appearing as "No role · Firebase · pending" forever.
+    const approvedSet = new Set<string>();
+    if (filterDomain === 'pending') {
+      try {
+        const approved = await prisma.profile.findMany({
+          where: {
+            OR: [
+              { accountStatus: 'active' },
+              { isCR: true },
+              { isACR: true },
+              { role: { notIn: ['user', 'external'] } },
+            ],
+          },
+          select: { userId: true, email: true },
+        });
+        for (const a of approved) {
+          if (a.email) approvedSet.add(a.email.toLowerCase().trim());
+          if (a.userId) approvedSet.add(a.userId.toLowerCase().trim());
+        }
+      } catch {}
+    }
+
+    const profileMap = new Map<string, any>();
+    for (const p of profiles) {
+      // Index by BOTH email and userId (legacy rows sometimes have a null email
+      // column but a valid userId), so a Firebase user always finds its profile.
+      const keys = new Set<string>();
+      if (p.email) keys.add(p.email.toLowerCase());
+      if (p.userId) keys.add(p.userId.toLowerCase());
+      keys.forEach(k => { if (!profileMap.has(k)) profileMap.set(k, p); });
+    }
     const merged = new Map<string, any>();
 
     for (const fu of firebaseUsers) {
@@ -348,11 +388,13 @@ export async function GET(req: NextRequest) {
         }
         if (filterDomain === 'pending') {
           // An account needs approval unless it has a profile marked 'active'
-          // (approve / setRole / CR / ACR all do that). Firebase-only accounts
-          // get the default 'pending' below, so they show here — and once
-          // approved or given a role / CR they move out automatically.
+          // (approve / setRole / CR / ACR all do that), or its address is an
+          // approved identity in the database. Firebase-only accounts get the
+          // default 'pending' below, so they show here — but once approved or
+          // given a role / CR their DB record removes them automatically.
           return u.accountStatus === 'pending' && !u.email?.endsWith('.iiuc.ac.bd') &&
             !config.ownerEmails.includes(u.email?.toLowerCase()) &&
+            !approvedSet.has((u.email || '').toLowerCase()) &&
             !u.isCR && !u.isACR &&
             (!u.role || u.role === 'user' || u.role === 'external');
         }
@@ -387,6 +429,7 @@ export async function GET(req: NextRequest) {
       firebaseUserCount: firebaseUsers.length,
       firebaseOnlyCount: result.filter(u => !u.hasProfile).length,
       firebaseListFailed,
+      firebaseListTruncated,
       canApprovePending: isApprover,
     });
   } catch (err: any) {

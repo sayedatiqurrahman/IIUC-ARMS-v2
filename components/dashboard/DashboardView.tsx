@@ -148,7 +148,7 @@ export default function DashboardView() {
       if (def) setTotpTarget(def);
       return;
     }
-    fetch(`/api/auth/totp/check?email=${encodeURIComponent(totpTarget)}`)
+    fetch(`/api/auth/totp/check?email=${encodeURIComponent(totpTarget)}&exact=1`)
       .then(r => r.json())
       .then(d => {
         setTotpEnabled(!!d.totpEnabled);

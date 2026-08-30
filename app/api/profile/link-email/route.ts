@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { linkEmail } = body;
+    const { linkEmail, setAsPrimary } = body;
 
     if (!linkEmail || typeof linkEmail !== 'string') {
       return NextResponse.json({ error: 'Email required' }, { status: 400 });
@@ -68,6 +68,27 @@ export async function POST(req: NextRequest) {
       data: { linkedEmails: JSON.stringify([...currentLinked, normalizedEmail]) },
     });
     invalidateLinkedEmail(normalizedEmail);
+
+    // Make the address a fully allowed, role-bearing account in its own right:
+    // a linked email automatically inherits the primary's role/status, so the
+    // approval gate can never show for it (even if resolution is stale).
+    const { upsertLinkedMirror, switchPrimary } = await import('@/lib/linked-accounts');
+    await upsertLinkedMirror(prisma, email, normalizedEmail);
+
+    if (setAsPrimary) {
+      try {
+        await ensureFirebaseIdentity(normalizedEmail);
+        await switchPrimary(prisma, email, normalizedEmail);
+        return NextResponse.json({
+          success: true,
+          switchedPrimary: true,
+          newPrimaryEmail: normalizedEmail,
+          message: 'Linked and set as your new primary email! Sign out and sign in again with this new address.',
+        });
+      } catch (swErr: any) {
+        return NextResponse.json({ error: swErr?.message || 'Failed to set as primary' }, { status: 400 });
+      }
+    }
 
     // Make the personal email a real login identity, then send a password-set
     // email to that inbox so the owner can log in with email + password.
@@ -134,14 +155,13 @@ export async function DELETE(req: NextRequest) {
       }
     } catch {}
 
-    // Free the address fully: drop any leftover placeholder profile row for it
-    // (e.g. auto-created by the owner's own earlier sign-in attempt) so being
-    // unlinked never shows "This email is already associated with another
-    // account" when the same address is linked again.
+    // Remove the linked-mirror profile (an ACTIVE row auto-created for this
+    // address when it was linked) so an unlinked address reverts to being a
+    // normal non-account — plus any leftover placeholder rows.
     try {
       const leftover = await prisma.profile.findUnique({ where: { userId: normalizedEmail } });
-      const inert = leftover && (leftover.accountStatus === 'pending' || leftover.accountStatus === 'rejected' || leftover.isBanned);
-      if (leftover && inert) {
+      const mirror = leftover && (leftover.profileType === 'linked' || leftover.accountStatus === 'pending' || leftover.accountStatus === 'rejected' || leftover.isBanned);
+      if (leftover && mirror) {
         await prisma.profile.delete({ where: { userId: normalizedEmail } });
         const { invalidateStatusCache } = await import('@/lib/auth-options');
         invalidateStatusCache(normalizedEmail);

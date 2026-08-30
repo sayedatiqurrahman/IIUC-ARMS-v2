@@ -4,12 +4,14 @@ import { useState } from 'react';
 
 export default function AccountLinkingSection({ email, linkedEmails, onRefresh }: { email: string; linkedEmails: string[]; onRefresh: () => void }) {
   const [newEmail, setNewEmail] = useState('');
+  const [setAsPrimary, setSetAsPrimary] = useState(false);
+  const [switching, setSwitching] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   const flash = (msg: string, type: 'ok' | 'err') => {
-    if (type === 'ok') { setSuccess(msg); setTimeout(() => setSuccess(''), 5000); }
+    if (type === 'ok') { setSuccess(msg); setTimeout(() => setSuccess(''), 8000); }
     else { setError(msg); setTimeout(() => setError(''), 5000); }
   };
 
@@ -20,16 +22,28 @@ export default function AccountLinkingSection({ email, linkedEmails, onRefresh }
       const res = await fetch('/api/profile/link-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ linkEmail: newEmail.trim() }),
+        body: JSON.stringify({ linkEmail: newEmail.trim(), setAsPrimary }),
       });
       const data = await res.json();
       if (data.success) {
+        if (data.switchedPrimary) {
+          flash(data.message || 'Primary changed! Sign out and sign in with the new address.', 'ok');
+          setNewEmail(''); setSetAsPrimary(false);
+          // The session is keyed to the OLD primary email, and that row no longer
+          // exists — reconnect with the new address.
+          setTimeout(async () => {
+            try { fetch('/api/auth/firebase-session', { method: 'DELETE' }); } catch {}
+            const { signOut } = await import('next-auth/react');
+            await signOut({ callbackUrl: '/' });
+          }, 1500);
+          return;
+        }
         if (data.resetLinkSent) {
           flash(`Linked! A password-set email was sent to ${newEmail.trim()}. Set a password there, then sign in with it.`, 'ok');
         } else {
           flash('Email linked! You can sign in with it via Magic Link.', 'ok');
         }
-        setNewEmail('');
+        setNewEmail(''); setSetAsPrimary(false);
         onRefresh();
       } else {
         flash(data.error || 'Failed', 'err');
@@ -61,6 +75,32 @@ export default function AccountLinkingSection({ email, linkedEmails, onRefresh }
     setLoading(false);
   };
 
+  const handleMakePrimary = async (target: string) => {
+    setSwitching(target);
+    setError(''); setSuccess('');
+    try {
+      const res = await fetch('/api/profile/switch-primary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPrimary: target }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        flash(data.message || 'Primary changed! Sign out and sign in with the new address.', 'ok');
+        setTimeout(async () => {
+          try { fetch('/api/auth/firebase-session', { method: 'DELETE' }); } catch {}
+          const { signOut } = await import('next-auth/react');
+          await signOut({ callbackUrl: '/' });
+        }, 1500);
+      } else {
+        flash(data.error || 'Failed to switch primary', 'err');
+      }
+    } catch {
+      flash('Network error', 'err');
+    }
+    setSwitching('');
+  };
+
   return (
     <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-4">
       <h4 className="text-[0.95rem] font-semibold mb-2 flex items-center gap-2">
@@ -75,7 +115,7 @@ export default function AccountLinkingSection({ email, linkedEmails, onRefresh }
       {linkedEmails.length > 0 && (
         <div className="space-y-2 mb-3">
           {linkedEmails.map(e => (
-            <div key={e} className="flex items-center justify-between p-2.5 rounded-lg bg-dark-bg3 border border-dark-border">
+            <div key={e} className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-dark-bg3 border border-dark-border">
               <div className="flex items-center gap-2 min-w-0">
                 <i className="fas fa-envelope text-cyan-400 text-[0.7rem]"></i>
                 <span className="text-[0.78rem] text-dark-text truncate">{e}</span>
@@ -84,9 +124,19 @@ export default function AccountLinkingSection({ email, linkedEmails, onRefresh }
                 )}
               </div>
               {e.toLowerCase() !== email.toLowerCase() && (
-                <button onClick={() => handleUnlink(e)} disabled={loading} className="text-red-400 hover:text-red-300 text-[0.65rem] px-2 py-1 rounded hover:bg-red-500/10 cursor-pointer border-none transition-colors disabled:opacity-50">
-                  <i className="fas fa-unlink mr-0.5"></i>Unlink
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleMakePrimary(e)}
+                    disabled={loading || !!switching}
+                    title={`Use ${e} as your new primary sign-in email`}
+                    className="text-cyan-400 hover:text-cyan-300 text-[0.65rem] px-2 py-1 rounded hover:bg-cyan-500/10 cursor-pointer border-none transition-colors disabled:opacity-50"
+                  >
+                    {switching === e ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-arrow-right mr-0.5"></i>Make Primary</>}
+                  </button>
+                  <button onClick={() => handleUnlink(e)} disabled={loading || !!switching} className="text-red-400 hover:text-red-300 text-[0.65rem] px-2 py-1 rounded hover:bg-red-500/10 cursor-pointer border-none transition-colors disabled:opacity-50">
+                    <i className="fas fa-unlink mr-0.5"></i>Unlink
+                  </button>
+                </div>
               )}
             </div>
           ))}
@@ -105,6 +155,17 @@ export default function AccountLinkingSection({ email, linkedEmails, onRefresh }
           {loading ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-link mr-1"></i>Link</>}
         </button>
       </div>
+      <label className="flex items-center gap-2 mt-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={setAsPrimary}
+          onChange={e => setSetAsPrimary(e.target.checked)}
+          className="accent-qsis"
+        />
+        <span className="text-[0.72rem] text-dark-text2">
+          Make this my new <strong>primary email</strong> (you will sign out and sign back in with it)
+        </span>
+      </label>
       {error && <p className="text-[0.7rem] text-red-400 mt-1.5"><i className="fas fa-exclamation-circle mr-1"></i>{error}</p>}
       {success && <p className="text-[0.7rem] text-green-400 mt-1.5"><i className="fas fa-check-circle mr-1"></i>{success}</p>}
     </div>
