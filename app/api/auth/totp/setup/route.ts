@@ -1,39 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { getTotpForEmail, saveTotpSetup, totpUrl } from '@/lib/totp';
 
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.totp);
   if (!rl.success) return rl.response!;
   try {
-    const email = await getUserEmail(req);
-    if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const primaryEmail = await getUserEmail(req);
+    if (!primaryEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const body = await req.json().catch(() => ({}));
+    const target = (body?.email ? String(body.email).toLowerCase().trim() : '') || primaryEmail;
 
     const { prisma } = await import('@/lib/prisma');
-    const { TOTP, Secret } = await import('otpauth');
-
-    const profile = await prisma.profile.findUnique({ where: { userId: email } });
+    const profile = await prisma.profile.findUnique({ where: { userId: primaryEmail } });
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
-    const existingTOTP = new TOTP({ issuer: 'IIUC-ARMS', label: email, algorithm: 'SHA1', digits: 6, period: 30 });
-
-    let secret: InstanceType<typeof Secret>;
-    if (profile.totpSecret && profile.totpEnabled) {
-      return NextResponse.json({ error: 'TOTP already enabled. Disable it first.' }, { status: 400 });
-    } else if (profile.totpSecret) {
-      secret = Secret.fromBase32(profile.totpSecret);
-    } else {
-      secret = new Secret({ size: 20 });
+    // The target must be the session primary account or one of its linked emails.
+    const linked: string[] = (() => { try { return JSON.parse(profile?.linkedEmails as string || '[]'); } catch { return []; } })();
+    const allowed = new Set([primaryEmail, ...linked.map((l) => l.toLowerCase())]);
+    if (!allowed.has(target)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    existingTOTP.secret = secret;
+    const { Secret } = await import('otpauth');
 
-    await prisma.profile.update({
-      where: { userId: email },
-      data: { totpSecret: secret.base32 },
-    });
+    const existing = await getTotpForEmail(target);
+    if (existing?.enabled) {
+      return NextResponse.json({ error: 'TOTP already enabled. Disable it first.' }, { status: 400 });
+    }
 
-    const otpauthURL = existingTOTP.toString();
+    const secret = existing?.secret ? Secret.fromBase32(existing.secret) : new Secret({ size: 20 });
+    await saveTotpSetup(target, secret.base32);
+
+    const otpauthURL = totpUrl(secret.base32, target);
 
     let qrCodeDataUrl = '';
     try {
@@ -46,7 +47,8 @@ export async function POST(req: NextRequest) {
       otpauthURL,
       qrCode: qrCodeDataUrl,
     });
-  } catch {
+  } catch (err: any) {
+    console.error('[totp/setup] error:', err?.message || err);
     return NextResponse.json({ error: 'TOTP setup failed' }, { status: 500 });
   }
 }

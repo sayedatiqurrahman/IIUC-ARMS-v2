@@ -452,3 +452,18 @@ model StudioCertificate {
   @@index([certificateId])
   @@index([universityId])
 }
+
+// Per-email two-factor (authenticator) configuration. Keyed by email so a
+// LINKED (secondary) account can have its own separate TOTP secret, enforced
+// when the user signs in with that email.
+model TotpAccount {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  secret    String
+  enabled   Boolean  @default(false)
+  methods   String   @default("[\"email\"]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}

@@ -32,6 +32,7 @@ interface LoginFormProps {
   turnstileReady: boolean;
   onForgotPassword: () => void;
   onSwitchToSignup: () => void;
+  linkedHint?: string;
   banReason?: string | null;
   bannedBy?: string | null;
 }
@@ -48,6 +49,7 @@ export default function LoginForm({
   onEmailLogin, onGoogleLogin, onMagicLink, onTotpVerify,
   onClose, turnstileContainerId, turnstileReady,
   onForgotPassword, onSwitchToSignup,
+  linkedHint,
   banReason, bannedBy,
 }: LoginFormProps) {
   if (totpStep) {
@@ -330,6 +332,12 @@ export default function LoginForm({
                 required
               />
             </div>
+
+            {linkedHint && (
+              <div className="mb-3 mt-1 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[0.8rem]">
+                <i className="fas fa-link mr-2"></i>This email is connected to an existing account. Sign in with Magic Link or your password.
+              </div>
+            )}
 
             {loginMode === 'password' && (
               <div className="mb-4">

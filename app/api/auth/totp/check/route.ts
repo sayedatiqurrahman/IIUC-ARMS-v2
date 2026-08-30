@@ -1,18 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
+import { getTotpForEmail } from '@/lib/totp';
 
 export async function GET(req: NextRequest) {
   try {
-    const email = await getUserEmail(req);
-    if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const primaryEmail = await getUserEmail(req);
+
+    // Raw email from the Firebase ID token (when provided) — the email the user
+    // is ACTUALLY signing in with. This may be a linked (secondary) email that
+    // has its own authenticator app.
+    let rawEmail: string | null = null;
+    const authHeader = req.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const { adminAuth } = await import('@/lib/firebase-admin');
+        const decoded = await adminAuth.verifyIdToken(authHeader.slice(7));
+        if (decoded.email) rawEmail = decoded.email.toLowerCase();
+      } catch {
+        // Invalid token — remaining checks fall back to session/primary.
+      }
+    }
 
     const method = req.nextUrl.searchParams.get('method') || 'email';
+    const requested = req.nextUrl.searchParams.get('email')?.toLowerCase().trim() || null;
 
-    const { prisma } = await import('@/lib/prisma');
-    const profile = await prisma.profile.findUnique({ where: { userId: email } });
+    // Dashboard per-account view: a requested email is honoured only when it is
+    // the session primary account or one of its linked emails.
+    let requestedTarget: string | null = null;
+    if (requested && primaryEmail && requested !== primaryEmail) {
+      const { prisma } = await import('@/lib/prisma');
+      const profile = await prisma.profile.findUnique({ where: { userId: primaryEmail } });
+      const linked: string[] = (() => { try { return JSON.parse(profile?.linkedEmails as string || '[]'); } catch { return []; } })();
+      if (linked.some((l) => l.toLowerCase() === requested)) requestedTarget = requested;
+    } else if (requested && requested === primaryEmail) {
+      requestedTarget = primaryEmail;
+    }
 
-    const totpEnabled = profile?.totpEnabled || false;
-    const totpMethods = (() => { try { return JSON.parse(profile?.totpMethods as string || '["email"]'); } catch { return ['email']; } })();
+    // Per-account TOTP: if the signing-in (or requested) email has its own
+    // authenticator config, use it; otherwise fall back to the primary.
+    let targetEmail = requestedTarget || rawEmail || primaryEmail || '';
+    let config = targetEmail ? await getTotpForEmail(targetEmail) : null;
+    if (!config && primaryEmail && primaryEmail !== targetEmail) {
+      targetEmail = primaryEmail;
+      config = await getTotpForEmail(primaryEmail);
+    }
+
+    const totpEnabled = !!config?.enabled;
+    const totpMethods = config?.methods || ['email'];
 
     let totpRequired = totpEnabled;
     if (totpEnabled && method) {
@@ -23,7 +57,8 @@ export async function GET(req: NextRequest) {
       totpEnabled,
       totpRequired,
       totpMethods,
-      totpSetupRequired: !!(profile?.totpSecret && !profile?.totpEnabled),
+      targetEmail: targetEmail || null,
+      totpSetupRequired: !!(config?.secret && !config?.enabled),
     });
   } catch (err: any) {
     console.error('[totp/check] error:', err?.message || err);

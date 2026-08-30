@@ -20,6 +20,7 @@ export default function MagicLinkPage() {
   const [totpCode, setTotpCode] = useState('');
   const [totpLoading, setTotpLoading] = useState(false);
   const [pendingCreds, setPendingCreds] = useState<{ idToken: string; email: string; name: string; image: string } | null>(null);
+  const [totpTarget, setTotpTarget] = useState('');
   const [needEmail, setNeedEmail] = useState(false);
   const [reEntry, setReEntry] = useState('');
   const [linkExpiredEmail, setLinkExpiredEmail] = useState('');
@@ -54,6 +55,7 @@ export default function MagicLinkPage() {
 
         if (totpData.totpRequired && totpData.totpEnabled) {
           setPendingCreds({ idToken, email, name, image });
+          setTotpTarget(totpData.targetEmail || email);
           setTotpRequired(true);
           setStep(-1);
           clearTimeout(timeout);
@@ -104,7 +106,7 @@ export default function MagicLinkPage() {
       const res = await fetch('/api/auth/totp/verify', {
         method: 'POST',
         headers: { Authorization: `Bearer ${pendingCreds.idToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: totpCode }),
+        body: JSON.stringify({ code: totpCode, email: totpTarget || pendingCreds.email }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -159,19 +161,35 @@ export default function MagicLinkPage() {
       window.localStorage.removeItem('emailForSignIn');
       const { linkCurrentUserWithGoogle } = await import('@/lib/firebase');
       await linkCurrentUserWithGoogle();
-      setStep(2);
       const idToken = await result.user.getIdToken();
+
+      const email = result.user.email || reEntry.trim();
+      const name = result.user.displayName || email.split('@')[0];
+      const image = result.user.photoURL || '';
+
+      const totpRes = await fetch('/api/auth/totp/check?method=magiclink', {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const totpData = await totpRes.json();
+      if (totpData.totpRequired && totpData.totpEnabled) {
+        setPendingCreds({ idToken, email, name, image });
+        setTotpTarget(totpData.targetEmail || email);
+        setTotpRequired(true);
+        setStep(-1);
+        return;
+      }
+
+      setStep(2);
       await fetch('/api/auth/firebase-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken, expiresIn: 3600 }),
       });
-      const email = result.user.email || reEntry.trim();
       const authResult = await signIn('credentials', {
         idToken,
         email,
-        name: result.user.displayName || email.split('@')[0],
-        image: result.user.photoURL || '',
+        name,
+        image,
         redirect: false,
       });
       if (authResult?.ok) {

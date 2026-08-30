@@ -28,12 +28,14 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
   const [totpStep, setTotpStep] = useState(false);
   const [totpAvailable, setTotpAvailable] = useState(false);
   const [totpCode, setTotpCode] = useState('');
+  const [totpTargetEmail, setTotpTargetEmail] = useState('');
   const [pendingCredentials, setPendingCredentials] = useState<{ idToken: string; email: string } | null>(null);
   const [magicLink2faSent, setMagicLink2faSent] = useState(false);
   const [banReason, setBanReason] = useState<string | null>(null);
   const [bannedBy, setBannedBy] = useState<string | null>(null);
   const [linkExisting, setLinkExisting] = useState<{ email: string; sent: boolean } | null>(null);
   const [linkPassword, setLinkPassword] = useState('');
+  const [linkedEmailHint, setLinkedEmailHint] = useState('');
   const turnstileContainerId = 'login-turnstile-container';
   const { renderWidget, getToken, reset } = useTurnstile();
   const isDev = process.env.NODE_ENV === 'development';
@@ -53,13 +55,31 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       setEmail(''); setPassword(''); setError(''); setSuccess('');
       setShowForgotPassword(false); setForgotPasswordEmail(''); setForgotPasswordSent(false);
       setTurnstileReady(false); setLoginMode('password'); setMagicLinkSent(false);
-      setTotpStep(false); setTotpAvailable(false); setTotpCode('');
+      setTotpStep(false); setTotpAvailable(false); setTotpCode(''); setTotpTargetEmail('');
       setPendingCredentials(null); setMagicLink2faSent(false);
       setBanReason(null); setBannedBy(null);
       setLinkExisting(null); setLinkPassword('');
+      setLinkedEmailHint('');
       try { window.localStorage.removeItem('pendingGoogleLink'); } catch {}
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const e = email.trim().toLowerCase();
+    if (!e || !e.includes('@') || e.endsWith('@ugrad.iiuc.ac.bd') || e.endsWith('@iiuc.ac.bd')) {
+      setLinkedEmailHint('');
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/auth/check-linked?email=${encodeURIComponent(e)}`);
+        const data = await res.json();
+        setLinkedEmailHint(data.linked ? e : '');
+      } catch { setLinkedEmailHint(''); }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [email, isOpen]);
 
   if (!isOpen) return null;
 
@@ -140,6 +160,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         const totpData = await totpRes.json();
 
         setPendingCredentials({ idToken, email });
+        setTotpTargetEmail(totpData.targetEmail || email);
         setTotpAvailable(totpRes.ok && !!totpData.totpEnabled);
         setTotpStep(true);
         setLoading(false);
@@ -165,6 +186,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
 
     if (totpData.totpRequired && totpData.totpEnabled) {
       setPendingCredentials({ idToken, email: fbUser.email || '' });
+      setTotpTargetEmail(totpData.targetEmail || fbUser.email || '');
       setTotpAvailable(true); setTotpStep(true); setLoading(false);
       return;
     }
@@ -279,6 +301,16 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
     } finally { setLoading(false); }
   };
 
+  const handleSwitchToSignup = () => {
+    if (linkedEmailHint) {
+      setError('This email is already connected to an existing account. Sign in with Magic Link or your password instead.');
+      return;
+    }
+    setIsSignUp(true);
+    setError('');
+    setSuccess('');
+  };
+
   const isUniversityEmail = (e: string) => e.endsWith('@ugrad.iiuc.ac.bd') || e.endsWith('@iiuc.ac.bd');
 
   const handleMagicLink = async (e: React.FormEvent) => {
@@ -310,7 +342,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       const res = await fetch('/api/auth/totp/verify', {
         method: 'POST',
         headers: { Authorization: `Bearer ${pendingCredentials?.idToken}` },
-        body: JSON.stringify({ code: totpCode }),
+        body: JSON.stringify({ code: totpCode, email: totpTargetEmail || pendingCredentials?.email }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Invalid code'); setLoading(false); return; }
@@ -456,7 +488,8 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       turnstileContainerId={turnstileContainerId}
       turnstileReady={turnstileReady}
       onForgotPassword={() => { setShowForgotPassword(true); setForgotPasswordEmail(email); setError(''); setSuccess(''); }}
-      onSwitchToSignup={() => { setIsSignUp(true); setError(''); setSuccess(''); }}
+      onSwitchToSignup={handleSwitchToSignup}
+      linkedHint={linkedEmailHint}
       banReason={banReason}
       bannedBy={bannedBy}
     />

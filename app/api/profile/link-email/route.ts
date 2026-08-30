@@ -33,7 +33,19 @@ export async function POST(req: NextRequest) {
     // userId or as one of their linked emails)
     const existing = await prisma.profile.findUnique({ where: { userId: normalizedEmail } });
     if (existing) {
-      return NextResponse.json({ error: 'This email is already associated with another account' }, { status: 400 });
+      // A leftover PLACEHOLDER row (pending/rejected/banned — e.g. auto-created
+      // by the account owner's own Google sign-in before they linked the
+      // address, or a previously-deleted application) must NOT block linking.
+      // Remove it so the address can be freshly linked and re-unlinked freely.
+      const inert = existing.accountStatus === 'pending' || existing.accountStatus === 'rejected' || !!existing.isBanned;
+      if (!inert) {
+        return NextResponse.json({ error: 'This email is already associated with another account' }, { status: 400 });
+      }
+      try {
+        await prisma.profile.delete({ where: { userId: existing.userId } });
+        const { invalidateStatusCache } = await import('@/lib/auth-options');
+        invalidateStatusCache(existing.userId);
+      } catch {}
     }
     if (await isLinkedElsewhere(normalizedEmail, email)) {
       return NextResponse.json({ error: 'This email is already associated with another account' }, { status: 400 });
@@ -91,13 +103,50 @@ export async function DELETE(req: NextRequest) {
 
     const profile = await prisma.profile.findUnique({ where: { userId: email } });
     const currentLinked: string[] = (() => { try { return JSON.parse(profile?.linkedEmails as string || '[]'); } catch { return []; } })();
-    const updated = currentLinked.filter(e => e.toLowerCase() !== unlinkEmail.toLowerCase());
+    const normalizedEmail = unlinkEmail.toLowerCase().trim();
+
+    if (!currentLinked.some(e => e.toLowerCase() === normalizedEmail)) {
+      return NextResponse.json({ error: 'Email is not linked' }, { status: 400 });
+    }
+    const updated = currentLinked.filter(e => e.toLowerCase() !== normalizedEmail);
 
     await prisma.profile.update({
       where: { userId: email },
       data: { linkedEmails: JSON.stringify(updated) },
     });
-    invalidateLinkedEmail(unlinkEmail);
+    invalidateLinkedEmail(normalizedEmail);
+
+    // Unlinking must ALSO remove the address from Firebase, so a re-link later
+    // starts clean (no stale identity reporting "already in use").
+    try {
+      const { getAdminAuth } = await import('@/lib/firebase-admin');
+      const auth = getAdminAuth();
+      if (auth) {
+        try {
+          const record = await auth.getUserByEmail(normalizedEmail);
+          await auth.deleteUser(record.uid);
+        } catch (firebaseErr: any) {
+          const code = firebaseErr?.code || firebaseErr?.errorInfo?.code || '';
+          if (code !== 'auth/user-not-found') {
+            console.error('[unlink] Firebase identity deletion failed:', firebaseErr?.message || firebaseErr);
+          }
+        }
+      }
+    } catch {}
+
+    // Free the address fully: drop any leftover placeholder profile row for it
+    // (e.g. auto-created by the owner's own earlier sign-in attempt) so being
+    // unlinked never shows "This email is already associated with another
+    // account" when the same address is linked again.
+    try {
+      const leftover = await prisma.profile.findUnique({ where: { userId: normalizedEmail } });
+      const inert = leftover && (leftover.accountStatus === 'pending' || leftover.accountStatus === 'rejected' || leftover.isBanned);
+      if (leftover && inert) {
+        await prisma.profile.delete({ where: { userId: normalizedEmail } });
+        const { invalidateStatusCache } = await import('@/lib/auth-options');
+        invalidateStatusCache(normalizedEmail);
+      }
+    } catch {}
 
     return NextResponse.json({ success: true, linkedEmails: updated });
   } catch (err: any) {

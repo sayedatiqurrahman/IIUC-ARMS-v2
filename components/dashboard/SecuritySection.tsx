@@ -38,6 +38,9 @@ interface SecuritySectionProps {
   handleTotpVerify: () => void;
   handleTotpDisable: () => void;
   handleTotpMethodsSave: (methods: string[]) => void;
+  totpTarget: string;
+  onTotpTargetChange: (email: string) => void;
+  totpAccounts: string[];
 }
 
 export default function SecuritySection({
@@ -45,6 +48,7 @@ export default function SecuritySection({
   totpMsg, totpErrMsg, totpDisableMode, totpDisableCode, totpMethods, totpMethodsLoading,
   setTotpCode, setTotpDisableCode, setTotpSetupMode, setTotpDisableMode, setTotpErrMsg,
   setTotpMethods, handleTotpSetup, handleTotpVerify, handleTotpDisable, handleTotpMethodsSave,
+  totpTarget, onTotpTargetChange, totpAccounts,
 }: SecuritySectionProps) {
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [passwordMode, setPasswordMode] = useState<'none' | 'set' | 'change'>('none');
@@ -224,6 +228,26 @@ export default function SecuritySection({
             {totpEnabled ? 'ON' : 'OFF'}
           </span>
         </div>
+
+        {totpAccounts.length > 1 && (
+          <div className="mb-3">
+            <label className="block text-[0.72rem] font-medium text-dark-text2 mb-1.5">
+              <i className="fas fa-at mr-1"></i>Protect account
+            </label>
+            <select
+              value={totpTarget}
+              onChange={(e) => onTotpTargetChange(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors cursor-pointer"
+            >
+              {totpAccounts.map((acc) => (
+                <option key={acc} value={acc}>{acc}</option>
+              ))}
+            </select>
+            <p className="text-[0.68rem] text-dark-text2 mt-1">
+              Each linked email can have its own authenticator app, applied when you sign in with that email.
+            </p>
+          </div>
+        )}
 
         {totpMsg && (
           <div className="mb-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-[0.8rem]">

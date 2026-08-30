@@ -343,6 +343,18 @@ async function main() {
   await safeExec(`CREATE INDEX IF NOT EXISTS "StudioCertificate_certificateId_idx" ON "StudioCertificate"("certificateId")`, 'StudioCertificate.certificateId idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "StudioCertificate_universityId_idx" ON "StudioCertificate"("universityId")`, 'StudioCertificate.universityId idx');
 
+  // ── TotpAccount table (per-email authenticator config, incl. linked emails) ──
+  await safeExec(`CREATE TABLE IF NOT EXISTS "TotpAccount" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "email" TEXT NOT NULL UNIQUE,
+    "secret" TEXT NOT NULL,
+    "enabled" INTEGER NOT NULL DEFAULT 0,
+    "methods" TEXT NOT NULL DEFAULT '["email"]',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'TotpAccount');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "TotpAccount_email_idx" ON "TotpAccount"("email")`, 'TotpAccount.email idx');
+
   const count = await prisma.profile.count();
   console.log(`\nTotal profiles: ${count}`);
 

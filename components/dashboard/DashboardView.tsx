@@ -128,6 +128,7 @@ export default function DashboardView() {
   const [totpDisableCode, setTotpDisableCode] = useState('');
   const [totpMethods, setTotpMethods] = useState<string[]>(['email']);
   const [totpMethodsLoading, setTotpMethodsLoading] = useState(false);
+  const [totpTarget, setTotpTarget] = useState('');
 
   useEffect(() => { loadProfile(); }, []);
 
@@ -142,11 +143,26 @@ export default function DashboardView() {
   useEffect(() => {
     const user = (session as any)?.user;
     if (!user?.email) return;
-    fetch('/api/auth/totp/check')
+    if (!totpTarget) {
+      const def = profile.email || user.email || '';
+      if (def) setTotpTarget(def);
+      return;
+    }
+    fetch(`/api/auth/totp/check?email=${encodeURIComponent(totpTarget)}`)
       .then(r => r.json())
-      .then(d => { if (d.totpEnabled) setTotpEnabled(true); if (d.totpMethods) setTotpMethods(d.totpMethods); })
+      .then(d => {
+        setTotpEnabled(!!d.totpEnabled);
+        if (d.totpMethods) setTotpMethods(d.totpMethods);
+      })
       .catch(() => {});
-  }, [session]);
+  }, [session, profile.email, totpTarget]);
+
+  const handleTotpAccountChange = (t: string) => {
+    setTotpTarget(t);
+    setTotpSetupMode(false); setTotpDisableMode(false);
+    setTotpQR(''); setTotpSecret(''); setTotpCode(''); setTotpDisableCode('');
+    setTotpErrMsg(''); setTotpMsg(''); setTotpEnabled(false);
+  };
 
   useEffect(() => {
     const email = profile.email || (session as any)?.user?.email || '';
@@ -310,7 +326,11 @@ export default function DashboardView() {
   const handleTotpSetup = async () => {
     setTotpErrMsg(''); setTotpMsg(''); setTotpLoading(true);
     try {
-      const res = await fetch('/api/auth/totp/setup', { method: 'POST' });
+      const res = await fetch('/api/auth/totp/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: totpTarget }),
+      });
       const data = await res.json();
       if (!res.ok) { setTotpErrMsg(data.error || 'Failed to start setup'); setTotpLoading(false); return; }
       setTotpQR(data.qrCode);
@@ -327,7 +347,7 @@ export default function DashboardView() {
       const res = await fetch('/api/auth/totp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: totpCode }),
+        body: JSON.stringify({ code: totpCode, email: totpTarget }),
       });
       const data = await res.json();
       if (!res.ok) { setTotpErrMsg(data.error || 'Invalid code'); setTotpLoading(false); return; }
@@ -346,7 +366,7 @@ export default function DashboardView() {
       const res = await fetch('/api/auth/totp/disable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: totpDisableCode }),
+        body: JSON.stringify({ code: totpDisableCode, email: totpTarget }),
       });
       const data = await res.json();
       if (!res.ok) { setTotpErrMsg(data.error || 'Invalid code'); setTotpLoading(false); return; }
@@ -364,7 +384,7 @@ export default function DashboardView() {
       const res = await fetch('/api/auth/totp/methods', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ methods }),
+        body: JSON.stringify({ methods, email: totpTarget }),
       });
       const data = await res.json();
       if (res.ok && data.totpMethods) {
@@ -603,6 +623,9 @@ export default function DashboardView() {
             setTotpErrMsg={setTotpErrMsg} setTotpMethods={setTotpMethods}
             handleTotpSetup={handleTotpSetup} handleTotpVerify={handleTotpVerify}
             handleTotpDisable={handleTotpDisable} handleTotpMethodsSave={handleTotpMethodsSave}
+            totpTarget={totpTarget}
+            onTotpTargetChange={handleTotpAccountChange}
+            totpAccounts={[profile.email || email, ...((profile as any).linkedEmails || [])].filter((e: string) => e)}
           />
           </div>
         );

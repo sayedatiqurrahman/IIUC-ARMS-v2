@@ -1,6 +1,7 @@
 import GitHubProvider from 'next-auth/providers/github';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import type { NextAuthOptions } from 'next-auth';
+import { isIiucEmail } from '@/lib/linked-accounts';
 
 const IIUC_STUDENT_REGEX = /^[^@]+@ugrad\.iiuc\.ac\.bd$/i;
 const IIUC_TEACHER_REGEX = /^[^@]+@iiuc\.ac\.bd$/i;
@@ -118,17 +119,19 @@ export const authOptions: NextAuthOptions = {
         if (decoded) {
           let email = (decoded.email || credentials.email || '').toLowerCase();
           if (!email) { console.log('[Auth] authorize: no email from token'); return null; }
+          // A linked (secondary) email ALWAYS belongs to its primary account.
+          // Resolve it before any other check so a leftover/stale profile row
+          // for the secondary address can never detach the login from the
+          // original account.
+          if (!isIiucEmail(email)) {
+            const { resolveSignInEmail } = await import('@/lib/linked-accounts');
+            const resolved = (await resolveSignInEmail(email) || '').toLowerCase();
+            if (resolved && resolved !== email) email = resolved;
+          }
           // A deleted blocklisted email can never sign in.
           const { isDeletedEmail } = await import('@/lib/deleted-emails');
           if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
           let allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
-          // A linked (personal) email signs into the primary account
-          if (!allowed) {
-            const { resolveSignInEmail } = await import('@/lib/linked-accounts');
-            email = (await resolveSignInEmail(email) || '').toLowerCase();
-            if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) linked email', email); return null; }
-            allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
-          }
           console.log('[Auth] authorize: email =', email, 'allowed =', allowed);
 
           if (!allowed) {
@@ -163,15 +166,14 @@ export const authOptions: NextAuthOptions = {
           const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
           let email = (credentials.email || payload.email || '').toLowerCase();
           if (!email) return null;
+          if (!isIiucEmail(email)) {
+            const { resolveSignInEmail } = await import('@/lib/linked-accounts');
+            const resolved = (await resolveSignInEmail(email) || '').toLowerCase();
+            if (resolved && resolved !== email) email = resolved;
+          }
           const { isDeletedEmail } = await import('@/lib/deleted-emails');
           if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
           let allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
-          if (!allowed) {
-            const { resolveSignInEmail } = await import('@/lib/linked-accounts');
-            email = (await resolveSignInEmail(email) || '').toLowerCase();
-            if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) linked email', email); return null; }
-            allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
-          }
           if (!allowed) return null;
           if (payload.email_verified === false) return null;
           try {
