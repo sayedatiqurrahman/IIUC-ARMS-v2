@@ -12,6 +12,7 @@ export interface UserRecord {
   githubAvatar?: string;
   image?: string;
   universityId?: string;
+  whatsapp?: string;
   semester?: string;
   section?: string;
   lastSignIn?: string;

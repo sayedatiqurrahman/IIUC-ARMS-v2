@@ -16,9 +16,16 @@ export async function POST(req: NextRequest) {
     const email = (body.email || '').toLowerCase().trim();
     const name = (body.name || '').trim();
     const id = (body.id || '').trim();
+    const contact = (body.contact || '').trim();
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'A valid email is required' }, { status: 400 });
+    }
+
+    // Optional WhatsApp/Telegram number with country code, e.g. +8801XXXXXXXXX,
+    // so the manager approving the request can actually reach the user.
+    if (contact && !/^\+?[0-9][0-9\s\-]{6,20}$/.test(contact)) {
+      return NextResponse.json({ error: 'Enter your WhatsApp/Telegram number with country code, e.g. +8801XXXXXXXXX' }, { status: 400 });
     }
 
     const { isIiucEmail, resolveLinkedEmail, ensureFirebaseIdentity } = await import('@/lib/linked-accounts');
@@ -62,15 +69,15 @@ export async function POST(req: NextRequest) {
     const displayName = name || email.split('@')[0];
     await prisma.profile.upsert({
       where: { userId: email },
-      update: { email, name: displayName, universityId: id, accountStatus: 'pending', role: 'user' },
-      create: { userId: email, email, name: displayName, universityId: id, accountStatus: 'pending', role: roleForEmail(email) },
+      update: { email, name: displayName, universityId: id, whatsapp: contact || null, accountStatus: 'pending', role: 'user' },
+      create: { userId: email, email, name: displayName, universityId: id, whatsapp: contact || null, accountStatus: 'pending', role: roleForEmail(email) },
     });
 
     const { invalidateStatusCache } = await import('@/lib/auth-options');
     invalidateStatusCache(email);
 
     const { notifyAdminsPendingAccount } = await import('@/lib/telegram/notifications');
-    await notifyAdminsPendingAccount(email, displayName, id);
+    await notifyAdminsPendingAccount(email, displayName, id, contact);
 
     return NextResponse.json({
       success: true,

@@ -246,6 +246,7 @@ export default function UserRow({
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
             {u.name && <InfoField label="Full Name" value={u.name} />}
             {u.universityId && <InfoField label="University ID" value={u.universityId} />}
+            {u.whatsapp && <InfoField label="WhatsApp / Telegram" value={u.whatsapp} />}
             {u.semester && <InfoField label="Semester" value={u.semester} />}
             {u.department && <InfoField label="Department" value={u.department} />}
             {u.batch && <InfoField label="Batch" value={u.batch} />}

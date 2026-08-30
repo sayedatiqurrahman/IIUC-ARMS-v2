@@ -209,7 +209,7 @@ export default function UsersTab({
       {userSubTab === 'pending' && (
         <div className="bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-3 mb-4 text-[0.72rem] text-yellow-300">
           <i className="fas fa-clock mr-1"></i>
-          Non-university accounts that haven't been approved yet — most requested access by submitting their student ID. Verify the ID, then <span className="font-semibold">Approve</span> to let them log in, or <span className="font-semibold">Reject</span> if it doesn&apos;t check out. Assigning a role (Student, Teacher, etc.) also activates them.
+          Non-university accounts that haven't been approved yet — most requested access by submitting their student ID (and, optionally, a WhatsApp/Telegram number). Verify the ID, then <span className="font-semibold">Approve</span> to let them log in, or <span className="font-semibold">Reject</span> if it doesn&apos;t check out. Assigning a role (Student, Teacher, etc.) also activates them.
         </div>
       )}
 

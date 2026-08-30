@@ -18,6 +18,7 @@ export default function AccessGate({ email: initialEmail = '', status, onClose, 
   const [gateEmail, setGateEmail] = useState(initialEmail);
   const [name, setName] = useState('');
   const [id, setId] = useState('');
+  const [contact, setContact] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [savedId, setSavedId] = useState('');
@@ -37,12 +38,17 @@ export default function AccessGate({ email: initialEmail = '', status, onClose, 
       setError('Please enter a valid email address.');
       return;
     }
+    const trimmedContact = contact.trim();
+    if (trimmedContact && !/^\+?[0-9][0-9\s\-]{6,20}$/.test(trimmedContact)) {
+      setError('Enter your WhatsApp/Telegram number with country code, e.g. +8801XXXXXXXXX.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch('/api/auth/request-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: gateEmail, name: name.trim(), id: trimmedId }),
+        body: JSON.stringify({ email: gateEmail, name: name.trim(), id: trimmedId, contact: trimmedContact }),
       });
       const data = await res.json();
       if (data.success) {
@@ -116,6 +122,13 @@ export default function AccessGate({ email: initialEmail = '', status, onClose, 
                 value={id}
                 onChange={e => setId(e.target.value)}
                 placeholder="Student / University ID (e.g. C211086)"
+                className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
+              />
+              <input
+                type="text"
+                value={contact}
+                onChange={e => setContact(e.target.value)}
+                placeholder="WhatsApp / Telegram number with country code (e.g. +8801XXXXXXXXX)"
                 className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
               />
             </div>

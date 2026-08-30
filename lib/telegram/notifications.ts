@@ -346,7 +346,7 @@ export async function getConnectedUsersCount(): Promise<number> {
 
 // ─── Pending Account Admin Notification ───────────────────────────
 
-export async function notifyAdminsPendingAccount(email: string, name?: string, universityId?: string): Promise<void> {
+export async function notifyAdminsPendingAccount(email: string, name?: string, universityId?: string, contact?: string): Promise<void> {
   try {
     const { prisma } = await import('@/lib/prisma');
 
@@ -389,6 +389,7 @@ export async function notifyAdminsPendingAccount(email: string, name?: string, u
       `<b>Email:</b> ${email}`,
       `<b>Name:</b> ${displayName}`,
       ...(universityId ? [`<b>Student ID:</b> ${universityId}`] : []),
+      ...(contact ? [`<b>WhatsApp/Telegram:</b> ${contact}`] : []),
       ``,
       `A non-university account requested approval with their ID. Verify it, then approve or reject them.`,
       ``,
