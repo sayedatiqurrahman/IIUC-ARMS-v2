@@ -21,6 +21,9 @@ export async function POST(req: NextRequest) {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'A valid email is required' }, { status: 400 });
     }
+    if (!name) {
+      return NextResponse.json({ error: 'Your full name as it appears on your university certificate is required' }, { status: 400 });
+    }
 
     // Optional WhatsApp/Telegram number with country code, e.g. +8801XXXXXXXXX,
     // so the manager approving the request can actually reach the user.
@@ -66,7 +69,7 @@ export async function POST(req: NextRequest) {
     await ensureFirebaseIdentity(email);
 
     const { roleForEmail } = await import('@/lib/roles');
-    const displayName = name || email.split('@')[0];
+    const displayName = name;
     await prisma.profile.upsert({
       where: { userId: email },
       update: { email, name: displayName, universityId: id, whatsapp: contact || null, accountStatus: 'pending', role: 'user' },
