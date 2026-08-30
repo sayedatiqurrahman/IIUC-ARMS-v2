@@ -171,10 +171,21 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         const result = await signInWithEmail(email, password);
         user = result.user;
 
+        // Non-university (personal-email) accounts approved by an admin, AND
+        // linked (secondary) email identities, do NOT need Firebase email
+        // verification — admin approval / the primary account is sufficient.
+        // Only university emails (verified via their institutional email) and
+        // still-pending accounts are gated by email verification.
         if (!user.emailVerified) {
-          setError('YOUR_EMAIL_IS_NOT_VERIFIED');
-          setLoading(false);
-          return;
+          const isUni = isUniversityEmail(email);
+          const acc = isUni ? null : await queryAccountStatus(email);
+          const approvedExternal = acc?.status === 'active';
+          const linkedAccount = !!acc?.linked;
+          if (!approvedExternal && !linkedAccount) {
+            setError('YOUR_EMAIL_IS_NOT_VERIFIED');
+            setLoading(false);
+            return;
+          }
         }
 
         const idToken = await user.getIdToken();

@@ -122,7 +122,7 @@ export default function SupportPage() {
   const canSubmit = form.name.trim() && form.gender && form.issue.trim() && !submitting;
 
   return (
-    <div className="max-w-lg mx-auto">
+    <div className="max-w-5xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-dark-text flex items-center gap-2">
           <i className="fas fa-headset text-qsis"></i>
@@ -140,7 +140,9 @@ export default function SupportPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="lg:grid lg:grid-cols-3 lg:gap-8 lg:items-start">
+
+      <form onSubmit={handleSubmit} className="space-y-4 lg:col-span-2">
         {/* Gender */}
         <div>
           <label className="block text-sm font-medium text-dark-text mb-2">Gender *</label>
@@ -290,7 +292,7 @@ export default function SupportPage() {
       </form>
 
       {/* Quick links */}
-      <div className="mt-8 p-4 rounded-xl bg-dark-bg3 border border-dark-border">
+      <div className="mt-8 lg:mt-0 p-4 rounded-xl bg-dark-bg3 border border-dark-border lg:sticky lg:top-24">
         <p className="text-xs font-semibold text-dark-text2 mb-3 uppercase tracking-wider">Quick Links</p>
         <div className="space-y-2">
           <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener noreferrer"
@@ -317,6 +319,7 @@ export default function SupportPage() {
             WhatsApp Community
           </a>
         </div>
+      </div>
       </div>
     </div>
   );

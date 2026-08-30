@@ -20,8 +20,12 @@ export function isIiucEmail(email: string): boolean {
 export async function resolveLinkedEmail(email: string): Promise<string | null> {
   const lower = (email || '').toLowerCase().trim();
   if (!lower) return null;
+  // Only positive lookups are cached. Negative results are NOT cached: an email
+  // that had no link a moment ago may have been linked since (admin "Link
+  // Email" / dashboard linking), and caching null made the login gate wrongly
+  // treat freshly-linked accounts as non-linked for up to 60s.
   const cached = linkCache.get(lower);
-  if (cached && Date.now() - cached.ts < LINK_CACHE_TTL) return cached.primary;
+  if (cached && cached.primary && Date.now() - cached.ts < LINK_CACHE_TTL) return cached.primary;
 
   let primary: string | null = null;
   try {
@@ -36,7 +40,7 @@ export async function resolveLinkedEmail(email: string): Promise<string | null> 
       if (arr.some(e => (e || '').toLowerCase() === lower)) { primary = p.userId; break; }
     }
   } catch {}
-  linkCache.set(lower, { primary, ts: Date.now() });
+  if (primary) linkCache.set(lower, { primary, ts: Date.now() });
   return primary;
 }
 
