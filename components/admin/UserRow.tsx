@@ -65,6 +65,7 @@ interface UserRowProps {
   handleDeleteUser?: (email: string) => void;
   handleSendToPending?: (email: string) => void;
   handleEmail?: (u: UserRecord) => void;
+  handleLinkEmail?: (u: UserRecord) => void;
 }
 
 export default function UserRow({
@@ -86,6 +87,7 @@ export default function UserRow({
   handleDeleteUser,
   handleSendToPending,
   handleEmail,
+  handleLinkEmail,
 }: UserRowProps) {
   const isSelf = u.email === email;
   const uRole = u.role || 'user';
@@ -199,6 +201,13 @@ export default function UserRow({
             className="px-2 sm:px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-cyan-500/20 border border-cyan-500/20 disabled:opacity-50"
             title="Open email composer: themed message asking for their university ID and suggesting university-email login">
             {actionLoading === u.email + 'email' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-envelope mr-0.5"></i>Email</>}
+          </button>
+        )}
+        {isAdmin && !isSelf && !isOwnerUser && handleLinkEmail && (
+          <button onClick={() => handleLinkEmail(u)} disabled={actionLoading === u.email + 'link'}
+            className="px-2 sm:px-2.5 py-1 rounded-lg bg-teal-500/10 text-teal-400 text-[0.65rem] sm:text-[0.68rem] font-semibold cursor-pointer hover:bg-teal-500/20 border border-teal-500/20 disabled:opacity-50"
+            title="Link a personal email to this profile (e.g. when the user's university email no longer works)">
+            {actionLoading === u.email + 'link' ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-link mr-0.5"></i>Link Email</>}
           </button>
         )}
         {isPendingRow && u.accountStatus === 'pending' && handleApprove && (

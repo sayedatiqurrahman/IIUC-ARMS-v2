@@ -119,6 +119,11 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
   const [createUserSuccess, setCreateUserSuccess] = useState('');
   const [emailTarget, setEmailTarget] = useState<UserRecord | null>(null);
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [linkUser, setLinkUser] = useState<UserRecord | null>(null);
+  const [linkEmail, setLinkEmail] = useState('');
+  const [linkSubmitting, setLinkSubmitting] = useState(false);
+  const [linkError, setLinkError] = useState('');
+  const [linkMsg, setLinkMsg] = useState('');
 
   const email = session?.user?.email || profile.email || '';
   const effectiveRole = config.getEffectiveRole(email, profile.role);
@@ -284,6 +289,44 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
     await handleSetRole(newAdminEmail.trim(), 'admin');
     setNewAdminEmail('');
     setShowAddAdmin(false);
+  };
+
+  const handleLinkEmail = (u: UserRecord) => {
+    setLinkUser(u);
+    setLinkEmail('');
+    setLinkError('');
+    setLinkMsg('');
+  };
+
+  const handleConfirmLink = async () => {
+    if (!linkUser || !linkEmail.trim()) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(linkEmail.trim())) {
+      setLinkError('Please enter a valid email address.');
+      return;
+    }
+    setLinkSubmitting(true);
+    setLinkError('');
+    setLinkMsg('');
+    try {
+      const res = await fetch('/api/admin/link-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: linkUser.email, linkEmail: linkEmail.trim().toLowerCase() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLinkMsg(`Linked ${linkEmail.trim().toLowerCase()} to ${linkUser.email}. A password-set email ${data.resetLinkSent ? 'was sent to that inbox' : 'could not be sent (mailer unavailable)'}.`);
+        showToast(data.resetLinkSent ? `Linked ${linkEmail.trim().toLowerCase()} and sent a login email` : `Linked ${linkEmail.trim().toLowerCase()}`, 'success');
+        refreshUsers();
+        setTimeout(() => { setLinkUser(null); setLinkMsg(''); }, 4000);
+      } else {
+        setLinkError(data.error || 'Failed to link email');
+      }
+    } catch {
+      setLinkError('Action failed. Try again.');
+    } finally {
+      setLinkSubmitting(false);
+    }
   };
 
   const handleToggleCR = async (targetEmail: string, currentCR: boolean) => {
@@ -838,6 +881,7 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           handleDeleteUser={handleDeleteUser}
           handleSendToPending={handleSendToPending}
           handleEmail={setEmailTarget}
+          handleLinkEmail={handleLinkEmail}
           handleBulkEmail={() => setBulkEmailOpen(true)}
           handleApproveAll={handleApproveAll}
           approveAllLoading={approveAllLoading}
@@ -941,6 +985,51 @@ export default function AdminPanelView({ activeTab: activeTabProp, setActiveTab:
           senderTelegram={profile.telegramId}
           onClose={() => setBulkEmailOpen(false)}
         />
+      )}
+
+      {linkUser && (
+        <div className="modal active">
+          <div className="modal-content">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
+              <h2 className="text-base font-semibold"><i className="fas fa-link"></i> Link Email to Profile</h2>
+              <button className="text-dark-text2 cursor-pointer bg-transparent border-none hover:text-dark-text" onClick={() => { setLinkUser(null); setLinkMsg(''); }}><i className="fas fa-times"></i></button>
+            </div>
+            <div className="p-5">
+              <p className="text-[0.8rem] text-dark-text2 mb-4">
+                Linking a personal email to <span className="text-dark-text font-semibold">{linkUser.name || linkUser.email}</span> ({linkUser.email})
+                lets <span className="text-dark-text">{linkUser.name || 'this user'}</span> sign in with that email too (e.g. when the university email no longer works).
+              </p>
+              <p className="text-[0.72rem] text-amber-400 mb-3"><i className="fas fa-shield-alt mr-1"></i>Only do this after confirming the email belongs to them.</p>
+              <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">Personal email to link</label>
+              <input
+                type="email"
+                value={linkEmail}
+                onChange={e => { setLinkEmail(e.target.value); setLinkError(''); setLinkMsg(''); }}
+                placeholder="theirpersonal@gmail.com"
+                autoFocus
+                className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors mb-1"
+              />
+              <p className="text-[0.68rem] text-dark-text3 mb-3">University emails cannot be linked. A set-password email is sent to this inbox so they can log in.</p>
+              {linkError && <p className="text-[0.75rem] text-red-400 mb-2"><i className="fas fa-exclamation-circle mr-1"></i>{linkError}</p>}
+              {linkMsg && <p className="text-[0.75rem] text-green-400 mb-2"><i className="fas fa-check-circle mr-1"></i>{linkMsg}</p>}
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  onClick={() => { setLinkUser(null); setLinkMsg(''); }}
+                  className="px-4 py-2 rounded-xl border border-dark-border bg-transparent text-dark-text2 text-[0.82rem] font-semibold cursor-pointer hover:text-dark-text transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmLink}
+                  disabled={linkSubmitting || !linkEmail.trim()}
+                  className="px-4 py-2 rounded-xl bg-qsis text-white text-[0.82rem] font-semibold cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {linkSubmitting ? <><i className="fas fa-spinner fa-spin mr-1"></i>Linking...</> : <><i className="fas fa-link mr-1"></i>Link Email</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

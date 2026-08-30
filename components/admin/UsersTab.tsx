@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { config } from '@/lib/config';
 import { getDepartmentOptions } from '@/lib/utils';
 import CustomSelect from '@/components/CustomSelect';
@@ -54,6 +54,7 @@ interface UsersTabProps {
   handleSendToPending: (email: string) => void;
   handleEmail?: (u: UserRecord) => void;
   handleBulkEmail?: () => void;
+  handleLinkEmail?: (u: UserRecord) => void;
   handleApproveAll: () => void;
   approveAllLoading: boolean;
   loadUsers: (role?: string, search?: string, pageToken?: string, append?: boolean, domain?: string, page?: number) => void;
@@ -111,8 +112,26 @@ export default function UsersTab({
   setCreateUserSuccess,
   handleEmail,
   handleBulkEmail,
+  handleLinkEmail,
 }: UsersTabProps) {
   const totalPages = Math.ceil(totalUsers / PER_PAGE);
+
+  // Local, instantly-typed search input; the parent query (which triggers the
+  // server fetch) is only updated after a short pause — typing no longer fires
+  // a request on every keystroke.
+  const [searchInput, setSearchInput] = useState(searchQuery);
+
+  useEffect(() => {
+    setSearchInput(searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (searchInput === searchQuery) return;
+    const t = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput, searchQuery, setSearchQuery]);
 
   // Safety net: never surface university / owner / rejected accounts in the
   // pending queue, regardless of what the API returns. Pending = non-university
@@ -255,8 +274,8 @@ export default function UsersTab({
           )}
           <input
             type="text"
-            value={searchQuery}
-            onChange={e => { setSearchQuery(e.target.value); goToPage(1); }}
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
             placeholder="Search by name or email..."
             className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-dark-text text-[0.78rem] w-full sm:w-60"
           />
@@ -337,6 +356,7 @@ export default function UsersTab({
             handleDeleteUser={handleDeleteUser}
             handleSendToPending={handleSendToPending}
             handleEmail={handleEmail}
+            handleLinkEmail={handleLinkEmail}
           />
         ))}
       </div>
