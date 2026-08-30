@@ -1,14 +1,8 @@
 'use client';
 
-const botCommands = [
-  { cmd: '/start', desc: 'Welcome message & main menu' },
-  { cmd: '/upload', desc: 'Upload a course file to GitHub (dept > sem > course > category)' },
-  { cmd: '/help', desc: 'List all available commands' },
-  { cmd: '/connect', desc: 'Link your IIUC-ARMS account (interactive)' },
-  { cmd: '/courses', desc: 'List all courses (dept > sem > courses)' },
-  { cmd: '/search notes', desc: 'Search files by name' },
-  { cmd: '/stats', desc: 'View site statistics' },
-];
+import { BOT_COMMANDS } from '@/lib/telegram/commands';
+
+const botCommands = BOT_COMMANDS.map(c => ({ cmd: `/${c.command}`, desc: c.description }));
 
 export default function BotCommands() {
   return (

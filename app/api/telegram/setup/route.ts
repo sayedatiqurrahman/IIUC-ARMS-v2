@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { registerBotCommands } from '@/lib/telegram/commands';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const API = `https://api.telegram.org/bot${TOKEN}`;
@@ -40,9 +41,14 @@ export async function GET(req: NextRequest) {
     const botRes = await fetch(`${API}/getMe`);
     const botData = await botRes.json();
 
+    // Register the command menu (setMyCommands) so /upload and friends show up
+    // in the Telegram UI above the input field.
+    const commands = await registerBotCommands();
+
     return NextResponse.json({
       webhook: data,
       bot: botData,
+      commands,
       webhookUrl,
       secretConfigured: Boolean(process.env.TELEGRAM_BOT_WEBHOOK_SECRET),
       secretSource: process.env.TELEGRAM_BOT_WEBHOOK_SECRET ? 'TELEGRAM_BOT_WEBHOOK_SECRET' : 'TELEGRAM_BOT_TOKEN (fallback)',

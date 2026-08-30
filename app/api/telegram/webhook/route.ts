@@ -38,6 +38,7 @@ import { isBlockedChat, updateBlocklist } from '@/lib/telegram/block';
 import { commitFilesToBranch } from '@/lib/github-commit';
 import { matchCourseFolder, normalizeCourseCode } from '@/lib/store/helpers';
 import { validateRepoPath } from '@/lib/repo-path';
+import { registerBotCommands } from '@/lib/telegram/commands';
 
 const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
 const GITHUB_API = 'https://api.github.com';
@@ -896,6 +897,19 @@ async function processConnectEmail(chatId: number, email: string, telegramUserna
 // are rejected before any handler runs.
 const WEBHOOK_SECRET = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || process.env.TELEGRAM_BOT_TOKEN || '';
 
+// Keep the bot's command menu in sync automatically (once per 12h per server
+// instance) so /upload and the trimmed commands always show in Telegram.
+let botCommandsSyncedAt = 0;
+async function maybeSyncBotCommands() {
+  const now = Date.now();
+  if (now - botCommandsSyncedAt < 12 * 60 * 60 * 1000) return;
+  botCommandsSyncedAt = now;
+  try {
+    const res = await registerBotCommands();
+    if (!res.ok) console.warn('[TG] setMyCommands failed:', res.description);
+  } catch {}
+}
+
 export async function POST(req: NextRequest) {
   const headerToken = req.headers.get('x-telegram-bot-api-secret-token');
   if (!WEBHOOK_SECRET || headerToken !== WEBHOOK_SECRET) {
@@ -907,6 +921,8 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+
+  await maybeSyncBotCommands();
 
   try {
     const body = await req.json();
