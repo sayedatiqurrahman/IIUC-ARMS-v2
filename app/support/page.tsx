@@ -30,6 +30,35 @@ const issueOptions: CustomSelectOption[] = ISSUE_TYPES.map(t => ({
   label: t,
 }));
 
+const COUNTRY_CODES = [
+  { code: '+880', label: 'Bangladesh' },
+  { code: '+91', label: 'India' },
+  { code: '+92', label: 'Pakistan' },
+  { code: '+977', label: 'Nepal' },
+  { code: '+94', label: 'Sri Lanka' },
+  { code: '+95', label: 'Myanmar' },
+  { code: '+60', label: 'Malaysia' },
+  { code: '+65', label: 'Singapore' },
+  { code: '+971', label: 'UAE' },
+  { code: '+974', label: 'Qatar' },
+  { code: '+966', label: 'Saudi Arabia' },
+  { code: '+973', label: 'Bahrain' },
+  { code: '+968', label: 'Oman' },
+  { code: '+993', label: 'Turkmenistan' },
+  { code: '+965', label: 'Kuwait' },
+  { code: '+44', label: 'United Kingdom' },
+  { code: '+1', label: 'USA / Canada' },
+];
+
+// Combine the selected country code with the typed local number. A number the
+// user already typed WITH its own "+..." code is left untouched.
+function buildWhatsappNumber(code: string, raw: string): string {
+  const trimmed = (raw || '').trim().replace(/\s+/g, '');
+  if (!trimmed) return '';
+  if (trimmed.startsWith('+')) return trimmed;
+  return `${code}${trimmed.replace(/^0+/, '')}`;
+}
+
 export default function SupportPage() {
   const [form, setForm] = useState({
     name: '',
@@ -39,6 +68,7 @@ export default function SupportPage() {
     issueType: '',
     issue: '',
     whatsapp: '',
+    whatsappCode: '+880',
     telegram: '',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -69,7 +99,7 @@ export default function SupportPage() {
           department: form.department || undefined,
           gender: form.gender,
           issue: fullIssue,
-          whatsapp: form.whatsapp.trim() || undefined,
+          whatsapp: buildWhatsappNumber(form.whatsappCode, form.whatsapp) || undefined,
           telegram: form.telegram.trim() || undefined,
         }),
       });
@@ -78,7 +108,7 @@ export default function SupportPage() {
 
       if (data.success) {
         setResult({ ok: true, message: `Your request has been sent to ${data.groupName}. A team member will respond shortly.` });
-        setForm({ name: '', universityId: '', department: '', gender: '', issueType: '', issue: '', whatsapp: '', telegram: '' });
+        setForm({ name: '', universityId: '', department: '', gender: '', issueType: '', issue: '', whatsapp: '', whatsappCode: '+880', telegram: '' });
       } else {
         setResult({ ok: false, message: data.error || 'Failed to submit' });
       }
@@ -207,17 +237,30 @@ export default function SupportPage() {
         </div>
 
         {/* Contact */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-dark-text mb-1.5">WhatsApp</label>
-            <input
-              type="tel"
-              value={form.whatsapp}
-              onChange={e => update('whatsapp', e.target.value)}
-              placeholder="+880 1XXXXXXXXX"
-              className="w-full px-4 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-sm placeholder:text-dark-text2/50 focus:outline-none focus:border-qsis transition"
-            />
-            <p className="text-[0.6rem] text-dark-text2/60 mt-1">Include country code (e.g. +880)</p>
+            <div className="flex gap-3">
+              <select
+                value={form.whatsappCode}
+                onChange={e => update('whatsappCode', e.target.value)}
+                className="shrink-0 px-3 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-sm focus:outline-none focus:border-qsis transition"
+              >
+                {COUNTRY_CODES.map(c => (
+                  <option key={c.code} value={c.code}>{c.label} {c.code}</option>
+                ))}
+              </select>
+              <input
+                type="tel"
+                value={form.whatsapp}
+                onChange={e => update('whatsapp', e.target.value)}
+                placeholder={form.whatsappCode === '+880' ? 'e.g. 1XXXXXXXXX' : 'Your phone number'}
+                className="flex-1 w-full px-4 py-2.5 rounded-xl bg-dark-bg3 border border-dark-border text-dark-text text-sm placeholder:text-dark-text2/50 focus:outline-none focus:border-qsis transition"
+              />
+            </div>
+            <p className="text-[0.6rem] text-dark-text2/60 mt-1">
+              Bangladesh (+880) is selected by default. The country code is added automatically — type only your local number (e.g. 1XXXXXXXXX).
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-dark-text mb-1.5">Telegram</label>

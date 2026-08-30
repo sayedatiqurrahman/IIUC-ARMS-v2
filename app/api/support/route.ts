@@ -15,7 +15,12 @@ function telegramLink(input: string): string {
 function whatsappLink(input: string): string {
   let clean = input.replace(/[^\d+]/g, '').trim();
   if (clean.startsWith('00')) clean = '+' + clean.slice(2);
-  if (!clean.startsWith('+')) clean = '+' + clean;
+  if (!clean.startsWith('+')) {
+    // Bare local number without a country code: assume Bangladesh (+880).
+    clean = clean.replace(/^0+/, '');
+    if (/^1\d{9}$/.test(clean)) clean = '+880' + clean;
+    else clean = '+' + clean;
+  }
   return `https://wa.me/${clean.slice(1)}`;
 }
 
