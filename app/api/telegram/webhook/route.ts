@@ -905,7 +905,12 @@ async function maybeSyncBotCommands() {
   if (now - botCommandsSyncedAt < 12 * 60 * 60 * 1000) return;
   botCommandsSyncedAt = now;
   try {
-    const res = await registerBotCommands();
+    const res = await Promise.race([
+      registerBotCommands(),
+      new Promise<{ ok: boolean; description?: string }>((resolve) =>
+        setTimeout(() => resolve({ ok: false, description: 'setMyCommands timed out' }), 8000)
+      ),
+    ]);
     if (!res.ok) console.warn('[TG] setMyCommands failed:', res.description);
   } catch {}
 }

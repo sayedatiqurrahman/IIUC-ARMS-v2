@@ -28,6 +28,7 @@ export default function WebhookSetup() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
   const [reRegistering, setReRegistering] = useState(false);
+  const [reRegistered, setReRegistered] = useState<{ ok: boolean; msg: string } | null>(null);
 
   useEffect(() => {
     fetchInfo();
@@ -63,13 +64,25 @@ export default function WebhookSetup() {
 
   async function reRegisterWebhook() {
     setReRegistering(true);
+    setReRegistered(null);
     try {
       const res = await fetch(`/api/telegram/setup?key=${info?.webhookSecretRaw || ''}`);
       const data = await res.json();
-      if (data.ok || data.success) {
+      if (data.webhook?.ok || data.webhook?.result?.ok) {
+        const url = data.webhookInfo?.url || '?';
+        const cmds = data.commands?.ok ? 'command menu OK' : 'command menu FAILED';
+        const pending = data.webhookInfo?.pendingUpdateCount ?? 0;
+        setReRegistered({ ok: true, msg: `Webhook → ${url} · ${cmds} · ${pending} pending update(s)` });
         fetchInfo();
+      } else if (data.success) {
+        setReRegistered({ ok: true, msg: `Done: ${Array.isArray(data.commands) ? data.commands.join(', ') : 'webhook re-registered'}, ${data.bot?.result?.username ? '@' + data.bot.result.username : ''}` });
+        fetchInfo();
+      } else {
+        setReRegistered({ ok: false, msg: data.error || 'Failed to re-register' });
       }
-    } catch {}
+    } catch {
+      setReRegistered({ ok: false, msg: 'Network error' });
+    }
     setReRegistering(false);
   }
 
@@ -157,6 +170,12 @@ export default function WebhookSetup() {
           {reRegistering ? <i className="fas fa-spinner fa-spin mr-1"></i> : <i className="fas fa-redo mr-1"></i>}
           Re-register Webhook
         </button>
+
+        {reRegistered && (
+          <div className={`mt-3 text-xs px-3 py-2 rounded-lg ${reRegistered.ok ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+            {reRegistered.msg}
+          </div>
+        )}
       </div>
 
       {/* Setup URLs — copyable */}
