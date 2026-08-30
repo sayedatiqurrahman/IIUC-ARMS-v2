@@ -200,12 +200,50 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         await completeFirebaseSignIn(user, idToken, 'email');
       }
     } catch (err: any) {
-      const msg = err.code === 'auth/email-already-in-use' ? 'An account with this email already exists. Please sign in instead.'
-        : err.code === 'auth/user-not-found' ? 'No account found with this email. Try signing up instead.'
-        : err.code === 'auth/wrong-password' ? 'Incorrect password'
-        : err.code === 'auth/invalid-email' ? 'Invalid email address'
-        : err.code === 'auth/weak-password' ? 'Password must be at least 6 characters'
-        : err.code === 'auth/too-many-requests' ? 'Too many attempts. Please try again later.'
+      // Firebase never distinguishes "no account" from "wrong password" anymore —
+      // it returns auth/invalid-credential for both. A linked (secondary) email
+      // has no password until the user sets one, so on any credential failure we
+      // check whether this is a linked account and, if so, send a password-set
+      // link automatically so they can finish logging in.
+      const firebaseCode = err?.code || '';
+      const denied = firebaseCode === 'auth/invalid-credential' || firebaseCode === 'auth/wrong-password' || firebaseCode === 'auth/user-not-found' || firebaseCode === 'auth/invalid-email';
+      if (denied) {
+        const raw = email.trim().toLowerCase();
+        const isUni = isUniversityEmail(raw);
+        const acc = isUni ? null : await queryAccountStatus(raw).catch(() => null);
+        if (!isUni && acc?.linked) {
+          try {
+            // Server-side: ensures the Firebase identity exists, then emails a
+            // password-set link to this linked inbox. Robust even if the address
+            // was never turned into a Firebase user.
+            const res = await fetch('/api/auth/link-password-reset', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: raw }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed');
+            setForgotPasswordEmail(raw);
+            setShowForgotPassword(true);
+            setError(''); setSuccess('');
+            setLoading(false);
+            setError(`This is a linked account — set a password to sign in with it. A password-set link was sent to ${raw}. Open it (check spam/junk too), create a password, then sign in.`);
+            reset();
+            return;
+          } catch {
+            setError('This is a linked account but we couldn\'t send a password-set email. Use "Continue with Google" or a Magic Link instead.');
+            reset();
+            return;
+          }
+        }
+      }
+      const msg = firebaseCode === 'auth/email-already-in-use' ? 'An account with this email already exists. Please sign in instead.'
+        : firebaseCode === 'auth/user-not-found' ? 'No account found with this email. Try signing up instead.'
+        : firebaseCode === 'auth/wrong-password' ? 'Incorrect password'
+        : firebaseCode === 'auth/invalid-credential' ? 'Incorrect email or password'
+        : firebaseCode === 'auth/invalid-email' ? 'Invalid email address'
+        : firebaseCode === 'auth/weak-password' ? 'Password must be at least 6 characters'
+        : firebaseCode === 'auth/too-many-requests' ? 'Too many attempts. Please try again later.'
         : 'Something went wrong. If you don\'t have an account, please sign up first.';
       setError(msg);
       reset();
