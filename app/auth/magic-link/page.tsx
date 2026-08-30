@@ -91,6 +91,14 @@ export default function MagicLinkPage() {
           // storage (e.g. the link was opened in a different browser/device).
           setNeedEmail(true);
           setError('');
+        } else if (String(err.message || '').includes('Invalid URL')) {
+          // next-auth returned a relative callback URL (e.g. the account is
+          // still pending approval) and its browser helper crashed building it.
+          // The account just isn't approved (or is blocked) yet — show the
+          // right message instead of the raw JS error.
+          const urlEmail = new URLSearchParams(window.location.search).get('email') || '';
+          setLinkExpiredEmail(urlEmail);
+          setError('Your account exists but it isn\'t approved yet (or access was blocked). Please contact an administrator, or go back and try a different sign-in method.');
         } else {
           setError(err.message || 'Failed to verify link. Please try again.');
         }

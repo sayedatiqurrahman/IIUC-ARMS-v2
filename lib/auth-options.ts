@@ -15,6 +15,16 @@ function isAllowedEmail(email: string): boolean {
   return IIUC_STUDENT_REGEX.test(e) || IIUC_TEACHER_REGEX.test(e) || OWNER_EMAILS.includes(e);
 }
 
+// next-auth's browser signIn() calls `new URL(data.url)` on the returned
+// callback URL, so a RELATIVE path (e.g. "/auth/pending") throws
+// "Failed to construct 'URL': Invalid URL" and the whole login silently fails.
+// Every URL this callback returns must therefore be absolute.
+function absolutePath(path: string): string {
+  const base = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
+  if (!base) return path;
+  return `${base.replace(/\/+$/, '')}${path}`;
+}
+
 async function hasAdminCreatedProfile(email: string): Promise<boolean> {
   try {
     const { prisma } = await import('@/lib/prisma');
@@ -202,31 +212,31 @@ export const authOptions: NextAuthOptions = {
           email = (await resolveSignInEmail(email) || '').toLowerCase();
         }
         console.log('[Auth] signIn callback — email:', email, 'provider:', account?.provider);
-        if (!email) { console.log('[Auth] signIn: no email, rejecting'); return '/auth/error?error=invalid-email'; }
+        if (!email) { console.log('[Auth] signIn: no email, rejecting'); return absolutePath('/auth/error?error=invalid-email'); }
 
         // A deleted blocklisted email can never sign in.
         const { isDeletedEmail } = await import('@/lib/deleted-emails');
-        if (await isDeletedEmail(email)) { console.log('[Auth] signIn: blocklisted (deleted) email', email); return '/auth/error?error=account-deleted'; }
+        if (await isDeletedEmail(email)) { console.log('[Auth] signIn: blocklisted (deleted) email', email); return absolutePath('/auth/error?error=account-deleted'); }
 
         // Allow if it's a standard IIUC email OR if user has an admin-created profile
         const allowed = isAllowedEmail(email) || await hasAdminCreatedProfile(email);
         console.log('[Auth] signIn: allowed =', allowed, 'isAllowed =', isAllowedEmail(email));
         if (!allowed) {
           await ensurePendingProfile(email, user.name || undefined);
-          return '/auth/pending';
+          return absolutePath('/auth/pending');
         }
 
         // Check if user is banned or rejected
         try {
           const { prisma } = await import('@/lib/prisma');
           const existing = await prisma.profile.findUnique({ where: { userId: email } });
-          if (existing?.isBanned) return '/auth/error?error=account-banned';
-          if (existing?.accountStatus === 'rejected') return '/auth/error?error=account-rejected';
+          if (existing?.isBanned) return absolutePath('/auth/error?error=account-banned');
+          if (existing?.accountStatus === 'rejected') return absolutePath('/auth/error?error=account-rejected');
           // For IIUC/owner emails, auto-activate if pending (they are pre-approved)
           if (existing?.accountStatus === 'pending' && isAllowedEmail(email)) {
             await prisma.profile.update({ where: { userId: email }, data: { accountStatus: 'active' } });
           } else if (existing?.accountStatus === 'pending') {
-            return '/auth/pending';
+            return absolutePath('/auth/pending');
           }
         } catch {}
 
@@ -250,7 +260,7 @@ export const authOptions: NextAuthOptions = {
               if (allowedEmail) {
                 user.email = allowedEmail.email;
               } else {
-                return '/auth/error?error=invalid-email';
+                return absolutePath('/auth/error?error=invalid-email');
               }
             }
 
