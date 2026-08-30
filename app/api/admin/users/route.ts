@@ -71,13 +71,14 @@ export async function GET(req: NextRequest) {
         }];
         where.accountStatus = { notIn: ['pending', 'rejected'] };
       } else if (filterDomain === 'external') {
-        // External = active non-university accounts that were given an explicit
-        // role (e.g. a custom club/organization role). Role-less accounts
-        // (still 'user', 'external' or null) belong on the pending list until a
-        // role is chosen, and 'student'/'teacher' accounts have their own tabs.
+        // External = active non-university accounts that were given a role — a
+        // custom club/organization role OR a Student/Teacher role on a personal
+        // email (they still appear in their role tab, and here as external too).
+        // Role-less accounts (still 'user', 'external' or null) belong on the
+        // pending list until a role is chosen; admins/managers have own lists.
         where.email = { not: { endsWith: '.iiuc.ac.bd' } };
         where.accountStatus = 'active';
-        where.role = { notIn: ['user', 'external', 'student', 'teacher', 'admin', 'manager'] };
+        where.role = { notIn: ['user', 'external', 'admin', 'manager'] };
       } else if (filterDomain === 'pending') {
         // Pending = non-university accounts with NO role assigned yet: fresh
         // signups who were blocked at login AND accounts that can already sign
@@ -327,7 +328,7 @@ export async function GET(req: NextRequest) {
         }
         if (filterDomain === 'external') {
           return !u.email?.endsWith('.iiuc.ac.bd') && u.accountStatus === 'active' &&
-            !!u.role && !['user', 'external', 'student', 'teacher', 'admin', 'manager'].includes(u.role);
+            !!u.role && !['user', 'external', 'admin', 'manager'].includes(u.role);
         }
         if (filterDomain === 'pending') {
           return u.accountStatus !== 'rejected' && !u.email?.endsWith('.iiuc.ac.bd') &&
@@ -505,12 +506,19 @@ export async function POST(req: NextRequest) {
       if (targetEmail.toLowerCase() === email.toLowerCase() && newRole !== 'admin') {
         return NextResponse.json({ error: 'Cannot demote yourself' }, { status: 400 });
       }
-      // Assigning a role is an explicit admin action — activate the account so the
-      // user (e.g. a manually-assigned student on a non-@ugrad email) is no longer
-      // treated as a pending external account and shows up under their role tab.
-      await prisma.profile.update({ where: { userId: targetEmail }, data: { role: newRole, accountStatus: 'active' } });
-      invalidateStatusCache(targetEmail);
-      return NextResponse.json({ success: true, message: `Role changed to ${newRole}` });
+      // Assigning a role is an explicit admin action — atomically create/repair the
+      // profile with the role and an ACTIVE status (so a pending external account
+      // stops being pending, shows under its role tab) and lift any deleted-email
+      // blocklist so the user can actually sign in (with Google or their password).
+      const normalizedTarget = targetEmail.toLowerCase();
+      await prisma.profile.upsert({
+        where: { userId: normalizedTarget },
+        create: { userId: normalizedTarget, email: normalizedTarget, role: newRole, accountStatus: 'active' },
+        update: { role: newRole, accountStatus: 'active' },
+      });
+      await removeDeletedEmail(prisma as any, normalizedTarget);
+      invalidateStatusCache(normalizedTarget);
+      return NextResponse.json({ success: true, message: `Role set to ${newRole}` });
     }
 
     // ─── TOGGLE CR ───

@@ -198,3 +198,21 @@ export async function setInitialPassword(email: string, newPassword: string) {
   const { updatePassword } = await import('firebase/auth');
   await updatePassword(user, newPassword);
 }
+
+// When Google sign-in hits `auth/account-exists-with-different-credential`, the
+// error carries the Google OAuth credential and the email of the existing
+// password account. Extract the credential so it can be linked below.
+export function googleCredentialFromError(err: any): any {
+  return GoogleAuthProvider.credentialFromError(err);
+}
+
+// One-time linking: the person proves they own the existing email/password
+// account (by entering its password), then its Google identity is attached.
+// Afterwards "Continue with Google" just works — no repeated credential errors.
+export async function linkGoogleAccountWithPassword(email: string, password: string, pendingCredential: any): Promise<User> {
+  const auth = getFirebaseAuth();
+  const { linkWithCredential } = await import('firebase/auth');
+  const userCred = await signInWithEmailAndPassword(auth, email, password);
+  if (pendingCredential) await linkWithCredential(userCred.user, pendingCredential);
+  return userCred.user;
+}

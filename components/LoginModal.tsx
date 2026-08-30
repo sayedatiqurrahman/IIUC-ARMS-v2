@@ -154,37 +154,66 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
     } finally { setLoading(false); }
   };
 
+  // Shared tail of the Google/password sign-in: TOTP gate, then NextAuth session.
+  const completeFirebaseSignIn = async (fbUser: any, idToken: string) => {
+    const totpRes = await fetch('/api/auth/totp/check?method=google', { headers: { Authorization: `Bearer ${idToken}` } });
+    const totpData = await totpRes.json();
+
+    if (totpData.totpRequired && totpData.totpEnabled) {
+      setPendingCredentials({ idToken, email: fbUser.email || '' });
+      setTotpAvailable(true); setTotpStep(true); setLoading(false);
+      return;
+    }
+
+    const result = await signIn('credentials', { idToken, redirect: false });
+
+    if (result?.error) {
+      const email = fbUser.email || '';
+      if (email.endsWith('@ugrad.iiuc.ac.bd') || email.endsWith('@iiuc.ac.bd')) {
+        setError('Sign-in failed. Your email may not be verified. Please check your inbox and verify your email first.');
+      } else {
+        setError(`Sign-in failed for ${email}. An admin must accept your account first. If you were just given a role, wait a minute and try again.`);
+      }
+    } else if (result?.ok) {
+      onClose();
+    } else {
+      setError('Sign-in failed. Your email may not be allowed. Use your IIUC university email.');
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setError(''); setSuccess(''); setLoading(true);
     try {
       const { idToken, user } = await signInWithGoogle();
-
-      const totpRes = await fetch('/api/auth/totp/check?method=google', { headers: { Authorization: `Bearer ${idToken}` } });
-      const totpData = await totpRes.json();
-
-      if (totpData.totpRequired && totpData.totpEnabled) {
-        setPendingCredentials({ idToken, email: user.email || '' });
-        setTotpAvailable(true); setTotpStep(true); setLoading(false);
-        return;
-      }
-
-      const result = await signIn('credentials', { idToken, redirect: false });
-
-      if (result?.error) {
-        const email = user.email || '';
-        if (email.endsWith('@ugrad.iiuc.ac.bd') || email.endsWith('@iiuc.ac.bd')) {
-          setError('Sign-in failed. Your email may not be verified. Please check your inbox and verify your email first.');
-        } else {
-          setError(`Sign-in failed for ${email}. Only university emails or admin-accepted accounts can sign in.`);
-        }
-      } else if (result?.ok) {
-        onClose();
-        return;
-      } else {
-        setError('Sign-in failed. Your email may not be allowed. Use your IIUC university email.');
-      }
+      await completeFirebaseSignIn(user, idToken);
     } catch (err: any) {
-      if (err.code === 'auth/popup-closed-by-user') setError('Sign-in cancelled — you closed the popup');
+      // A password account already exists for this Google email (e.g. the admin
+      // created it, or a password sign-up happened first). Firebase blocks the
+      // Google popup with this error. One-time fix: ask for that account's
+      // password, link the Google identity to it, and finish the sign-in.
+      if (err.code === 'auth/account-exists-with-different-credential') {
+        const existingEmail = err?.email || email;
+        if (existingEmail) {
+          const password = window.prompt(`An account already uses ${existingEmail} with a password. Enter that password once to link your Google account (after that, "Continue with Google" just works).`, '');
+          if (!password) {
+            setError('Google sign-in cancelled. Sign in with your password instead.');
+            setLoading(false);
+            return;
+          }
+          try {
+            const { googleCredentialFromError, linkGoogleAccountWithPassword } = await import('@/lib/firebase');
+            const linkedUser = await linkGoogleAccountWithPassword(existingEmail, password, googleCredentialFromError(err));
+            const linkedIdToken = await linkedUser.getIdToken();
+            await completeFirebaseSignIn(linkedUser, linkedIdToken);
+          } catch (linkErr: any) {
+            if (linkErr.code === 'auth/wrong-password') setError(`Wrong password for ${existingEmail}. Try again, or reset your password first.`);
+            else if (linkErr.code === 'auth/too-many-requests') setError('Too many attempts. Please try again later.');
+            else setError(`Could not link your Google account (${linkErr.code || 'unknown'}). Try signing in with your password instead.`);
+          }
+        } else {
+          setError('Google sign-in failed. Sign in with your password instead.');
+        }
+      } else if (err.code === 'auth/popup-closed-by-user') setError('Sign-in cancelled — you closed the popup');
       else if (err.code === 'auth/popup-blocked') setError('Popup was blocked by browser. Allow popups for this site and try again.');
       else if (err.code === 'auth/network-request-failed') setError('Network error. Check your connection and try again.');
       else if (err.code === 'auth/unauthorized-domain') setError('This domain is not authorized for Google sign-in. If on localhost, add it in Firebase Console → Authentication → Settings → Authorized domains.');
