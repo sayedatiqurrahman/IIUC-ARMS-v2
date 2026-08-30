@@ -39,9 +39,9 @@ async function hasAdminCreatedProfile(email: string): Promise<boolean> {
 // Authoritative "may this email sign in?" decision used by both authorize and
 // the signIn callback. Returns true when the address is:
 //   - a standard IIUC / owner email, OR
+//   - a linked (secondary) identity of any approved profile, OR
 //   - an admin-approved external account (profile exists with an active status
-//     or an assigned role/privilege), OR
-//   - a linked (secondary) identity whose primary account is itself allowed.
+//     or an assigned role/privilege).
 // This is the single source of truth so a user can never be mis-routed to the
 // approval gate once their account (or an account it resolves to) is approved.
 async function isAccountAllowed(email: string): Promise<boolean> {
@@ -49,6 +49,11 @@ async function isAccountAllowed(email: string): Promise<boolean> {
   if (!e) return false;
   if (isAllowedEmail(e) || isIiucEmail(e)) return true;
   try {
+    // A linked (secondary) identity is itself an allowed account: linking it
+    // from the dashboard is only possible while signed in as an approved user,
+    // so its very presence proves it was deliberately authorized.
+    const { resolveLinkedEmail } = await import('@/lib/linked-accounts');
+    if (await resolveLinkedEmail(e)) return true;
     const { prisma } = await import('@/lib/prisma');
     const profile = await prisma.profile.findUnique({
       where: { userId: e },
