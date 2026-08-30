@@ -193,17 +193,11 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
 
         const idToken = await user.getIdToken();
 
-        const totpRes = await fetch('/api/auth/totp/check?method=email', {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-        const totpData = await totpRes.json();
-
-        setPendingCredentials({ idToken, email });
-        setTotpTargetEmail(totpData.targetEmail || email);
-        setTotpAvailable(totpRes.ok && !!totpData.totpEnabled);
-        setTotpStep(true);
-        setLoading(false);
-        return;
+        // A linked (secondary) email whose account has NO authenticator must not
+        // be pushed through the 2FA screen and a failing magic link. Delegate to
+        // completeFirebaseSignIn: it shows the 2FA step only when TOTP is truly
+        // enabled, otherwise it signs straight into the NextAuth session.
+        await completeFirebaseSignIn(user, idToken, 'email');
       }
     } catch (err: any) {
       const msg = err.code === 'auth/email-already-in-use' ? 'An account with this email already exists. Please sign in instead.'
@@ -218,9 +212,12 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
     } finally { setLoading(false); }
   };
 
-  // Shared tail of the Google/password sign-in: TOTP gate, then NextAuth session.
-  const completeFirebaseSignIn = async (fbUser: any, idToken: string) => {
-    const totpRes = await fetch('/api/auth/totp/check?method=google', { headers: { Authorization: `Bearer ${idToken}` } });
+  // Shared tail of the Google/password/sign-up sign-ins: TOTP gate (only when
+  // truly enabled), then the NextAuth session. `method` mirrors the totp/check
+  // param so only accounts that configured TOTP for that login method ever see
+  // the 2FA screen — a linked email with no authenticator signs in directly.
+  const completeFirebaseSignIn = async (fbUser: any, idToken: string, method = 'google') => {
+    const totpRes = await fetch(`/api/auth/totp/check?method=${method}`, { headers: { Authorization: `Bearer ${idToken}` } });
     const totpData = await totpRes.json();
 
     if (totpData.totpRequired && totpData.totpEnabled) {
@@ -230,7 +227,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       return;
     }
 
-    const result = await signIn('credentials', { idToken, redirect: false });
+    const result = await signIn('credentials', { idToken, email: fbUser.email || undefined, redirect: false });
 
     // The signIn callback may return the gate redirect either in result.url or
     // (next-auth style) packed into result.error. Either way, surface the gate
