@@ -81,15 +81,16 @@ export async function GET(req: NextRequest) {
         where.email = { not: { endsWith: '.iiuc.ac.bd' } };
         where.accountStatus = 'active';
       } else if (filterDomain === 'pending') {
-        // Pending = non-university accounts with NO role assigned yet: fresh
-        // signups who were blocked at login AND accounts that can already sign
-        // in but were never given a role. Assigning any role activates them
-        // (see setRole) and moves them to the matching list.
+        // Pending = accounts waiting to be approved: a non-university account
+        // with a pending-request profile (or a Firebase account with no profile
+        // at all) that hasn't been given a role yet. Approving (action
+        // `approve`) or assigning any role sets accountStatus to 'active',
+        // which automatically removes the account from this list.
         where.email = {
           not: { endsWith: '.iiuc.ac.bd' },
           notIn: config.ownerEmails.map(e => e.toLowerCase()),
         };
-        where.accountStatus = { not: 'rejected' };
+        where.accountStatus = 'pending';
         where.AND = [...(where.AND || []), {
           OR: [{ role: 'user' }, { role: 'external' }, { role: null }],
         }];
@@ -240,7 +241,10 @@ export async function GET(req: NextRequest) {
         createdAt: profile?.createdAt?.toISOString?.() || fu.metadata?.creationTime || null,
         providers: fu.providerData?.map((p: any) => p.providerId) || [],
         customPermissions: profile?.customPermissions || {},
-        accountStatus: profile?.accountStatus || 'active',
+        // A Firebase account with no profile has never been approved — treat it
+        // as pending so it only appears on the Pending list until an admin
+        // approves it or assigns a role (both create an 'active' profile).
+        accountStatus: profile?.accountStatus || 'pending',
         facebook: profile?.facebook || null,
         twitter: profile?.twitter || null,
         linkedin: profile?.linkedin || null,
@@ -333,7 +337,11 @@ export async function GET(req: NextRequest) {
           return !u.email?.endsWith('.iiuc.ac.bd') && u.accountStatus === 'active';
         }
         if (filterDomain === 'pending') {
-          return u.accountStatus !== 'rejected' && !u.email?.endsWith('.iiuc.ac.bd') &&
+          // An account needs approval unless it has a profile marked 'active'
+          // (approve / setRole both do that). Firebase-only accounts get the
+          // default 'pending' below, so they show here — and once approved or
+          // given a role they move out automatically.
+          return u.accountStatus === 'pending' && !u.email?.endsWith('.iiuc.ac.bd') &&
             !config.ownerEmails.includes(u.email?.toLowerCase()) &&
             (!u.role || u.role === 'user' || u.role === 'external');
         }

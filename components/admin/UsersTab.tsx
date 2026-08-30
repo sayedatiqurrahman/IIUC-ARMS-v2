@@ -135,14 +135,15 @@ export default function UsersTab({
     return () => clearTimeout(t);
   }, [searchInput, searchQuery, setSearchQuery]);
 
-  // Safety net: never surface university / owner / rejected accounts in the
-  // pending queue, regardless of what the API returns. Pending = non-university
-  // accounts with no role assigned (null, 'user' or the detected 'external').
+  // Safety net: never surface university / owner / rejected / approved accounts
+  // in the pending queue, regardless of what the API returns. Pending =
+  // non-university accounts still waiting for approval with no role assigned
+  // (null, 'user' or the detected 'external').
   const isPendingTab = userSubTab === 'pending';
   const displayedUsers = useMemo(() => {
     if (!isPendingTab) return users;
     return users.filter(u =>
-      u.accountStatus !== 'rejected' &&
+      u.accountStatus === 'pending' &&
       !/@iiuc\.ac\.bd$/i.test(u.email) &&
       !config.ownerEmails.includes(u.email.toLowerCase()) &&
       (!u.role || u.role === 'user' || u.role === 'external')
