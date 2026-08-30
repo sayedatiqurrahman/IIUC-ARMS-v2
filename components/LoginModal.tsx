@@ -149,7 +149,10 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       const e = email.trim().toLowerCase();
       if (!isUniversityEmail(e)) {
         const status = await queryAccountStatus(e);
-        if (status?.needsApproval) {
+        // Only open the gate when the account genuinely isn't approved and
+        // ISN'T a linked identity. A linked or approved account must never see
+        // this gate — it signs in like any university account.
+        if (status?.needsApproval && status.status !== 'active' && !status.linked) {
           setAccessGate({ email: e, status: status.status || null });
           setLoading(false);
           return;
