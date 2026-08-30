@@ -263,7 +263,14 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       if (email.endsWith('@ugrad.iiuc.ac.bd') || email.endsWith('@iiuc.ac.bd')) {
         setError('Sign-in failed. Your email may not be verified. Please check your inbox and verify your email first.');
       } else {
-        setError(`Sign-in failed for ${email}. An admin must accept your account first. If you were just given a role, wait a minute and try again.`);
+        // A linked (secondary) email is already authorized — never tell the user
+        // an admin must accept it. Show a clear, actionable error instead.
+        const status = await queryAccountStatus(email);
+        if (status?.linked) {
+          setError(`This is a linked account and should sign you in automatically. Please try again — if it keeps failing, sign in with the main account and check the email is still linked.`);
+        } else {
+          setError(`Sign-in failed for ${email}. An admin must accept your account first. If you were just given a role, wait a minute and try again.`);
+        }
       }
     } else if (result?.ok) {
       onClose();

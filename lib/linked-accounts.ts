@@ -50,6 +50,29 @@ export async function resolveSignInEmail(email: string): Promise<string> {
   return primary || email;
 }
 
+/**
+ * Robust check that `email` is a linked (secondary) identity of some profile.
+ * Returns true either when the address appears in another profile's linkedEmails
+ * OR when an ACTIVE linked-mirror profile (profileType:'linked') exists for it.
+ * The mirror is authoritative, so even if the linkedEmails list can't be scanned
+ * (huge DB / cache miss) a genuinely linked email is still recognized.
+ */
+export async function isLinkedIdentity(email: string): Promise<boolean> {
+  const lower = (email || '').toLowerCase().trim();
+  if (!lower) return false;
+  try {
+    if (await resolveLinkedEmail(lower)) return true;
+    const { prisma } = await import('@/lib/prisma');
+    const mirror = await prisma.profile.findUnique({
+      where: { userId: lower },
+      select: { profileType: true, accountStatus: true },
+    });
+    return !!mirror && mirror.profileType === 'linked' && mirror.accountStatus !== 'rejected' && mirror.accountStatus !== 'banned';
+  } catch {
+    return false;
+  }
+}
+
 /** True if `email` is already used as a linked email of a profile other than `excludeUserId`. */
 export async function isLinkedElsewhere(email: string, excludeUserId: string): Promise<boolean> {
   const lower = (email || '').toLowerCase().trim();

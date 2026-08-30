@@ -167,9 +167,15 @@ export const authOptions: NextAuthOptions = {
           // treated as an unapproved standalone address.
           if (!isIiucEmail(email)) {
             const { resolved, allowed } = await resolveAndAllow(email);
-            email = resolved;
-            if (!allowed) {
-              console.log('[Auth] authorize: NOT ALLOWED — redirecting to request-access for', resolved);
+            if (allowed) {
+              email = resolved;
+            } else if (await import('@/lib/linked-accounts').then(m => m.isLinkedIdentity(email))) {
+              // A linked (secondary) identity whose mirror profile is active is
+              // allowed to log in as ITSELF, even if resolution to the primary
+              // failed (stale link list / huge DB / cache miss). Never gate it.
+              console.log('[Auth] authorize: linked identity allowed as itself —', email);
+            } else {
+              console.log('[Auth] authorize: NOT ALLOWED — redirecting to request-access for', email);
               return {
                 id: decoded.sub || email,
                 email,
@@ -195,7 +201,7 @@ export const authOptions: NextAuthOptions = {
           // deliberately allowed. Requiring emailVerified here makes linked
           // logins fail with a 401 even though the account is fully allowed.
           const isLinked = !isIiucEmail(rawSignInEmail) &&
-            !!(await import('@/lib/linked-accounts').then(m => m.resolveLinkedEmail(rawSignInEmail)));
+            !!(await import('@/lib/linked-accounts').then(m => m.isLinkedIdentity(rawSignInEmail)));
           if (decoded.email_verified === false && !isLinked) {
             console.log('[Auth] authorize: email not verified (not a linked identity) —', email);
             return null;
@@ -229,7 +235,7 @@ export const authOptions: NextAuthOptions = {
           }
           const { isDeletedEmail } = await import('@/lib/deleted-emails');
           if (await isDeletedEmail(email)) { console.log('[Auth] authorize: blocklisted (deleted) email', email); return null; }
-          const fallbackLinked = !isIiucEmail(rawSignInEmail) && !!(await import('@/lib/linked-accounts').then(m => m.resolveLinkedEmail(rawSignInEmail)));
+          const fallbackLinked = !isIiucEmail(rawSignInEmail) && !!(await import('@/lib/linked-accounts').then(m => m.isLinkedIdentity(rawSignInEmail)));
           if (payload.email_verified === false && !fallbackLinked) return null;
           try {
             const { prisma } = await import('@/lib/prisma');
@@ -258,6 +264,15 @@ export const authOptions: NextAuthOptions = {
           const r = await resolveAndAllow(email);
           email = r.resolved;
           allowed = r.allowed;
+          if (!allowed && !isIiucEmail(rawEmail)) {
+            // A linked (secondary) identity is allowed as itself via its active
+            // mirror profile, even when primary resolution fails. Never gate it.
+            const { isLinkedIdentity } = await import('@/lib/linked-accounts');
+            if (await isLinkedIdentity(rawEmail)) {
+              email = rawEmail;
+              allowed = true;
+            }
+          }
         }
         console.log('[Auth] signIn callback — email:', email, 'provider:', account?.provider, 'allowed:', allowed);
         if (!email) { console.log('[Auth] signIn: no email, rejecting'); return absolutePath('/auth/error?error=invalid-email'); }
