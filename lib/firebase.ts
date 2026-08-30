@@ -206,13 +206,39 @@ export function googleCredentialFromError(err: any): any {
   return GoogleAuthProvider.credentialFromError(err);
 }
 
-// One-time linking: the person proves they own the existing email/password
-// account (by entering its password), then its Google identity is attached.
-// Afterwards "Continue with Google" just works — no repeated credential errors.
-export async function linkGoogleAccountWithPassword(email: string, password: string, pendingCredential: any): Promise<User> {
+// One-time linking started from "Continue with Google": the pending Google
+// credential + email are stored in localStorage by the login modal. We sign
+// into the EXISTING account with its password, attach the Google identity to
+// it, and clean up — afterwards Google sign-in just works for that email.
+export async function linkGoogleWithStoredCredential(email: string, password: string): Promise<User> {
   const auth = getFirebaseAuth();
-  const { linkWithCredential } = await import('firebase/auth');
+  const raw = typeof window !== 'undefined' ? window.localStorage.getItem('pendingGoogleLink') : null;
+  const pending = raw ? JSON.parse(raw) : null;
   const userCred = await signInWithEmailAndPassword(auth, email, password);
-  if (pendingCredential) await linkWithCredential(userCred.user, pendingCredential);
+  if (pending && (pending.accessToken || pending.idToken)) {
+    const { linkWithCredential } = await import('firebase/auth');
+    await linkWithCredential(userCred.user, GoogleAuthProvider.credential(pending.idToken || null, pending.accessToken || null));
+  }
+  if (typeof window !== 'undefined') window.localStorage.removeItem('pendingGoogleLink');
   return userCred.user;
+}
+
+// Attach a stored pending Google credential to the ALREADY signed-in user. Used
+// by the magic-link page: the one-time link proves ownership of that email,
+// then Google gets connected automatically — so "Continue with Google" works
+// from then on with no password needed.
+export async function linkCurrentUserWithGoogle(): Promise<boolean> {
+  const raw = typeof window !== 'undefined' ? window.localStorage.getItem('pendingGoogleLink') : null;
+  if (!raw) return false;
+  let pending: any = null;
+  try { pending = JSON.parse(raw); } catch { return false; }
+  if (!pending || (!pending.accessToken && !pending.idToken)) return false;
+  const { getAuth, linkWithCredential } = await import('firebase/auth');
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user || !user.email) return false;
+  if (pending.email && user.email.toLowerCase() !== pending.email.toLowerCase()) return false;
+  await linkWithCredential(user, GoogleAuthProvider.credential(pending.idToken || null, pending.accessToken || null));
+  if (typeof window !== 'undefined') window.localStorage.removeItem('pendingGoogleLink');
+  return true;
 }

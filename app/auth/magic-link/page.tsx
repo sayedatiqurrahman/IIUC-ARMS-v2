@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { completeMagicLinkSignIn, isMagicLink } from '@/lib/firebase';
+import { completeMagicLinkSignIn, isMagicLink, sendMagicLink } from '@/lib/firebase';
 import { signIn } from 'next-auth/react';
 
 const STEPS = [
@@ -22,6 +22,8 @@ export default function MagicLinkPage() {
   const [pendingCreds, setPendingCreds] = useState<{ idToken: string; email: string; name: string; image: string } | null>(null);
   const [needEmail, setNeedEmail] = useState(false);
   const [reEntry, setReEntry] = useState('');
+  const [linkExpiredEmail, setLinkExpiredEmail] = useState('');
+  const [resent, setResent] = useState(false);
 
   useEffect(() => {
     if (!isMagicLink()) {
@@ -36,6 +38,11 @@ export default function MagicLinkPage() {
     completeMagicLinkSignIn()
       .then(async ({ idToken, user }) => {
         setStep(1);
+        // If this magic-link sign-in completes a Google-linking step started
+        // from the login modal, attach the pending Google identity to this
+        // account now (proof of ownership = the one-time link).
+        const { linkCurrentUserWithGoogle } = await import('@/lib/firebase');
+        await linkCurrentUserWithGoogle();
         const email = user.email || '';
         const name = user.displayName || email.split('@')[0] || '';
         const image = user.photoURL || '';
@@ -72,7 +79,9 @@ export default function MagicLinkPage() {
       .catch((err: any) => {
         clearTimeout(timeout);
         if (err.code === 'auth/invalid-action-code' || err.code === 'auth/expired-action-code') {
-          setError('This link has expired. Please request a new magic link. Check your spam/junk folder and "All Mail" if the email was missed.');
+          const urlEmail = new URLSearchParams(window.location.search).get('email') || '';
+          setLinkExpiredEmail(urlEmail);
+          setError('This link has expired. Send a new one below. If it ever lands in spam, mark it "Not spam" once so Gmail keeps future links in your inbox.');
         } else if (err.code === 'auth/email-already-in-use') {
           setError('This email is already registered. Please sign in with your password.');
         } else if (err.message?.includes('No email found') || err.code === 'auth/missing-email') {
@@ -148,6 +157,8 @@ export default function MagicLinkPage() {
       const url = window.location.href;
       const result = await signInWithEmailLink(auth, reEntry.trim(), url);
       window.localStorage.removeItem('emailForSignIn');
+      const { linkCurrentUserWithGoogle } = await import('@/lib/firebase');
+      await linkCurrentUserWithGoogle();
       setStep(2);
       const idToken = await result.user.getIdToken();
       await fetch('/api/auth/firebase-session', {
@@ -174,10 +185,44 @@ export default function MagicLinkPage() {
     }
   };
 
+  const handleResendMagicLink = async () => {
+    const target = linkExpiredEmail;
+    if (!target) return;
+    setError('');
+    setResent(false);
+    setStep(1);
+    try {
+      await sendMagicLink(target);
+      setResent(true);
+    } catch {
+      setError('Failed to send a new link. Go back to the login page and request a new magic link.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4">
       <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-8 max-w-md w-full text-center">
-        {error && (
+        {resent && (
+          <>
+            <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
+              <i className="fas fa-envelope text-2xl text-green-500"></i>
+            </div>
+            <h1 className="text-lg font-bold text-dark-text mb-2">New link sent</h1>
+            <p className="text-[0.85rem] text-dark-text2 mb-6">
+              A fresh magic link is on its way to{' '}
+              <strong className="text-dark-text">{linkExpiredEmail}</strong>. Open it within the next few minutes.
+              If it lands in spam/junk, click &quot;Not spam&quot; once in Gmail so future links arrive in your inbox.
+            </p>
+            <a
+              href="/"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white font-semibold text-[0.85rem] no-underline hover:opacity-90 transition-opacity"
+            >
+              <i className="fas fa-arrow-left"></i> Back to Home
+            </a>
+          </>
+        )}
+
+        {error && !resent && (
           <>
             <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
               <i className="fas fa-times-circle text-2xl text-red-500"></i>
@@ -190,6 +235,16 @@ export default function MagicLinkPage() {
             >
               <i className="fas fa-arrow-left"></i> Back to Home
             </a>
+            {linkExpiredEmail && (
+              <div className="mt-4">
+                <button
+                  onClick={handleResendMagicLink}
+                  className="w-full py-2.5 rounded-lg border border-qsis text-qsis text-[0.8rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors"
+                >
+                  <i className="fas fa-redo mr-1"></i> Send a new magic link to {linkExpiredEmail}
+                </button>
+              </div>
+            )}
           </>
         )}
 
@@ -221,7 +276,7 @@ export default function MagicLinkPage() {
           </>
         )}
 
-        {!error && totpRequired && pendingCreds && (
+        {!error && !resent && totpRequired && pendingCreds && (
           <>
             <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
               <i className="fas fa-shield-alt text-2xl text-yellow-500"></i>
@@ -249,7 +304,7 @@ export default function MagicLinkPage() {
           </>
         )}
 
-        {!error && !totpRequired && (
+        {!error && !resent && !totpRequired && (
           <>
             <div className="w-16 h-16 rounded-full bg-qsis/10 flex items-center justify-center mx-auto mb-4">
               <i className="fas fa-spinner fa-spin text-2xl text-qsis"></i>
