@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { completeMagicLinkSignIn, isMagicLink, sendMagicLink } from '@/lib/firebase';
-import { signIn } from 'next-auth/react';
+import { getSession, signIn } from 'next-auth/react';
 
 const STEPS = [
   'Verifying link...',
@@ -26,13 +26,15 @@ export default function MagicLinkPage() {
   const [linkExpiredEmail, setLinkExpiredEmail] = useState('');
   const [resent, setResent] = useState(false);
 
+  let verifyTimeout: ReturnType<typeof setTimeout> | null = null;
+
   useEffect(() => {
     if (!isMagicLink()) {
       setError('Invalid or expired link. Please request a new one.');
       return;
     }
 
-    const timeout = setTimeout(() => {
+    verifyTimeout = setTimeout(() => {
       setError('Verification is taking too long. This may be due to a slow connection or an expired link. Please try again.');
     }, 30000);
 
@@ -58,7 +60,7 @@ export default function MagicLinkPage() {
           setTotpTarget(totpData.targetEmail || email);
           setTotpRequired(true);
           setStep(-1);
-          clearTimeout(timeout);
+          if (verifyTimeout) clearTimeout(verifyTimeout);
           return;
         }
 
@@ -70,16 +72,10 @@ export default function MagicLinkPage() {
           image,
           redirect: false,
         });
-        if (result?.ok) {
-          setStep(3);
-          clearTimeout(timeout);
-          setTimeout(() => router.push('/dashboard'), 1000);
-        } else {
-          setError('Sign-in failed. Please try again.');
-        }
+        await handleSignInResult(result);
       })
       .catch((err: any) => {
-        clearTimeout(timeout);
+        if (verifyTimeout) clearTimeout(verifyTimeout);
         if (err.code === 'auth/invalid-action-code' || err.code === 'auth/expired-action-code') {
           const urlEmail = new URLSearchParams(window.location.search).get('email') || '';
           setLinkExpiredEmail(urlEmail);
@@ -200,15 +196,34 @@ export default function MagicLinkPage() {
         image,
         redirect: false,
       });
-      if (authResult?.ok) {
-        setStep(3);
-        setTimeout(() => router.push('/dashboard'), 1000);
-      } else {
-        setError('Sign-in failed. Please try again.');
-      }
+      await handleSignInResult(authResult);
     } catch (err: any) {
       setError(err.code === 'auth/email-already-in-use' ? 'This email is already registered. Please sign in with your password.' : (err.message || 'Failed to verify link.'));
     }
+  };
+
+  // A signIn() result can be `ok` even when the server did NOT create a session —
+  // e.g. it returned a pending/error redirect instead. Pushing straight to
+  // /dashboard then bounces the user back home silently, so follow the server's
+  // URL instead whenever a real session isn't present.
+  const handleSignInResult = async (result: { ok?: boolean; error?: string | null; url?: string | null }) => {
+    if (result?.error) { setError('Sign-in failed. Please try again.'); return; }
+    const session = await getSession();
+    if (session) {
+      if (verifyTimeout) clearTimeout(verifyTimeout);
+      setStep(3);
+      setTimeout(() => router.push('/dashboard'), 1000);
+      return;
+    }
+    if (result?.url) {
+      try {
+        const target = new URL(result.url, window.location.origin);
+        if (target.pathname.endsWith('/auth/magic-link')) { setError('Something went wrong. Please try again.'); return; }
+        router.push(target.pathname + target.search);
+        return;
+      } catch {}
+    }
+    setError('Something went wrong. Please try again.');
   };
 
   const handleResendMagicLink = async () => {
