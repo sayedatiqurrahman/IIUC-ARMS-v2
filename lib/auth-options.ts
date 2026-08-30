@@ -212,6 +212,17 @@ export const authOptions: NextAuthOptions = {
             if (profile?.isBanned) return null;
             if (profile?.accountStatus === 'rejected') return null;
           } catch {}
+          // DB-first: record/refresh this account in our database on every
+          // authenticate, so a Firebase identity not yet in the DB is auto-saved
+          // on first sign-in and the DB stays the source of truth.
+          try {
+            const { persistAuthProfile } = await import('@/lib/auth-persist');
+            await persistAuthProfile({
+              email,
+              name: credentials.name || decoded.name || email.split('@')[0],
+              image: credentials.image || decoded.picture || null,
+            });
+          } catch {}
           return {
             id: decoded.sub || email,
             email,
@@ -241,6 +252,14 @@ export const authOptions: NextAuthOptions = {
             const { prisma } = await import('@/lib/prisma');
             const profile = await prisma.profile.findUnique({ where: { userId: email } });
             if (profile?.isBanned) return null;
+          } catch {}
+          try {
+            const { persistAuthProfile } = await import('@/lib/auth-persist');
+            await persistAuthProfile({
+              email,
+              name: credentials.name || payload.name || email.split('@')[0],
+              image: credentials.image || payload.picture || null,
+            });
           } catch {}
           return {
             id: payload.sub || email,
@@ -352,6 +371,19 @@ export const authOptions: NextAuthOptions = {
             }
           } catch {}
         }
+
+        // DB-first safety net: ensure the authenticated account exists/refreshed
+        // in our database (catches any provider that didn't reach the persist in
+        // authorize). Never changes roles/status — existence + identity only.
+        try {
+          const { persistAuthProfile } = await import('@/lib/auth-persist');
+          await persistAuthProfile({
+            email,
+            name: user.name || email.split('@')[0],
+            image: user.image || null,
+            githubLogin: (profile as any)?.login || undefined,
+          });
+        } catch {}
 
         return true;
       } catch (err) {
