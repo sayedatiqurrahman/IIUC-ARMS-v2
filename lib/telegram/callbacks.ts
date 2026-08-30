@@ -81,5 +81,7 @@ export function parseCallbackData(data: string): { type: string; args: string[] 
   if (data === 'support_accept') return { type: 'support_accept', args: [] };
   if (data === 'support_reject') return { type: 'support_reject', args: [] };
   if (data === 'support_reply') return { type: 'support_reply', args: [] };
+  // File-upload wizard callbacks (up:<step>:<...>)
+  if (parts[0] === 'up') return { type: 'up', args: parts.slice(1) };
   return null;
 }

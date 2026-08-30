@@ -34,14 +34,14 @@ export function buildConnectMessage(): string {
 export function buildWelcomeMessage(): string {
   return (
     `🎓 <b>IIUC-ARMS Bot</b>\n\n` +
-    `Find academic resources for IIUC courses.\n\n` +
+    `Find & share academic resources for IIUC courses.\n\n` +
     `<b>Quick Start:</b>\n` +
+    `• Upload a file → <code>/upload</code>\n` +
     `• Type a course code → <code>QSM-3602</code>\n` +
     `• Browse all → <code>/departments</code>\n` +
     `• Search anything → <code>/search notes</code>\n\n` +
     `<b>Account:</b>\n` +
-    `• <code>/connect</code> — Link your Telegram for notifications\n` +
-    `• <code>/status</code> — Check connection status\n` +
+    `• <code>/connect</code> — Link your Telegram for notifications & uploads\n` +
     `• <code>/help</code> — All commands\n` +
     `• No username? Tap <b>📱 Connect by Phone Number</b> below\n\n` +
     `━━━━━━━━━━━━━━\n` +
@@ -57,10 +57,11 @@ export function buildWelcomeMessage(): string {
 export function buildHelpMessage(): string {
   return (
     `📖 <b>IIUC-ARMS Bot — Commands</b>\n\n` +
+    `<b>📤 Upload:</b>\n` +
+    `<code>/upload</code> — Upload a course file to GitHub\n` +
+    `→ Pick department, semester, course, category, then send the file\n\n` +
     `<b>🔗 Account:</b>\n` +
-    `<code>/connect yourmail@ugrad.iiuc.ac.bd</code> — Link your account\n` +
-    `<code>/status</code> — Check connection status\n` +
-    `<code>/disconnect</code> — Unlink your account\n\n` +
+    `<code>/connect yourmail@ugrad.iiuc.ac.bd</code> — Link your account\n\n` +
     `<b>📚 Course Lookup:</b>\n` +
     `<code>QSM-3602</code> — Type any course code\n` +
     `<code>/code QSM-3602</code> — Same as above\n` +
@@ -68,14 +69,9 @@ export function buildHelpMessage(): string {
     `<b>🔍 Search & Browse:</b>\n` +
     `<code>/search notes</code> — Search files & courses\n` +
     `<code>/departments</code> — List all departments\n` +
-    `<code>/semester 3</code> — Browse semester 3\n` +
     `<code>/courses</code> — List all courses\n` +
-    `<code>/courses qs</code> — Courses in QSIS dept\n` +
-    `<code>/courses qs 3</code> — QSIS 3rd semester\n` +
     `<code>/stats</code> — Site statistics\n\n` +
-    `<b>📢 Admin:</b>\n` +
-    `<code>/broadcast &lt;msg&gt;</code> — Announce to all users\n\n` +
-    `<i>Tap any Open button to view on IIUC-ARMS website.</i>`
+    `<i>Tip: use <code>/upload</code> in a private chat to contribute files. Connected users can upload instantly.</i>`
   );
 }
 

@@ -293,6 +293,14 @@ export default function SupportPage() {
       <div className="mt-8 p-4 rounded-xl bg-dark-bg3 border border-dark-border">
         <p className="text-xs font-semibold text-dark-text2 mb-3 uppercase tracking-wider">Quick Links</p>
         <div className="space-y-2">
+          <a href="https://t.me/iiuc_arms_bot" target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-dark-bg2 transition text-sm text-dark-text2 hover:text-dark-text no-underline">
+            <i className="fab fa-telegram text-emerald-400 w-5 text-center"></i>
+            <span>
+              🤖 IIUC-ARMS Bot — Fastest way to get a reply
+              <span className="block text-xs text-dark-text2/70">Message the bot for instant answers & upload course files</span>
+            </span>
+          </a>
           <a href="https://t.me/iiuc_arms_chat" target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-dark-bg2 transition text-sm text-dark-text2 hover:text-dark-text no-underline">
             <i className="fab fa-telegram text-blue-400 w-5 text-center"></i>

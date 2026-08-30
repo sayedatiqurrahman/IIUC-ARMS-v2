@@ -28,12 +28,16 @@ import {
   esc,
   getDeptName,
   getDeptFullName,
+  resolveGithubToken,
 } from '@/lib/telegram';
 import { config } from '@/lib/config';
-import { getDepartmentFolder } from '@/lib/departments';
+import { getDepartmentFolder, findDepartment, FACULTIES } from '@/lib/departments';
 import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-app';
 import { deleteCourseFolder, findCourseFolderPathInRepo } from '@/lib/course-delete';
 import { isBlockedChat, updateBlocklist } from '@/lib/telegram/block';
+import { commitFilesToBranch } from '@/lib/github-commit';
+import { matchCourseFolder, normalizeCourseCode } from '@/lib/store/helpers';
+import { validateRepoPath } from '@/lib/repo-path';
 
 const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
 const GITHUB_API = 'https://api.github.com';
@@ -111,6 +115,589 @@ async function resolveRequesterChat(userId: string): Promise<number | null> {
     const chatId = (profile as any)?.telegramChatId;
     return chatId ? Number(chatId) : null;
   } catch { return null; }
+}
+
+// ═══ Telegram file-upload wizard ═══════════════════════════════════
+// BotFather-style step flow: department → semester → course (or create new)
+// → category → (Mid/Final → Spring/Autumn + year) → send file → GitHub.
+// Upload state is persisted per-chat in SiteSettings.telegramUploadStates so a
+// server cold start never drops a user mid-flow.
+
+interface UploadFlowState {
+  dept?: string; // canonical department id
+  sem?: string; // semester id, e.g. '3rd-semister'
+  courses?: { code: string; title: string; folder: string }[];
+  courseFolder?: string;
+  courseCode?: string;
+  category?: string; // sheet|notes|questions|syllabus|other
+  term?: 'Mid' | 'Final';
+  season?: 'Spring' | 'Autumn';
+  session?: string; // e.g. 'Spring 2024'
+  stage: string; // dept|sem|course|newcourse|category|term|season|year|file|askid
+  connectedEmail?: string;
+  universityId?: string;
+  ts: number;
+}
+
+const UPLOAD_STATE_TTL = 12 * 60 * 60 * 1000;
+const MAX_BOT_UPLOAD_BYTES = 20 * 1024 * 1024;
+const SAFE_FILE_EXTS = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'webp', 'csv', 'txt', 'rtf', 'odt', 'ods']);
+const SESSION_YEARS = [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
+const TERM_CATEGORIES = new Set(['notes', 'sheet', 'questions']);
+const UPLOAD_CATEGORIES: { key: string; label: string }[] = [
+  { key: 'sheet', label: '📊 Sheets' },
+  { key: 'notes', label: '📝 Notes' },
+  { key: 'questions', label: '📋 Previous Questions' },
+  { key: 'syllabus', label: '📘 Syllabus' },
+  { key: 'other', label: '📁 Other' },
+];
+
+let uploadColumnChecked = false;
+async function ensureUploadColumn() {
+  if (uploadColumnChecked) return;
+  uploadColumnChecked = true;
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const p = prisma as any;
+    const tableInfo = await p.$queryRawUnsafe(`PRAGMA table_info(SiteSettings)`);
+    const cols = new Set((tableInfo as any[]).map((c: any) => c.name));
+    if (!cols.has('telegramUploadStates')) {
+      await p.$executeRawUnsafe(`ALTER TABLE SiteSettings ADD COLUMN telegramUploadStates TEXT`);
+    }
+  } catch {}
+}
+
+async function readUploadStates(): Promise<Record<string, any>> {
+  const map: Record<string, any> = {};
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const p = prisma as any;
+    await ensureUploadColumn();
+    const rows = await p.$queryRawUnsafe(`SELECT telegramUploadStates FROM SiteSettings WHERE id = 'site-settings'`);
+    const raw = (rows as any[])[0]?.telegramUploadStates;
+    if (raw) {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch {}
+  return map;
+}
+
+async function writeUploadStates(map: Record<string, any>) {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const p = prisma as any;
+    await ensureUploadColumn();
+    await p.$executeRawUnsafe(`UPDATE SiteSettings SET telegramUploadStates = ? WHERE id = 'site-settings'`, JSON.stringify(map));
+  } catch {}
+}
+
+async function getUploadState(chatId: number): Promise<UploadFlowState | null> {
+  try {
+    const map = await readUploadStates();
+    const st = map[String(chatId)];
+    if (!st) return null;
+    if (Date.now() - (st.ts || 0) > UPLOAD_STATE_TTL) {
+      delete map[String(chatId)];
+      await writeUploadStates(map);
+      return null;
+    }
+    return st as UploadFlowState;
+  } catch { return null; }
+}
+
+async function setUploadState(chatId: number, state: UploadFlowState | null) {
+  try {
+    const map = await readUploadStates();
+    if (state) {
+      state.ts = Date.now();
+      map[String(chatId)] = state;
+    } else {
+      delete map[String(chatId)];
+    }
+    await writeUploadStates(map);
+  } catch {}
+}
+
+function semLabel(semId: string): string {
+  return config.semesters.find(s => s.id === semId)?.label || semId;
+}
+
+function chunkBy<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+function uploadDeptButtons(): any[][] {
+  const rows: any[][] = [];
+  for (const fac of FACULTIES) {
+    rows.push(...chunkBy(fac.departments.map(d => ({ text: d.shortName, callback_data: `up:dept:${d.id}` })), 4));
+  }
+  rows.push([{ text: '❌ Cancel', callback_data: 'up:cancel' }]);
+  return rows;
+}
+
+function uploadSemButtons(): any[][] {
+  const rows = chunkBy(config.semesters.map(s => ({ text: s.id.replace('-semister', ''), callback_data: `up:sem:${s.id}` })), 4);
+  rows.push([{ text: '❌ Cancel', callback_data: 'up:cancel' }]);
+  return rows;
+}
+
+function uploadCourseButtons(state: UploadFlowState): any[][] {
+  const rows = chunkBy((state.courses || []).map(c => ({ text: c.code, callback_data: `up:pick:${c.code}` })), 2);
+  rows.push([{ text: '➕ Create New Course', callback_data: 'up:newcourse' }]);
+  rows.push([{ text: '❌ Cancel', callback_data: 'up:cancel' }]);
+  return rows;
+}
+
+function uploadCategoryButtons(): any[][] {
+  const rows = chunkBy(UPLOAD_CATEGORIES.map(c => ({ text: c.label, callback_data: `up:cat:${c.key}` })), 2);
+  rows.push([{ text: '❌ Cancel', callback_data: 'up:cancel' }]);
+  return rows;
+}
+
+function uploadTermButtons(): any[][] {
+  return [
+    [{ text: 'Mid', callback_data: 'up:term:Mid' }, { text: 'Final', callback_data: 'up:term:Final' }],
+    [{ text: '❌ Cancel', callback_data: 'up:cancel' }],
+  ];
+}
+
+function uploadSeasonButtons(): any[][] {
+  return [
+    [{ text: '🌱 Spring', callback_data: 'up:season:Spring' }, { text: '🍂 Autumn', callback_data: 'up:season:Autumn' }],
+    [{ text: '❌ Cancel', callback_data: 'up:cancel' }],
+  ];
+}
+
+function uploadYearButtons(season: string): any[][] {
+  const rows = chunkBy(SESSION_YEARS.map(y => ({ text: `${season} ${y}`, callback_data: `up:session:${season}:${y}` })), 4);
+  rows.push([{ text: '❌ Cancel', callback_data: 'up:cancel' }]);
+  return rows;
+}
+
+// Courses already present under uploadPath/{deptFolder}/{semId}/ in the repo.
+// Handles both the new structure (…/COURSE/Mid|Final/cat/file) and the old
+// one (…/cat/COURSE/file).
+function listCoursesForDeptSem(tree: any[], deptFolder: string, semId: string): { code: string; title: string; folder: string }[] {
+  const prefix = `${config.uploadPath}/${deptFolder}/${semId}/`;
+  const map = new Map<string, { code: string; title: string; folder: string }>();
+  for (const item of tree) {
+    const p: string = item.path;
+    if (!p.startsWith(prefix)) continue;
+    const segs = p.slice(prefix.length).split('/');
+    if (!segs[0]) continue;
+    let folderSeg = segs[0];
+    let m = matchCourseFolder(folderSeg);
+    if (!m && segs.length >= 2) {
+      m = matchCourseFolder(segs[1]);
+      if (m) folderSeg = segs[1];
+    }
+    if (!m) continue;
+    map.set(m.code, { code: m.code, title: m.title, folder: folderSeg });
+  }
+  return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+}
+
+// Parse "QSM-3602 - Islamic Studies" (code + optional title)
+function parseNewCourseInput(text: string): { code: string; title: string; folder: string } | null {
+  const t = text.trim();
+  const m = t.match(/^([A-Z]{2,5}\s*[-–—]?\s*\d{3,5}[A-Z]?)\s*[-–—]?\s*(.*)$/i);
+  if (!m) return null;
+  const code = normalizeCourseCode(m[1]);
+  const title = (m[2] || '').trim().replace(/\s+/g, ' ') || code;
+  if (title.length > 60) return null;
+  return { code, title, folder: `${code} - ${title}` };
+}
+
+function sanitizeFileName(name: string): string {
+  const base = name.replace(/[\\/:*?"<>|\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return (base.slice(0, 80) || 'file');
+}
+
+function buildUploadFolderPath(state: UploadFlowState): string {
+  const deptFolder = getDepartmentFolder(state.dept || '');
+  const segs = [config.uploadPath, deptFolder, state.sem || '', state.courseFolder || ''];
+  if (state.term) segs.push(state.term);
+  segs.push(state.category ? CATEGORY_META[state.category]?.folder || 'Other' : '');
+  return segs.filter(Boolean).join('/');
+}
+
+// The GitHub folder path the site will show for this course, trimmed to
+// upload_academic_files (used only for display).
+function buildUploadFolderPreview(state: UploadFlowState): string {
+  return buildUploadFolderPath(state).replace(/^upload_academic_files\//, '') + ' / <your-file>';
+}
+
+async function resolveConnectedEmail(chatId: number): Promise<string | null> {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findFirst({
+      where: { telegramChatId: String(chatId), telegramVerified: true },
+      select: { userId: true },
+    });
+    return profile?.userId || null;
+  } catch { return null; }
+}
+
+async function profileUniversityId(email: string): Promise<string | null> {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findUnique({ where: { userId: email }, select: { universityId: true } });
+    return (profile as any)?.universityId || null;
+  } catch { return null; }
+}
+
+// Called once the path is fully known: resolves identity then asks for the file.
+async function askUploadMessage(chatId: number, messageId: number, state: UploadFlowState) {
+  const email = await resolveConnectedEmail(chatId);
+  if (email) {
+    state.connectedEmail = email;
+    state.universityId = state.universityId || (await profileUniversityId(email)) || undefined;
+  }
+
+  if (!state.connectedEmail && !state.universityId) {
+    state.stage = 'askid';
+    await setUploadState(chatId, state);
+    await editMessageText(chatId, messageId,
+      `🪪 <b>Your University ID</b>\n\n` +
+      `To track who uploaded this file, please send your <b>University / Student ID</b>.\n\n` +
+      `Example: <code>22-43211-3</code> or <code>C232101</code>\n\n` +
+      `<i>Tip: <code>/connect</code> your account to skip this next time.</i>`,
+      { reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'up:cancel' }]] } }
+    );
+    return;
+  }
+
+  state.stage = 'file';
+  await setUploadState(chatId, state);
+  await editMessageText(chatId, messageId,
+    `📤 <b>Send the file</b>\n\n` +
+    `It will be saved at:\n<code>${buildUploadFolderPreview(state)}</code>\n\n` +
+    `Now send me the <b>file</b> (PDF, Word, Excel, PowerPoint, image, CSV).`,
+    { reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'up:cancel' }]] } }
+  );
+}
+
+async function downloadTelegramFile(fileId: string): Promise<{ buffer: Buffer; ext: string } | null> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return null;
+  try {
+    const g = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`);
+    if (!g.ok) return null;
+    const d = await g.json();
+    const filePath: string = d?.result?.file_path;
+    if (!filePath) return null;
+    const res = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`);
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const ext = (filePath.split('.').pop() || '').toLowerCase();
+    return { buffer, ext };
+  } catch { return null; }
+}
+
+// Direct-to-main commit via the GitHub App bot token (falls back to env GITHUB_TOKEN).
+async function commitBotUpload(fullPath: string, contentBase64: string, message: string, authorName: string): Promise<string> {
+  const token = await resolveGithubToken();
+  if (!token) throw new Error('GitHub upload service is unavailable right now.');
+  const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
+  if (!refRes.ok) throw new Error(`Cannot read repository (${refRes.status}).`);
+  const baseSha = (await refRes.json()).object.sha;
+  const clean = authorName.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim() || 'Telegram Bot';
+  return commitFilesToBranch({
+    token,
+    owner: config.owner,
+    repo: config.repo,
+    branch: config.branch,
+    baseSha,
+    files: [{ path: fullPath, content: contentBase64 }],
+    message,
+    author: { name: clean, email: `${clean.toLowerCase().replace(/[^a-z0-9]/g, '')}@users.noreply.github.com` },
+  });
+}
+
+async function handleUploadDocument(chatId: number, msg: any, state: UploadFlowState) {
+  const doc = msg.document;
+  const origName = doc?.file_name || `telegram_${doc?.file_id || Date.now()}`;
+  const size = doc?.file_size || 0;
+
+  if (size > MAX_BOT_UPLOAD_BYTES) {
+    await sendMessage(chatId, `❌ File is too large (${(size / 1048576).toFixed(1)} MB).\n\nMax is <b>20 MB</b> — split the file or use smaller files. Your upload is still waiting — send the file again.`);
+    return;
+  }
+
+  const dl = await downloadTelegramFile(doc.file_id);
+  if (!dl) {
+    await sendMessage(chatId, `❌ Could not download the file from Telegram. Please try again.`);
+    return;
+  }
+
+  const ext = (origName.split('.').pop() || dl.ext || 'bin').toLowerCase();
+  if (!SAFE_FILE_EXTS.has(ext)) {
+    await sendMessage(chatId, `❌ File type ".${esc(ext)}" is not allowed.\n\nAllowed: PDF, Word, Excel, PowerPoint, images, CSV, text.`);
+    return;
+  }
+
+  // PDF integrity gate (mirrors the web upload guard) — never let a truncated
+  // PDF reach GitHub.
+  if (ext === 'pdf') {
+    if (dl.buffer.length < 16) {
+      await sendMessage(chatId, `❌ The PDF is empty or invalid — upload the original file again.`);
+      return;
+    }
+    const head = dl.buffer.subarray(0, 1024).toString('latin1');
+    const tail = dl.buffer.subarray(Math.max(0, dl.buffer.length - 2048)).toString('latin1');
+    if (!head.includes('%PDF-') || !tail.includes('%%EOF')) {
+      await sendMessage(chatId, `❌ The PDF looks corrupted (truncated during transfer). Please re-send the original file.`);
+      return;
+    }
+  }
+
+  let universityId = state.connectedEmail ? (state.universityId || (await profileUniversityId(state.connectedEmail)) || '') : (state.universityId || '');
+  if (!universityId) {
+    state.stage = 'askid';
+    await setUploadState(chatId, state);
+    await sendMessage(chatId, `🪪 Please send your <b>University ID</b> so we can track who uploaded this file.`);
+    return;
+  }
+  universityId = String(universityId).replace(/\s+/g, '').slice(0, 30);
+
+  const base = sanitizeFileName(origName.replace(/\.[^.]+$/, ''));
+  const nameParts = [base];
+  if (state.session) nameParts.push(state.session);
+  nameParts.push(`ID-${universityId}`);
+  const fileName = `${nameParts.join(' - ')}.${ext}`;
+
+  const fullPath = `${buildUploadFolderPath(state)}/${fileName}`;
+  const relPath = fullPath.slice(config.uploadPath.length + 1);
+  try { validateRepoPath(relPath, false); } catch {
+    await sendMessage(chatId, `❌ The file name contains unsupported characters. Please rename it and send again.`);
+    return;
+  }
+
+  await sendChatAction(chatId, 'upload_document');
+
+  const senderName = msg.from?.first_name
+    ? `${msg.from.first_name}${msg.from.last_name ? ' ' + msg.from.last_name : ''}`
+    : msg.from?.username ? `@${msg.from.username}` : `Chat ${chatId}`;
+
+  let commitSha: string;
+  try {
+    commitSha = await commitBotUpload(
+      fullPath,
+      dl.buffer.toString('base64'),
+      `Add ${relPath} (via Telegram, ID-${universityId})`,
+      senderName
+    );
+  } catch (e: any) {
+    console.error('[TG] Bot upload commit failed:', e?.message);
+    await sendMessage(chatId, `❌ <b>Upload failed</b>\n\n${esc(e?.message || 'Unknown error')}\n\nPlease try again later.`);
+    return;
+  }
+
+  await setUploadState(chatId, null);
+
+  const courseLink = state.courseCode
+    ? buildCourseLink(state.courseCode, state.dept, state.sem)
+    : buildBrowseLink({ dept: state.dept, sem: state.sem });
+
+  await sendMessage(chatId,
+    `✅ <b>File uploaded to GitHub!</b>\n\n` +
+    `📄 <code>${esc(relPath)}</code>\n` +
+    `🏷️ Uploaded by: <code>ID-${esc(universityId)}</code>\n` +
+    `📚 <a href="${courseLink}">Open course on IIUC-ARMS →</a>\n\n` +
+    `Thank you for contributing! 🎉`
+  );
+
+  // Best-effort activity log so every bot upload is trackable.
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    await prisma.activityLog.create({
+      data: {
+        action: 'file_upload',
+        userId: state.connectedEmail || `telegram-${chatId}`,
+        userName: senderName,
+        details: JSON.stringify({ files: [relPath], count: 1, source: 'telegram', universityId, commitSha, session: state.session, term: state.term }),
+      },
+    });
+  } catch {}
+
+  // The GitHub tree cache refreshes itself after ~2 minutes, so the new file
+  // appears on the site automatically shortly after the upload.
+}
+
+async function handleNewCourseText(chatId: number, state: UploadFlowState, text: string) {
+  const parsed = parseNewCourseInput(text);
+  if (!parsed) {
+    await sendMessage(chatId,
+      `⚠️ Hmm, that didn't parse as a course.\n\nSend it as:\n<code>QSM-3602 - Islamic Studies</code>\n\nor just a code:\n<code>QUR101</code>\n\nKeep the title under 60 characters.`,
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+  const courses = state.courses || [];
+  if (!courses.some(c => c.code === parsed.code)) {
+    courses.push(parsed);
+    courses.sort((a, b) => a.code.localeCompare(b.code));
+  }
+  state.courses = courses;
+  state.stage = 'course';
+  await setUploadState(chatId, state);
+  await sendMessage(chatId,
+    `✅ Course added: <code>${esc(parsed.code)}</code> — ${esc(parsed.title)}\n\nNow pick it below:`,
+    { reply_markup: { inline_keyboard: uploadCourseButtons(state) } }
+  );
+}
+
+async function handleUniversityIdText(chatId: number, state: UploadFlowState, text: string) {
+  const id = text.replace(/\s+/g, ' ').trim().replace(/^#/, '').slice(0, 30);
+  if (id.length < 3 || !/^[A-Za-z0-9][A-Za-z0-9\-/_]*$/.test(id)) {
+    await sendMessage(chatId,
+      `⚠️ That doesn't look like a valid ID.\n\nExamples: <code>22-43211-3</code>, <code>C232101</code>`,
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+  state.universityId = id;
+  state.stage = 'file';
+  await setUploadState(chatId, state);
+  await sendMessage(chatId,
+    `✅ Got it — <code>ID-${esc(id)}</code> will be marked with the file.\n\nNow send the <b>file</b> to upload.`,
+    { parse_mode: 'HTML' }
+  );
+}
+
+async function handleUploadCallback(cq: any, chatId: number, messageId: number, args: string[]) {
+  const action = args[0];
+
+  if (action === 'cancel') {
+    await setUploadState(chatId, null);
+    await editMessageText(chatId, messageId, `❌ <b>Upload cancelled.</b>\n\nUse <code>/upload</code> to start a new upload.`, { reply_markup: { inline_keyboard: [] } });
+    return;
+  }
+
+  const state = (await getUploadState(chatId)) || { stage: 'dept', ts: Date.now() };
+
+  if (action === 'dept') {
+    const deptId = args[1];
+    if (!deptId || !findDepartment(deptId)) { await answerCallbackQuery(cq.id, 'Pick a department'); return; }
+    state.dept = deptId;
+    state.stage = 'sem';
+    state.courses = undefined; state.courseFolder = undefined; state.courseCode = undefined;
+    state.category = undefined; state.term = undefined; state.session = undefined;
+    await setUploadState(chatId, state);
+    await editMessageText(chatId, messageId,
+      `<b>📤 Upload a File</b>\n\n🏢 Department: <b>${esc(getDeptName(deptId))}</b>\n\nNow pick the <b>semester</b>:`,
+      { reply_markup: { inline_keyboard: uploadSemButtons() } }
+    );
+    return;
+  }
+
+  if (action === 'sem') {
+    const semId = args[1];
+    if (!semId || !config.semesters.some(s => s.id === semId)) { await answerCallbackQuery(cq.id, 'Pick a semester'); return; }
+    state.sem = semId;
+    state.stage = 'course';
+    state.courseFolder = undefined; state.courseCode = undefined;
+    state.category = undefined; state.term = undefined; state.session = undefined;
+    const tree = await getGithubTree();
+    if (!tree.length) {
+      await editMessageText(chatId, messageId, `⚠️ Could not load course data. Please try again in a minute.`);
+      return;
+    }
+    state.courses = listCoursesForDeptSem(tree, getDepartmentFolder(state.dept || ''), semId);
+    await setUploadState(chatId, state);
+    const emptyHint = state.courses.length === 0 ? `\n\n<i>(No courses here yet — create the first one!)</i>` : '';
+    await editMessageText(chatId, messageId,
+      `<b>📤 Upload</b>\n\n🏢 ${esc(getDeptName(state.dept || ''))} · 📅 ${esc(semLabel(semId))}\n\nPick a <b>course</b> or create a new one:${emptyHint}`,
+      { reply_markup: { inline_keyboard: uploadCourseButtons(state) } }
+    );
+    return;
+  }
+
+  if (action === 'newcourse') {
+    state.stage = 'newcourse';
+    await setUploadState(chatId, state);
+    await editMessageText(chatId, messageId,
+      `➕ <b>Create Course</b>\n\nSend the course code and title like:\n\n<code>QSM-3602 - Islamic Studies</code>\n\nor just a code:\n<code>QUR101</code>`,
+      { reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'up:cancel' }]] } }
+    );
+    return;
+  }
+
+  if (action === 'pick') {
+    const code = (args[1] || '').toUpperCase();
+    const norm = (c: string) => c.replace(/[^A-Z0-9]/g, '');
+    const course = (state.courses || []).find(c => norm(c.code) === norm(code));
+    if (!course) { await answerCallbackQuery(cq.id, 'Course not found — pick again'); return; }
+    state.courseCode = course.code;
+    state.courseFolder = course.folder;
+    state.category = undefined; state.term = undefined; state.session = undefined;
+    state.stage = 'category';
+    await setUploadState(chatId, state);
+    await editMessageText(chatId, messageId,
+      `<b>📤 Upload</b>\n\n🏢 ${esc(getDeptName(state.dept || ''))} · 📅 ${esc(semLabel(state.sem || ''))}\n📚 <code>${esc(course.code)}</code> — ${esc(course.title)}\n\nWhat is the <b>category</b>?`,
+      { reply_markup: { inline_keyboard: uploadCategoryButtons() } }
+    );
+    return;
+  }
+
+  if (action === 'cat') {
+    const cat = args[1];
+    if (!UPLOAD_CATEGORIES.some(c => c.key === cat)) { await answerCallbackQuery(cq.id, 'Pick a category'); return; }
+    state.category = cat;
+    state.term = undefined; state.session = undefined;
+    if (TERM_CATEGORIES.has(cat)) {
+      state.stage = 'term';
+      await setUploadState(chatId, state);
+      await editMessageText(chatId, messageId,
+        `<b>📤 Upload</b>\n\n📚 <code>${esc(state.courseCode || '')}</code> · ${esc(CATEGORY_META[cat]?.label || cat)}\n\n<b>Mid</b> or <b>Final</b>?`,
+        { reply_markup: { inline_keyboard: uploadTermButtons() } }
+      );
+    } else {
+      await askUploadMessage(chatId, messageId, state);
+    }
+    return;
+  }
+
+  if (action === 'term') {
+    const term = args[1];
+    if (term !== 'Mid' && term !== 'Final') { await answerCallbackQuery(cq.id, 'Pick Mid or Final'); return; }
+    state.term = term;
+    state.stage = 'season';
+    await setUploadState(chatId, state);
+    await editMessageText(chatId, messageId,
+      `<b>📤 Upload</b>\n\n📚 <code>${esc(state.courseCode || '')}</code> · ${term} · ${esc(CATEGORY_META[state.category || '']?.label || '')}\n\nWhich <b>season</b>?`,
+      { reply_markup: { inline_keyboard: uploadSeasonButtons() } }
+    );
+    return;
+  }
+
+  if (action === 'season') {
+    const season = args[1];
+    if (season !== 'Spring' && season !== 'Autumn') { await answerCallbackQuery(cq.id, 'Pick a season'); return; }
+    state.season = season;
+    state.stage = 'year';
+    await setUploadState(chatId, state);
+    await editMessageText(chatId, messageId,
+      `<b>📤 Upload</b>\n\n📚 <code>${esc(state.courseCode || '')}</code> · ${state.term} · ${season}\n\nWhich <b>year</b>?`,
+      { reply_markup: { inline_keyboard: uploadYearButtons(season) } }
+    );
+    return;
+  }
+
+  if (action === 'session') {
+    const season = args[1];
+    const year = args[2];
+    if ((season !== 'Spring' && season !== 'Autumn') || !/^\d{4}$/.test(year || '')) { await answerCallbackQuery(cq.id, 'Pick a year'); return; }
+    state.season = season;
+    state.session = `${season} ${year}`;
+    await askUploadMessage(chatId, messageId, state);
+    return;
+  }
+
+  await answerCallbackQuery(cq.id, 'Action expired — start again with /upload');
 }
 
 // Telegram chat ids allowed to approve/reject destructive actions (deletes, broadcast).
@@ -464,6 +1051,28 @@ async function handleMessage(msg: any) {
     .trim();
   const telegramUsername = msg.from?.username ? `@${msg.from.username}` : null;
 
+  // ─── Upload wizard: file uploads ───
+  if (msg.document) {
+    if (isGroup) return; // file uploads are private-chat only
+    const flow = await getUploadState(chatId);
+    if (flow && flow.stage === 'file') {
+      await handleUploadDocument(chatId, msg, flow);
+    } else {
+      await sendMessage(chatId,
+        `📤 <b>To upload a file</b>, start with <code>/upload</code> and follow the steps (department → semester → course → category).`,
+        { parse_mode: 'HTML' }
+      );
+    }
+    return;
+  }
+
+  // ─── Upload wizard: text steps (course code+title / university ID) ───
+  if (!isGroup && text && !text.startsWith('/')) {
+    const flow = await getUploadState(chatId);
+    if (flow?.stage === 'newcourse') { await handleNewCourseText(chatId, flow, cleanText); return; }
+    if (flow?.stage === 'askid') { await handleUniversityIdText(chatId, flow, cleanText); return; }
+  }
+
   // ─── Owner block management ───
   if (/^\/(block|unblock|blocklist)\b/.test(cleanText)) {
     await handleBlockCommand(chatId, cleanText);
@@ -783,6 +1392,20 @@ async function handleMessage(msg: any) {
       return;
     }
 
+    // ─── /upload — start the file-upload wizard ───
+    if (cleanText === '/upload') {
+      if (isGroup) {
+        await sendMessage(chatId, `ℹ️ Please use <code>/upload</code> in a <b>private chat</b> with the bot to upload files.`);
+        return;
+      }
+      await setUploadState(chatId, { stage: 'dept', ts: Date.now() });
+      await sendMessage(chatId,
+        `<b>📤 Upload a File</b>\n\nFirst pick the <b>department</b>:`,
+        { reply_markup: { inline_keyboard: uploadDeptButtons() } }
+      );
+      return;
+    }
+
     // ─── /broadcast (owner only) ───
     if (cleanText.startsWith('/broadcast')) {
       const broadcastMsg = cleanText.replace('/broadcast', '').trim();
@@ -934,6 +1557,12 @@ async function handleCallbackQuery(cq: any) {
   }
 
   try {
+    // ─── File-upload wizard buttons ───
+    if (parsed.type === 'up') {
+      await handleUploadCallback(cq, chatId, messageId, parsed.args);
+      return;
+    }
+
     // ─── Start menu buttons ───
     if (parsed.type === 'start_faculties') {
       await editMessageText(chatId, messageId, buildDeptList(), {
