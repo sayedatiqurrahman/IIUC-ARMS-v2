@@ -301,6 +301,19 @@ export const authOptions: NextAuthOptions = {
           }
         } catch {}
 
+        // Keep a linked (secondary) identity's mirror in sync with its primary on
+        // every login: the linked email inherits the SAME role / CR / ACR / status
+        // as the account it's linked to, so a freshly-linked email (or one whose
+        // primary role changed since linking) always logs in with the right
+        // privileges and is never treated as an unapproved standalone address.
+        try {
+          const { upsertLinkedMirror, isLinkedIdentity } = await import('@/lib/linked-accounts');
+          const { prisma } = await import('@/lib/prisma');
+          if (rawEmail !== email && await isLinkedIdentity(rawEmail)) {
+            await upsertLinkedMirror(prisma, email, rawEmail);
+          }
+        } catch {}
+
         if (account?.provider === 'github') {
           try {
             const token = account.access_token;
