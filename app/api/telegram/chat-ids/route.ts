@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { configuredSecret } from '@/lib/telegram/secret';
 
 // Discover chat IDs by temporarily dropping the webhook, fetching getUpdates, then re-registering.
 // Owner-only: GET /api/telegram/chat-ids?key=<TELEGRAM_BOT_WEBHOOK_SECRET or TELEGRAM_BOT_TOKEN>
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: webhookUrl,
-        secret_token: webhookSecret || botToken,
+        secret_token: configuredSecret(),
         allowed_updates: ['message', 'callback_query'],
         drop_pending_updates: false,
       }),

@@ -39,6 +39,7 @@ import { commitFilesToBranch } from '@/lib/github-commit';
 import { matchCourseFolder, normalizeCourseCode } from '@/lib/store/helpers';
 import { validateRepoPath } from '@/lib/repo-path';
 import { registerBotCommands } from '@/lib/telegram/commands';
+import { configuredSecret } from '@/lib/telegram/secret';
 
 const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
 const GITHUB_API = 'https://api.github.com';
@@ -895,7 +896,7 @@ async function processConnectEmail(chatId: number, email: string, telegramUserna
 // was registered via setWebhook. We require it so forged HTTP requests (e.g.
 // someone POSTing a fake update to spam arbitrary chats or approve deletes)
 // are rejected before any handler runs.
-const WEBHOOK_SECRET = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || process.env.TELEGRAM_BOT_TOKEN || '';
+const WEBHOOK_SECRET = configuredSecret();
 
 // Keep the bot's command menu in sync automatically (once per 12h per server
 // instance) so /upload and the trimmed commands always show in Telegram.

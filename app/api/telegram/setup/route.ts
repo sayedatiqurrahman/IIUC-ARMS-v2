@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { registerBotCommands } from '@/lib/telegram/commands';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
+import { configuredSecret } from '@/lib/telegram/secret';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const API = `https://api.telegram.org/bot${TOKEN}`;
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: webhookUrl,
-        secret_token: webhookSecret || TOKEN,
+        secret_token: configuredSecret(),
         allowed_updates: ['message', 'callback_query'],
         drop_pending_updates: true,
       }),
