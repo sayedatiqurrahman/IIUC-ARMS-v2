@@ -185,19 +185,54 @@ export const authOptions: NextAuthOptions = {
                 const { upsertLinkedMirror } = await import('@/lib/linked-accounts');
                 await upsertLinkedMirror(prisma, resolved, rawSignInEmail);
               } catch {}
-            } else if (await import('@/lib/linked-accounts').then(m => m.isLinkedIdentity(email))) {
-              // A linked (secondary) identity whose mirror profile is active is
-              // allowed to log in as ITSELF, even if resolution to the primary
-              // failed (stale link list / huge DB / cache miss). Never gate it.
-              console.log('[Auth] authorize: linked identity allowed as itself —', email);
             } else {
-              console.log('[Auth] authorize: NOT ALLOWED — redirecting to request-access for', email);
-              return {
-                id: decoded.sub || email,
-                email,
-                name: credentials.name || decoded.name || email.split('@')[0],
-                image: credentials.image || decoded.picture || null,
-              } as any;
+              // Not resolved to a primary and not already allowed. Use the
+              // authoritative linked check (active mirror OR listed in some
+              // active profile's linkedEmails). A linked identity NEVER hits the
+              // request-access gate — it signs in as itself.
+              const isLinked = await import('@/lib/linked-accounts').then(m => m.isLinkedIdentity(email));
+              if (isLinked) {
+                console.log('[Auth] authorize: linked identity allowed as itself —', email);
+              } else if (decoded.email_verified !== false) {
+                // Strong ownership proof: Firebase verified this address (e.g. a
+                // real Google account the user fully owns). If it already has a
+                // real, non-rejected/non-banned profile in our DB, it is a valid
+                // sign-in (DB-first). Only brand-new, never-seen addresses are
+                // routed to the request-access gate.
+                try {
+                  const { prisma } = await import('@/lib/prisma');
+                  const own = await prisma.profile.findUnique({
+                    where: { userId: email },
+                    select: { accountStatus: true, isBanned: true },
+                  });
+                  if (own && own.accountStatus !== 'rejected' && own.accountStatus !== 'banned' && own.accountStatus !== 'pending') {
+                    console.log('[Auth] authorize: verified existing DB account allowed —', email);
+                  } else {
+                    console.log('[Auth] authorize: NOT ALLOWED — redirecting to request-access for', email);
+                    return {
+                      id: decoded.sub || email,
+                      email,
+                      name: credentials.name || decoded.name || email.split('@')[0],
+                      image: credentials.image || decoded.picture || null,
+                    } as any;
+                  }
+                } catch {
+                  return {
+                    id: decoded.sub || email,
+                    email,
+                    name: credentials.name || decoded.name || email.split('@')[0],
+                    image: credentials.image || decoded.picture || null,
+                  } as any;
+                }
+              } else {
+                console.log('[Auth] authorize: NOT ALLOWED — redirecting to request-access for', email);
+                return {
+                  id: decoded.sub || email,
+                  email,
+                  name: credentials.name || decoded.name || email.split('@')[0],
+                  image: credentials.image || decoded.picture || null,
+                } as any;
+              }
             }
           } else {
             const { isDeletedEmail } = await import('@/lib/deleted-emails');
@@ -219,8 +254,35 @@ export const authOptions: NextAuthOptions = {
           const isLinked = !isIiucEmail(rawSignInEmail) &&
             !!(await import('@/lib/linked-accounts').then(m => m.isLinkedIdentity(rawSignInEmail)));
           if (decoded.email_verified === false && !isLinked) {
-            console.log('[Auth] authorize: email not verified (not a linked identity) —', email);
-            return null;
+            // An unverified non-linked account. Do NOT return null here — that
+            // surfaces a confusing "admin must accept" CredentialsSignin error.
+            // Instead route through the request-access gate (honest UI). A gmail
+            // that exists in our DB with an active/banned-else status, or is the
+            // exact account the user is signing into, is allowed to proceed.
+            try {
+              const { prisma } = await import('@/lib/prisma');
+              const own = await prisma.profile.findUnique({
+                where: { userId: email },
+                select: { accountStatus: true, isBanned: true },
+              });
+              const real = own && own.accountStatus !== 'rejected' && own.accountStatus !== 'banned' && own.accountStatus !== 'pending';
+              if (!real) {
+                console.log('[Auth] authorize: email not verified (unknown profile) — routing to gate for', email);
+                return {
+                  id: decoded.sub || email,
+                  email,
+                  name: credentials.name || decoded.name || email.split('@')[0],
+                  image: credentials.image || decoded.picture || null,
+                } as any;
+              }
+            } catch {
+              return {
+                id: decoded.sub || email,
+                email,
+                name: credentials.name || decoded.name || email.split('@')[0],
+                image: credentials.image || decoded.picture || null,
+              } as any;
+            }
           }
           try {
             const { prisma } = await import('@/lib/prisma');

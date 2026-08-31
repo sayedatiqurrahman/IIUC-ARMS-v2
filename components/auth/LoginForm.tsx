@@ -322,11 +322,14 @@ export default function LoginForm({
 
           <form onSubmit={loginMode === 'magiclink' ? onMagicLink : onEmailLogin}>
             <div className="mb-3">
-              <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">University Email</label>
+              <label className="block text-[0.78rem] font-medium text-dark-text2 mb-1.5">Email or Versity ID</label>
               <input
-                type="email"
+                type="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.85rem] outline-none focus:border-qsis transition-colors"
-                placeholder="your_id@ugrad.iiuc.ac.bd"
+                placeholder="your_id@ugrad.iiuc.ac.bd or your versity ID"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

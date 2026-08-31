@@ -101,6 +101,26 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
     }
   };
 
+  // Resolve the login identifier to a canonical account email. Accepts an email
+  // address OR a versity (university) ID — the DB is the source of truth. Keeps
+  // the user's typed value, so a versity ID maps to the exact account email.
+  const resolveLoginEmail = async (identifier: string): Promise<{ email: string | null }> => {
+    const id = identifier.trim();
+    if (!id) return { email: null };
+    try {
+      const res = await fetch('/api/auth/identifier-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: id }),
+      });
+      if (!res.ok) return { email: null };
+      const data = await res.json();
+      return { email: data?.email || null };
+    } catch {
+      return { email: null };
+    }
+  };
+
   async function verifyTurnstileToken(): Promise<boolean> {
     if (isDev) return true;
     const token = (preRenderedTurnstileContainer ? getToken(preRenderedTurnstileContainer) : null) || getToken(turnstileContainerId);
@@ -118,8 +138,24 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
     setError('');
     setSuccess('');
 
-    if (!isValidEmail(email)) {
-      setError('Please enter a valid email address');
+    const entered = email.trim().toLowerCase();
+
+    // Allow signing in with a versity (university) ID instead of an email: the
+    // DB maps that ID to the exact account's email. Non-email identifiers are
+    // resolved first, then the normal email+password flow runs against it.
+    let effectiveEmail = entered;
+    if (entered && !isValidEmail(entered)) {
+      const resolved = await resolveLoginEmail(entered);
+      if (!resolved.email) {
+        setError('No account matches that versity ID. Use your registered email instead.');
+        return;
+      }
+      effectiveEmail = resolved.email;
+      setEmail(resolved.email); // reflect the resolved account email in the field
+    }
+
+    if (!isValidEmail(effectiveEmail)) {
+      setError('Please enter a valid email address or versity ID');
       return;
     }
 
@@ -130,7 +166,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         const banCheck = await fetch('/api/auth/check-ban', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({ email: effectiveEmail }),
         });
         const banData = await banCheck.json();
         if (banData.banned) {
@@ -146,7 +182,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       // sign in or sign up here. They must use their university email first, or
       // request access with their student ID. The status endpoint also lets us
       // tell them if their request is still pending/rejected.
-      const e = email.trim().toLowerCase();
+      const e = effectiveEmail;
       if (!isUniversityEmail(e)) {
         const status = await queryAccountStatus(e);
         // Only open the gate when the account genuinely isn't approved and
@@ -164,14 +200,14 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         const turnstileValid = await verifyTurnstileToken();
         if (!turnstileValid) { setLoading(false); return; }
 
-        const result = await signUpWithEmail(email, password);
+        const result = await signUpWithEmail(effectiveEmail, password);
         user = result.user;
         setSuccess('Account created! A verification email has been sent to your inbox. Please verify your email before signing in. Check your spam/junk folder and "All Mail" if you don\'t see it.');
         setIsSignUp(false);
         setLoading(false);
         return;
       } else {
-        const result = await signInWithEmail(email, password);
+        const result = await signInWithEmail(effectiveEmail, password);
         user = result.user;
 
         // Non-university (personal-email) accounts approved by an admin, AND
@@ -180,8 +216,8 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         // Only university emails (verified via their institutional email) and
         // still-pending accounts are gated by email verification.
         if (!user.emailVerified) {
-          const isUni = isUniversityEmail(email);
-          const acc = isUni ? null : await queryAccountStatus(email);
+          const isUni = isUniversityEmail(effectiveEmail);
+          const acc = isUni ? null : await queryAccountStatus(effectiveEmail);
           const approvedExternal = acc?.status === 'active';
           const linkedAccount = !!acc?.linked;
           if (!approvedExternal && !linkedAccount) {
@@ -208,30 +244,23 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
       const firebaseCode = err?.code || '';
       const denied = firebaseCode === 'auth/invalid-credential' || firebaseCode === 'auth/wrong-password' || firebaseCode === 'auth/user-not-found' || firebaseCode === 'auth/invalid-email';
       if (denied) {
-        const raw = email.trim().toLowerCase();
+        const raw = effectiveEmail.trim().toLowerCase();
         const isUni = isUniversityEmail(raw);
         const acc = isUni ? null : await queryAccountStatus(raw).catch(() => null);
         if (!isUni && acc?.linked) {
+          // A linked (secondary) email signs in via MAGIC LINK by default (or a
+          // Google sign-in) — not a password. It may have no usable Firebase
+          // password until one is set. Send the magic link now and guide them,
+          // instead of a dead-end password failure.
           try {
-            // Server-side: ensures the Firebase identity exists, then emails a
-            // password-set link to this linked inbox. Robust even if the address
-            // was never turned into a Firebase user.
-            const res = await fetch('/api/auth/link-password-reset', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: raw }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed');
-            setForgotPasswordEmail(raw);
-            setShowForgotPassword(true);
-            setError(''); setSuccess('');
+            await sendMagicLink(raw);
+            setMagicLinkSent(true);
+            setSuccess(`That's a linked account — sending a magic link instead of using a password. Check your inbox (incl. spam/junk and "All Mail") and click it to sign in.`);
             setLoading(false);
-            setError(`This is a linked account — set a password to sign in with it. A password-set link was sent to ${raw}. Open it (check spam/junk too), create a password, then sign in.`);
             reset();
             return;
           } catch {
-            setError('This is a linked account but we couldn\'t send a password-set email. Use "Continue with Google" or a Magic Link instead.');
+            setError('This is a linked account. Use "Continue with Google" or a Magic Link to sign in.');
             reset();
             return;
           }
@@ -423,13 +452,23 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
 
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setSuccess('');
-    if (!isValidEmail(email)) { setError('Please enter a valid email address'); return; }
+
+    const entered = email.trim().toLowerCase();
+    let targetEmail = entered;
+    if (entered && !isValidEmail(entered)) {
+      const resolved = await resolveLoginEmail(entered);
+      if (!resolved.email) { setError('No account matches that versity ID. Use your registered email instead.'); return; }
+      targetEmail = resolved.email;
+      setEmail(resolved.email);
+    }
+
+    if (!isValidEmail(targetEmail)) { setError('Please enter a valid email address or versity ID'); return; }
     setLoading(true);
     try {
       const turnstileValid = await verifyTurnstileToken();
       if (!turnstileValid) { setLoading(false); return; }
-      await sendMagicLink(email);
-      const isUni = isUniversityEmail(email);
+      await sendMagicLink(targetEmail);
+      const isUni = isUniversityEmail(targetEmail);
       setMagicLinkSent(true);
       setSuccess(isUni
         ? 'Magic link sent! Check your email inbox, spam/junk folder, and "All Mail" if you don\'t see it within 2 minutes.'

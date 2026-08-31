@@ -30,14 +30,26 @@ export async function resolveLinkedEmail(email: string): Promise<string | null> 
   let primary: string | null = null;
   try {
     const { prisma } = await import('@/lib/prisma');
-    const profiles = await prisma.profile.findMany({
-      where: { NOT: [{ linkedEmails: '[]' }, { linkedEmails: null }] },
-      select: { userId: true, linkedEmails: true },
-    });
-    for (const p of profiles) {
-      let arr: string[] = [];
-      try { arr = JSON.parse((p.linkedEmails as string) || '[]'); } catch { arr = []; }
-      if (arr.some(e => (e || '').toLowerCase() === lower)) { primary = p.userId; break; }
+    // Fast path: direct contains lookup on the JSON-string column. Reliable even
+    // with many profiles (no full-table materialisation), and exact-match-safe
+    // because linked emails are stored as JSON string arrays.
+    try {
+      const hit = await prisma.profile.findFirst({
+        where: { linkedEmails: { contains: `"${lower}"` } },
+        select: { userId: true },
+      });
+      if (hit) primary = hit.userId;
+    } catch {}
+    if (!primary) {
+      const profiles = await prisma.profile.findMany({
+        where: { NOT: [{ linkedEmails: '[]' }, { linkedEmails: null }] },
+        select: { userId: true, linkedEmails: true },
+      });
+      for (const p of profiles) {
+        let arr: string[] = [];
+        try { arr = JSON.parse((p.linkedEmails as string) || '[]'); } catch { arr = []; }
+        if (arr.some(e => (e || '').toLowerCase() === lower)) { primary = p.userId; break; }
+      }
     }
   } catch {}
   if (primary) linkCache.set(lower, { primary, ts: Date.now() });

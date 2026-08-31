@@ -71,6 +71,14 @@ export async function POST(req: NextRequest) {
     });
     invalidateLinkedEmail(normalizedEmail);
 
+    // Make the address a fully allowed, role-bearing account in its own right:
+    // a linked email automatically inherits the primary's role/status, and an
+    // ACTIVE linked mirror makes it recognisable as a linked identity even when
+    // the linkedEmails list can't be scanned. Keep both routes (self-serve and
+    // admin) consistent so a linked email reliably logs in.
+    const { upsertLinkedMirror } = await import('@/lib/linked-accounts');
+    await upsertLinkedMirror(prisma, targetUserId, normalizedEmail);
+
     // Make the personal email a real login identity and send a password-set
     // email to that inbox, so the owner can sign in with email + password.
     await ensureFirebaseIdentity(normalizedEmail);
