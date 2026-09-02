@@ -674,33 +674,14 @@ export default function BrowsePage() {
         departments={departments} recentReads={recentReads} openRecentFile={openRecentFile}
       />
       {view === 'departments' && <LatestNotices />}
-      {view === 'files' && !loading && !error && !isSearching && canCreateFolder && (
-        <div className="flex items-center justify-end mb-3">
-          <input
-            ref={quickInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.csv,.md,.markdown,.txt,.json,.html,.css,.js,.ts,.py,.zip"
-            onChange={e => { const fl = Array.from(e.target.files || []); if (fl.length) { const deptFolder = getDepartmentFolder(currentDept); const courseFolder = currentCourseCode && currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : ''; const catFolder = currentCat ? config.categories[currentCat as keyof typeof config.categories]?.folder || currentCat : ''; const quickTarget = [deptFolder, currentSem, courseFolder, currentMidFinal, catFolder, currentSubPath].filter(Boolean).join('/'); handleQuickUpload(quickTarget, fl); } setImmediate(() => { e.target.value = ''; }); }}
-          />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => quickInputRef.current?.click()}
-              disabled={quickUploading}
-              className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold hover:bg-dark-bg2 transition-colors disabled:opacity-50"
-            >
-              <i className={`fas ${quickUploading ? 'fa-spinner fa-spin' : 'fa-cloud-upload-alt'}`}></i> {quickUploading ? 'Uploading...' : 'Upload'}
-            </button>
-            <button
-              onClick={() => { setRelatedCreatePath(''); setShowCreateFolder(true); }}
-              className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold hover:bg-dark-bg2 transition-colors"
-            >
-              <i className="fas fa-folder-plus"></i> New Folder
-            </button>
-          </div>
-        </div>
-      )}
+      <input
+        ref={quickInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.csv,.md,.markdown,.txt,.json,.html,.css,.js,.ts,.py,.zip"
+        onChange={e => { const fl = Array.from(e.target.files || []); if (fl.length) { const deptFolder = getDepartmentFolder(currentDept); const courseFolder = currentCourseCode && currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : ''; const catFolder = currentCat ? config.categories[currentCat as keyof typeof config.categories]?.folder || currentCat : ''; const quickTarget = [deptFolder, currentSem, courseFolder, currentMidFinal, catFolder, currentSubPath].filter(Boolean).join('/'); handleQuickUpload(quickTarget, fl); } setImmediate(() => { e.target.value = ''; }); }}
+      />
       <BrowseHeader
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchSemester={searchSemester} setSearchSemester={setSearchSemester}
@@ -711,9 +692,14 @@ export default function BrowsePage() {
         currentDept={currentDept} currentSem={currentSem}
         currentCourseCode={currentCourseCode} currentCourseTitle={currentCourseTitle}
         currentMidFinal={currentMidFinal} currentCat={currentCat}
-        goHome={goHome} navigateToDepartment={navigateToDepartment}
+        goBack={goBack} navigateToDepartment={navigateToDepartment}
         navigateToSemester={navigateToSemester} navigateToCourse={navigateToCourse}
         navigateToMidFinal={navigateToMidFinal} navigateToCategory={navigateToCategory}
+        canCreateFolder={view === 'files' && !loading && !error && !isSearching && canCreateFolder}
+        canUpload={view === 'files' && !loading && !error && !isSearching && !!session?.user}
+        onUpload={() => quickInputRef.current?.click()}
+        onCreateFolder={() => { setRelatedCreatePath(''); setShowCreateFolder(true); }}
+        uploading={quickUploading}
       />
       {loading && (
         <PageLoader fullScreen />
