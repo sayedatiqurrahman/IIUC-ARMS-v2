@@ -157,6 +157,7 @@ export async function GET(req: NextRequest) {
           userId: true, email: true, name: true, title: true, shortForm: true,
           role: true, isBanned: true, banReason: true, bannedBy: true,
           isCR: true, isACR: true, department: true, universityId: true, whatsapp: true,
+          gender: true,
           githubLogin: true, githubAvatar: true, image: true, semester: true,
           section: true, createdAt: true, customPermissions: true,
           telegramId: true, telegramChatId: true, batchId: true,
@@ -275,6 +276,7 @@ export async function GET(req: NextRequest) {
         department: profile?.department || null,
         universityId: profile?.universityId || null,
         whatsapp: profile?.whatsapp || null,
+        gender: profile?.gender || null,
         githubLogin: profile?.githubLogin || null,
         githubAvatar: profile?.githubAvatar || null,
         image: profile?.image || fu.photoURL || null,
@@ -319,6 +321,7 @@ export async function GET(req: NextRequest) {
           department: profile.department || null,
           universityId: profile.universityId || null,
           whatsapp: profile.whatsapp || null,
+          gender: profile.gender || null,
           githubLogin: profile.githubLogin || null,
           githubAvatar: profile.githubAvatar || null,
           image: profile.image || null,
@@ -469,8 +472,8 @@ export async function POST(req: NextRequest) {
 
     // ─── APPROVE ALL PENDING EXTERNAL ACCOUNTS ───
     if (action === 'approveAllPending') {
-      if (effectiveRole !== 'admin') {
-        return NextResponse.json({ error: 'Only admins can approve accounts' }, { status: 403 });
+      if (effectiveRole !== 'admin' && effectiveRole !== 'manager') {
+        return NextResponse.json({ error: 'Only admins or managers can approve accounts' }, { status: 403 });
       }
       const result = await prisma.profile.updateMany({
         where: {
@@ -564,9 +567,12 @@ export async function POST(req: NextRequest) {
       if (!['admin', 'manager', 'teacher', 'student', 'user', ...customRoleKeys].includes(newRole)) {
         return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
       }
-      // Only admin can set roles
-      if (effectiveRole !== 'admin') {
-        return NextResponse.json({ error: 'Only admins can change roles' }, { status: 403 });
+      // Admins can set any role; managers can only set student/teacher/user
+      if (effectiveRole !== 'admin' && effectiveRole !== 'manager') {
+        return NextResponse.json({ error: 'Only admins or managers can change roles' }, { status: 403 });
+      }
+      if (effectiveRole === 'manager' && (newRole === 'admin' || newRole === 'manager')) {
+        return NextResponse.json({ error: 'Managers cannot assign admin or manager roles' }, { status: 403 });
       }
       if (targetEmail.toLowerCase() === email.toLowerCase() && newRole !== 'admin') {
         return NextResponse.json({ error: 'Cannot demote yourself' }, { status: 400 });

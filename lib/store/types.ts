@@ -207,6 +207,6 @@ export interface AppState {
   getRelatedFolderContents: (relFolder: string, departmentId: string | null, relPath: string) => { subfolders: { name: string; fileCount: number; count: number; path: string; githubPath: string }[]; files: any[] };
   getCategories: (semId: string, departmentId?: string | null) => Category[];
   getCourses: (semId: string, catKey: string, departmentId?: string | null) => [string, any[]][];
-  getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string, departmentId?: string | null) => { files: any[]; folders: any[] };
+  getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string, departmentId?: string | null, semesterId?: string | null, courseCode?: string | null, midFinal?: string | null, category?: string | null) => { files: any[]; folders: any[] };
   getAvailableYears: () => string[];
 }

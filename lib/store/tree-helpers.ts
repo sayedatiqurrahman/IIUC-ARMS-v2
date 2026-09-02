@@ -857,7 +857,7 @@ export function createTreeHelpers(get: GetState) {
       return result;
     },
 
-    getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string, departmentId?: string | null) => {
+    getSearchResults: (query: string, typeFilter: string, yearFilter: string, semFilter: string, departmentId?: string | null, semesterId?: string | null, courseCode?: string | null, midFinal?: string | null, category?: string | null) => {
       if (departmentId) departmentId = resolveDepartmentId(departmentId);
       const uploadTree = get().getUploadTree();
       const q = query.toLowerCase().trim();
@@ -866,9 +866,34 @@ export function createTreeHelpers(get: GetState) {
       const matchedFiles: any[] = [];
       const matchedFolders = new Map<string, { id: string; label: string; type: string; path: string; count: number }>();
 
+      // Build path prefix for context scoping
+      let pathPrefix = '';
+      if (courseCode) {
+        // Find the full course folder name from the tree
+        const courseFolder = uploadTree.find((item: any) => {
+          if (item.type !== 'blob') return false;
+          const parts = item.path.split('/');
+          const second = parts[1] || '';
+          const cm = matchCourseFolder(second);
+          return cm && cm.code === courseCode;
+        });
+        if (courseFolder) {
+          const parts = courseFolder.path.split('/');
+          pathPrefix = parts.slice(0, 2).join('/');
+        }
+      } else if (semesterId) {
+        pathPrefix = semesterId;
+      }
+
       uploadTree.forEach((item: any) => {
         if (item.type !== 'blob') return;
+
+        // Context scoping: department
         if (departmentId && item.department !== departmentId && item.department !== null) return;
+
+        // Context scoping: semester / course / mid-final
+        if (pathPrefix && !item.path.startsWith(pathPrefix + '/') && item.path !== pathPrefix) return;
+
         const parts = item.path.split('/');
         const sem = parts[0];
         const fileName = parts[parts.length - 1] || '';
@@ -896,10 +921,27 @@ export function createTreeHelpers(get: GetState) {
           }
         }
 
+        // Extra context: when inside a specific mid/final, skip items not in it
+        if (midFinal) {
+          const mfIdx = parts.indexOf(midFinal);
+          if (mfIdx < 0) return;
+        }
+
+        // Extra context: when inside a specific category, skip items not in it
+        if (category) {
+          const catCfg = config.categories[category as keyof typeof config.categories];
+          const catFolderName = catCfg?.folder || category;
+          if (!parts.includes(catFolderName)) return;
+        }
+
+        // Filter: semester
         if (semFilter && sem !== semFilter) return;
+        // Filter: file type
         if (typeFilter && getMimeFromExt(ext) !== typeFilter) return;
+        // Filter: year
         if (yearFilter && extractYear(fileName) !== yearFilter) return;
 
+        // Text query matching
         if (q) {
           const semLabel = config.semesters.find(s => s.id === sem)?.label || sem.replace(/-/g, ' ');
           const catCfg = config.categories[catFolder as keyof typeof config.categories];
@@ -915,16 +957,20 @@ export function createTreeHelpers(get: GetState) {
           if (!matchFileName && !matchCode && !matchTitle && !matchCourse && !matchCat && !matchSem && !matchCatFolder && !matchPath) return;
         }
 
-        matchedFiles.push({ ...item, sem, catFolder, courseName, fileName });
+        matchedFiles.push({ ...item, sem, catFolder, courseName, courseCode, courseTitle, fileName });
 
-        const semKey = `sem:${sem}`;
-        if (!matchedFolders.has(semKey)) {
-          const semCfg = config.semesters.find(s => s.id === sem);
-          matchedFolders.set(semKey, { id: sem, label: semCfg?.label || sem.replace(/-/g, ' '), type: 'semester', path: sem, count: 0 });
+        // Aggregate folder results
+        if (!pathPrefix) {
+          // At top level or department level — aggregate semesters
+          const semKey = `sem:${sem}`;
+          if (!matchedFolders.has(semKey)) {
+            const semCfg = config.semesters.find(s => s.id === sem);
+            matchedFolders.set(semKey, { id: sem, label: semCfg?.label || sem.replace(/-/g, ' '), type: 'semester', path: sem, count: 0 });
+          }
+          matchedFolders.get(semKey)!.count++;
         }
-        matchedFolders.get(semKey)!.count++;
 
-        if (catFolder) {
+        if (catFolder && (!pathPrefix || pathPrefix === sem)) {
           const catKey = `cat:${sem}/${catFolder}`;
           if (!matchedFolders.has(catKey)) {
             const catCfg = config.categories[catFolder as keyof typeof config.categories];
@@ -942,7 +988,34 @@ export function createTreeHelpers(get: GetState) {
         }
       });
 
-      return { files: matchedFiles, folders: Array.from(matchedFolders.values()) };
+      // Smart sorting: folders by type priority then count, files by relevance
+      const foldersArr = Array.from(matchedFolders.values()).sort((a, b) => {
+        const typePriority: Record<string, number> = { semester: 0, course: 1, category: 2 };
+        const pa = typePriority[a.type] ?? 3;
+        const pb = typePriority[b.type] ?? 3;
+        if (pa !== pb) return pa - pb;
+        return b.count - a.count;
+      });
+
+      // Relevance scoring for files
+      const scoredFiles = matchedFiles.map(f => {
+        let score = 0;
+        if (q) {
+          if (f.fileName.toLowerCase().includes(q)) score += 100;
+          if (f.courseCode.toLowerCase().includes(q)) score += 80;
+          if (f.courseTitle.toLowerCase().includes(q)) score += 60;
+          if (f.courseName.toLowerCase().includes(q)) score += 50;
+          if (f.catFolder.toLowerCase().includes(q)) score += 30;
+        }
+        // Boost by file type relevance (PDFs are most common academic files)
+        if (typeFilter) score += 10;
+        // Boost by recency (newer files first)
+        const year = extractYear(f.fileName);
+        if (year) score += parseInt(year) - 2000;
+        return { ...f, score };
+      }).sort((a, b) => b.score - a.score);
+
+      return { files: scoredFiles, folders: foldersArr };
     },
 
     getAvailableYears: (): string[] => {

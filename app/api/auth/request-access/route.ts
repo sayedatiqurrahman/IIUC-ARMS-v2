@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     const name = (body.name || '').trim();
     const id = (body.id || '').trim();
     const contact = (body.contact || '').trim();
+    const gender = (body.gender || '').trim().toLowerCase();
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'A valid email is required' }, { status: 400 });
@@ -70,17 +71,18 @@ export async function POST(req: NextRequest) {
 
     const { roleForEmail } = await import('@/lib/roles');
     const displayName = name;
+    const validGender = (gender === 'male' || gender === 'female') ? gender : null;
     await prisma.profile.upsert({
       where: { userId: email },
-      update: { email, name: displayName, universityId: id, whatsapp: contact || null, accountStatus: 'pending', role: 'user' },
-      create: { userId: email, email, name: displayName, universityId: id, whatsapp: contact || null, accountStatus: 'pending', role: roleForEmail(email) },
+      update: { email, name: displayName, universityId: id, whatsapp: contact || null, accountStatus: 'pending', role: 'user', gender: validGender },
+      create: { userId: email, email, name: displayName, universityId: id, whatsapp: contact || null, accountStatus: 'pending', role: roleForEmail(email), gender: validGender },
     });
 
     const { invalidateStatusCache } = await import('@/lib/auth-options');
     invalidateStatusCache(email);
 
     const { notifyAdminsPendingAccount } = await import('@/lib/telegram/notifications');
-    await notifyAdminsPendingAccount(email, displayName, id, contact);
+    await notifyAdminsPendingAccount(email, displayName, id, contact, validGender);
 
     return NextResponse.json({
       success: true,

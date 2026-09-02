@@ -13,6 +13,7 @@ export interface UserRecord {
   image?: string;
   universityId?: string;
   whatsapp?: string;
+  gender?: string;
   semester?: string;
   section?: string;
   lastSignIn?: string;

@@ -122,6 +122,13 @@ export default function UserRow({
             {u.isCR && <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 text-[0.6rem] font-bold">CR</span>}
             {u.isACR && <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 text-[0.6rem] font-bold">ACR</span>}
             {isOwnerUser && <span className="px-1.5 py-0.5 rounded-md bg-yellow-500/15 text-yellow-400 text-[0.6rem] font-bold"><i className="fas fa-star mr-0.5"></i>Owner</span>}
+            {u.gender && isPendingRow && (
+              <span className={`px-1.5 py-0.5 rounded-full text-[0.6rem] font-semibold ${
+                u.gender === 'male' ? 'bg-blue-500/15 text-blue-400' : 'bg-pink-500/15 text-pink-400'
+              }`}>
+                <i className={`fas ${u.gender === 'male' ? 'fa-mars' : 'fa-venus'} mr-0.5`}></i>{u.gender === 'male' ? 'M' : 'F'}
+              </span>
+            )}
             {u.source === 'firebase' && <span className="px-1.5 py-0.5 rounded-md bg-cyan-500/15 text-cyan-400 text-[0.6rem] font-bold" title="Exists in Firebase — shown from the auth accounts"><i className="fas fa-cloud mr-0.5"></i>Firebase</span>}
             {u.githubLogin && <a href={`https://github.com/${u.githubLogin}`} target="_blank" rel="noopener noreferrer" className="text-dark-text3 hover:text-dark-text hidden sm:inline"><i className="fab fa-github text-[0.7rem]"></i></a>}
             {(isAdmin || isManager) && (
@@ -247,6 +254,7 @@ export default function UserRow({
             {u.name && <InfoField label="Full Name" value={u.name} />}
             {u.universityId && <InfoField label="University ID" value={u.universityId} />}
             {u.whatsapp && <InfoField label="WhatsApp / Telegram" value={u.whatsapp} />}
+            {u.gender && <InfoField label="Gender" value={u.gender === 'male' ? 'Male' : 'Female'} icon={u.gender === 'male' ? 'fas fa-mars' : 'fas fa-venus'} />}
             {u.semester && <InfoField label="Semester" value={u.semester} />}
             {u.department && <InfoField label="Department" value={u.department} />}
             {u.batch && <InfoField label="Batch" value={u.batch} />}

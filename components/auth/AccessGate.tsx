@@ -19,6 +19,7 @@ export default function AccessGate({ email: initialEmail = '', status, onClose, 
   const [name, setName] = useState('');
   const [id, setId] = useState('');
   const [contact, setContact] = useState('');
+  const [gender, setGender] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [savedId, setSavedId] = useState('');
@@ -48,7 +49,7 @@ export default function AccessGate({ email: initialEmail = '', status, onClose, 
       const res = await fetch('/api/auth/request-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: gateEmail, name: name.trim(), id: trimmedId, contact: trimmedContact }),
+        body: JSON.stringify({ email: gateEmail, name: name.trim(), id: trimmedId, contact: trimmedContact, gender }),
       });
       const data = await res.json();
       if (data.success) {
@@ -132,6 +133,15 @@ export default function AccessGate({ email: initialEmail = '', status, onClose, 
                 placeholder="WhatsApp / Telegram number with country code (e.g. +8801XXXXXXXXX)"
                 className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
               />
+              <select
+                value={gender}
+                onChange={e => setGender(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
+              >
+                <option value="">Select gender (optional)</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
             </div>
             {error && (
               <p className="mt-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[0.72rem]">

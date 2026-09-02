@@ -1290,7 +1290,6 @@ button { font-family: inherit; }
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 16px;
-  overflow: hidden;
 }
 
 /* Step Indicator */

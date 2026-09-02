@@ -1,7 +1,6 @@
 'use client';
 
 import { config } from '@/lib/config';
-import { FACULTIES } from '@/lib/departments';
 import CustomSelect from '@/components/CustomSelect';
 
 interface BrowseHeaderProps {
@@ -39,7 +38,6 @@ export default function BrowseHeader({
   availableYears,
   loading, error, view,
   currentDept, currentSem, currentCourseCode, currentCourseTitle, currentMidFinal, currentCat,
-  goHome, navigateToDepartment, navigateToSemester, navigateToCourse, navigateToMidFinal, navigateToCategory,
 }: BrowseHeaderProps) {
   return (
     <>
@@ -98,56 +96,6 @@ export default function BrowseHeader({
         </div>
       </div>
 
-      {/* Directory Path */}
-      {!loading && !error && view !== 'departments' && (() => {
-        let deptLabel = currentDept;
-        for (const f of FACULTIES) {
-          const d = f.departments.find(dd => dd.id === currentDept);
-          if (d) { deptLabel = d.shortName; break; }
-        }
-        const semLabel = config.semesters.find(s => s.id === currentSem)?.label || currentSem;
-        return (
-        <div className="flex items-center gap-1.5 text-[0.75rem] mb-4 px-1 flex-wrap">
-          <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem] font-semibold" onClick={goHome}>
-            <i className="fas fa-home text-[0.65rem]"></i> Home
-          </button>
-          {currentDept && (
-            <>
-              <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
-              <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem]" onClick={() => navigateToDepartment(currentDept)}>
-                {deptLabel}
-              </button>
-            </>
-          )}
-          {currentSem && (
-            <>
-              <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
-              <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem]" onClick={() => navigateToSemester(currentSem)}>
-                {semLabel}
-              </button>
-            </>
-          )}
-          {currentCourseCode && (
-            <>
-              <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
-              <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem] font-semibold" onClick={() => navigateToCourse(currentCourseCode, currentCourseTitle)}>{currentCourseCode}</button>
-            </>
-          )}
-          {currentMidFinal && (
-            <>
-              <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
-              <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem]" onClick={() => navigateToMidFinal(currentMidFinal)}>{currentMidFinal}</button>
-            </>
-          )}
-          {view === 'files' && currentCat && (
-            <>
-              <span className="text-dark-text2 text-[0.5rem]"><i className="fas fa-chevron-right"></i></span>
-              <button className="text-qsis cursor-pointer hover:underline bg-transparent border-none text-[0.75rem]" onClick={() => navigateToCategory(currentCat)}>{config.categories[currentCat as keyof typeof config.categories]?.label || currentCat}</button>
-            </>
-          )}
-        </div>
-        );
-      })()}
     </>
   );
 }

@@ -114,7 +114,7 @@ export default function ContributorsView() {
   }, [activeTab, developers, resources, designers, deptFilter, searchQuery]);
 
   return (
-    <section className="mb-5 overflow-x-hidden">
+    <section className="mb-5">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold flex items-center gap-2"><i className="fas fa-users"></i> Contributors</h3>

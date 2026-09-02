@@ -122,6 +122,7 @@ export default function UsersTab({
   // server fetch) is only updated after a short pause — typing no longer fires
   // a request on every keystroke.
   const [searchInput, setSearchInput] = useState(searchQuery);
+  const [genderFilter, setGenderFilter] = useState<'all' | 'male' | 'female'>('all');
 
   useEffect(() => {
     setSearchInput(searchQuery);
@@ -148,9 +149,10 @@ export default function UsersTab({
       !config.ownerEmails.includes(u.email.toLowerCase()) &&
       !u.isCR &&
       !u.isACR &&
-      (!u.role || u.role === 'user' || u.role === 'external')
+      (!u.role || u.role === 'user' || u.role === 'external') &&
+      (genderFilter === 'all' || u.gender === genderFilter)
     );
-  }, [isPendingTab, users]);
+  }, [isPendingTab, users, genderFilter]);
 
   const goToPage = (page: number) => {
     const domainFilter = userSubTab === 'student' ? 'student' : userSubTab === 'teacher' ? 'teacher' : userSubTab === 'external' ? 'external' : userSubTab === 'pending' ? 'pending' : undefined;
@@ -191,7 +193,7 @@ export default function UsersTab({
           { key: 'teacher' as UserSubTab, label: 'Teachers', icon: 'fa-chalkboard-teacher', color: 'text-green-400' },
           { key: 'student' as UserSubTab, label: 'Students', icon: 'fa-user-graduate', color: 'text-blue-400' },
           { key: 'external' as UserSubTab, label: 'External', icon: 'fa-globe', color: 'text-purple-400', show: canViewExternalUsers },
-          { key: 'pending' as UserSubTab, label: 'Pending', icon: 'fa-clock', color: 'text-yellow-400', show: isAdmin || canApprovePending },
+          { key: 'pending' as UserSubTab, label: 'Pending', icon: 'fa-clock', color: 'text-yellow-400', show: isAdmin || isManager || canApprovePending },
         ]).filter(s => s.show !== false).map(sub => (
           <button
             key={sub.key}
@@ -211,7 +213,43 @@ export default function UsersTab({
       {userSubTab === 'pending' && (
         <div className="bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-3 mb-4 text-[0.72rem] text-yellow-300">
           <i className="fas fa-clock mr-1"></i>
-          Non-university accounts that haven't been approved yet — most requested access by submitting their student ID (and, optionally, a WhatsApp/Telegram number). Verify the ID, then <span className="font-semibold">Approve</span> to let them log in, or <span className="font-semibold">Reject</span> if it doesn&apos;t check out. Assigning a role (Student, Teacher, etc.) or making them CR/ACR also activates them and removes them from this list.
+          Non-university accounts that haven&apos;t been approved yet — most requested access by submitting their student ID (and, optionally, a WhatsApp/Telegram number). Verify the ID, then <span className="font-semibold">Approve</span> to let them log in, or <span className="font-semibold">Reject</span> if it doesn&apos;t check out. Assigning a role (Student, Teacher, etc.) or making them CR/ACR also activates them and removes them from this list.
+        </div>
+      )}
+
+      {/* Gender filter for pending tab */}
+      {userSubTab === 'pending' && (
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setGenderFilter('all')}
+            className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border transition-all ${
+              genderFilter === 'all'
+                ? 'bg-qsis text-white border-qsis'
+                : 'bg-dark-bg2 text-dark-text2 border-dark-border hover:text-dark-text hover:border-qsis/30'
+            }`}
+          >
+            <i className="fas fa-users mr-1"></i>All ({displayedUsers.length})
+          </button>
+          <button
+            onClick={() => setGenderFilter('male')}
+            className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border transition-all ${
+              genderFilter === 'male'
+                ? 'bg-blue-500 text-white border-blue-500'
+                : 'bg-dark-bg2 text-dark-text2 border-dark-border hover:text-blue-400 hover:border-blue-500/30'
+            }`}
+          >
+            <i className="fas fa-mars mr-1"></i>Male ({displayedUsers.filter(u => u.gender === 'male').length})
+          </button>
+          <button
+            onClick={() => setGenderFilter('female')}
+            className={`px-3 py-1.5 rounded-lg text-[0.72rem] font-semibold cursor-pointer border transition-all ${
+              genderFilter === 'female'
+                ? 'bg-pink-500 text-white border-pink-500'
+                : 'bg-dark-bg2 text-dark-text2 border-dark-border hover:text-pink-400 hover:border-pink-500/30'
+            }`}
+          >
+            <i className="fas fa-venus mr-1"></i>Female ({displayedUsers.filter(u => u.gender === 'female').length})
+          </button>
         </div>
       )}
 
@@ -266,7 +304,7 @@ export default function UsersTab({
             {userSubTab === 'pending' && <><i className="fas fa-clock text-yellow-400 mr-1"></i>Pending Approval</>}
           <span className="text-dark-text3 ml-1">({userSubTab === 'pending' ? displayedUsers.length : totalUsers})</span>        </h3>
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-          {userSubTab === 'pending' && isAdmin && (
+          {userSubTab === 'pending' && (isAdmin || isManager) && (
             <button
               onClick={handleApproveAll}
               disabled={approveAllLoading || displayedUsers.length === 0}

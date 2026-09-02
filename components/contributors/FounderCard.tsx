@@ -1,6 +1,8 @@
 'use client';
 
 import Image from 'next/image';
+import { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { config } from '@/lib/config';
 import StatTip from './StatTip';
 import SocialIcons from './SocialIcons';
@@ -10,25 +12,67 @@ const DATA_TIP = 'Files you uploaded to the Academic Files data repo. Every file
 const BUG_TIP = 'Issues (bug reports, feature requests) you opened on the IIUC-ARMS-v2 repo — every issue you file, such as reporting a broken Studio app, counts as 1.';
 const TOTAL_TIP = 'Code + Data + Issues added together.';
 
+function FounderTooltip({ anchorRef, show }: { anchorRef: React.RefObject<HTMLDivElement | null>; show: boolean }) {
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (!show || !anchorRef.current) return;
+    const update = () => {
+      const r = anchorRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const w = 240;
+      let left = r.left + r.width / 2 - w / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+      setPos({ top: r.top - 8, left, width: w });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [show, anchorRef]);
+
+  if (!show || !pos) return null;
+  return createPortal(
+    <div
+      className="pointer-events-none fixed z-[9999] w-60 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left shadow-xl"
+      style={{ top: pos.top, left: pos.left, width: pos.width, transform: 'translateY(-100%)' }}
+    >
+      <span className="block text-[0.7rem] font-bold text-qsis mb-0.5">
+        <i className="fas fa-crown mr-1"></i>Founder
+      </span>
+      <span className="block text-[0.65rem] leading-snug text-neutral-300">
+        This crown marks the founder who created this platform. It isn&apos;t an earned badge — it belongs only to the founding account.
+      </span>
+    </div>,
+    document.body
+  );
+}
+
 export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistory?: (c: any) => void }) {
+  const mobileAvatarRef = useRef<HTMLDivElement>(null);
+  const desktopAvatarRef = useRef<HTMLDivElement>(null);
+  const [mobileHover, setMobileHover] = useState(false);
+  const [desktopHover, setDesktopHover] = useState(false);
+
   return (
     <div className="bg-gradient-to-br from-qsis/10 to-accent/10 border-2 border-qsis/40 rounded-2xl p-4 sm:p-5 mb-5 ring-1 ring-qsis/20">
       {/* Mobile: vertical centered layout */}
       <div className="sm:hidden text-center">
-        <div className="relative inline-block mb-3 group/avatar">
+        <div
+          ref={mobileAvatarRef}
+          className="relative inline-block mb-3"
+          onMouseEnter={() => setMobileHover(true)}
+          onMouseLeave={() => setMobileHover(false)}
+        >
           <Image src={c.avatar_url} alt={c.login} width={72} height={72} className="w-[72px] h-[72px] rounded-full border-[3px] border-qsis shadow-[0_0_24px_rgba(34,197,94,0.4)] object-cover" />
           <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2 cursor-help" title="Founder & Lead">
             <i className="fas fa-crown text-white text-[0.6rem]"></i>
           </div>
-          <span className="pointer-events-none absolute bottom-8 right-0 z-50 w-48 sm:w-60 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left opacity-0 translate-y-1 transition-all duration-150 group-hover/avatar:opacity-100 group-hover/avatar:translate-y-0 shadow-xl">
-            <span className="block text-[0.7rem] font-bold text-qsis mb-0.5">
-              <i className="fas fa-crown mr-1"></i>Founder
-            </span>
-            <span className="block text-[0.65rem] leading-snug text-neutral-300">
-              This crown marks the founder who created this platform. It isn&apos;t an earned badge — it belongs only to the founding account.
-            </span>
-          </span>
         </div>
+        <FounderTooltip anchorRef={mobileAvatarRef} show={mobileHover} />
         <h3 className="text-[1rem] font-bold text-dark-text">{c.name || c.login}</h3>
         <p className="text-[0.75rem] text-qsis font-medium mb-1">{config.founderName}</p>
         <div className="flex items-center justify-center gap-2 mb-2">
@@ -57,20 +101,18 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
 
       {/* Desktop: horizontal layout */}
       <div className="hidden sm:flex items-center gap-4">
-        <div className="relative flex-shrink-0 group/avatar">
+        <div
+          ref={desktopAvatarRef}
+          className="relative flex-shrink-0"
+          onMouseEnter={() => setDesktopHover(true)}
+          onMouseLeave={() => setDesktopHover(false)}
+        >
           <Image src={c.avatar_url} alt={c.login} width={80} height={80} className="w-20 h-20 rounded-full border-[3px] border-qsis shadow-[0_0_24px_rgba(34,197,94,0.4)] object-cover" />
           <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-qsis flex items-center justify-center shadow-lg ring-2 ring-dark-bg2 cursor-help" title="Founder & Lead">
             <i className="fas fa-crown text-white text-[0.6rem]"></i>
           </div>
-          <span className="pointer-events-none absolute bottom-8 right-0 z-50 w-48 sm:w-60 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-left opacity-0 translate-y-1 transition-all duration-150 group-hover/avatar:opacity-100 group-hover/avatar:translate-y-0 shadow-xl">
-            <span className="block text-[0.7rem] font-bold text-qsis mb-0.5">
-              <i className="fas fa-crown mr-1"></i>Founder
-            </span>
-            <span className="block text-[0.65rem] leading-snug text-neutral-300">
-              This crown marks the founder who created this platform. It isn&apos;t an earned badge — it belongs only to the founding account.
-            </span>
-          </span>
         </div>
+        <FounderTooltip anchorRef={desktopAvatarRef} show={desktopHover} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-[1.1rem] font-bold text-dark-text">{c.name || c.login}</h3>

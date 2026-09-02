@@ -55,7 +55,6 @@ export default function BrowsePage() {
   const [permissionDenied, setPermissionDenied] = useState<{ show: boolean; message: string; contact: string }>({ show: false, message: '', contact: '' });
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [relatedCreatePath, setRelatedCreatePath] = useState('');
-  const [menuOpen, setMenuOpen] = useState(false);
   const [quickUploading, setQuickUploading] = useState(false);
   const quickInputRef = useRef<HTMLInputElement>(null);
   const [shareItem, setShareItem] = useState<ShareItem | null>(null);
@@ -567,7 +566,7 @@ export default function BrowsePage() {
   const uploadTree = getUploadTree();
 
   const isSearching = !!(searchQuery || fileTypeFilter || searchYear || searchSemester);
-  const searchResults = isSearching ? getSearchResults(searchQuery, fileTypeFilter, searchYear, searchSemester, currentDept || userDeptId) : { files: [], folders: [] };
+  const searchResults = isSearching ? getSearchResults(searchQuery, fileTypeFilter, searchYear, searchSemester, currentDept || userDeptId, currentSem, currentCourseCode, currentMidFinal, currentCat) : { files: [], folders: [] };
   const getAvailableYears = useAppStore(s => s.getAvailableYears);
   const availableYears = getAvailableYears();
   useEffect(() => {
@@ -675,67 +674,33 @@ export default function BrowsePage() {
         departments={departments} recentReads={recentReads} openRecentFile={openRecentFile}
       />
       {view === 'departments' && <LatestNotices />}
-      {view === 'files' && !loading && !error && !isSearching && (() => {
-        const deptFolder = getDepartmentFolder(currentDept);
-        const courseFolder = currentCourseCode && currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : '';
-        const catFolder = currentCat
-          ? config.categories[currentCat as keyof typeof config.categories]?.folder || currentCat
-          : '';
-        const quickTarget = [deptFolder, currentSem, courseFolder, currentMidFinal, catFolder, currentSubPath].filter(Boolean).join('/');
-        return (
-          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <span className="text-[0.7rem] text-dark-text2 min-w-0">
-              <i className="fas fa-arrow-right text-[0.6rem] text-qsis mr-1"></i>
-              Uploading into: <span className="font-mono text-qsis">./{quickTarget}</span>
-            </span>
-            <div className="relative">
-              <input
-                ref={quickInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.csv,.md,.markdown,.txt,.json,.html,.css,.js,.ts,.py,.zip"
-                onChange={e => { const fl = Array.from(e.target.files || []); setMenuOpen(false); if (fl.length) handleQuickUpload(quickTarget, fl); setImmediate(() => { e.target.value = ''; }); }}
-              />
-              <button
-                onClick={() => setMenuOpen(o => !o)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-qsis to-qsis-dark text-white text-[0.78rem] font-semibold cursor-pointer border-none hover:opacity-90 transition-opacity shadow-lg shadow-qsis/20"
-              >
-                <i className="fas fa-plus text-[0.8rem]"></i>New
-                <i className={`fas fa-chevron-down text-[0.55rem] ml-1 transition-transform ${menuOpen ? 'rotate-180' : ''}`}></i>
-              </button>
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-[45]" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 z-[60] w-72 rounded-xl border border-dark-border bg-dark-bg2 shadow-2xl overflow-hidden">
-                    <button
-                      className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-dark-bg3 transition-colors cursor-pointer border-none bg-transparent"
-                      onClick={() => { setMenuOpen(false); setRelatedCreatePath(''); setShowCreateFolder(true); }}
-                    >
-                      <span className="w-8 h-8 rounded-lg bg-qsis/15 flex items-center justify-center shrink-0"><i className="fas fa-folder-plus text-qsis text-sm"></i></span>
-                      <span className="flex flex-col min-w-0 text-left">
-                        <span className="text-[0.8rem] font-semibold text-dark-text">New Folder</span>
-                        <span className="text-[0.65rem] text-dark-text3">Create a folder inside this location</span>
-                      </span>
-                    </button>
-                    <button
-                      className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-dark-bg3 transition-colors cursor-pointer border-none bg-transparent border-t border-dark-border disabled:opacity-50"
-                      disabled={quickUploading}
-                      onClick={() => { setMenuOpen(false); if (!quickUploading) quickInputRef.current?.click(); }}
-                    >
-                      <span className="w-8 h-8 rounded-lg bg-qsis/15 flex items-center justify-center shrink-0"><i className="fas fa-cloud-upload-alt text-qsis text-sm"></i></span>
-                      <span className="flex flex-col min-w-0 text-left">
-                        <span className="text-[0.8rem] font-semibold text-dark-text">{quickUploading ? 'Uploading...' : 'Upload File'}</span>
-                        <span className="text-[0.65rem] text-dark-text3">Upload directly here — no form</span>
-                      </span>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+      {view === 'files' && !loading && !error && !isSearching && canCreateFolder && (
+        <div className="flex items-center justify-end mb-3">
+          <input
+            ref={quickInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.csv,.md,.markdown,.txt,.json,.html,.css,.js,.ts,.py,.zip"
+            onChange={e => { const fl = Array.from(e.target.files || []); if (fl.length) { const deptFolder = getDepartmentFolder(currentDept); const courseFolder = currentCourseCode && currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : ''; const catFolder = currentCat ? config.categories[currentCat as keyof typeof config.categories]?.folder || currentCat : ''; const quickTarget = [deptFolder, currentSem, courseFolder, currentMidFinal, catFolder, currentSubPath].filter(Boolean).join('/'); handleQuickUpload(quickTarget, fl); } setImmediate(() => { e.target.value = ''; }); }}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => quickInputRef.current?.click()}
+              disabled={quickUploading}
+              className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold hover:bg-dark-bg2 transition-colors disabled:opacity-50"
+            >
+              <i className={`fas ${quickUploading ? 'fa-spinner fa-spin' : 'fa-cloud-upload-alt'}`}></i> {quickUploading ? 'Uploading...' : 'Upload'}
+            </button>
+            <button
+              onClick={() => { setRelatedCreatePath(''); setShowCreateFolder(true); }}
+              className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold hover:bg-dark-bg2 transition-colors"
+            >
+              <i className="fas fa-folder-plus"></i> New Folder
+            </button>
           </div>
-        );
-      })()}
+        </div>
+      )}
       <BrowseHeader
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchSemester={searchSemester} setSearchSemester={setSearchSemester}

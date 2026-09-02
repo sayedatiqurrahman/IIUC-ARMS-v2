@@ -346,7 +346,7 @@ export async function getConnectedUsersCount(): Promise<number> {
 
 // ─── Pending Account Admin Notification ───────────────────────────
 
-export async function notifyAdminsPendingAccount(email: string, name?: string, universityId?: string, contact?: string): Promise<void> {
+export async function notifyAdminsPendingAccount(email: string, name?: string, universityId?: string, contact?: string, gender?: string): Promise<void> {
   try {
     const { prisma } = await import('@/lib/prisma');
 
@@ -380,14 +380,14 @@ export async function notifyAdminsPendingAccount(email: string, name?: string, u
       });
     }
 
-    if (recipients.length === 0) return;
-
     const displayName = name || email.split('@')[0];
+    const genderLabel = gender === 'male' ? 'Male' : gender === 'female' ? 'Female' : 'Not specified';
     const message = [
       `🆕 <b>New Access Request</b>`,
       ``,
       `<b>Email:</b> ${email}`,
       `<b>Name:</b> ${displayName}`,
+      `<b>Gender:</b> ${genderLabel}`,
       ...(universityId ? [`<b>Student ID:</b> ${universityId}`] : []),
       ...(contact ? [`<b>WhatsApp/Telegram:</b> ${contact}`] : []),
       ``,
@@ -396,6 +396,7 @@ export async function notifyAdminsPendingAccount(email: string, name?: string, u
       `<a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc'}/dashboard">→ Review in Admin Panel</a>`,
     ].join('\n');
 
+    // Send to individual admins/managers
     for (const admin of recipients) {
       if (!admin.telegramChatId) continue;
       try {
@@ -404,6 +405,22 @@ export async function notifyAdminsPendingAccount(email: string, name?: string, u
         await sendMessage(chatId, message, { disable_web_page_preview: true });
       } catch {}
     }
+
+    // Send to gender-specific support group
+    try {
+      const supportConfig = (settings?.supportConfig as Record<string, any>) || {};
+      if (supportConfig.enabled) {
+        const chatId = gender === 'female'
+          ? supportConfig.femaleChatId
+          : supportConfig.maleChatId;
+        if (chatId) {
+          const numericId = Number(chatId);
+          if (!isNaN(numericId)) {
+            await sendMessage(numericId, message, { disable_web_page_preview: true });
+          }
+        }
+      }
+    } catch {}
   } catch (err: any) {
     console.error('[TG] Failed to notify about access request:', err?.message);
   }

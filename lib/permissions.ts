@@ -79,6 +79,7 @@ export async function canApprovePending(email: string, role?: string): Promise<b
   if (!email) return false;
   const lower = email.toLowerCase();
   if (role === 'admin') return true;
+  if (role === 'manager') return true;
   if (config.ownerEmails.some(o => o.toLowerCase() === lower)) return true;
   const approvers = await getPendingApprovers();
   return approvers.includes(lower);
