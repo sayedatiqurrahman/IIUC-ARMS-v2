@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CertPDFData, exportCertificateImage, downloadCertPDF } from '@/lib/club-cert-pdf';
+import { CertPDFData, exportCertificateImage, downloadCertPDF, downloadCertPNG } from '@/lib/club-cert-pdf';
 import { DEFAULT_THEME } from '@/lib/cert-theme';
 
 export default function CertificatePreviewView({ params }: { params: Promise<{ certificateId: string }> }) {
@@ -30,7 +30,7 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
       if (data.valid && data.certificate) {
         setCert(data.certificate);
         const pdfData = toCertPDFData(data.certificate);
-        const url = await exportCertificateImage(pdfData, 'png');
+        const url = await exportCertificateImage(pdfData, 'png', 1600);
         setPreviewUrl(url);
       }
     } catch {
@@ -59,55 +59,104 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
     };
   }
 
-  function handleDownload() {
+  function handleDownloadPDF() {
     if (!cert) return;
-    try {
-      downloadCertPDF(toCertPDFData(cert));
-    } catch {
-      alert('Failed to download PDF');
-    }
+    try { downloadCertPDF(toCertPDFData(cert)); } catch { alert('Failed to download PDF'); }
   }
+
+  function handleDownloadPNG() {
+    if (!cert) return;
+    try { downloadCertPNG(toCertPDFData(cert)); } catch { alert('Failed to download PNG'); }
+  }
+
+  const row = (label: string, value: React.ReactNode, mono = false) => (
+    <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
+      <span className="text-dark-text2">{label}</span>
+      <span className={mono ? 'font-mono font-bold text-dark-text break-all' : 'font-semibold text-dark-text'}>{value}</span>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-dark-bg py-6 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <a href={`/clubs/verify/${certId}`} className="text-qsis text-sm hover:underline no-underline">
-            <i className="fas fa-arrow-left mr-1"></i>Back to Verification
-          </a>
-          <h1 className="text-lg font-bold text-dark-text"><i className="fas fa-certificate text-qsis mr-2"></i>Certificate Preview</h1>
+          <div className="flex items-center gap-2">
+            <span className="w-10 h-10 rounded-full bg-qsis/20 flex items-center justify-center">
+              <i className="fas fa-shield-alt text-qsis"></i>
+            </span>
+            <div>
+              <h1 className="text-lg font-bold text-dark-text leading-tight">Certificate Verification &amp; Preview</h1>
+              <p className="text-xs text-dark-text2">{certId || 'IIUC-XXXX-XXXX-XXXX'}</p>
+            </div>
+          </div>
           {valid === true && cert && (
-            <button onClick={handleDownload}
-              className="px-4 py-2 bg-qsis text-white rounded-lg text-sm font-semibold hover:opacity-90 transition">
-              <i className="fas fa-file-pdf mr-1"></i>Download PDF
-            </button>
+            <div className="flex gap-2">
+              <button onClick={handleDownloadPNG}
+                className="px-4 py-2 bg-dark-bg3 text-dark-text border border-dark-border rounded-lg text-sm font-semibold hover:border-qsis transition">
+                <i className="fas fa-image mr-1"></i>PNG
+              </button>
+              <button onClick={handleDownloadPDF}
+                className="px-4 py-2 bg-qsis text-white rounded-lg text-sm font-semibold hover:opacity-90 transition">
+                <i className="fas fa-file-pdf mr-1"></i>Download PDF
+              </button>
+            </div>
           )}
         </div>
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <i className="fas fa-spinner fa-spin text-qsis text-2xl"></i>
-            <p className="text-sm text-dark-text2 mt-3">Rendering certificate design...</p>
+            <p className="text-sm text-dark-text2 mt-3">Rendering certificate...</p>
           </div>
-        ) : valid === true && previewUrl ? (
-          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              <div>
+        ) : valid === true && cert && previewUrl ? (
+          <div className="space-y-5">
+            <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-sm font-bold text-dark-text">{cert.certificateId}</span>
                   <span className="text-xs text-green-400 bg-green-500/10 border border-green-500/30 rounded-full px-2 py-0.5">
                     <i className="fas fa-check-circle mr-1"></i>Verified
                   </span>
                 </div>
-                <p className="text-xs text-dark-text2 mt-1">{cert.memberName} — {cert.department}</p>
+                <p className="text-xs text-dark-text2">{cert.source === 'studio' ? 'Organization' : 'Club'}: <span className="text-qsis font-semibold">{cert.organization}</span></p>
               </div>
-              <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition no-underline">
-                <i className="fas fa-external-link-alt mr-1"></i>Verify
-              </a>
+              <img src={previewUrl} alt={`Certificate ${cert.certificateId}`}
+                className="w-full rounded-xl border border-dark-border shadow-lg object-contain" />
             </div>
-            <img src={previewUrl} alt={`Certificate ${cert.certificateId}`}
-              className="w-full rounded-xl border border-dark-border shadow-lg object-contain" />
+
+            <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-4 sm:p-6">
+              <h2 className="text-sm font-bold text-dark-text mb-4"><i className="fas fa-info-circle text-qsis mr-2"></i>Certificate Details</h2>
+              <div className="space-y-2.5">
+                {row('Certificate ID', cert.certificateId, true)}
+                {row('Member Name', cert.memberName)}
+                {row('University ID', cert.universityId, true)}
+                {row('Department', cert.department)}
+                {cert.session && row('Session', cert.session)}
+                {cert.post && row('Post', cert.post)}
+                {cert.eventName && row('Event', cert.eventName)}
+                {cert.servicePeriod && row('Service Period', cert.servicePeriod)}
+                {row('Issued By', cert.issuedBy || cert.organization)}
+                {row('Issued', new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))}
+              </div>
+              {Array.isArray(cert.signatories) && cert.signatories.length > 0 && (
+                <div className="border-t border-dark-border pt-3 mt-4">
+                  <p className="text-[0.7rem] text-dark-text3 mb-2 font-semibold">SIGNATORIES</p>
+                  <div className="space-y-2">
+                    {cert.signatories.map((sig: any, i: number) => (
+                      <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                        <div className="w-1 h-1 rounded-full bg-qsis"></div>
+                        <span className="text-dark-text font-semibold">{sig.name}</span>
+                        <span className="text-dark-text3">—</span>
+                        <span className="text-dark-text2">{sig.title || sig.designation || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-green-400/70 mt-4">
+                <i className="fas fa-lock mr-1"></i>This certificate is verified through IIUC-ARMS
+              </p>
+            </div>
           </div>
         ) : valid === false ? (
           <div className="bg-red-500/5 border-2 border-red-500/30 rounded-2xl p-6 text-center">

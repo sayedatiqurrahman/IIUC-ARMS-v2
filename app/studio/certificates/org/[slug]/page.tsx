@@ -134,7 +134,7 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
         const urls: Record<string, string> = {};
         for (const cert of data.certificates) {
           urls[cert.certificateId] = await QRCode.toDataURL(
-            `${typeof window !== 'undefined' ? window.location.origin : 'https://iiuc-arms.eu.cc'}/clubs/verify/${cert.certificateId}`,
+            `${typeof window !== 'undefined' ? window.location.origin : 'https://iiuc-arms.eu.cc'}/clubs/preview/${cert.certificateId}`,
             { width: 200, margin: 2 }
           );
         }
@@ -416,7 +416,7 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
+                        <a href={`/clubs/preview/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
                           className="w-8 h-8 flex items-center justify-center bg-qsis/15 text-qsis border border-qsis/30 rounded-lg hover:bg-qsis/25 transition no-underline">
                           <i className="fas fa-external-link-alt text-xs"></i>
                         </a>
@@ -465,7 +465,7 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
                     <div className="min-w-0 flex-1">
                       <p className="font-mono text-sm font-bold text-dark-text">{cert.certificateId}</p>
                       <p className="text-xs text-dark-text2">{cert.memberName} &middot; {cert.universityId}</p>
-                      <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
+                      <a href={`/clubs/preview/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
                         className="text-[0.65rem] text-qsis hover:underline no-underline mt-1 inline-block">
                         <i className="fas fa-external-link-alt mr-1"></i>Verify
                       </a>

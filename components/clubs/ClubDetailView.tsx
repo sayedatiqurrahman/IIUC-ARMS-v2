@@ -813,7 +813,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                     <div className="border-t border-dark-border px-4 py-2 flex items-center justify-between text-xs text-dark-text2">
                       <span><i className="fas fa-shield-check mr-1 text-green-400"></i>Verified by IIUC-ARMS</span>
                       <div className="flex gap-3">
-                        <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer" className="hover:text-qsis transition font-semibold">View</a>
+                        <a href={`/clubs/preview/${cert.certificateId}`} target="_blank" rel="noopener noreferrer" className="hover:text-qsis transition font-semibold">View</a>
                         <button onClick={() => downloadCertPDF(toCertPDFData(cert))} className="hover:text-yellow-400 transition font-semibold">PDF</button>
                       </div>
                     </div>
@@ -1327,7 +1327,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
+                            <a href={`/clubs/preview/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
                               className="w-8 h-8 flex items-center justify-center bg-qsis/15 text-qsis border border-qsis/30 rounded-lg hover:bg-qsis/20 transition no-underline">
                               <i className="fas fa-external-link-alt text-xs"></i>
                             </a>

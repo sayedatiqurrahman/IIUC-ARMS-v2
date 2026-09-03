@@ -4,7 +4,7 @@ function loadSignatureFont(): Promise<void> {
   if (signatureFontLoaded) return Promise.resolve();
   return new Promise((resolve) => {
     const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap';
+    link.href = 'https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap';
     link.rel = 'stylesheet';
     link.onload = () => { signatureFontLoaded = true; resolve(); };
     link.onerror = () => resolve();
@@ -12,8 +12,11 @@ function loadSignatureFont(): Promise<void> {
   });
 }
 
-export async function generateSignatureDataURL(name: string, width = 300, height = 80): Promise<string> {
+export async function generateSignatureDataURL(fullName: string, width = 300, height = 80): Promise<string> {
   await loadSignatureFont();
+
+  // Sign only with the first name — cleaner and more natural for a signature.
+  const name = fullName.trim().split(/\s+/)[0] || fullName.trim();
 
   const canvas = document.createElement('canvas');
   canvas.width = width * 2;
@@ -24,20 +27,20 @@ export async function generateSignatureDataURL(name: string, width = 300, height
   ctx.clearRect(0, 0, width, height);
 
   ctx.fillStyle = '#1a1a2e';
-  ctx.font = `700 28px "Dancing Script", cursive`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  const lines = name.split(/\s+/);
-  if (lines.length <= 2) {
-    ctx.fillText(name, width / 2, height / 2);
-  } else {
-    const mid = Math.ceil(lines.length / 2);
-    const line1 = lines.slice(0, mid).join(' ');
-    const line2 = lines.slice(mid).join(' ');
-    ctx.fillText(line1, width / 2, height / 2 - 12);
-    ctx.fillText(line2, width / 2, height / 2 + 14);
+  // Fit the text to the canvas while keeping it comfortably large.
+  const basePx = Math.min(48, 44);
+  ctx.font = `${basePx}px "Great Vibes", cursive`;
+  let textWidth = ctx.measureText(name).width;
+  let size = basePx;
+  while (textWidth > width - 24 && size > 16) {
+    size -= 2;
+    ctx.font = `${size}px "Great Vibes", cursive`;
+    textWidth = ctx.measureText(name).width;
   }
+  ctx.fillText(name, width / 2, height / 2 + size * 0.12);
 
   return canvas.toDataURL('image/png');
 }

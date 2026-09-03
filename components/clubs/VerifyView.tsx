@@ -202,7 +202,7 @@ export default function VerifyView() {
                 <p className="text-xs text-green-400/70">
                   <i className="fas fa-lock mr-1"></i>Verified through IIUC-ARMS
                 </p>
-                <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
+                <a href={`/clubs/preview/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
                   className="text-xs text-green-400 hover:text-green-300 font-semibold transition no-underline">
                   <i className="fas fa-external-link-alt mr-1"></i>Full Page
                 </a>

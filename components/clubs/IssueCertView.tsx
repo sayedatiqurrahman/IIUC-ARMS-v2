@@ -150,7 +150,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
         const urls: Record<string, string> = {};
         for (const cert of data.certificates) {
           urls[cert.certificateId] = await QRCode.toDataURL(
-            `${typeof window !== 'undefined' ? window.location.origin : 'https://iiuc-arms.eu.cc'}/clubs/verify/${cert.certificateId}`,
+            `${typeof window !== 'undefined' ? window.location.origin : 'https://iiuc-arms.eu.cc'}/clubs/preview/${cert.certificateId}`,
             { width: 200, margin: 2 }
           );
         }
@@ -436,7 +436,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
                         {cert.post && <div><span className="text-dark-text2">Post:</span> <span className="text-qsis">{cert.post}</span></div>}
                       </div>
                       <div className="mt-3 flex gap-2 flex-wrap">
-                        <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
+                        <a href={`/clubs/preview/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
                           className="px-3 py-1.5 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition no-underline">
                           <i className="fas fa-external-link-alt mr-1"></i>Verify
                         </a>
