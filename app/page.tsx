@@ -648,7 +648,6 @@ export default function BrowsePage() {
   const subfolderContents = currentSem && currentCat && currentCourseCode
     ? getSubfolderContents(currentSem, currentCourseCode, currentDept || userDeptId, currentMidFinal || null, currentCat, currentSubPath)
     : { subfolders: [], files: [] };
-  const subPathSegments = currentSubPath ? currentSubPath.split('/') : [];
   const isRelatedSem = currentSem === config.relatedKitabsFolder || currentSem === config.relatedSourcesFolder;
   const isRelatedKitabs = currentSem === config.relatedKitabsFolder;
   const relatedLabel = isRelatedKitabs ? 'Related Kitabs' : 'Related Sources';
@@ -680,7 +679,7 @@ export default function BrowsePage() {
         multiple
         className="hidden"
         accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.csv,.md,.markdown,.txt,.json,.html,.css,.js,.ts,.py,.zip"
-        onChange={e => { const fl = Array.from(e.target.files || []); if (fl.length) { const deptFolder = getDepartmentFolder(currentDept); const courseFolder = currentCourseCode && currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : ''; const catFolder = currentCat ? config.categories[currentCat as keyof typeof config.categories]?.folder || currentCat : ''; const quickTarget = [deptFolder, currentSem, courseFolder, currentMidFinal, catFolder, currentSubPath].filter(Boolean).join('/'); handleQuickUpload(quickTarget, fl); } setImmediate(() => { e.target.value = ''; }); }}
+        onChange={e => { const fl = Array.from(e.target.files || []); if (fl.length) { const deptFolder = getDepartmentFolder(currentDept); const courseFolder = currentCourseCode && currentCourseTitle ? `${currentCourseCode} - ${currentCourseTitle}` : ''; const catFolder = currentCat ? config.categories[currentCat as keyof typeof config.categories]?.folder || currentCat : ''; const quickTarget = [deptFolder, currentSem, courseFolder, currentMidFinal, catFolder, currentSubPath].filter(Boolean).join('/'); handleQuickUpload(quickTarget, fl); } setTimeout(() => { e.target.value = ''; }, 0); }}
       />
       <BrowseHeader
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
@@ -772,9 +771,7 @@ export default function BrowsePage() {
         <SubFolderView
           subfolders={subfolderContents.subfolders}
           files={filteredFiles}
-          subPathSegments={subPathSegments}
           onOpenFolder={navigateToSubFolder}
-          onGoBack={goBack}
           onOpenFile={openFile}
           filePerms={filePerms}
           onMove={(p, n, m) => setMoveTarget({ path: p, name: n, mode: m })}
@@ -783,8 +780,6 @@ export default function BrowsePage() {
           onDelete={(p, n) => setDeleteConfirm({ path: p, name: n })}
           onShare={handleFileShare}
           actionLoading={actionLoading}
-          canCreateFolder={canCreateFolder}
-          onCreateFolder={() => setShowCreateFolder(true)}
           canDeleteFolder={!!session?.user}
           onDeleteFolder={(t) => setDeleteConfirm({ ...t, kind: 'folder' })}
         />
