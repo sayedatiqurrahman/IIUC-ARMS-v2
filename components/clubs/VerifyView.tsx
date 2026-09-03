@@ -98,7 +98,7 @@ export default function VerifyView() {
           {!loading && valid === true && cert && (
             <div className="bg-dark-bg2 rounded-2xl border-2 border-green-500/40 overflow-hidden shadow-xl shadow-green-500/5">
               {/* Valid Header */}
-              <div className="bg-green-500/10 px-6 py-4 flex items-center gap-3 border-b border-green-500/20">
+              <div className="bg-green-500/10 px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-green-500/20">
                 <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
                   <i className="fas fa-check-circle text-green-400 text-2xl"></i>
                 </div>
@@ -110,7 +110,7 @@ export default function VerifyView() {
 
               {/* Organization Info */}
               {(cert.club || cert.organization) && (
-                <div className="px-6 py-4 border-b border-dark-border flex items-center gap-3">
+                <div className="px-4 sm:px-6 py-4 border-b border-dark-border flex items-center gap-3">
                   {(cert.club?.logoUrl || cert.organizationLogo) ? (
                     <img src={cert.club?.logoUrl || cert.organizationLogo} alt="" className="w-12 h-12 rounded-xl object-cover border border-dark-border" />
                   ) : (
@@ -126,54 +126,54 @@ export default function VerifyView() {
               )}
 
               {/* Details */}
-              <div className="px-6 py-5 space-y-3.5">
-                <div className="flex justify-between items-center py-2 border-b border-dark-border/50">
+              <div className="px-4 sm:px-6 py-5 space-y-3.5">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2 border-b border-dark-border/50">
                   <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">Certificate ID</span>
-                  <span className="font-mono text-sm font-bold text-green-400">{cert.certificateId}</span>
+                  <span className="font-mono text-sm font-bold text-green-400 break-all">{cert.certificateId}</span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-dark-border/50">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2 border-b border-dark-border/50">
                   <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">Recipient</span>
                   <span className="text-sm font-bold text-dark-text">{cert.memberName}</span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-dark-border/50">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2 border-b border-dark-border/50">
                   <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">University ID</span>
-                  <span className="font-mono text-sm text-dark-text">{cert.universityId}</span>
+                  <span className="font-mono text-sm text-dark-text break-all">{cert.universityId}</span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-dark-border/50">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2 border-b border-dark-border/50">
                   <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">Department</span>
                   <span className="text-sm text-dark-text">{cert.department}</span>
                 </div>
                 {cert.session && (
-                  <div className="flex justify-between items-center py-2 border-b border-dark-border/50">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2 border-b border-dark-border/50">
                     <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">Session</span>
                     <span className="text-sm text-dark-text">{cert.session}</span>
                   </div>
                 )}
                 {cert.post && (
-                  <div className="flex justify-between items-center py-2 border-b border-dark-border/50">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2 border-b border-dark-border/50">
                     <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">Position</span>
                     <span className="text-sm font-semibold text-blue-400">{cert.post}</span>
                   </div>
                 )}
                 {cert.eventName && (
-                  <div className="flex justify-between items-center py-2 border-b border-dark-border/50">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2 border-b border-dark-border/50">
                     <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">Event</span>
-                    <span className="text-sm text-purple-400">{cert.eventName}</span>
+                    <span className="text-sm text-purple-400 break-words">{cert.eventName}</span>
                   </div>
                 )}
                 {cert.servicePeriod && (
-                  <div className="flex justify-between items-center py-2 border-b border-dark-border/50">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2 border-b border-dark-border/50">
                     <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">Service Period</span>
                     <span className="text-sm text-dark-text">{cert.servicePeriod}</span>
                   </div>
                 )}
-                <div className="flex justify-between items-center py-2 border-b border-dark-border/50">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2 border-b border-dark-border/50">
                   <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">Issued Date</span>
                   <span className="text-sm text-dark-text">{new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
                 </div>
-                <div className="flex justify-between items-center py-2">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2">
                   <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">Issued By</span>
-                  <span className="text-sm text-dark-text">{cert.issuedBy}</span>
+                  <span className="text-sm text-dark-text break-words">{cert.issuedBy}</span>
                 </div>
 
                 {/* Signatories */}

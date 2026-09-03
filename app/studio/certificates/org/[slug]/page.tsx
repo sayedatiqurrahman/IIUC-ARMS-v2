@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import Link from 'next/link';
-import { downloadCertPDF, downloadCertPNG, generateBulkCertPDF, CertPDFData } from '@/lib/club-cert-pdf';
+import { downloadCertPDF, generateBulkCertPDF, CertPDFData } from '@/lib/club-cert-pdf';
 import { CertSignatory, CertTheme, DEFAULT_THEME, THEME_PRESETS } from '@/lib/cert-theme';
 import { useAppStore } from '@/lib/store';
 import CertDesignPanel from '@/components/studio/CertDesignPanel';
@@ -424,10 +424,10 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
                           className="w-8 h-8 flex items-center justify-center bg-red-500/15 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/25 transition">
                           <i className="fas fa-file-pdf text-xs"></i>
                         </button>
-                        <button onClick={() => downloadCertPNG(toCertPDFData(cert))}
-                          className="w-8 h-8 flex items-center justify-center bg-qsis/15 text-qsis border border-qsis/30 rounded-lg hover:bg-qsis/25 transition">
-                          <i className="fas fa-image text-xs"></i>
-                        </button>
+                        <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
+                          className="w-8 h-8 flex items-center justify-center bg-dark-bg3 text-dark-text border border-dark-border rounded-lg hover:border-qsis transition no-underline">
+                          <i className="fas fa-eye text-xs"></i>
+                        </a>
                       </div>
                     </div>
                   </div>

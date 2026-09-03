@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAppStore } from '@/lib/store';
 import { parseClubRoles } from '@/lib/club-member-roles';
 import QRCode from 'qrcode';
-import { downloadCertPDF, downloadCertPNG, generateBulkCertPDF, CertPDFData } from '@/lib/club-cert-pdf';
+import { downloadCertPDF, generateBulkCertPDF, CertPDFData } from '@/lib/club-cert-pdf';
 import { CertSignatory, CertTheme, DEFAULT_THEME, THEME_PRESETS } from '@/lib/cert-theme';
 import { generateSignatureDataURL } from '@/lib/signature-gen';
 
@@ -444,10 +444,10 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
                           className="px-3 py-1.5 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
                           <i className="fas fa-file-pdf mr-1"></i>PDF
                         </button>
-                        <button onClick={() => downloadCertPNG(toCertPDFData(cert))}
-                          className="px-3 py-1.5 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
-                          <i className="fas fa-image mr-1"></i>PNG
-                        </button>
+                        <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-dark-bg3 text-dark-text border border-dark-border rounded-lg text-xs font-semibold hover:border-qsis transition no-underline">
+                          <i className="fas fa-eye mr-1"></i>View
+                        </a>
                       </div>
                     </div>
                   </div>

@@ -54,11 +54,11 @@ export default function CertificateVerifyView({ params }: { params: Promise<{ ce
             <input
               type="text" value={manualInput} onChange={e => setManualInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleManualVerify()}
-              className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm font-mono outline-none focus:border-qsis"
+              className="flex-1 min-w-0 px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm font-mono outline-none focus:border-qsis"
               placeholder="IIUC-XXXX-XXXX-XXXX"
             />
             <button onClick={handleManualVerify} disabled={!manualInput.trim()}
-              className="px-4 py-2.5 rounded-lg bg-qsis text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50">
+              className="px-4 py-2.5 rounded-lg bg-qsis text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 shrink-0">
               <i className="fas fa-search"></i>
             </button>
           </div>
@@ -69,54 +69,54 @@ export default function CertificateVerifyView({ params }: { params: Promise<{ ce
             <i className="fas fa-spinner fa-spin text-qsis text-xl"></i>
           </div>
         ) : valid === true && cert ? (
-          <div className="bg-green-500/5 border-2 border-green-500/30 rounded-2xl p-6 text-center">
+          <div className="bg-green-500/5 border-2 border-green-500/30 rounded-2xl p-4 sm:p-6 text-center">
             <div className="w-14 h-14 mx-auto rounded-full bg-green-500/20 flex items-center justify-center mb-3">
               <i className="fas fa-check-circle text-green-400 text-3xl"></i>
             </div>
             <h2 className="text-lg font-bold text-green-400 mb-4">Certificate Verified</h2>
-            <div className="bg-dark-bg rounded-xl p-4 text-left space-y-3">
+            <div className="bg-dark-bg rounded-xl p-3 sm:p-4 text-left space-y-3">
               {(cert.club?.logoUrl || cert.organizationLogo) && (
                 <div className="flex justify-center mb-2">
                   <img src={cert.club?.logoUrl || cert.organizationLogo} alt="" className="w-12 h-12 rounded-lg object-cover" />
                 </div>
               )}
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">Certificate ID</span>
-                <span className="font-mono font-bold text-dark-text">{cert.certificateId}</span>
+                <span className="font-mono font-bold text-dark-text break-all">{cert.certificateId}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">{cert.source === 'studio' ? 'Organization' : 'Club'}</span>
                 <span className="font-semibold text-dark-text">{cert.club?.name || cert.organization}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">Member Name</span>
                 <span className="font-semibold text-dark-text">{cert.memberName}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">University ID</span>
-                <span className="font-mono text-dark-text">{cert.universityId}</span>
+                <span className="font-mono text-dark-text break-all">{cert.universityId}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">Department</span>
                 <span className="text-dark-text">{cert.department}</span>
               </div>
-              {cert.session && <div className="flex justify-between text-sm">
+              {cert.session && <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">Session</span>
                 <span className="text-dark-text">{cert.session}</span>
               </div>}
-              {cert.post && <div className="flex justify-between text-sm">
+              {cert.post && <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">Post</span>
                 <span className="text-qsis font-semibold">{cert.post}</span>
               </div>}
-              {cert.eventName && <div className="flex justify-between text-sm">
+              {cert.eventName && <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">Event</span>
-                <span className="text-dark-text">{cert.eventName}</span>
+                <span className="text-dark-text break-words">{cert.eventName}</span>
               </div>}
-              {cert.servicePeriod && <div className="flex justify-between text-sm">
+              {cert.servicePeriod && <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">Service Period</span>
                 <span className="text-dark-text">{cert.servicePeriod}</span>
               </div>}
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">Issued</span>
                 <span className="text-dark-text">{new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
               </div>
@@ -125,7 +125,7 @@ export default function CertificateVerifyView({ params }: { params: Promise<{ ce
                   <p className="text-[0.7rem] text-dark-text3 mb-2 font-semibold">SIGNATORIES</p>
                   <div className="space-y-2">
                     {cert.signatories.map((sig: any, i: number) => (
-                      <div key={i} className="flex items-center gap-2 text-xs">
+                      <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                         <div className="w-1 h-1 rounded-full bg-qsis"></div>
                         <span className="text-dark-text font-semibold">{sig.name}</span>
                         <span className="text-dark-text3">—</span>
@@ -136,9 +136,9 @@ export default function CertificateVerifyView({ params }: { params: Promise<{ ce
                   </div>
                 </div>
               )}
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
                 <span className="text-dark-text2">Issued By</span>
-                <span className="text-dark-text">{cert.issuedBy}</span>
+                <span className="text-dark-text break-words">{cert.issuedBy}</span>
               </div>
             </div>
             <p className="text-xs text-green-400/70 mt-4">
