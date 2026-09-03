@@ -129,6 +129,58 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   }
 }
 
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  const rl = rateLimit(req, RATE_LIMITS.faculty);
+  if (!rl.success) return rl.response!;
+  try {
+    const email = await getUserEmail(req);
+    if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { slug } = await params;
+    const { prisma } = await import('@/lib/prisma');
+    const club = await prisma.club.findUnique({ where: { slug } });
+    if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+
+    if (!(await canIssueCertificates(email, club.id))) {
+      return NextResponse.json({ error: 'Not authorized to edit certificates' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { certificateId, data } = body;
+    if (!certificateId || !data) {
+      return NextResponse.json({ error: 'certificateId and data required' }, { status: 400 });
+    }
+
+    const { memberName, universityId, department, session, post, eventName, servicePeriod, signatories } = data || {};
+    if (!memberName?.trim() || !universityId?.trim() || !department?.trim()) {
+      return NextResponse.json({ error: 'memberName, universityId, department are required' }, { status: 400 });
+    }
+
+    const existing = await prisma.clubCertificate.findFirst({
+      where: { certificateId, clubId: club.id },
+    });
+    if (!existing) return NextResponse.json({ error: 'Certificate not found' }, { status: 404 });
+
+    const updated = await prisma.clubCertificate.update({
+      where: { id: existing.id },
+      data: {
+        memberName: memberName.trim(),
+        universityId: universityId.trim(),
+        department: department.trim(),
+        session: session || null,
+        post: post || null,
+        eventName: eventName || null,
+        servicePeriod: servicePeriod || null,
+        signatories: signatories ? JSON.stringify(signatories) : null,
+      },
+    });
+
+    return NextResponse.json({ success: true, certificate: updated });
+  } catch {
+    return NextResponse.json({ error: 'Failed to update certificate' }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const rl = rateLimit(req, RATE_LIMITS.faculty);
   if (!rl.success) return rl.response!;

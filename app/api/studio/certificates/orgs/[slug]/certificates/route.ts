@@ -103,3 +103,55 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: 'Failed to issue certificates' }, { status: 500 });
   }
 }
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  const rl = rateLimit(req, RATE_LIMITS.faculty);
+  if (!rl.success) return rl.response!;
+  try {
+    const email = await getUserEmail(req);
+    if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { slug } = await params;
+    const { prisma } = await import('@/lib/prisma');
+
+    const org = await prisma.studioOrganization.findUnique({ where: { slug } });
+    if (!org) return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    if (org.createdBy !== email) return NextResponse.json({ error: 'Not authorized to edit certificates for this organization' }, { status: 403 });
+
+    const body = await req.json();
+    const { certificateId, data } = body;
+    if (!certificateId || !data) {
+      return NextResponse.json({ error: 'certificateId and data required' }, { status: 400 });
+    }
+    if (!data.memberName?.trim() || !data.universityId?.trim() || !data.department?.trim()) {
+      return NextResponse.json({ error: 'memberName, universityId, department are required' }, { status: 400 });
+    }
+
+    const existing = await prisma.studioCertificate.findFirst({
+      where: { certificateId, orgId: org.id },
+    });
+    if (!existing) return NextResponse.json({ error: 'Certificate not found' }, { status: 404 });
+
+    const signatoriesJson = data.signatories && data.signatories.length > 0
+      ? JSON.stringify(data.signatories.filter((s: any) => s.name?.trim()))
+      : null;
+
+    const updated = await prisma.studioCertificate.update({
+      where: { id: existing.id },
+      data: {
+        memberName: data.memberName.trim(),
+        universityId: data.universityId.trim(),
+        department: data.department.trim(),
+        session: data.session?.trim() || null,
+        post: data.post?.trim() || null,
+        eventName: data.eventName?.trim() || null,
+        servicePeriod: data.servicePeriod?.trim() || null,
+        signatories: signatoriesJson,
+      },
+    });
+
+    return NextResponse.json({ success: true, certificate: updated });
+  } catch {
+    return NextResponse.json({ error: 'Failed to update certificate' }, { status: 500 });
+  }
+}

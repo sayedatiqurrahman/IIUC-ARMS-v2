@@ -40,6 +40,9 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
   const [issued, setIssued] = useState<any[]>([]);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [qrUrls, setQrUrls] = useState<Record<string, string>>({});
+  const [editingCert, setEditingCert] = useState<any>(null);
+  const [certDraft, setCertDraft] = useState({ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '' });
+  const [editCertSaving, setEditCertSaving] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isOwner = org?.createdBy === profile.email;
@@ -155,6 +158,40 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
       await generateBulkCertPDF(issued.map(toCertPDFData));
     } catch { alert('PDF generation failed'); }
     setGeneratingPdf(false);
+  }
+
+  async function handleOpenEditCert(cert: any) {
+    if (!cert) return;
+    setEditingCert(cert);
+    setCertDraft({
+      memberName: cert.memberName || '',
+      universityId: cert.universityId || '',
+      department: cert.department || '',
+      session: cert.session || '',
+      post: cert.post || '',
+      eventName: cert.eventName || '',
+      servicePeriod: cert.servicePeriod || '',
+    });
+  }
+
+  async function handleSaveEditCert() {
+    if (!editingCert || !slug) return;
+    setEditCertSaving(true);
+    try {
+      const res = await fetch(`/api/studio/certificates/orgs/${slug}/certificates`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ certificateId: editingCert.certificateId, data: certDraft }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCerts(prev => prev.map((c: any) => c.certificateId === editingCert.certificateId ? data.certificate : c));
+        setEditingCert(null);
+      } else {
+        alert(data.error || 'Failed to update certificate');
+      }
+    } catch { alert('Network error'); }
+    setEditCertSaving(false);
   }
 
   function toCertPDFData(cert: any): CertPDFData {
@@ -428,6 +465,13 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
                           className="w-8 h-8 flex items-center justify-center bg-dark-bg3 text-dark-text border border-dark-border rounded-lg hover:border-qsis transition no-underline">
                           <i className="fas fa-eye text-xs"></i>
                         </a>
+                        {isOwner && (
+                          <button onClick={() => handleOpenEditCert(cert)}
+                            className="w-8 h-8 flex items-center justify-center bg-blue-500/15 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/25 transition"
+                            title="Edit certificate">
+                            <i className="fas fa-edit text-xs"></i>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -472,6 +516,32 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ═══ EDIT CERTIFICATE ═══ */}
+        {editingCert && (
+          <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setEditingCert(null)}>
+            <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[80vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}>
+              <h3 className="text-base font-bold text-dark-text mb-1"><i className="fas fa-edit text-qsis mr-2"></i>Edit Certificate {editingCert.certificateId}</h3>
+              <p className="text-xs text-dark-text2 mb-4">Update recipient details. The certificate ID and issue date stay unchanged.</p>
+              <div className="space-y-3">
+                {([['memberName', 'Member Name', true], ['universityId', 'University ID', true], ['department', 'Department', true], ['session', 'Session'], ['post', 'Post'], ['eventName', 'Event Name'], ['servicePeriod', 'Service Period']] as const).map(([key, label, required]) => (
+                  <div key={key}>
+                    <label className="text-xs text-dark-text2 font-semibold mb-1 block">{label}{required && <span className="text-red-400"> *</span>}</label>
+                    <input type="text" value={certDraft[key]} onChange={e => setCertDraft(d => ({ ...d, [key]: e.target.value }))}
+                      className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => setEditingCert(null)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+                <button onClick={handleSaveEditCert} disabled={editCertSaving || !certDraft.memberName.trim() || !certDraft.universityId.trim() || !certDraft.department.trim()}
+                  className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold transition disabled:opacity-50">
+                  {editCertSaving ? <i className="fas fa-spinner fa-spin"></i> : 'Save Changes'}
+                </button>
               </div>
             </div>
           </div>

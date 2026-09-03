@@ -103,6 +103,9 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
   const [certSearch, setCertSearch] = useState('');
   const [certResults, setCertResults] = useState<any[]>([]);
+  const [editingCert, setEditingCert] = useState<any>(null);
+  const [editCertSaving, setEditCertSaving] = useState(false);
+  const [certDraft, setCertDraft] = useState({ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '' });
 
   const [logoUploading, setLogoUploading] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
@@ -412,6 +415,40 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
       else alert(data.error || 'Failed');
     } catch { alert('Network error'); }
     setSubmittingClaim(false);
+  }
+
+  async function handleOpenEditCert(cert: any) {
+    if (!cert) return;
+    setEditingCert(cert);
+    setCertDraft({
+      memberName: cert.memberName || '',
+      universityId: cert.universityId || '',
+      department: cert.department || '',
+      session: cert.session || '',
+      post: cert.post || '',
+      eventName: cert.eventName || '',
+      servicePeriod: cert.servicePeriod || '',
+    });
+  }
+
+  async function handleSaveEditCert() {
+    if (!editingCert || !slug) return;
+    setEditCertSaving(true);
+    try {
+      const res = await fetch(`/api/clubs/${slug}/certificates`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ certificateId: editingCert.certificateId, data: certDraft }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCertResults(prev => prev.map((c: any) => c.certificateId === editingCert.certificateId ? data.certificate : c));
+        setEditingCert(null);
+      } else {
+        alert(data.error || 'Failed to update certificate');
+      }
+    } catch { alert('Network error'); }
+    setEditCertSaving(false);
   }
 
   function toCertPDFData(cert: any): CertPDFData {
@@ -1340,6 +1377,13 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                               title="View certificate design">
                               <i className="fas fa-eye text-xs"></i>
                             </a>
+                            {canIssueCert && (
+                              <button onClick={() => handleOpenEditCert(cert)}
+                                className="w-8 h-8 flex items-center justify-center bg-blue-500/15 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/25 transition"
+                                title="Edit certificate">
+                                <i className="fas fa-edit text-xs"></i>
+                              </button>
+                            )}
                             {isAdmin && (
                               <button onClick={async () => {
                                 if (!confirm(`Delete certificate ${cert.certificateId}?`)) return;
@@ -1667,6 +1711,27 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
           <div className="flex gap-3 mt-2">
             <button onClick={() => setEditingMember(null)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
             <button onClick={handleChangeRole} className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold transition">Update</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Edit Certificate ── */}
+      <Modal isOpen={!!editingCert} onClose={() => setEditingCert(null)} title={`Edit Certificate ${editingCert?.certificateId || ''}`}>
+        <div className="space-y-3 px-4 pb-4">
+          <p className="text-xs text-dark-text2 -mt-1">Update the recipient details for this certificate. The certificate ID and issue date stay unchanged.</p>
+          {([['memberName', 'Member Name', true], ['universityId', 'University ID', true], ['department', 'Department', true], ['session', 'Session'], ['post', 'Post'], ['eventName', 'Event Name'], ['servicePeriod', 'Service Period']] as const).map(([key, label, required]) => (
+            <div key={key}>
+              <label className="text-sm text-dark-text2 font-semibold mb-1 block">{label}{required && <span className="text-red-400"> *</span>}</label>
+              <input type="text" value={certDraft[key]} onChange={e => setCertDraft(d => ({ ...d, [key]: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" />
+            </div>
+          ))}
+          <div className="flex gap-3 mt-2">
+            <button onClick={() => setEditingCert(null)} className="flex-1 px-3 py-2.5 rounded-lg border border-dark-border text-dark-text2 text-sm font-semibold hover:bg-dark-bg3 transition">Cancel</button>
+            <button onClick={handleSaveEditCert} disabled={editCertSaving || !certDraft.memberName.trim() || !certDraft.universityId.trim() || !certDraft.department.trim()}
+              className="flex-1 px-3 py-2.5 rounded-lg bg-qsis hover:bg-qsis/80 text-dark-text text-sm font-semibold transition disabled:opacity-50">
+              {editCertSaving ? <i className="fas fa-spinner fa-spin"></i> : 'Save Changes'}
+            </button>
           </div>
         </div>
       </Modal>
