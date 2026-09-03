@@ -120,8 +120,8 @@ export interface CertTheme {
 export const DESIGN_DEFAULTS: Required<CertDesignConfig> = {
   text: {
     mainTitle: 'CERTIFICATE',
-    subtitle: 'OF APPRECIATION',
-    intro: 'This is to certify that',
+    subtitle: 'OF ACHIEVEMENT',
+    intro: 'Proudly presented to',
     closing: 'THANK YOU FOR YOUR VALUABLE CONTRIBUTION',
     institutionName: 'INTERNATIONAL ISLAMIC UNIVERSITY CHITTAGONG',
     tagline: 'An International Centre for Higher Education and Research',
@@ -182,9 +182,9 @@ export const DEFAULT_THEME: CertTheme = {
     showAbbreviation: true,
     showLocation: true,
   },
-  title: {
+    title: {
     fontSize: 26,
-    subtitle: 'OF APPRECIATION',
+    subtitle: 'OF ACHIEVEMENT',
     subtitleFontSize: 12,
     decoration: 'line',
   },
