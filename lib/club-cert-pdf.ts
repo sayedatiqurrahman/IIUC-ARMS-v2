@@ -223,7 +223,7 @@ const fontDescent = (pt: number) => pt * PT_MM * 0.25;
 
 // Baseline-to-baseline pitch needed between a line of size `prevPt` and the
 // next line of size `nextPt`: previous descenders + next ascenders + breathing.
-const linePitch = (prevPt: number, nextPt: number) => fontDescent(prevPt) + fontAscent(nextPt) + 1.8;
+const linePitch = (prevPt: number, nextPt: number) => fontDescent(prevPt) + fontAscent(nextPt) + 2.2;
 
 // Draw one centered line, shrinking until it fits maxWidth. Returns the size used.
 function drawCenteredText(
@@ -316,7 +316,7 @@ function drawBorder(p: any, t: CertTheme) {
 
 function drawHeader(p: any, t: CertTheme, data: CertPDFData, logos: { iiuc?: string; club?: string }) {
   const design = resolveDesign(t.design);
-  const top = CONTENT_TOP + 4;
+  const top = CONTENT_TOP + 5.5;
 
   // Logos (configurable size, preserved aspect). imageRatio is a fallback aspect
   // (w/h) used because jsPDF cannot readily read PNG pixel dimensions before add.
@@ -396,7 +396,7 @@ function drawTitle(p: any, t: CertTheme, headerBottom: number) {
 
   // Title baseline is placed safely below the header (with its cap height above).
   const titlePt = design.fonts.titleFontSize || t.title?.fontSize || 26;
-  const titleBase = headerBottom + 3.5 + fontAscent(titlePt);
+  const titleBase = headerBottom + 4.2 + fontAscent(titlePt);
 
   const titleText = design.text.mainTitle || 'CERTIFICATE';
   const titleSize = drawCenteredText(p, titleText, 'serif', 'bold', titlePt, primary, titleBase, CONTENT_W - 40, 16);
@@ -404,7 +404,7 @@ function drawTitle(p: any, t: CertTheme, headerBottom: number) {
 
   // Decoration row sits below the title's descender line.
   const decoration = t.title?.decoration || 'flourish';
-  const decoY = titleBase + fontDescent(titleSize) + 1.8;
+  const decoY = titleBase + fontDescent(titleSize) + 2.2;
   p.setDrawColor(...secondary);
   p.setLineWidth(0.3);
 
@@ -414,10 +414,10 @@ function drawTitle(p: any, t: CertTheme, headerBottom: number) {
     p.setFillColor(...secondary);
     for (let i = -3; i <= 3; i++) p.circle(CX + i * 2.4, decoY, 0.5, 'F');
   } else if (decoration === 'line') {
-    p.line(CX - 24, decoY, CX - 3, decoY);
-    p.line(CX + 3, decoY, CX + 24, decoY);
+    p.line(CX - 26, decoY, CX - 3, decoY);
+    p.line(CX + 3, decoY, CX + 26, decoY);
     p.setFillColor(...secondary);
-    p.circle(CX, decoY, 0.6, 'F');
+    p.circle(CX, decoY, 0.7, 'F');
   } else {
     // diamond (default) + flanking flourishes
     const fy = titleBase - 1;
@@ -437,14 +437,14 @@ function drawTitle(p: any, t: CertTheme, headerBottom: number) {
 
   // Subtitle, letter-spaced, placed below the ornament row.
   const subPt = design.fonts.subtitleFontSize || 10;
-  const subBase = decoY + 2.8 + fontAscent(subPt);
+  const subBase = decoY + 3.2 + fontAscent(subPt);
   const subtitle = (design.text.subtitle || t.title?.subtitle || 'OF APPRECIATION').toUpperCase();
   setStyle(p, 'sans', 'bold', subPt, secondary);
   p.setCharSpace(design.fonts.titleLetterSpacing != null ? design.fonts.titleLetterSpacing : 3.4);
   p.text(subtitle, CX, subBase, { align: 'center' });
   p.setCharSpace(0);
 
-  return subBase + fontDescent(subPt);
+  return subBase + fontDescent(subPt) + 0.6;
 }
 
 async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number, closingMax: number) {
@@ -457,7 +457,7 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
   // ── Fixed intro + recipient name + underline block ──
   const introBase = startY + 2;
   setStyle(p, 'serif', 'normal', design.fonts.bodySize || 9.5, textColor);
-  p.setCharSpace(1.2);
+  p.setCharSpace(1.4);
   p.text(design.text.intro || 'This is to certify that', CX, introBase, { align: 'center' });
   p.setCharSpace(0);
   const introBottom = introBase + fontDescent(9.5);
@@ -466,20 +466,20 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
   const nameDataUrl = await renderScriptText(name, {
     font: design.fonts.nameScriptFont || 'Great Vibes',
     maxWidthPx: 900,
-    maxHeightPx: 90,
+    maxHeightPx: 96,
     color: `rgb(${primary[0]},${primary[1]},${primary[2]})`,
   });
 
   const nameMaxW = CONTENT_W - 60;
-  const nameTop = introBottom + 2.4;
-  const nameBottom = nameTop + 10;
+  const nameTop = introBottom + 2.8;
+  const nameBottom = nameTop + 10.5;
   const serifName = () => {
     setStyle(p, 'serif', 'bold', design.fonts.nameSize || 20, primary);
     p.text(name.toUpperCase(), CX, nameBottom - 1.2, { align: 'center' });
   };
   if (nameDataUrl) {
     try {
-      p.addImage(nameDataUrl, 'PNG', CX - nameMaxW / 2, nameTop, nameMaxW, 10);
+      p.addImage(nameDataUrl, 'PNG', CX - nameMaxW / 2, nameTop, nameMaxW, 10.5);
     } catch {
       serifName();
     }
@@ -487,7 +487,7 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
     serifName();
   }
 
-  const underlineY = nameBottom + 1.4;
+  const underlineY = nameBottom + 1.6;
   let nameW = 0;
   try {
     setStyle(p, 'serif', 'bold', design.fonts.nameSize || 20, primary);
@@ -498,10 +498,10 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
   p.setLineWidth(0.35);
   p.line(CX - w / 2, underlineY, CX + w / 2, underlineY);
   p.setFillColor(...secondary);
-  p.circle(CX - w / 2, underlineY, 0.6, 'F');
-  p.circle(CX + w / 2, underlineY, 0.6, 'F');
+  p.circle(CX - w / 2, underlineY, 0.7, 'F');
+  p.circle(CX + w / 2, underlineY, 0.7, 'F');
 
-  const bodyFirstBase = underlineY + 6.2;
+  const bodyFirstBase = underlineY + 6.6;
 
   // ── Recognition / body paragraphs ──
   const recognition = getRoleRecognition(data.post || '');
@@ -576,10 +576,10 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
 function drawClosing(p: any, t: CertTheme, y: number) {
   const design = resolveDesign(t.design);
   setStyle(p, 'sans', 'bold', 7.5, t.colors.secondary);
-  p.setCharSpace(1);
+  p.setCharSpace(1.2);
   p.text(design.text.closing || 'THANK YOU FOR YOUR VALUABLE CONTRIBUTION', CX, y, { align: 'center' });
   p.setCharSpace(0);
-  return y + 8;
+  return y + 8.5;
 }
 
 // Measure how far below the signature line the tallest block (signature names +
@@ -709,18 +709,18 @@ async function drawSignatures(p: any, t: CertTheme, signatories: CertSignatory[]
 // stay clear of it both horizontally and vertically.
 const FOOTER_BAND_PAD = 2;
 function footerBandTop(qrEnabled = true): number {
-  const qrSize = 15;
+  const qrSize = 16;
   const extra = qrEnabled ? 0 : 6; // without QR we can drop the band closer to the edge
-  return PAGE_H - FRAME_INNER - qrSize - 11 + extra - FOOTER_BAND_PAD;
+  return PAGE_H - FRAME_INNER - qrSize - 13 + extra - FOOTER_BAND_PAD;
 }
 
 async function drawFooter(p: any, t: CertTheme, data: CertPDFData, siteUrl: string) {
   const design = resolveDesign(t.design);
   const qrEnabled = design.qr.enabled !== false;
   const bandTop = footerBandTop(qrEnabled);
-  const dateY = PAGE_H - FRAME_INNER - 4;
+  const dateY = bandTop + FOOTER_BAND_PAD + 2;
 
-  // Date — bottom left.
+  // Date — bottom left, aligned with the footer band top.
   const d = new Date(data.issuedAt);
   const dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   p.setFont('times', 'italic');
@@ -728,14 +728,20 @@ async function drawFooter(p: any, t: CertTheme, data: CertPDFData, siteUrl: stri
   p.setTextColor(...t.colors.text);
   p.text(`Dated: ${dateStr}`, CONTENT_L + 2, dateY);
 
-  // Certificate ID — bottom left, under the date (kept away from the QR corner).
+  // Certificate ID — under the date (kept away from the QR corner).
   p.setFont('helvetica', 'normal');
   p.setFontSize(5.5);
   p.setTextColor(...t.colors.muted);
   p.text(`Certificate ID: ${data.certificateId}`, CONTENT_L + 2, dateY + 4);
 
+  // Verified-by line under the ID for authenticity.
+  p.setFont('helvetica', 'normal');
+  p.setFontSize(5);
+  p.setTextColor(...t.colors.secondary);
+  p.text('Verified by IIUC-ARMS', CONTENT_L + 2, dateY + 8);
+
   // QR — bottom right, inside its reserved region (only when enabled).
-  const qrSize = 15;
+  const qrSize = 16;
   const qrX = CONTENT_R - qrSize;
   const qrY = bandTop + FOOTER_BAND_PAD;
 
@@ -851,7 +857,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   // ---- Header ----
   // Canvas mirrors the PDF layout exactly: baseline math in mm, font sizes in pt,
   // everything converted through mmPx() so PNG/PDF outputs are consistent.
-  const topHmm = CONTENT_TOP + 4;
+  const topHmm = CONTENT_TOP + 5.5;
   const logoW = mmPx(d.logo.width || 20), logoH = mmPx(d.logo.height || 14);
   if (data.iiucLogoUrl) await (await import('./canvas-img')).drawCtx(ctx as any, data.iiucLogoUrl, C.contentL + mmPx(1), mmPx(topHmm), logoW, logoH, d.logo.opacity ?? 1);
   if (data.clubLogoUrl) await (await import('./canvas-img')).drawCtx(ctx as any, data.clubLogoUrl, C.contentR - mmPx(1) - logoW, mmPx(topHmm), logoW, logoH, d.logo.opacity ?? 1);
@@ -909,7 +915,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   const titleText = d.text.mainTitle || 'CERTIFICATE';
   const titlePt = d.fonts.titleFontSize || t.title?.fontSize || 26;
-  const titleBaseMm = headerBottomMm + 3.5 + fontAscent(titlePt);
+  const titleBaseMm = headerBottomMm + 4.2 + fontAscent(titlePt);
   let tsize = titlePt * PT_MM * EXPORT_PX_PER_MM;
   ctx.font = font('Times New Roman', 'bold', tsize);
   while (tsize > 16 * PT_MM * EXPORT_PX_PER_MM && ctx.measureText(titleText).width > C.contentW - mmPx(40)) {
@@ -922,7 +928,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   const titleW = ctx.measureText(titleText).width;
 
   const decoration = t.title?.decoration || 'flourish';
-  const decoY = mmPx(titleBaseMm + fontDescent(titleUsedPt) + 1.8);
+  const decoY = mmPx(titleBaseMm + fontDescent(titleUsedPt) + 2.2);
   ctx.strokeStyle = rgb(t.colors.secondary); ctx.lineWidth = 0.3 * EXPORT_PX_PER_MM;
   if (decoration === 'none') {
     // no ornament row
@@ -950,7 +956,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
 
   // Subtitle, letter-spaced, below the ornament row.
   const subPt = d.fonts.subtitleFontSize || 10;
-  const subBaseMm = titleBaseMm + fontDescent(titleUsedPt) + 1.8 + 2.8 + fontAscent(subPt);
+  const subBaseMm = titleBaseMm + fontDescent(titleUsedPt) + 2.2 + 3.2 + fontAscent(subPt);
   const subtitle = (d.text.subtitle || t.title?.subtitle || 'OF APPRECIATION').toUpperCase();
   const subPx = subPt * PT_MM * EXPORT_PX_PER_MM;
   ctx.font = font('Helvetica', 'bold', subPx);
@@ -963,21 +969,21 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   }
 
   // ---- Intro + name + body + closing ----
-  const bodyStartMm = subBaseMm + fontDescent(subPt) + 3;
+  const bodyStartMm = subBaseMm + fontDescent(subPt) + 3.6;
   const introBaseMm = bodyStartMm + 2;
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.font = font('Times New Roman', 'normal', (d.fonts.bodySize || 9.5) * PT_MM * EXPORT_PX_PER_MM);
   ctx.fillStyle = rgb(t.colors.text);
   const intro = d.text.intro || 'This is to certify that';
-  ctx.save(); ctx.letterSpacing = '1.2px'; ctx.fillText(intro, C.cx, mmPx(introBaseMm)); ctx.restore();
+  ctx.save(); ctx.letterSpacing = '1.4px'; ctx.fillText(intro, C.cx, mmPx(introBaseMm)); ctx.restore();
   const introBottomMm = introBaseMm + fontDescent(9.5);
 
   // recipient name — script font with serif fallback
   const name = data.memberName.trim();
   const nameSizePt = d.fonts.nameSize || 20;
   const nameLarge = name.toUpperCase();
-  const nameTopMm = introBottomMm + 2.4;
-  const nameBottomMm = nameTopMm + 10;
+  const nameTopMm = introBottomMm + 2.8;
+  const nameBottomMm = nameTopMm + 10.5;
   const nameBasePx = mmPx(nameBottomMm - 1.2);
   let shownAsScript = false;
   try {
@@ -996,17 +1002,17 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   }
 
   // underline
-  const underlineYmm = nameBottomMm + 1.4;
+  const underlineYmm = nameBottomMm + 1.6;
   ctx.font = font('Times New Roman', 'bold', nameSizePt * PT_MM * EXPORT_PX_PER_MM);
   const nameW = Math.min(ctx.measureText(nameLarge).width + mmPx(18), C.contentW - mmPx(60) + mmPx(12));
   const uyPx = mmPx(underlineYmm);
   ctx.strokeStyle = rgb(t.colors.secondary); ctx.lineWidth = 0.35 * EXPORT_PX_PER_MM;
   line2d(C.cx - nameW / 2, uyPx, C.cx + nameW / 2, uyPx);
   ctx.fillStyle = rgb(t.colors.secondary);
-  ctx.beginPath(); ctx.arc(C.cx - nameW / 2, uyPx, 0.6 * EXPORT_PX_PER_MM, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(C.cx + nameW / 2, uyPx, 0.6 * EXPORT_PX_PER_MM, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(C.cx - nameW / 2, uyPx, 0.7 * EXPORT_PX_PER_MM, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(C.cx + nameW / 2, uyPx, 0.7 * EXPORT_PX_PER_MM, 0, Math.PI * 2); ctx.fill();
 
-  const bodyFirstBaseMm = underlineYmm + 6.2;
+  const bodyFirstBaseMm = underlineYmm + 6.6;
 
   // body paragraphs
   const paragraphs: string[] = [];
@@ -1096,19 +1102,21 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   }
 
   // closing — always drawn, clamped above the signature / footer area
-  const closBaseMm = Math.min(yMm + 2, closingMaxMm);
+  const closBaseMm = Math.min(yMm + 2.5, closingMaxMm);
   const closingSizePx = 7.5 * PT_MM * EXPORT_PX_PER_MM;
   ctx.font = font('Helvetica', 'bold', closingSizePx); ctx.fillStyle = rgb(t.colors.secondary);
   ctx.fillText(d.text.closing || 'THANK YOU FOR YOUR VALUABLE CONTRIBUTION', C.cx, mmPx(closBaseMm));
 
   // ---- Footer band ----
   const bandTopPx = mmPx(footerBandTop(qrOn));
-  const footDateY = mmPx(PAGE_H - FRAME_INNER - 4);
+  const footDateY = mmPx(footerBandTop(qrOn) + FOOTER_BAND_PAD + 2);
   const dateStr = new Date(data.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   ctx.font = font('Times New Roman', 'italic', 6.5 * EXPORT_PX_PER_MM); ctx.textAlign = 'left'; ctx.fillStyle = rgb(t.colors.text);
   ctx.fillText(`Dated: ${dateStr}`, C.contentL + mmPx(2), footDateY);
   ctx.font = font('Helvetica', 'normal', 5.5 * EXPORT_PX_PER_MM); ctx.fillStyle = rgb(t.colors.muted);
   ctx.fillText(`Certificate ID: ${data.certificateId}`, C.contentL + mmPx(2), footDateY + mmPx(4));
+  ctx.font = font('Helvetica', 'normal', 5 * EXPORT_PX_PER_MM); ctx.fillStyle = rgb(t.colors.secondary);
+  ctx.fillText('Verified by IIUC-ARMS', C.contentL + mmPx(2), footDateY + mmPx(8));
 
   // ---- Signatures ----
   if (sigs.length > 0) {
@@ -1180,7 +1188,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
     try {
       const qrUrl = `${data.siteUrl || 'https://iiuc-arms.eu.cc'}/clubs/verify/${data.certificateId}`;
       const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 200, margin: 1, errorCorrectionLevel: 'H', color: { dark: '#1a1a2e', light: '#ffffff' } });
-      const qrSize = 15 * EXPORT_PX_PER_MM;
+      const qrSize = 16 * EXPORT_PX_PER_MM;
       const qrX = C.contentR - qrSize, qrY = bandTopPx + mmPx(FOOTER_BAND_PAD);
       ctx.fillStyle = '#ffffff'; ctx.fillRect(qrX - mmPx(1.5), qrY - mmPx(1.5), qrSize + mmPx(3), qrSize + mmPx(3));
       ctx.strokeStyle = rgb(t.colors.secondary); ctx.lineWidth = 0.3 * EXPORT_PX_PER_MM;
