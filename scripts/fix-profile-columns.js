@@ -39,7 +39,7 @@ async function main() {
     "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL UNIQUE,
     "email" TEXT, "name" TEXT, "universityId" TEXT, "whatsapp" TEXT,
-    "semester" TEXT, "image" TEXT,
+    "gender" TEXT, "semester" TEXT, "image" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "facebook" TEXT, "githubLogin" TEXT,
@@ -80,6 +80,7 @@ async function main() {
 
   await safeExec(`CREATE INDEX IF NOT EXISTS "Profile_githubLogin_idx" ON "Profile"("githubLogin")`, 'Profile.githubLogin idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "Profile_email_idx" ON "Profile"("email")`, 'Profile.email idx');
+  await safeExec(`ALTER TABLE "Profile" ADD COLUMN "gender" TEXT`, 'Profile.gender col');
   await safeExec(`ALTER TABLE "Profile" ADD COLUMN "telegramName" TEXT`, 'Profile.telegramName col');
   await safeExec(`ALTER TABLE "Profile" ADD COLUMN "telegramAvatar" TEXT`, 'Profile.telegramAvatar col');
 
