@@ -424,7 +424,7 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
                           className="w-8 h-8 flex items-center justify-center bg-red-500/15 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/25 transition">
                           <i className="fas fa-file-pdf text-xs"></i>
                         </button>
-                        <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
+                        <a href={`/clubs/preview/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
                           className="w-8 h-8 flex items-center justify-center bg-dark-bg3 text-dark-text border border-dark-border rounded-lg hover:border-qsis transition no-underline">
                           <i className="fas fa-eye text-xs"></i>
                         </a>

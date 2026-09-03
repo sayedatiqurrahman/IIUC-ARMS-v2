@@ -444,7 +444,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
                           className="px-3 py-1.5 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
                           <i className="fas fa-file-pdf mr-1"></i>PDF
                         </button>
-                        <a href={`/clubs/verify/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
+                        <a href={`/clubs/preview/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"
                           className="px-3 py-1.5 bg-dark-bg3 text-dark-text border border-dark-border rounded-lg text-xs font-semibold hover:border-qsis transition no-underline">
                           <i className="fas fa-eye mr-1"></i>View
                         </a>
