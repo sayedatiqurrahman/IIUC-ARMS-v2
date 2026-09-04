@@ -268,86 +268,83 @@ function drawBackground(p: any, t: CertTheme) {
   p.rect(FRAME - 0.8, FRAME - 0.8, PAGE_W - 2 * (FRAME - 0.8), PAGE_H - 2 * (FRAME - 0.8), 'F');
 }
 
-// Draw a small ornamental flower/diamond used at frame corners.
-function drawCornerOrnament(p: any, x: number, y: number, color: [number, number, number], r = 1.6) {
-  p.setFillColor(...color);
-  const rr = r;
-  // 4-petal flower via two rotated diamonds.
-  p.triangle(x, y - rr, x - rr * 0.7, y, x, y + rr, 'F');
-  p.triangle(x, y - rr, x + rr * 0.7, y, x, y + rr, 'F');
-  p.triangle(x - rr, y, x, y - rr * 0.7, x, y + rr * 0.7, 'F');
-  p.triangle(x - rr, y, x, y - rr * 0.7, x, y + rr * 0.7, 'F');
-  p.circle(x, y, rr * 0.28, 'F');
-}
-
-// Decorative border: a thick green band with a stepped "picket fence" top and
-// bottom, plus a diamond-studded inner line and corner flowers.
-function drawBorder(p: any, t: CertTheme) {
-  const primary = t.colors.primary;
-  const secondary = t.colors.secondary;
-  const greenLight: [number, number, number] = [22, 139, 10];
-
-  // Outer fine green frame.
-  p.setDrawColor(...primary);
-  p.setLineWidth(0.5);
-  p.rect(FRAME + 0.6, FRAME + 0.6, PAGE_W - 2 * (FRAME + 0.6), PAGE_H - 2 * (FRAME + 0.6), 'S');
-
-  // Inner double line.
-  p.setDrawColor(...secondary);
-  p.setLineWidth(0.25);
-  p.rect(FRAME_INNER + 1.4, FRAME_INNER + 1.4, PAGE_W - 2 * (FRAME_INNER + 1.4), PAGE_H - 2 * (FRAME_INNER + 1.4), 'S');
-
-  // Diamond rail along the inner frame.
-  p.setDrawColor(...secondary);
-  p.setLineWidth(0.18);
-  p.rect(FRAME_INNER, FRAME_INNER, PAGE_W - 2 * FRAME_INNER, PAGE_H - 2 * FRAME_INNER, 'S');
-
-  // Corner flowers.
-  if (t.border.cornerOrnaments) {
-    const fr = 2.2;
-    const d = 4.2;
-    const f = (x: number, y: number) => {
-      drawCornerOrnament(p, x, y, greenLight, fr);
-      p.setDrawColor(...secondary);
-      p.setLineWidth(0.3);
-      p.circle(x, y, 1.1, 'S');
-    };
-    f(FRAME_INNER + d, FRAME_INNER + d);
-    f(PAGE_W - FRAME_INNER - d, FRAME_INNER + d);
-    f(FRAME_INNER + d, PAGE_H - FRAME_INNER - d);
-    f(PAGE_W - FRAME_INNER - d, PAGE_H - FRAME_INNER - d);
+// Draw a stroked circular arc as fine line segments (jsPDF ellipse cannot take
+// angle ranges). Stroke width is controlled by the current setLineWidth.
+function drawArc(p: any, cx: number, cy: number, r: number, start: number, end: number, segments = 96) {
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i <= segments; i++) {
+    const a = start + (end - start) * (i / segments);
+    pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
   }
-
-  // Bottom green band.
-  p.setFillColor(...primary);
-  p.rect(FRAME, PAGE_H - FRAME_INNER - 4.5, PAGE_W - 2 * FRAME, 4.5, 'F');
-
-  // Deep-green accent under the band.
-  p.setFillColor(11, 110, 8);
-  p.rect(FRAME, PAGE_H - FRAME_INNER - 4.5, PAGE_W - 2 * FRAME, 1, 'F');
+  const segs: number[][] = [];
+  for (let i = 1; i < pts.length; i++) segs.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
+  p.lines(segs, pts[0][0], pts[0][1]);
 }
 
-// Slim decorative strip at the very top — subtle green accent bars at the left
-// edge, keeping the top-left / top-right corners clear for the header logos.
-function drawTopDecoration(p: any, t: CertTheme) {
+// Decorative border — fine inner frame plus a green bottom band with concentric
+// arcs at the bottom-right corner and side ribbons, matching certificate.html.
+function drawBorder(p: any, t: CertTheme) {
   const green: [number, number, number] = [22, 139, 10];
-  const greenDeep: [number, number, number] = [17, 110, 8];
+  const purple: [number, number, number] = [133, 0, 168];
 
-  // Corner accents that stay out of the way of the two header logos.
-  p.setFillColor(...greenDeep);
-  p.rect(FRAME, FRAME, 3, 3, 'F');
+  // Inner frame (thin decorative border inside the content area).
+  p.setDrawColor(...green);
+  p.setLineWidth(0.12);
+  p.rect(12, 12, PAGE_W - 24, PAGE_H - 24, 'S');
+
+  // Side ribbons — thin green strips + short blocks on the left/right edges.
   p.setFillColor(...green);
-  p.rect(PAGE_W - FRAME - 3, FRAME, 3, 3, 'F');
-  p.rect(FRAME, FRAME + 5, 2.2, 26, 'F');
-  p.rect(PAGE_W - FRAME - 2.2, FRAME + 5, 2.2, 26, 'F');
+  p.rect(12, 85, 1, 62, 'F');
+  p.rect(PAGE_W - 13, 85, 1, 62, 'F');
+  p.setFillColor(...green);
+  p.rect(12, 85, 40, 22, 'F');
+  p.rect(PAGE_W - 52, 85, 40, 22, 'F');
+
+  // Bottom green bar — full width at the very bottom.
+  p.setFillColor(...green);
+  p.rect(0, PAGE_H - 13, PAGE_W, 13, 'F');
+
+  // Concentric arcs at bottom-right corner (outer green).
+  p.setDrawColor(...green);
+  p.setLineWidth(10);
+  drawArc(p, PAGE_W + 30, PAGE_H + 44, 70, Math.PI, Math.PI * 1.5);
+
+  // Concentric arcs at bottom-right corner (inner purple).
+  p.setDrawColor(...purple);
+  p.setLineWidth(6);
+  drawArc(p, PAGE_W + 19, PAGE_H + 31, 44, Math.PI, Math.PI * 1.5);
 }
 
-// The new design drops the university banner at the top; the header reduces to
-// the top decorative strip plus a modest university line. Returns the y offset
-// where the title begins.
-function drawHeader(p: any, t: CertTheme, data: CertPDFData, logos: { iiuc?: string; club?: string }): number {
+// Purple geometric accents at the top-left corner — large rounded purple
+// rectangle with smaller green/purple squares, matching the certificate.html design.
+function drawTopDecoration(p: any) {
+  const purple: [number, number, number] = [133, 0, 168];
+  const green: [number, number, number] = [22, 139, 10];
+
+  // Large purple rounded-bottom rectangle at top-left (top corners hidden above
+  // the page edge so only the bottom reads as rounded).
+  p.setFillColor(...purple);
+  p.roundedRect(16, -20, 27, 60, 13, 13, 'F');
+
+  // Small purple square at top-right area.
+  p.setFillColor(...purple);
+  p.rect(PAGE_W - 33, 0, 18, 18, 'F');
+
+  // Green square below the purple one.
+  p.setFillColor(...green);
+  p.rect(PAGE_W - 46, 14, 13, 13, 'F');
+
+  // Smaller green square further down.
+  p.setFillColor(...green);
+  p.rect(PAGE_W - 36, 28, 9, 9, 'F');
+}
+
+// The reference design drops the university banner at the top; the header
+// reduces to the top decorative strip plus a modest university line. Logos live
+// in the circular award seals drawn separately (see drawSeal).
+function drawHeader(p: any, t: CertTheme, data: CertPDFData): number {
   const design = resolveDesign(t.design);
-  drawTopDecoration(p, t);
+  drawTopDecoration(p);
 
   // University + department line at the very top centre, small and elegant.
   const top = CONTENT_TOP + 2.5;
@@ -364,23 +361,6 @@ function drawHeader(p: any, t: CertTheme, data: CertPDFData, logos: { iiuc?: str
     base += linePitch(size, depSize);
     size = depSize;
   }
-
-  // Header logos — club/org on the left, university on the right. Each is fitted
-  // into a fixed-height band (14mm) preserving its natural aspect ratio.
-  const logoH = 14;
-  const logoTop = FRAME_INNER + 3.5;
-  const logoSlotW = 26;
-  const fitLogo = (u: string, xRightAligned: boolean) => {
-    try {
-      const info = p.getImageProperties(u);
-      const ratio = info.width / info.height;
-      let w = logoH * ratio;
-      if (w > logoSlotW) { w = logoSlotW; const h = w / ratio; p.addImage(u, 'PNG', xRightAligned ? CONTENT_R - w : CONTENT_L, logoTop + (logoH - h) / 2, w, h); return; }
-      p.addImage(u, 'PNG', xRightAligned ? CONTENT_R - w : CONTENT_L, logoTop + (logoH - w / ratio) / 2, w, logoH);
-    } catch {}
-  };
-  if (logos.club) fitLogo(logos.club, false);
-  if (logos.iiuc) fitLogo(logos.iiuc, true);
 
   // Thin elegant rule below the university line.
   const ruleY = base + fontDescent(size) + 2.6;
@@ -433,7 +413,8 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
   const textColor = t.colors.text;
   const primary = t.colors.primary;
   const secondary = t.colors.secondary;
-  const maxWidth = CONTENT_W - 30;
+  // Body text is kept narrower than the full width so it clears the award seals.
+  const maxWidth = SEAL_BODY_W;
 
   // ── Fixed intro + recipient name + underline block ──
   const introBase = startY + 2;
@@ -451,7 +432,7 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
     color: `rgb(${primary[0]},${primary[1]},${primary[2]})`,
   });
 
-  const nameMaxW = CONTENT_W - 60;
+  const nameMaxW = SEAL_BODY_W - 12;
   const nameTop = introBottom + 2.8;
   const nameBottom = nameTop + 10.5;
   const serifName = () => {
@@ -523,7 +504,7 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
   // line (closingMax - 6 reserves room for "THANK YOU…"). This is what keeps the
   // certificate text from ever piling onto the next section.
   const avail = closingMax - 6 - bodyFirstBase;
-  const startSize = design.fonts.bodySize || 9.5;
+  const startSize = (design.fonts.bodySize || 9.5) + 1.2;
   let chosen = startSize;
   for (let k = startSize; k >= 7.25; k -= 0.25) {
     chosen = k;
@@ -563,47 +544,64 @@ function drawClosing(p: any, t: CertTheme, y: number) {
   return y + 8.5;
 }
 
-// ── Best-Award seal ────────────────────────────────────────────────────────
-// A clean circular green "BEST AWARD" medal on the right side (the header
-// carries the club and university logos separately at the top corners).
-const SEAL_D = 34;               // seal outer diameter (mm)
-const SEAL_CX = PAGE_W - FRAME_INNER - 26;
-const SEAL_CY = 118;
+// ── Award seals ────────────────────────────────────────────────────────────
+// Two circular seals (like certificate.html) — university logo on the left,
+// club logo on the right. Each has a green outer ring, white ring, ink inner
+// ring and the logo centered on white.
+const SEAL_D = 40;               // seal outer diameter (mm)
+const SEAL_CX_L = 42;            // left seal — at the left side of the certificate
+const SEAL_CX_R = PAGE_W - 42;   // right seal — mirrored at the right side
+const SEAL_CY = 99;              // both seals vertically centred
+const SEAL_BODY_W = 162;         // centred body text width that stays clear of seals
 
-function drawSeal(p: any, t: CertTheme) {
+async function drawSeal(p: any, t: CertTheme, logos: { iiuc?: string; club?: string }, label?: string) {
   const green: [number, number, number] = [22, 139, 10];
   const greenDeep: [number, number, number] = [17, 110, 8];
   const r = SEAL_D / 2;
-  const cx = SEAL_CX;
-  const cy = SEAL_CY;
 
-  // Outer green disc.
-  p.setFillColor(...green);
-  p.circle(cx, cy, r, 'F');
+  const drawOne = (cx: number, url?: string, sub?: string) => {
+    // Outer green ring.
+    p.setFillColor(...green);
+    p.circle(cx, SEAL_CY, r, 'F');
 
-  // Cream inner disc.
-  p.setFillColor(...t.colors.background);
-  p.circle(cx, cy, r - 3, 'F');
+    // White ring divider.
+    p.setFillColor(255, 255, 255);
+    p.circle(cx, SEAL_CY, r - 3, 'F');
 
-  // Ink ring on the cream disc.
-  p.setDrawColor(...greenDeep);
-  p.setLineWidth(0.5);
-  p.circle(cx, cy, r - 5.6, 'S');
+    // Ink inner ring.
+    p.setDrawColor(...greenDeep);
+    p.setLineWidth(0.5);
+    p.circle(cx, SEAL_CY, r - 5.2, 'S');
 
-  // "BEST AWARD" centered in the medal.
-  p.setFont('times', 'bold');
-  p.setFontSize(6.5);
-  p.setTextColor(...greenDeep);
-  p.text('BEST', cx, cy - 2, { align: 'center' });
-  p.setFontSize(6.5);
-  p.text('AWARD', cx, cy + 3.6, { align: 'center' });
-  p.setFontSize(3.4);
-  p.setTextColor(...t.colors.muted);
-  p.text('- CERTIFICATE -', cx, cy + 8, { align: 'center' });
+    // Inner photo area.
+    p.setFillColor(255, 255, 255);
+    p.circle(cx, SEAL_CY, r - 5.2, 'F');
 
-  // Bottom ribbon accent under the disc.
-  p.setFillColor(...greenDeep);
-  p.roundedRect(cx - 8, cy + r + 1.5, 16, 2.2, 1, 1, 'F');
+    // Logo fitted inside the inner circle.
+    if (url) {
+      try {
+        const info = p.getImageProperties(url);
+        const ratio = info.width / info.height;
+        const box = (r - 5.2) * 1.7;
+        let w = box, h = box;
+        if (ratio > 1) { h = box / ratio; } else { w = box * ratio; }
+        p.addImage(url, 'PNG', cx - w / 2, SEAL_CY - h / 2, w, h);
+      } catch {}
+    }
+
+    // Small caption under the ring.
+    if (sub) {
+      p.setFont('times', 'bold');
+      let s = 4.2;
+      p.setFontSize(s);
+      while (s > 2.6 && p.getTextWidth(sub) > r * 1.8) { s -= 0.2; p.setFontSize(s); }
+      p.setTextColor(...t.colors.muted);
+      p.text(sub, cx, SEAL_CY + r + 3.6, { align: 'center' });
+    }
+  };
+
+  drawOne(SEAL_CX_L, logos.iiuc, label || 'UNIVERSITY');
+  drawOne(SEAL_CX_R, logos.club);
 }
 
 // Measure how far below the signature line the tallest block (signature names +
@@ -662,11 +660,11 @@ async function drawSignatures(p: any, t: CertTheme, signatories: CertSignatory[]
 
   const sigImgH = list.some(s => s.signatureUrl || s.autoSignature !== false) ? 11 : 0;
 
-  // Anchor the signature line so the whole block sits just above the footer band.
+  // Anchor the signature line close to the closing text, but never let the
+  // block drop into the QR/footer-band reserved region.
   const safeBottom = footBandTop - 2;
-  const availTop = topY + 6;
   const targetLine = safeBottom - maxBelow;
-  const lineY = targetLine < availTop ? availTop : targetLine;
+  const lineY = Math.min(targetLine, Math.max(topY + 6, topY + 17));
 
   for (let i = 0; i < sigCount; i++) {
     const sig = list[i];
@@ -742,13 +740,6 @@ async function drawFooter(p: any, t: CertTheme, data: CertPDFData, siteUrl: stri
   const design = resolveDesign(t.design);
   const qrEnabled = design.qr.enabled !== false;
   const bandTop = footerBandTop(qrEnabled);
-  const dateY = bandTop + FOOTER_BAND_PAD + 2;
-
-  // Date — bottom left, smallest text, raw value with no formatting.
-  p.setFont('helvetica', 'normal');
-  p.setFontSize(4.8);
-  p.setTextColor(...t.colors.muted);
-  p.text(data.issuedAt || '', CONTENT_L + 2, dateY);
 
   // QR — bottom right, inside its reserved region (only when enabled).
   const qrSize = 16;
@@ -830,61 +821,86 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   // ---- Decorative border (mirrors the PDF path) ----
   const green: [number, number, number] = [22, 139, 10];
   const greenDeep: [number, number, number] = [17, 110, 8];
+  const purple: [number, number, number] = [133, 0, 168];
   const stroke = (c: [number, number, number], w: number) => { ctx.strokeStyle = rgb(c); ctx.lineWidth = mmPx(w); };
   const rectMM = (x: number, y: number, w: number, h: number) => ctx.strokeRect(mmPx(x), mmPx(y), mmPx(w), mmPx(h));
+  const fillRectMM = (x: number, y: number, w: number, h: number, c?: [number, number, number]) => {
+    ctx.fillStyle = c ? rgb(c) : '#000'; ctx.fillRect(mmPx(x), mmPx(y), mmPx(w), mmPx(h));
+  };
 
-  // Outer fine green frame.
-  stroke(t.colors.border, 0.5); rectMM(FRAME + 0.6, FRAME + 0.6, PAGE_W - 2 * (FRAME + 0.6), PAGE_H - 2 * (FRAME + 0.6));
-  // Inner double gold-accent lines.
-  stroke(t.colors.borderAccent, 0.25); rectMM(FRAME_INNER + 1.4, FRAME_INNER + 1.4, PAGE_W - 2 * (FRAME_INNER + 1.4), PAGE_H - 2 * (FRAME_INNER + 1.4));
-  stroke(t.colors.borderAccent, 0.18); rectMM(FRAME_INNER, FRAME_INNER, PAGE_W - 2 * FRAME_INNER, PAGE_H - 2 * FRAME_INNER);
+  // Inner frame (thin decorative border inside the content area).
+  stroke(green, 0.12); rectMM(12, 12, PAGE_W - 24, PAGE_H - 24);
 
-  // Corner flowers (4-petal motif).
-  if (t.border.cornerOrnaments) {
-    const flower = (xmm: number, ymm: number) => {
-      const x = mmPx(xmm), y = mmPx(ymm);
-      const rr = mmPx(2.2);
-      ctx.fillStyle = rgb(green);
-      ctx.beginPath(); ctx.moveTo(x, y - rr); ctx.lineTo(x - rr * 0.7, y); ctx.lineTo(x, y + rr); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x, y - rr); ctx.lineTo(x + rr * 0.7, y); ctx.lineTo(x, y + rr); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x - rr, y); ctx.lineTo(x, y - rr * 0.7); ctx.lineTo(x, y + rr * 0.7); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x - rr, y); ctx.lineTo(x, y - rr * 0.7); ctx.lineTo(x, y + rr * 0.7); ctx.closePath(); ctx.fill();
-      stroke(t.colors.borderAccent, 0.3); ctx.beginPath(); ctx.arc(x, y, mmPx(1.1), 0, Math.PI * 2); ctx.stroke();
-    };
-    const d2 = 4.2;
-    flower(FRAME_INNER + d2, FRAME_INNER + d2);
-    flower(PAGE_W - FRAME_INNER - d2, FRAME_INNER + d2);
-    flower(FRAME_INNER + d2, PAGE_H - FRAME_INNER - d2);
-    flower(PAGE_W - FRAME_INNER - d2, PAGE_H - FRAME_INNER - d2);
+  // Side ribbons — thin green strips + short blocks on the left/right edges.
+  fillRectMM(12, 85, 1, 62, green);
+  fillRectMM(PAGE_W - 13, 85, 1, 62, green);
+  fillRectMM(12, 85, 40, 22, green);
+  fillRectMM(PAGE_W - 52, 85, 40, 22, green);
+
+  // Bottom green bar — full width at the very bottom.
+  fillRectMM(0, PAGE_H - 13, PAGE_W, 13, green);
+
+  // Concentric arcs at bottom-right corner (outer green + inner purple).
+  {
+    ctx.strokeStyle = rgb(green); ctx.lineWidth = mmPx(10);
+    ctx.beginPath(); ctx.arc(mmPx(PAGE_W + 30), mmPx(PAGE_H + 44), mmPx(70), Math.PI, Math.PI * 1.5); ctx.stroke();
+    ctx.strokeStyle = rgb(purple); ctx.lineWidth = mmPx(6);
+    ctx.beginPath(); ctx.arc(mmPx(PAGE_W + 19), mmPx(PAGE_H + 31), mmPx(44), Math.PI, Math.PI * 1.5); ctx.stroke();
   }
 
-  // Bottom green band + deep accent.
-  ctx.fillStyle = rgb(t.colors.primary);
-  ctx.fillRect(mmPx(FRAME), mmPx(PAGE_H - FRAME_INNER - 4.5), mmPx(PAGE_W - 2 * FRAME), mmPx(4.5));
-  ctx.fillStyle = rgb(greenDeep);
-  ctx.fillRect(mmPx(FRAME), mmPx(PAGE_H - FRAME_INNER - 4.5), mmPx(PAGE_W - 2 * FRAME), mmPx(1));
-
   // ---- Top decoration (mirrors PDF drawTopDecoration) ----
-  ctx.fillStyle = rgb(greenDeep); ctx.fillRect(mmPx(FRAME), mmPx(FRAME), mmPx(3), mmPx(3));
-  ctx.fillStyle = rgb(green); ctx.fillRect(mmPx(PAGE_W - FRAME - 3), mmPx(FRAME), mmPx(3), mmPx(3));
-  ctx.fillRect(mmPx(FRAME), mmPx(FRAME + 5), mmPx(2.2), mmPx(26));
-  ctx.fillRect(mmPx(PAGE_W - FRAME - 2.2), mmPx(FRAME + 5), mmPx(2.2), mmPx(26));
+  // Large purple rounded rectangle at top-left.
+  ctx.fillStyle = rgb(purple);
+  ctx.beginPath(); ctx.roundRect(mmPx(16), 0, mmPx(27), mmPx(40), [0, 0, mmPx(13), mmPx(13)]); ctx.fill();
+  // Small purple square at top-right area.
+  ctx.fillStyle = rgb(purple);
+  ctx.fillRect(mmPx(PAGE_W - 33), 0, mmPx(18), mmPx(18));
+  // Green square below the purple one.
+  ctx.fillStyle = rgb(green);
+  ctx.fillRect(mmPx(PAGE_W - 46), mmPx(14), mmPx(13), mmPx(13));
+  // Smaller green square further down.
+  ctx.fillStyle = rgb(green);
+  ctx.fillRect(mmPx(PAGE_W - 36), mmPx(28), mmPx(9), mmPx(9));
 
-  // ---- Header logos (club/org left, university right, aspect-ratio kept) ----
+  // ---- Award seals (university logo left, club logo right) ----
   {
-    const drawCtx = (await import('./canvas-img')).drawCtx;
-    const logoH = 14;
-    const logoTop = FRAME_INNER + 3.5;
-    const logoSlotW = 26;
-    const fitLogo = async (url: string, rightAligned: boolean) => {
-      if (rightAligned) {
-        await drawCtx(ctx as any, url, C.contentR - mmPx(logoSlotW), logoTop * EXPORT_PX_PER_MM, mmPx(logoSlotW), mmPx(logoH), 1);
-      } else {
-        await drawCtx(ctx as any, url, CONTENT_L * EXPORT_PX_PER_MM, logoTop * EXPORT_PX_PER_MM, mmPx(logoSlotW), mmPx(logoH), 1);
+    const r = mmPx(SEAL_D / 2);
+    const cy = mmPx(SEAL_CY);
+    const sealPx = async (cxmm: number, url?: string, sub?: string) => {
+      const cx = mmPx(cxmm);
+      // Outer green ring.
+      ctx.fillStyle = rgb(green); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      // White ring divider.
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx, cy, r - mmPx(3), 0, Math.PI * 2); ctx.fill();
+      // Ink inner ring.
+      stroke(greenDeep, 0.5); ctx.beginPath(); ctx.arc(cx, cy, r - mmPx(5.2), 0, Math.PI * 2); ctx.stroke();
+      // Inner photo area.
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx, cy, r - mmPx(5.2), 0, Math.PI * 2); ctx.fill();
+      // Logo fitted inside.
+      if (url) {
+        const img = await canvasLoadImage(url);
+        if (img) {
+          const box = (r - mmPx(5.2)) * 1.7;
+          let w = box, h = box;
+          const ratio = img.naturalWidth / img.naturalHeight || 1;
+          if (ratio > 1) h = box / ratio; else w = box * ratio;
+          ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+        }
+      }
+      // Small caption under the ring.
+      if (sub) {
+        ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        let s = 4.2 * PT_MM * EXPORT_PX_PER_MM;
+        ctx.font = font('Times New Roman', 'bold', s);
+        while (s > 2.6 * PT_MM * EXPORT_PX_PER_MM && ctx.measureText(sub).width > mmPx(r * 1.8)) {
+          s -= 0.2 * PT_MM * EXPORT_PX_PER_MM; ctx.font = font('Times New Roman', 'bold', s);
+        }
+        ctx.fillStyle = rgb(t.colors.muted);
+        ctx.fillText(sub, cx, cy + r + mmPx(3.6));
       }
     };
-    if (data.clubLogoUrl) await fitLogo(data.clubLogoUrl, false);
-    if (data.iiucLogoUrl) await fitLogo(data.iiucLogoUrl, true);
+    await sealPx(SEAL_CX_L, data.iiucLogoUrl, 'UNIVERSITY');
+    await sealPx(SEAL_CX_R, data.clubLogoUrl);
   }
 
   // ---- Header (university + department, centered, small) ----
@@ -978,20 +994,20 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
     if (document.fonts && typeof document.fonts.load === 'function') await document.fonts.load(`40px "${d.fonts.nameScriptFont || 'Great Vibes'}"`);
     ctx.font = font(d.fonts.nameScriptFont || 'Great Vibes', 'normal', nameSizePt * 1.15 * PT_MM * EXPORT_PX_PER_MM);
     const nw = ctx.measureText(name).width;
-    const maxNW = C.contentW - mmPx(60);
+    const maxNW = mmPx(SEAL_BODY_W - 12);
     if (nw <= maxNW) { ctx.fillStyle = rgb(t.colors.primary); ctx.fillText(name, C.cx, nameBasePx); shownAsScript = true; }
   } catch {}
   if (!shownAsScript) {
     let s = nameSizePt * PT_MM * EXPORT_PX_PER_MM;
     ctx.font = font('Times New Roman', 'bold', s);
-    while (s > 10 * PT_MM * EXPORT_PX_PER_MM && ctx.measureText(nameLarge).width > C.contentW - mmPx(60)) { s -= 0.5 * PT_MM * EXPORT_PX_PER_MM; ctx.font = font('Times New Roman', 'bold', s); }
+    while (s > 10 * PT_MM * EXPORT_PX_PER_MM && ctx.measureText(nameLarge).width > mmPx(SEAL_BODY_W - 12)) { s -= 0.5 * PT_MM * EXPORT_PX_PER_MM; ctx.font = font('Times New Roman', 'bold', s); }
     ctx.fillStyle = rgb(t.colors.primary); ctx.fillText(nameLarge, C.cx, nameBasePx);
   }
 
   // underline
   const underlineYmm = nameBottomMm + 1.6;
   ctx.font = font('Times New Roman', 'bold', nameSizePt * PT_MM * EXPORT_PX_PER_MM);
-  const nameW = Math.min(ctx.measureText(nameLarge).width + mmPx(18), C.contentW - mmPx(60) + mmPx(12));
+  const nameW = Math.min(ctx.measureText(nameLarge).width + mmPx(18), mmPx(SEAL_BODY_W - 12) + mmPx(12));
   const uyPx = mmPx(underlineYmm);
   ctx.strokeStyle = rgb(t.colors.secondary); ctx.lineWidth = 0.35 * EXPORT_PX_PER_MM;
   line2d(C.cx - nameW / 2, uyPx, C.cx + nameW / 2, uyPx);
@@ -1009,7 +1025,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   else paragraphs.push('for your sincere service, dedication, and invaluable contribution to our organization.');
   const recText = getRoleRecognition(data.post || '') ? `We sincerely appreciate your ${getRoleRecognition(data.post || '')}.` : '';
 
-  const maxWmm = CONTENT_W - 30;
+  const maxWmm = SEAL_BODY_W;
   const wrapTexLimit = (text: string, sizePt2: number, maxW: number, maxLines: number): string[] => {
     const s = sizePt2 * PT_MM * EXPORT_PX_PER_MM;
     ctx.font = font('Times New Roman', 'normal', s);
@@ -1061,7 +1077,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   };
 
   const availMm = closingMaxMm - 6 - bodyFirstBaseMm;
-  const bodyStartSize = d.fonts.bodySize || 9.5;
+  const bodyStartSize = (d.fonts.bodySize || 9.5) + 1.2;
   let chosenK = bodyStartSize;
   for (let k = bodyStartSize; k >= 7.25; k -= 0.25) {
     chosenK = k;
@@ -1096,30 +1112,9 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
 
   // ---- Footer band ----
   const bandTopPx = mmPx(footerBandTop(qrOn));
-  const footDateY = mmPx(footerBandTop(qrOn) + FOOTER_BAND_PAD + 2);
-  ctx.font = font('Helvetica', 'normal', 4.8 * EXPORT_PX_PER_MM); ctx.textAlign = 'left'; ctx.fillStyle = rgb(t.colors.muted);
-  ctx.fillText(data.issuedAt || '', C.contentL + mmPx(2), footDateY);
-
-  // ---- Best-award seal (clean medal on the right, no logos) ----
-  {
-    const cx = mmPx(SEAL_CX), cy = mmPx(SEAL_CY), r = mmPx(SEAL_D / 2);
-    // Outer green disc.
-    ctx.fillStyle = rgb(green); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-    // Cream inner disc.
-    ctx.fillStyle = rgb(t.colors.background); ctx.beginPath(); ctx.arc(cx, cy, r - mmPx(3), 0, Math.PI * 2); ctx.fill();
-    // Ink ring.
-    stroke(greenDeep, 0.5); ctx.beginPath(); ctx.arc(cx, cy, r - mmPx(5.6), 0, Math.PI * 2); ctx.stroke();
-    // "BEST AWARD" centered.
-    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.font = font('Times New Roman', 'bold', 6.5 * EXPORT_PX_PER_MM); ctx.fillStyle = rgb(greenDeep);
-    ctx.fillText('BEST', cx, cy - mmPx(2));
-    ctx.fillText('AWARD', cx, cy + mmPx(3.6));
-    ctx.font = font('Times New Roman', 'normal', 3.4 * EXPORT_PX_PER_MM); ctx.fillStyle = rgb(t.colors.muted);
-    ctx.fillText('- CERTIFICATE -', cx, cy + mmPx(8));
-    // Ribbon accent under the disc.
-    ctx.fillStyle = rgb(greenDeep);
-    ctx.beginPath(); ctx.roundRect(cx - mmPx(8), cy + r + mmPx(1.5), mmPx(16), mmPx(2.2), mmPx(1)); ctx.fill();
-  }
+  const qrSizePx = mmPx(16);
+  const qrXPx = C.contentR - qrSizePx;
+  const qrYPx = bandTopPx + mmPx(FOOTER_BAND_PAD);
 
   // ---- Signatures ----
   if (sigs.length > 0) {
@@ -1145,7 +1140,10 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
       for (const m of metas) below += wrapTexLimit(m, 6, slotWmm - 2, 99).length * 3.2;
       if (below > maxBelowMM) maxBelowMM = below;
     }
-    const lineY = bandTopPx - mmPx(2) - mmPx(maxBelowMM);
+    // Anchor the signature line close to the closing text, but never let the
+    // block drop into the QR/footer-band reserved region.
+    const footSafeLinePx = bandTopPx - mmPx(2) - mmPx(maxBelowMM);
+    const lineY = Math.min(footSafeLinePx, Math.max(mmPx(closBaseMm + 6), mmPx(closBaseMm + 17)));
     const sigImgHmm = sigs.some(s => s.signatureUrl || s.autoSignature !== false) ? 11 : 0;
     for (let i = 0; i < sigCount; i++) {
       const sig = sigs[i];
@@ -1280,7 +1278,7 @@ async function renderCertificate(pdf: any, data: CertPDFData, isFirstPage: boole
     closingMax = sigImgTop - 2.5;
   }
 
-  const headerBottom = drawHeader(pdf, t, data, logos);
+  const headerBottom = drawHeader(pdf, t, data);
 
   const titleEnd = drawTitle(pdf, t, headerBottom);
 
@@ -1290,8 +1288,8 @@ async function renderCertificate(pdf: any, data: CertPDFData, isFirstPage: boole
   const closBase = Math.min(bodyBottom + 2, closingMax);
   drawClosing(pdf, t, closBase);
 
-  // Best-award seal (right side).
-  drawSeal(pdf, t);
+  // Award seals — university logo on the left, club logo on the right.
+  await drawSeal(pdf, t, logos);
 
   if (signatories.length > 0) {
     await drawSignatures(pdf, t, signatories, closBase, bandTop);

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Certificate of Achievement</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Elegant certificate typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800&family=Cinzel+Decorative:wght@400;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --green: #168b0a;
+      --green-dark: #116e08;
+      --green-soft: #a8cf8f;
+      --purple: #8500a8;
+      --ink: #171717;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #eef1f4;
+      font-family: 'Montserrat', sans-serif;
+    }
+
+    .certificate {
+      width: 1120px;
+      height: 790px;
+      position: relative;
+      overflow: hidden;
+      background: #fff;
+      isolation: isolate;
+    }
+
+    .font-certificate { font-family: 'Cinzel Decorative', 'Cinzel', serif; }
+    .font-elegant { font-family: 'Cormorant Garamond', Georgia, serif; }
+    .font-clean { font-family: 'Montserrat', sans-serif; }
+
+    .editable {
+      outline: none;
+      cursor: text;
+    }
+    .editable:focus {
+      text-shadow: 0 0 0 rgba(0,0,0,0);
+      box-shadow: inset 0 -2px 0 rgba(22,139,10,.25);
+    }
+
+    /* Subtle inner frame for a more finished certificate feel */
+    .inner-frame {
+      position: absolute;
+      inset: 17px;
+      border: 1px solid rgba(22,139,10,.10);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .dot-pattern {
+      width: 105px;
+      height: 105px;
+      background-image: radial-gradient(var(--green-soft) 2.2px, transparent 2.2px);
+      background-size: 11px 11px;
+      transform: rotate(-28deg);
+      opacity: .62;
+    }
+
+    .stripe-circle {
+      background: repeating-linear-gradient(45deg,
+        rgba(22,139,10,.38) 0,
+        rgba(22,139,10,.38) 4px,
+        transparent 4px,
+        transparent 9px);
+    }
+
+    .seal-shadow { filter: drop-shadow(0 2px 2px rgba(0,0,0,.08)); }
+
+    .print-btn {
+      background: var(--green);
+      transition: .2s ease;
+    }
+    .print-btn:hover { background: var(--green-dark); transform: translateY(-1px); }
+
+    @media print {
+      @page { size: 1120px 790px; margin: 0; }
+      body { background: #fff; }
+      .no-print { display: none !important; }
+      .certificate { box-shadow: none !important; margin: 0 !important; }
+    }
+
+    @media (max-width: 1180px) {
+      .certificate {
+        transform-origin: top center;
+        transform: scale(calc((100vw - 32px) / 1120));
+        margin-bottom: calc(-790px + ((100vw - 32px) / 1120) * 790px);
+      }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6">
+
+
+  <main class="certificate shadow-[0_22px_60px_rgba(0,0,0,.16)]">
+    <div class="inner-frame"></div>
+
+    <!-- ================= TOP DECORATIONS ================= -->
+    <div class="absolute left-[60px] top-0 h-[151px] w-[101px] rounded-b-[50px] bg-[var(--purple)]"></div>
+
+    <div class="absolute right-[95px] top-0 h-[82px] w-[82px] bg-[var(--purple)]"></div>
+    <div class="absolute right-[142px] top-[62px] h-[57px] w-[57px] bg-[var(--green)]"></div>
+    <div class="absolute right-[98px] top-[108px] h-[41px] w-[41px] bg-[var(--green)]"></div>
+
+    <!-- ================= MAIN CONTENT ================= -->
+    <section class="absolute inset-x-0 top-[102px] z-10 text-center">
+
+      <!-- Main certificate heading: decorative certificate font -->
+      <h1 class="font-certificate text-[49px] font-bold leading-none tracking-[5px] text-[var(--green)]">
+        CERTIFICATE
+      </h1>
+
+      <!-- Subtitle: elegant but still readable -->
+      <h2 class="font-certificate mt-[8px] text-[27px] font-medium leading-none tracking-[3px] text-[var(--ink)]">
+        OF ACHIEVEMENT
+      </h2>
+
+      <!-- Normal supporting text -->
+      <p class="font-clean mt-[35px] text-[17px] font-medium tracking-[.2px] text-neutral-700">
+        Proudly presented to:
+      </p>
+
+      <!-- Recipient name: stylish certificate serif -->
+      <div class="mx-auto mt-[24px] w-[470px]">
+        <div
+          contenteditable="true"
+          spellcheck="false"
+          class="editable font-elegant border-b-[1.5px] border-neutral-700 pb-[3px] text-[38px] font-semibold leading-tight text-neutral-900">
+          Momtahina Shiraz Cousin
+        </div>
+      </div>
+
+      <!-- Certificate body: elegant serif, normal size -->
+      <div
+        contenteditable="true"
+        spellcheck="false"
+        class="editable font-elegant mx-auto mt-[23px] w-[620px] text-[16px] font-medium leading-[19px] text-neutral-700">
+        Jalani shuro matro, soborer appriciation,<br>
+        sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.<br>
+        Ut enim ad minim veniam, quis nostrud exercitation ullamco<br>
+        laboris nisi ut aliquip ex ea commodo consequat
+      </div>
+
+     
+
+      <!-- Signature -->
+      <div class="mx-auto mt-[70px] w-[240px]">
+        <div class="border-b-[1.5px] border-neutral-700"></div>
+        <div class="font-clean mt-[7px] text-[17px] font-bold tracking-[1px] text-neutral-900">
+          SIGNATURE
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= LEFT AWARD SEAL ================= -->
+    <div class="seal-shadow absolute left-[82px] top-[297px] z-20 h-[152px] w-[152px] rounded-full bg-[var(--green)]">
+      <div class="absolute inset-[12px] rounded-full border-[3px] border-white bg-white"></div>
+      <div class="absolute inset-[19px] flex flex-col items-center justify-center rounded-full border-[2px] border-neutral-900 bg-white text-center p-1">
+        <img src="https://iiuc-arms.eu.cc/iiuc-logo.png" class="h-20 bg-white rounded" alt="" srcset="">
+      </div>
+    </div>
+
+    <!-- ================= RIGHT AWARD SEAL ================= -->
+    <div class="seal-shadow absolute right-[82px] top-[297px] z-20 h-[152px] w-[152px] rounded-full bg-[var(--green)]">
+      <div class="absolute inset-[12px] rounded-full border-[3px] border-white bg-white"></div>
+      <div class="absolute inset-[19px] flex flex-col items-center justify-center rounded-full border-[2px] border-neutral-900 bg-white text-center p-1">
+        <img src="https://raw.githubusercontent.com/sayedatiqurrahman/IIUC-ACADEMIC-FILES-MANAFGER/main/clubs/qur-anic-sciences-club/logo.png" class="h-24" alt="" srcset="">
+      </div>
+    </div>
+
+    <!-- ================= SIDE / RIBBON DETAILS ================= -->
+    <div class="absolute left-0 top-[319px] h-[235px] w-[4px] bg-[var(--green)]"></div>
+    <div class="absolute left-0 top-[319px] h-[82px] w-[151px] bg-[var(--green)]"></div>
+    <div class="absolute right-0 top-[319px] h-[82px] w-[151px] bg-[var(--green)]"></div>
+    <div class="absolute right-0 top-[319px] h-[235px] w-[4px] bg-[var(--green)]"></div>
+
+    <!-- Dotted pattern -->
+    <div class="dot-pattern absolute right-[119px] top-[250px]"></div>
+
+    <!-- ================= BOTTOM DECORATIONS ================= -->
+    <div class="absolute bottom-[99px] left-[82px] h-[53px] w-[53px] bg-[#3b9d28]"></div>
+    <div class="absolute bottom-[144px] left-[120px] h-[43px] w-[43px] bg-[var(--green)]"></div>
+    <div class="absolute bottom-[72px] left-[142px] h-[47px] w-[47px] bg-[var(--purple)]"></div>
+
+    <div class="stripe-circle absolute bottom-[92px] right-[240px] h-[75px] w-[75px] rounded-full"></div>
+
+    <!-- Bottom green bar -->
+    <div class="absolute bottom-0 left-0 h-[50px] w-full bg-[var(--green)]"></div>
+
+    <!-- Bottom-right concentric arcs -->
+    <div class="absolute bottom-[-152px] right-[-117px] h-[355px] w-[355px] rounded-full border-[58px] border-[var(--green)] bg-white"></div>
+    <div class="absolute bottom-[-119px] right-[-81px] h-[216px] w-[216px] rounded-full border-[30px] border-[var(--purple)] bg-white"></div>
+  </main>
+
+</body>
+</html>
