@@ -448,7 +448,9 @@ export default function ProfileCard({
                 {(profile as any).clubMemberships.map((m: any, i: number) => (
                   <a key={i} href={`/clubs/${m.clubSlug}`} className="flex items-center gap-2 p-2 rounded-lg bg-dark-bg border border-dark-border hover:border-qsis/40 transition-colors group">
                     {m.logoUrl ? (
-                      <img src={m.logoUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
+                      <div className="w-6 h-6 rounded-full bg-white border border-dark-border overflow-hidden flex items-center justify-center shrink-0">
+                        <img src={m.logoUrl} alt="" className="w-full h-full object-cover" />
+                      </div>
                     ) : (
                       <div className="w-6 h-6 rounded-full bg-qsis/15 flex items-center justify-center">
                         <i className="fas fa-users text-[0.55rem] text-qsis"></i>

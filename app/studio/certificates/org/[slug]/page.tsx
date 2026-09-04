@@ -242,7 +242,7 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
           <Link href="/studio/certificates" className="text-qsis text-xs hover:underline no-underline"><i className="fas fa-arrow-left mr-1"></i>Back to Certificate Studio</Link>
           <div className="flex items-center gap-4 mt-3">
             {org.logoUrl ? (
-              <img src={org.logoUrl} alt="" className="w-16 h-16 rounded-2xl object-cover border border-dark-border" />
+              <img src={org.logoUrl} alt="" className="w-16 h-16 rounded-2xl object-cover border border-dark-border bg-white" />
             ) : (
               <div className="w-16 h-16 rounded-2xl bg-qsis/15 flex items-center justify-center">
                 <i className="fas fa-certificate text-qsis text-2xl"></i>

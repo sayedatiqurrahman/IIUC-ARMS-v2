@@ -127,7 +127,9 @@ export default function ClubsView() {
                 <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 hover:border-qsis/50 transition-all cursor-pointer group h-full flex flex-col">
                   <div className="flex items-center gap-3 mb-3">
                     {club.logoUrl ? (
-                      <img src={club.logoUrl} alt="" className="w-12 h-12 rounded-xl object-cover border border-dark-border shrink-0" />
+                      <div className="w-12 h-12 rounded-xl bg-white border border-dark-border overflow-hidden flex items-center justify-center shrink-0">
+                        <img src={club.logoUrl} alt="" className="w-full h-full object-cover" />
+                      </div>
                     ) : (
                       <div className="w-12 h-12 rounded-xl bg-qsis/20 flex items-center justify-center shrink-0">
                         <i className="fas fa-users text-qsis"></i>

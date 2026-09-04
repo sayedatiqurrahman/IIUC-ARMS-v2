@@ -524,7 +524,9 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
             {/* Logo */}
             <div className="relative shrink-0 self-center sm:self-auto">
               {club.logoUrl ? (
-                <img src={club.logoUrl} alt={club.name} className="w-[120px] h-[120px] sm:w-[168px] sm:h-[168px] rounded-full object-cover border-4 border-dark-bg shadow-xl" />
+                <div className="w-[120px] h-[120px] sm:w-[168px] sm:h-[168px] rounded-full bg-white border-4 border-dark-bg shadow-xl overflow-hidden flex items-center justify-center">
+                  <img src={club.logoUrl} alt={club.name} className="w-full h-full object-cover" />
+                </div>
               ) : (
                 <div className="w-[120px] h-[120px] sm:w-[168px] sm:h-[168px] rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center border-4 border-dark-bg shadow-xl">
                   <i className="fas fa-users text-dark-text text-4xl sm:text-5xl"></i>
@@ -765,8 +767,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                 {canManage && (
                   <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0">
-                        {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-full h-full rounded-full object-cover" /> : <i className="fas fa-users"></i>}
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0 overflow-hidden">
+                        {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-full h-full rounded-full object-cover bg-white" /> : <i className="fas fa-users"></i>}
                       </div>
                       <button onClick={() => setShowAddEvent(true)} className="flex-1 text-left px-4 py-2.5 bg-dark-bg3 hover:bg-dark-bg3 rounded-full text-sm text-dark-text2 transition">
                         Create an event...
@@ -820,9 +822,9 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                   <div key={cert.id || cert.certificateId} className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
                     <div className="p-4 pb-0">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0">
-                          {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-full h-full rounded-full object-cover" /> : <i className="fas fa-users"></i>}
-                        </div>
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0 overflow-hidden">
+                            {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-full h-full rounded-full object-cover bg-white" /> : <i className="fas fa-users"></i>}
+                          </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-dark-text">{club.name}</p>
                           <p className="text-xs text-dark-text2">Issued a certificate &middot; {timeAgo(cert.issuedAt)}</p>
@@ -869,8 +871,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                     <div key={ev.id} className="bg-dark-bg2 rounded-xl border border-dark-border overflow-hidden">
                       <div className="p-4 pb-0">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0">
-                            {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-full h-full rounded-full object-cover" /> : <i className="fas fa-users"></i>}
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-xs font-bold text-dark-text shrink-0 overflow-hidden">
+                            {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-full h-full rounded-full object-cover bg-white" /> : <i className="fas fa-users"></i>}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-dark-text">{club.name}</p>
@@ -1497,7 +1499,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                     <div>
                       <p className="text-xs text-dark-text2 font-semibold mb-2">Club Logo</p>
                       <div className="flex items-center gap-3">
-                        {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-dark-border" /> : <div className="w-16 h-16 rounded-full bg-qsis/20 flex items-center justify-center"><i className="fas fa-users text-qsis"></i></div>}
+                        {club.logoUrl ? <img src={club.logoUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-dark-border bg-white" /> : <div className="w-16 h-16 rounded-full bg-qsis/20 flex items-center justify-center"><i className="fas fa-users text-qsis"></i></div>}
                         <label className="px-3 py-1.5 bg-dark-bg3 hover:bg-dark-bg3 text-dark-text rounded-lg text-xs font-semibold cursor-pointer transition border border-dark-border">
                           {logoUploading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Uploading...</> : <><i className="fas fa-upload mr-1"></i>Upload Logo</>}
                           <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" disabled={logoUploading} />

@@ -121,7 +121,7 @@ export default function CertificateStudioPage() {
               <div className="flex items-center justify-between mb-3">
                 <div className="w-12 h-12 rounded-2xl bg-qsis/15 flex items-center justify-center overflow-hidden">
                   {org.logoUrl ? (
-                    <img src={org.logoUrl} alt="" className="w-full h-full object-cover" />
+                    <img src={org.logoUrl} alt="" className="w-full h-full object-cover bg-white" />
                   ) : (
                     <i className="fas fa-certificate text-qsis text-lg"></i>
                   )}

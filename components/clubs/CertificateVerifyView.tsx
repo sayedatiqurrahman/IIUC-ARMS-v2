@@ -77,7 +77,9 @@ export default function CertificateVerifyView({ params }: { params: Promise<{ ce
             <div className="bg-dark-bg rounded-xl p-3 sm:p-4 text-left space-y-3">
               {(cert.club?.logoUrl || cert.organizationLogo) && (
                 <div className="flex justify-center mb-2">
-                  <img src={cert.club?.logoUrl || cert.organizationLogo} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                  <div className="w-12 h-12 rounded-lg bg-white border border-dark-border overflow-hidden flex items-center justify-center">
+                    <img src={cert.club?.logoUrl || cert.organizationLogo} alt="" className="w-full h-full object-cover" />
+                  </div>
                 </div>
               )}
               <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">

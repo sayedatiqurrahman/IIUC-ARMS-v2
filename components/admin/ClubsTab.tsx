@@ -207,7 +207,9 @@ export default function ClubsTab({ email, effectiveRole, profile, customPermissi
               <div className="p-4">
                 <div className="flex items-start gap-3">
                   {club.logoUrl ? (
-                    <img src={club.logoUrl} alt={club.name} className="w-10 h-10 rounded-full object-cover border border-gray-700/50" />
+                    <div className="w-10 h-10 rounded-full bg-white border border-gray-700/50 overflow-hidden flex items-center justify-center shrink-0">
+                      <img src={club.logoUrl} alt={club.name} className="w-full h-full object-cover" />
+                    </div>
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-qsis/20 border border-qsis/30 flex items-center justify-center">
                       <i className="fas fa-users text-qsis text-sm" />
