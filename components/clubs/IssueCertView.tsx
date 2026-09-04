@@ -6,7 +6,7 @@ import { parseClubRoles } from '@/lib/club-member-roles';
 import QRCode from 'qrcode';
 import { downloadCertPDF, generateBulkCertPDF, CertPDFData } from '@/lib/club-cert-pdf';
 import { CertSignatory, CertTheme, DEFAULT_THEME, THEME_PRESETS } from '@/lib/cert-theme';
-import { generateSignatureDataURL } from '@/lib/signature-gen';
+import { generateSignatureDataURL, signatureTextFor } from '@/lib/signature-gen';
 
 interface CertRow {
   memberName: string;
@@ -123,7 +123,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
     if (sig.signatureUrl) return sig.signatureUrl;
     if (sigPreviews[i]) return sigPreviews[i];
     if (sig.autoSignature !== false && sig.name) {
-      const url = await generateSignatureDataURL(sig.name);
+      const url = await generateSignatureDataURL(signatureTextFor(sig));
       return url;
     }
     return null;
@@ -313,6 +313,17 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
                               }}
                               className="w-3.5 h-3.5 rounded border-dark-border accent-qsis" />
                           </label>
+                        </div>
+                        <div className="mb-2">
+                          <label className="text-[0.6rem] text-dark-text2 mb-1 block">
+                            Signature text <span className="text-dark-text2/60">(used when auto-generating; leave empty to sign the first word of the name)</span>
+                          </label>
+                          <input type="text" value={sig.signatureText || ''} onChange={e => {
+                            setSignatories(prev => prev.map((s, idx) => idx === i ? { ...s, signatureText: e.target.value } : s));
+                            setSigPreviews(prev => { const n = { ...prev }; delete n[i]; return n; });
+                          }}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-xs outline-none focus:border-qsis"
+                            placeholder="Full name or short label" />
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="flex-1">

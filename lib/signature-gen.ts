@@ -12,11 +12,21 @@ function loadSignatureFont(): Promise<void> {
   });
 }
 
-export async function generateSignatureDataURL(fullName: string, width = 300, height = 80): Promise<string> {
+// Text actually used to render the script signature: the user-supplied
+// signature text wins; otherwise fall back to the first word of the name.
+export function signatureTextFor(sig: { name: string; signatureText?: string } | string): string {
+  if (typeof sig === 'string') return sig.trim().split(/\s+/)[0] || sig.trim();
+  const custom = (sig.signatureText || '').trim();
+  if (custom) return custom;
+  const name = (sig.name || '').trim();
+  return name.split(/\s+/)[0] || name;
+}
+
+export async function generateSignatureDataURL(text: string, width = 300, height = 80): Promise<string> {
   await loadSignatureFont();
 
-  // Sign only with the first name — cleaner and more natural for a signature.
-  const name = fullName.trim().split(/\s+/)[0] || fullName.trim();
+  // Sign exactly what was passed — the caller resolves name vs. custom text.
+  const name = (text || '').trim();
 
   const canvas = document.createElement('canvas');
   canvas.width = width * 2;

@@ -268,21 +268,8 @@ function drawBackground(p: any, t: CertTheme) {
   p.rect(FRAME - 0.8, FRAME - 0.8, PAGE_W - 2 * (FRAME - 0.8), PAGE_H - 2 * (FRAME - 0.8), 'F');
 }
 
-// Draw a stroked circular arc as fine line segments (jsPDF ellipse cannot take
-// angle ranges). Stroke width is controlled by the current setLineWidth.
-function drawArc(p: any, cx: number, cy: number, r: number, start: number, end: number, segments = 96) {
-  const pts: Array<[number, number]> = [];
-  for (let i = 0; i <= segments; i++) {
-    const a = start + (end - start) * (i / segments);
-    pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
-  }
-  const segs: number[][] = [];
-  for (let i = 1; i < pts.length; i++) segs.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
-  p.lines(segs, pts[0][0], pts[0][1]);
-}
-
-// Decorative border — fine inner frame plus a green bottom band with concentric
-// arcs at the bottom-right corner and side ribbons, matching certificate.html.
+// Decorative border — fine inner frame, green bar, bottom-left squares,
+// stripe circle and concentric arcs matching certificate.html.
 function drawBorder(p: any, t: CertTheme) {
   const green: [number, number, number] = [22, 139, 10];
   const purple: [number, number, number] = [133, 0, 168];
@@ -300,19 +287,47 @@ function drawBorder(p: any, t: CertTheme) {
   p.rect(12, 85, 40, 22, 'F');
   p.rect(PAGE_W - 52, 85, 40, 22, 'F');
 
-  // Bottom green bar — full width at the very bottom.
+  // Bottom green bar — full width at the very bottom (50px in the reference).
   p.setFillColor(...green);
-  p.rect(0, PAGE_H - 13, PAGE_W, 13, 'F');
+  p.rect(0, PAGE_H - 13.3, PAGE_W, 13.3, 'F');
 
-  // Concentric arcs at bottom-right corner (outer green).
+  // Bottom-left decorative squares (certificate.html bottom-[99/144/72] blocks).
+  p.setFillColor(59, 157, 40); // #3b9d28
+  p.rect(21.75, 169.2, 14.06, 14.06, 'F');
+  p.setFillColor(...green);
+  p.rect(31.82, 159.9, 11.4, 11.4, 'F');
+  p.setFillColor(...purple);
+  p.rect(37.66, 178.0, 12.47, 12.47, 'F');
+
+  // Diagonal-stripe circle (certificate.html .stripe-circle, 75px round).
+  // Drawn as chords of each 45° stripe line that fall inside the circle —
+  // avoids jsPDF clip support quirks. Spacing = 3.38mm (9px), width 1.06mm (4px).
+  p.setDrawColor(166, 211, 162); // 38% green over white
+  p.setLineWidth(1.06);
+  const ssR = 9.95;
+  const ssSum = 223.4 + 175.15;
+  for (let s = 384.5; s <= 412.7; s += 3.38) {
+    const d = s - ssSum;
+    if (Math.abs(d) >= ssR * Math.SQRT2) continue;
+    const h = Math.sqrt(ssR * ssR - (d * d) / 2);
+    const fx = 223.4 + d / 2;
+    const fy = 175.15 + d / 2;
+    p.line(fx + h / Math.SQRT2, fy - h / Math.SQRT2, fx - h / Math.SQRT2, fy + h / Math.SQRT2);
+  }
+
+  // Bottom-right concentric arcs (certificate.html bottom-[-152]/[-119] rings).
+  // Outer green ring + white interior.
+  p.setFillColor(255, 255, 255);
+  p.circle(281.0, 203.2, 47.08, 'F');
   p.setDrawColor(...green);
-  p.setLineWidth(10);
-  drawArc(p, PAGE_W + 30, PAGE_H + 44, 70, Math.PI, Math.PI * 1.5);
-
-  // Concentric arcs at bottom-right corner (inner purple).
+  p.setLineWidth(15.38);
+  p.circle(281.0, 203.2, 39.39, 'S');
+  // Inner purple ring + white interior.
+  p.setFillColor(255, 255, 255);
+  p.circle(289.9, 212.9, 28.64, 'F');
   p.setDrawColor(...purple);
-  p.setLineWidth(6);
-  drawArc(p, PAGE_W + 19, PAGE_H + 31, 44, Math.PI, Math.PI * 1.5);
+  p.setLineWidth(7.96);
+  p.circle(289.9, 212.9, 24.66, 'S');
 }
 
 // Purple geometric accents at the top-left corner — large rounded purple
@@ -441,7 +456,7 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
   };
   if (nameDataUrl) {
     try {
-      p.addImage(nameDataUrl, 'PNG', CX - nameMaxW / 2, nameTop, nameMaxW, 10.5);
+      await p.addImage(nameDataUrl, 'PNG', CX - nameMaxW / 2, nameTop, nameMaxW, 10.5);
     } catch {
       serifName();
     }
@@ -554,12 +569,25 @@ const SEAL_CX_R = PAGE_W - 42;   // right seal — mirrored at the right side
 const SEAL_CY = 99;              // both seals vertically centred
 const SEAL_BODY_W = 162;         // centred body text width that stays clear of seals
 
+// Safety gap (mm) between the logo corners and the inner ink ring so the logo
+// never touches the circle border (≈ 2px+ at export scale).
+const SEAL_LOGO_PAD = 0.8;
+
+// Fit a logo inside the seal's inner circle: corners land exactly on the
+// (photoR − pad) circle so nothing crosses the ink ring, aspect ratio preserved.
+function fitLogoInCircle(ratio: number, photoR: number, pad: number): { w: number; h: number } {
+  const availR = photoR - pad;
+  const w = (2 * availR * ratio) / Math.sqrt(1 + ratio * ratio);
+  const h = w / ratio;
+  return { w, h };
+}
+
 async function drawSeal(p: any, t: CertTheme, logos: { iiuc?: string; club?: string }, label?: string) {
   const green: [number, number, number] = [22, 139, 10];
   const greenDeep: [number, number, number] = [17, 110, 8];
   const r = SEAL_D / 2;
 
-  const drawOne = (cx: number, url?: string, sub?: string) => {
+  const drawOne = async (cx: number, url?: string, sub?: string) => {
     // Outer green ring.
     p.setFillColor(...green);
     p.circle(cx, SEAL_CY, r, 'F');
@@ -577,15 +605,12 @@ async function drawSeal(p: any, t: CertTheme, logos: { iiuc?: string; club?: str
     p.setFillColor(255, 255, 255);
     p.circle(cx, SEAL_CY, r - 5.2, 'F');
 
-    // Logo fitted inside the inner circle.
+    // Logo fitted inside the inner circle (aspect preserved, corner-safe).
     if (url) {
       try {
         const info = p.getImageProperties(url);
-        const ratio = info.width / info.height;
-        const box = (r - 5.2) * 1.7;
-        let w = box, h = box;
-        if (ratio > 1) { h = box / ratio; } else { w = box * ratio; }
-        p.addImage(url, 'PNG', cx - w / 2, SEAL_CY - h / 2, w, h);
+        const { w, h } = fitLogoInCircle(info.width / info.height, r - 5.2, SEAL_LOGO_PAD);
+        await p.addImage(url, 'PNG', cx - w / 2, SEAL_CY - h / 2, w, h);
       } catch {}
     }
 
@@ -600,8 +625,8 @@ async function drawSeal(p: any, t: CertTheme, logos: { iiuc?: string; club?: str
     }
   };
 
-  drawOne(SEAL_CX_L, logos.iiuc, label || 'UNIVERSITY');
-  drawOne(SEAL_CX_R, logos.club);
+  await drawOne(SEAL_CX_L, logos.iiuc, label || 'UNIVERSITY');
+  await drawOne(SEAL_CX_R, logos.club);
 }
 
 // Measure how far below the signature line the tallest block (signature names +
@@ -634,10 +659,6 @@ async function drawSignatures(p: any, t: CertTheme, signatories: CertSignatory[]
 
   const sigCount = Math.min(count, 3);
 
-  const qrEnabled = design.qr.enabled !== false;
-  // Keep signature slots clear of the right-corner QR block: the rightmost slot
-  // must end before QR_LEFT - margin. QR occupies its own reserved region.
-  const qrReserveL = qrEnabled ? CONTENT_R - 30 : CONTENT_R + 30;
   const slotW = sigCount === 1 ? 80 : sigCount === 2 ? 54 : 54;
   let slots: number[];
   if (sigCount === 1) {
@@ -645,8 +666,8 @@ async function drawSignatures(p: any, t: CertTheme, signatories: CertSignatory[]
   } else if (sigCount === 2) {
     slots = [CX - 58, CX + 58];
   } else {
-    // Three slots, left-shifted so the right one stays clear of the QR corner.
-    const gap = ((qrReserveL - 4) - (CONTENT_L + 4) - slotW * sigCount) / (sigCount - 1);
+    // Three slots spread across the full content width.
+    const gap = ((CONTENT_R - 4) - (CONTENT_L + 4) - slotW * sigCount) / (sigCount - 1);
     slots = [];
     let x = CONTENT_L + 4 + slotW / 2;
     for (let i = 0; i < sigCount; i++) {
@@ -683,12 +704,12 @@ async function drawSignatures(p: any, t: CertTheme, signatories: CertSignatory[]
     if (sig.signatureUrl || sig.autoSignature !== false) {
       let sigDataUrl = sig.signatureUrl;
       if (!sigDataUrl && sig.autoSignature !== false && sig.name) {
-        const { generateSignatureDataURL } = await import('./signature-gen');
-        try { sigDataUrl = await generateSignatureDataURL(sig.name, 220, 60); } catch {}
+        const { generateSignatureDataURL, signatureTextFor } = await import('./signature-gen');
+        try { sigDataUrl = await generateSignatureDataURL(signatureTextFor(sig), 220, 60); } catch {}
       }
       if (sigDataUrl) {
         try {
-          p.addImage(sigDataUrl, 'PNG', x - slotW / 2, lineY - sigImgH - 1, slotW, sigImgH);
+          await p.addImage(sigDataUrl, 'PNG', x - slotW / 2, lineY - sigImgH - 1, slotW, sigImgH);
         } catch {}
       }
     }
@@ -727,13 +748,12 @@ async function drawSignatures(p: any, t: CertTheme, signatories: CertSignatory[]
 }
 
 // Footer band geometry shared between the signature section and the footer row.
-// The QR occupies a reserved region in the bottom-right corner; signatures must
-// stay clear of it both horizontally and vertically.
+// The QR sits centred at the bottom; signatures stay clear of it vertically.
 const FOOTER_BAND_PAD = 2;
 function footerBandTop(qrEnabled = true): number {
   const qrSize = 16;
   const extra = qrEnabled ? 0 : 6; // without QR we can drop the band closer to the edge
-  return PAGE_H - FRAME_INNER - qrSize - 13 + extra - FOOTER_BAND_PAD;
+  return PAGE_H - FRAME_INNER - qrSize - 13 + extra - FOOTER_BAND_PAD; // ≈ 167
 }
 
 async function drawFooter(p: any, t: CertTheme, data: CertPDFData, siteUrl: string) {
@@ -741,10 +761,11 @@ async function drawFooter(p: any, t: CertTheme, data: CertPDFData, siteUrl: stri
   const qrEnabled = design.qr.enabled !== false;
   const bandTop = footerBandTop(qrEnabled);
 
-  // QR — bottom right, inside its reserved region (only when enabled).
+  // QR — centred at the bottom, above the green bar (keeps the bottom-right
+  // corner free for the award arcs from the reference design).
   const qrSize = 16;
-  const qrX = CONTENT_R - qrSize;
-  const qrY = bandTop + FOOTER_BAND_PAD;
+  const qrX = CX - qrSize / 2;
+  const qrY = bandTop;
 
   if (!qrEnabled) return;
 
@@ -765,7 +786,7 @@ async function drawFooter(p: any, t: CertTheme, data: CertPDFData, siteUrl: stri
     p.setDrawColor(...t.colors.secondary);
     p.setLineWidth(0.3);
     p.roundedRect(qrX - 1.5, qrY - 1.5, qrSize + 3, qrSize + 3, 1.5, 1.5, 'S');
-    try { p.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize); } catch {}
+    try { await p.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize); } catch {}
   }
 }
 
@@ -838,15 +859,46 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   fillRectMM(PAGE_W - 52, 85, 40, 22, green);
 
   // Bottom green bar — full width at the very bottom.
-  fillRectMM(0, PAGE_H - 13, PAGE_W, 13, green);
+  fillRectMM(0, PAGE_H - 13.3, PAGE_W, 13.3, green);
 
-  // Concentric arcs at bottom-right corner (outer green + inner purple).
+  // Bottom-left decorative squares.
+  fillRectMM(21.75, 169.2, 14.06, 14.06, [59, 157, 40]);
+  fillRectMM(31.82, 159.9, 11.4, 11.4, green);
+  fillRectMM(37.66, 178.0, 12.47, 12.47, purple);
+
+  // Diagonal-stripe circle (certificate.html .stripe-circle, 75px round).
+  // Chords of each 45° stripe line inside the circle — same math as the PDF path.
   {
-    ctx.strokeStyle = rgb(green); ctx.lineWidth = mmPx(10);
-    ctx.beginPath(); ctx.arc(mmPx(PAGE_W + 30), mmPx(PAGE_H + 44), mmPx(70), Math.PI, Math.PI * 1.5); ctx.stroke();
-    ctx.strokeStyle = rgb(purple); ctx.lineWidth = mmPx(6);
-    ctx.beginPath(); ctx.arc(mmPx(PAGE_W + 19), mmPx(PAGE_H + 31), mmPx(44), Math.PI, Math.PI * 1.5); ctx.stroke();
+    ctx.strokeStyle = 'rgb(166,211,162)';
+    ctx.lineWidth = mmPx(1.06);
+    const ssR = 9.95;
+    const ssSum = 223.4 + 175.15;
+    for (let s = 384.5; s <= 412.7; s += 3.38) {
+      const d = s - ssSum;
+      if (Math.abs(d) >= ssR * Math.SQRT2) continue;
+      const h = Math.sqrt(ssR * ssR - (d * d) / 2);
+      const fx = mmPx(223.4 + d / 2);
+      const fy = mmPx(175.15 + d / 2);
+      const hx = mmPx(h / Math.SQRT2);
+      const hy = mmPx(h / Math.SQRT2);
+      ctx.beginPath();
+      ctx.moveTo(fx + hx, fy - hy);
+      ctx.lineTo(fx - hx, fy + hy);
+      ctx.stroke();
+    }
   }
+
+  // Bottom-right concentric arcs: outer green ring, inner purple ring, each
+  // with a white interior fill (reference .stripe/arc circles).
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(mmPx(281.0), mmPx(203.2), mmPx(47.08), 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = rgb(green); ctx.lineWidth = mmPx(15.38);
+  ctx.beginPath(); ctx.arc(mmPx(281.0), mmPx(203.2), mmPx(39.39), 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(mmPx(289.9), mmPx(212.9), mmPx(28.64), 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = rgb(purple); ctx.lineWidth = mmPx(7.96);
+  ctx.beginPath(); ctx.arc(mmPx(289.9), mmPx(212.9), mmPx(24.66), 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = mmPx(0.12);
 
   // ---- Top decoration (mirrors PDF drawTopDecoration) ----
   // Large purple rounded rectangle at top-left.
@@ -876,14 +928,12 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
       stroke(greenDeep, 0.5); ctx.beginPath(); ctx.arc(cx, cy, r - mmPx(5.2), 0, Math.PI * 2); ctx.stroke();
       // Inner photo area.
       ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx, cy, r - mmPx(5.2), 0, Math.PI * 2); ctx.fill();
-      // Logo fitted inside.
+      // Logo fitted inside the circle (aspect preserved, corner-safe).
       if (url) {
         const img = await canvasLoadImage(url);
         if (img) {
-          const box = (r - mmPx(5.2)) * 1.7;
-          let w = box, h = box;
           const ratio = img.naturalWidth / img.naturalHeight || 1;
-          if (ratio > 1) h = box / ratio; else w = box * ratio;
+          const { w, h } = fitLogoInCircle(ratio, r - mmPx(5.2), mmPx(SEAL_LOGO_PAD));
           ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
         }
       }
@@ -1113,19 +1163,18 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   // ---- Footer band ----
   const bandTopPx = mmPx(footerBandTop(qrOn));
   const qrSizePx = mmPx(16);
-  const qrXPx = C.contentR - qrSizePx;
-  const qrYPx = bandTopPx + mmPx(FOOTER_BAND_PAD);
+  const qrXPx = C.cx - qrSizePx / 2;
+  const qrYPx = bandTopPx;
 
   // ---- Signatures ----
   if (sigs.length > 0) {
     const sigCount = Math.min(sigs.length, 3);
-    const qrReserveL = qrOn ? CONTENT_R - 30 : CONTENT_R + 30;
     const slotWmm = sigCount === 1 ? 80 : 54;
     let slots: number[];
     if (sigCount === 1) slots = [CX];
     else if (sigCount === 2) slots = [CX - 58, CX + 58];
     else {
-      const gap = ((qrReserveL - 4) - (CONTENT_L + 4) - slotWmm * sigCount) / (sigCount - 1);
+      const gap = ((CONTENT_R - 4) - (CONTENT_L + 4) - slotWmm * sigCount) / (sigCount - 1);
       slots = []; let x = CONTENT_L + 4 + slotWmm / 2;
       for (let i = 0; i < sigCount; i++) { slots.push(x); x += slotWmm + gap; }
     }
@@ -1159,8 +1208,8 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
       if (sig.signatureUrl || sig.autoSignature !== false) {
         let url = sig.signatureUrl;
         if (!url && sig.autoSignature !== false && sig.name) {
-          const { generateSignatureDataURL } = await import('./signature-gen');
-          try { url = await generateSignatureDataURL(sig.name, 220, 60); } catch {}
+          const { generateSignatureDataURL, signatureTextFor } = await import('./signature-gen');
+          try { url = await generateSignatureDataURL(signatureTextFor(sig), 220, 60); } catch {}
         }
         if (url) { const img = await canvasLoadImage(url); if (img) ctx.drawImage(img, x - slotW / 2, lineY - mmPx(sigImgHmm + 1), slotW, mmPx(sigImgHmm)); }
       }
@@ -1190,7 +1239,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
       const qrUrl = `${data.siteUrl || 'https://iiuc-arms.eu.cc'}/clubs/preview/${data.certificateId}`;
       const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 200, margin: 1, errorCorrectionLevel: 'H', color: { dark: '#1a1a2e', light: '#ffffff' } });
       const qrSize = 16 * EXPORT_PX_PER_MM;
-      const qrX = C.contentR - qrSize, qrY = bandTopPx + mmPx(FOOTER_BAND_PAD);
+      const qrX = C.cx - qrSize / 2, qrY = bandTopPx;
       ctx.fillStyle = '#ffffff'; ctx.fillRect(qrX - mmPx(1.5), qrY - mmPx(1.5), qrSize + mmPx(3), qrSize + mmPx(3));
       ctx.strokeStyle = rgb(t.colors.secondary); ctx.lineWidth = 0.3 * EXPORT_PX_PER_MM;
       const r2 = mmPx(1.5);
@@ -1295,7 +1344,7 @@ async function renderCertificate(pdf: any, data: CertPDFData, isFirstPage: boole
     await drawSignatures(pdf, t, signatories, closBase, bandTop);
   }
 
-  drawFooter(pdf, t, data, data.siteUrl || 'https://iiuc-arms.eu.cc');
+  await drawFooter(pdf, t, data, data.siteUrl || 'https://iiuc-arms.eu.cc');
 }
 
 // ---------------------------------------------------------------------------

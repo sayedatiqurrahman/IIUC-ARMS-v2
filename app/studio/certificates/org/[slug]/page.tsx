@@ -329,6 +329,12 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
                           className="w-full px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-xs outline-none focus:border-qsis"
                           placeholder="Dept. of CSE, IIUC" />
                       </div>
+                      <div className="mt-2">
+                        <label className="text-[0.65rem] text-dark-text2 mb-1 block">Signature text</label>
+                        <input type="text" value={sig.signatureText || ''} onChange={e => updateSignatory(i, 'signatureText', e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-xs outline-none focus:border-qsis"
+                          placeholder="Text to render as the script signature (blank = first word of name)" />
+                      </div>
                     </div>
                     {signatories.length > 1 && (
                       <button onClick={() => removeSignatory(i)} className="text-red-400 hover:text-red-300 text-xs mt-5"><i className="fas fa-trash"></i></button>

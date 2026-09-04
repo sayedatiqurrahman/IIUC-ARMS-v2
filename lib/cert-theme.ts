@@ -100,6 +100,7 @@ export interface CertSignatory {
   designation: string;
   title: string;
   signatureUrl?: string;
+  signatureText?: string;
   autoSignature?: boolean;
 }
 
