@@ -75,95 +75,6 @@ function loadGoogleFonts(): Promise<void> {
   });
 }
 
-// Render text as a PNG data-URL on a transparent canvas using a script font,
-// auto-fitting the font size so the whole string fits the requested width.
-async function renderScriptText(
-  text: string,
-  opts: { font: string; maxWidthPx: number; maxHeightPx: number; color?: string; fallbackSizePx?: number; forceUppercase?: boolean },
-): Promise<string | null> {
-  const maxWidthPx = Math.max(200, opts.maxWidthPx);
-  const maxHeightPx = Math.max(80, opts.maxHeightPx);
-
-  if (typeof document === 'undefined') return null;
-  await loadGoogleFonts();
-
-  // Ensure the specific face is actually usable before measuring.
-  try {
-    if (document.fonts && typeof document.fonts.load === 'function') {
-      await document.fonts.load(`40px "${opts.font}"`);
-    }
-  } catch {}
-
-  const useUpperCase = !!opts.forceUppercase;
-  const display = useUpperCase ? text.toUpperCase() : text;
-
-  const canvas = document.createElement('canvas');
-  const scale = 2;
-  canvas.width = maxWidthPx * scale;
-  canvas.height = maxHeightPx * scale * 1.15;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  ctx.scale(scale, scale);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  let fontSize = opts.fallbackSizePx || 90;
-  const baseline = canvas.height / (2 * scale);
-
-  let width = Infinity;
-  const measure = () => {
-    ctx.font = `${fontSize}px "${opts.font}", cursive, serif`;
-    return ctx.measureText(display).width;
-  };
-
-  // Fit within width, and shrink if we exceed height.
-  while (fontSize > 14) {
-    width = measure();
-    if (width <= maxWidthPx && fontSize <= maxHeightPx) break;
-    fontSize -= 2;
-  }
-  // Final fallback shrink.
-  while (fontSize > 10 && measure() > maxWidthPx) fontSize -= 1;
-
-  const color = opts.color || '#1a1a2e';
-  ctx.font = `${fontSize}px "${opts.font}", cursive, serif`;
-  ctx.fillStyle = color;
-  ctx.fillText(display, maxWidthPx / 2, baseline);
-
-  // Remove transparent margins conservatively.
-  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
-  const d = imgData.data;
-  for (let y = 0; y < canvas.height; y++) {
-    for (let x = 0; x < canvas.width; x++) {
-      if (d[(y * canvas.width + x) * 4 + 3] > 8) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-    }
-  }
-
-  if (maxX <= minX || maxY <= minY) return null;
-  const pad = 4 * scale;
-  minX = Math.max(0, minX - pad);
-  minY = Math.max(0, minY - pad);
-  maxX = Math.min(canvas.width, maxX + pad);
-  maxY = Math.min(canvas.height, maxY + pad);
-
-  const w = maxX - minX;
-  const h = maxY - minY;
-  const cropped = document.createElement('canvas');
-  cropped.width = w;
-  cropped.height = h;
-  const cctx = cropped.getContext('2d');
-  if (!cctx) return null;
-  cctx.drawImage(canvas, minX, minY, w, h, 0, 0, w, h);
-
-  return cropped.toDataURL('image/png');
-}
-
 // ---------------------------------------------------------------------------
 // Text-fitting engine
 // ---------------------------------------------------------------------------
@@ -440,23 +351,21 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
   const introBottom = introBase + fontDescent(9.5);
 
   const name = data.memberName.trim();
-  const nameDataUrl = await renderScriptText(name, {
-    font: design.fonts.nameScriptFont || 'Great Vibes',
-    maxWidthPx: 900,
-    maxHeightPx: 96,
-    color: `rgb(${primary[0]},${primary[1]},${primary[2]})`,
-  });
-
   const nameMaxW = SEAL_BODY_W - 12;
   const nameTop = introBottom + 2.8;
   const nameBottom = nameTop + 10.5;
+  const nameBase = nameBottom - 1.2;
   const serifName = () => {
     setStyle(p, 'serif', 'bold', design.fonts.nameSize || 20, primary);
-    p.text(name.toUpperCase(), CX, nameBottom - 1.2, { align: 'center' });
+    p.text(name.toUpperCase(), CX, nameBase, { align: 'center' });
   };
-  if (nameDataUrl) {
+
+  // Same renderer as the canvas/PNG path so the PDF name is identical in size,
+  // shape and baseline — never stretched into a fixed box.
+  const nm = await renderNameImage(name, design, primary);
+  if (nm && nm.dataUrl) {
     try {
-      await p.addImage(nameDataUrl, 'PNG', CX - nameMaxW / 2, nameTop, nameMaxW, 10.5);
+      await p.addImage(nm.dataUrl, 'PNG', CX - nm.widthMm / 2, nameBase - nm.baselineFromTopMm, nm.widthMm, nm.heightMm);
     } catch {
       serifName();
     }
@@ -632,6 +541,8 @@ async function drawSeal(p: any, t: CertTheme, logos: { iiuc?: string; club?: str
 // Measure how far below the signature line the tallest block (signature names +
 // wrapped titles/designations) hangs. Used to anchor signatures above the footer
 // band and to place the closing line clear of the signature images.
+const SIG_META_PT = 7;   // role/designation size under the signature name
+const SIG_META_PITCH = 3.4;
 function measureSigBelow(p: any, list: CertSignatory[], sigCount: number, slotW: number): number {
   let maxBelow = 0;
   for (let i = 0; i < sigCount; i++) {
@@ -641,10 +552,10 @@ function measureSigBelow(p: any, list: CertSignatory[], sigCount: number, slotW:
     if (sig.title) metaLines.push(sig.title);
     if (sig.designation) metaLines.push(sig.designation);
     for (const m of metaLines) {
-      p.setFont('times', 'normal');
-      p.setFontSize(6);
-      const wrapped = p.splitTextToSize(m, slotW - 2) as string[];
-      below += (Array.isArray(wrapped) ? wrapped.length : 1) * 3.2;
+      p.setFont('times', 'bold');
+      p.setFontSize(SIG_META_PT);
+      const wrapped = p.splitTextToSize(m.toUpperCase(), slotW - 2) as string[];
+      below += Math.max(Array.isArray(wrapped) ? wrapped.length : 1, 1) * SIG_META_PITCH;
     }
     if (below > maxBelow) maxBelow = below;
   }
@@ -726,20 +637,21 @@ async function drawSignatures(p: any, t: CertTheme, signatories: CertSignatory[]
 
     let py = textY + 3.6;
 
-    // Title / designation block (wrapped).
+    // Title / designation block (wrapped, uppercase).
     const metaLines: string[] = [];
     if (sig.title) metaLines.push(sig.title);
     if (sig.designation) metaLines.push(sig.designation);
-    for (const m of metaLines) {
-      p.setFont('times', 'normal');
-      let mSize = 6;
+    for (let mi = 0; mi < metaLines.length; mi++) {
+      const m = metaLines[mi].toUpperCase();
+      p.setFont('times', mi === 0 ? 'bold' : 'normal');
+      let mSize = SIG_META_PT;
       p.setFontSize(mSize);
-      while (mSize > 4 && p.getTextWidth(m) > slotW - 2) { mSize -= 0.2; p.setFontSize(mSize); }
+      while (mSize > 4.5 && p.getTextWidth(m) > slotW - 2) { mSize -= 0.2; p.setFontSize(mSize); }
       const wrapped = p.splitTextToSize(m, slotW - 2) as string[];
       for (const wl of wrapped) {
-        p.setTextColor(...t.colors.muted);
+        p.setTextColor(...(mi === 0 ? t.colors.text : t.colors.muted));
         p.text(wl, x, py, { align: 'center' });
-        py += 3.2;
+        py += SIG_META_PITCH;
       }
     }
   }
@@ -750,10 +662,10 @@ async function drawSignatures(p: any, t: CertTheme, signatories: CertSignatory[]
 // Footer band geometry shared between the signature section and the footer row.
 // The QR sits centred at the bottom; signatures stay clear of it vertically.
 const FOOTER_BAND_PAD = 2;
+const QR_SIZE_MM = 22; // large enough for any scanner to read (≈20mm+ recommended)
 function footerBandTop(qrEnabled = true): number {
-  const qrSize = 16;
   const extra = qrEnabled ? 0 : 6; // without QR we can drop the band closer to the edge
-  return PAGE_H - FRAME_INNER - qrSize - 13 + extra - FOOTER_BAND_PAD; // ≈ 167
+  return PAGE_H - FRAME_INNER - QR_SIZE_MM - 13 + extra - FOOTER_BAND_PAD; // ≈ 161
 }
 
 async function drawFooter(p: any, t: CertTheme, data: CertPDFData, siteUrl: string) {
@@ -763,7 +675,7 @@ async function drawFooter(p: any, t: CertTheme, data: CertPDFData, siteUrl: stri
 
   // QR — centred at the bottom, above the green bar (keeps the bottom-right
   // corner free for the award arcs from the reference design).
-  const qrSize = 16;
+  const qrSize = QR_SIZE_MM;
   const qrX = CX - qrSize / 2;
   const qrY = bandTop;
 
@@ -773,8 +685,8 @@ async function drawFooter(p: any, t: CertTheme, data: CertPDFData, siteUrl: stri
   let qrDataUrl: string | undefined;
   try {
     qrDataUrl = await QRCode.toDataURL(qrUrl, {
-      width: 160,
-      margin: 1,
+      width: 640,
+      margin: 4,
       errorCorrectionLevel: 'H',
       color: { dark: '#1a1a2e', light: '#ffffff' },
     });
@@ -798,6 +710,99 @@ async function drawFooter(p: any, t: CertTheme, data: CertPDFData, siteUrl: stri
 const EXPORT_W_PX = 3508;
 const EXPORT_H_PX = 2480;
 const EXPORT_PX_PER_MM = EXPORT_W_PX / PAGE_W; // ≈11.8 @300 DPI
+
+// Shared recipient-name renderer. Draws the script name (with a serif fallback
+// for long names) at the same physical size and baseline used by the old canvas
+// path, then returns a cropped raster + its size in mm so BOTH the PDF and the
+// PNG/export can place identical glyphs at identical coordinates.
+async function renderNameImage(
+  name: string,
+  design: any,
+  primary: [number, number, number] | number[],
+): Promise<{ dataUrl: string; widthMm: number; heightMm: number; baselineFromTopMm: number } | null> {
+  if (typeof document === 'undefined') return null;
+  await loadGoogleFonts();
+
+  const scriptFont = design.fonts.nameScriptFont || 'Great Vibes';
+  const nameSizePt = design.fonts.nameSize || 20;
+  const nameLarge = name.toUpperCase();
+  const maxWmm = SEAL_BODY_W - 12;
+  const canvasHmm = 14;
+  const baselineHmm = 12;
+
+  const W = Math.round(maxWmm * EXPORT_PX_PER_MM);
+  const H = Math.round(canvasHmm * EXPORT_PX_PER_MM);
+  const baselineY = Math.round(baselineHmm * EXPORT_PX_PER_MM);
+  const ptPx = (pt: number) => pt * PT_MM * EXPORT_PX_PER_MM;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+
+  const ink = `rgb(${primary[0]},${primary[1]},${primary[2]})`;
+  let drawn = false;
+  try {
+    if (document.fonts && typeof document.fonts.load === 'function') {
+      await document.fonts.load(`40px "${scriptFont}"`);
+    }
+    ctx.font = `${ptPx(nameSizePt * 1.15)}px "${scriptFont}", cursive, serif`;
+    drawn = ctx.measureText(name).width <= W;
+    if (drawn) {
+      ctx.fillStyle = ink;
+      ctx.fillText(name, W / 2, baselineY);
+    }
+  } catch {}
+  if (!drawn) {
+    let s = ptPx(nameSizePt);
+    ctx.font = `bold ${s}px "Times New Roman", Times, serif`;
+    while (s > ptPx(10) && ctx.measureText(nameLarge).width > W) {
+      s -= ptPx(0.5);
+      ctx.font = `bold ${s}px "Times New Roman", Times, serif`;
+    }
+    ctx.fillStyle = ink;
+    ctx.fillText(nameLarge, W / 2, baselineY);
+  }
+
+  const imgData = ctx.getImageData(0, 0, W, H);
+  let minX = W, minY = H, maxX = 0, maxY = 0;
+  const d = imgData.data;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (d[(y * W + x) * 4 + 3] > 8) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX <= minX || maxY <= minY) return null;
+
+  const pad = Math.round(1.5 * EXPORT_PX_PER_MM);
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(W, maxX + pad);
+  maxY = Math.min(H, maxY + pad);
+  const w = maxX - minX;
+  const h = maxY - minY;
+  const cropped = document.createElement('canvas');
+  cropped.width = w;
+  cropped.height = h;
+  const cctx = cropped.getContext('2d');
+  if (!cctx) return null;
+  cctx.drawImage(canvas, minX, minY, w, h, 0, 0, w, h);
+
+  return {
+    dataUrl: cropped.toDataURL('image/png'),
+    widthMm: w / EXPORT_PX_PER_MM,
+    heightMm: h / EXPORT_PX_PER_MM,
+    baselineFromTopMm: (baselineY - minY) / EXPORT_PX_PER_MM,
+  };
+}
 
 function mmPx(mm: number): number { return mm * EXPORT_PX_PER_MM; }
 
@@ -1031,27 +1036,27 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   ctx.save(); ctx.letterSpacing = '1.4px'; ctx.fillText(intro, C.cx, mmPx(introBaseMm)); ctx.restore();
   const introBottomMm = introBaseMm + fontDescent(9.5);
 
-  // recipient name — script font with serif fallback
+  // recipient name — script font with serif fallback; rendered once by the shared
+  // renderer so the PNG export and the PDF draw the exact same glyphs at the same
+  // physical size and baseline.
   const name = data.memberName.trim();
   const nameSizePt = d.fonts.nameSize || 20;
   const nameLarge = name.toUpperCase();
   const nameTopMm = introBottomMm + 2.8;
   const nameBottomMm = nameTopMm + 10.5;
-  const nameBasePx = mmPx(nameBottomMm - 1.2);
-  let shownAsScript = false;
-  try {
-    await loadGoogleFonts();
-    if (document.fonts && typeof document.fonts.load === 'function') await document.fonts.load(`40px "${d.fonts.nameScriptFont || 'Great Vibes'}"`);
-    ctx.font = font(d.fonts.nameScriptFont || 'Great Vibes', 'normal', nameSizePt * 1.15 * PT_MM * EXPORT_PX_PER_MM);
-    const nw = ctx.measureText(name).width;
-    const maxNW = mmPx(SEAL_BODY_W - 12);
-    if (nw <= maxNW) { ctx.fillStyle = rgb(t.colors.primary); ctx.fillText(name, C.cx, nameBasePx); shownAsScript = true; }
-  } catch {}
-  if (!shownAsScript) {
-    let s = nameSizePt * PT_MM * EXPORT_PX_PER_MM;
-    ctx.font = font('Times New Roman', 'bold', s);
-    while (s > 10 * PT_MM * EXPORT_PX_PER_MM && ctx.measureText(nameLarge).width > mmPx(SEAL_BODY_W - 12)) { s -= 0.5 * PT_MM * EXPORT_PX_PER_MM; ctx.font = font('Times New Roman', 'bold', s); }
-    ctx.fillStyle = rgb(t.colors.primary); ctx.fillText(nameLarge, C.cx, nameBasePx);
+  const nameBaseMm = nameBottomMm - 1.2;
+  const nm = await renderNameImage(name, d, t.colors.primary);
+  if (nm && nm.dataUrl) {
+    const img = await canvasLoadImage(nm.dataUrl);
+    if (img) {
+      ctx.drawImage(
+        img,
+        C.cx - (nm.widthMm * EXPORT_PX_PER_MM) / 2,
+        mmPx(nameBaseMm - nm.baselineFromTopMm),
+        nm.widthMm * EXPORT_PX_PER_MM,
+        nm.heightMm * EXPORT_PX_PER_MM,
+      );
+    }
   }
 
   // underline
@@ -1108,7 +1113,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
       const metas = [];
       if (sig.title) metas.push(sig.title);
       if (sig.designation) metas.push(sig.designation);
-      for (const m of metas) below += wrapTexLimit(m, 6, slotWmm - 2, 99).length * 3.2;
+      for (const m of metas) below += wrapTexLimit(m, SIG_META_PT + 0.5, slotWmm - 2, 99).length * (SIG_META_PITCH + 0.3);
       if (below > maxBelowMM) maxBelowMM = below;
     }
     const sigImgH = sigs.some(s => s.signatureUrl || s.autoSignature !== false) ? 11 : 0;
@@ -1162,7 +1167,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
 
   // ---- Footer band ----
   const bandTopPx = mmPx(footerBandTop(qrOn));
-  const qrSizePx = mmPx(16);
+  const qrSizePx = mmPx(QR_SIZE_MM);
   const qrXPx = C.cx - qrSizePx / 2;
   const qrYPx = bandTopPx;
 
@@ -1186,7 +1191,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
       const metas: string[] = [];
       if (sigs[i].title) metas.push(sigs[i].title);
       if (sigs[i].designation) metas.push(sigs[i].designation);
-      for (const m of metas) below += wrapTexLimit(m, 6, slotWmm - 2, 99).length * 3.2;
+      for (const m of metas) below += wrapTexLimit(m, SIG_META_PT + 0.5, slotWmm - 2, 99).length * (SIG_META_PITCH + 0.3);
       if (below > maxBelowMM) maxBelowMM = below;
     }
     // Anchor the signature line close to the closing text, but never let the
@@ -1223,10 +1228,11 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
       const metaLines: string[] = [];
       if (sig.title) metaLines.push(sig.title);
       if (sig.designation) metaLines.push(sig.designation);
-      ctx.fillStyle = rgb(t.colors.muted);
-      for (const meta of metaLines) {
-        for (const wl of wrapTexLimit(meta, 6, slotWmm - 2, 99)) {
-          ctx.fillText(wl, x, py); py += mmPx(3.2);
+      for (let mi = 0; mi < metaLines.length; mi++) {
+        ctx.font = font('Times New Roman', mi === 0 ? 'bold' : 'normal', SIG_META_PT * PT_MM * EXPORT_PX_PER_MM);
+        ctx.fillStyle = rgb(mi === 0 ? t.colors.text : t.colors.muted);
+        for (const wl of wrapTexLimit(metaLines[mi].toUpperCase(), SIG_META_PT, slotWmm - 2, 99)) {
+          ctx.fillText(wl, x, py); py += mmPx(SIG_META_PITCH);
         }
       }
     }
@@ -1237,8 +1243,8 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
     const { default: QRCode } = await import('qrcode');
     try {
       const qrUrl = `${data.siteUrl || 'https://iiuc-arms.eu.cc'}/clubs/preview/${data.certificateId}`;
-      const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 200, margin: 1, errorCorrectionLevel: 'H', color: { dark: '#1a1a2e', light: '#ffffff' } });
-      const qrSize = 16 * EXPORT_PX_PER_MM;
+      const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 640, margin: 4, errorCorrectionLevel: 'H', color: { dark: '#1a1a2e', light: '#ffffff' } });
+      const qrSize = QR_SIZE_MM * EXPORT_PX_PER_MM;
       const qrX = C.cx - qrSize / 2, qrY = bandTopPx;
       ctx.fillStyle = '#ffffff'; ctx.fillRect(qrX - mmPx(1.5), qrY - mmPx(1.5), qrSize + mmPx(3), qrSize + mmPx(3));
       ctx.strokeStyle = rgb(t.colors.secondary); ctx.lineWidth = 0.3 * EXPORT_PX_PER_MM;

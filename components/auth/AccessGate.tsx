@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { normalizeUniversityId } from '@/lib/utils';
 
 interface AccessGateProps {
   email?: string;
@@ -122,7 +123,7 @@ export default function AccessGate({ email: initialEmail = '', status, onClose, 
               <input
                 type="text"
                 value={id}
-                onChange={e => setId(e.target.value)}
+                onChange={e => setId(normalizeUniversityId(e.target.value))}
                 placeholder="Student / University ID (e.g. C211086)"
                 className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
               />

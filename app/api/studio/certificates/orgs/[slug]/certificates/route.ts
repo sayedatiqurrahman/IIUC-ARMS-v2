@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { normalizeUniversityId } from '@/lib/utils';
 
 function generateCertId(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -66,7 +67,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
 
     const created = [];
     for (const cert of certificates) {
-      if (!cert.memberName?.trim() || !cert.universityId?.trim() || !cert.department?.trim()) continue;
+      const uniId = normalizeUniversityId(cert.universityId);
+      if (!cert.memberName?.trim() || !uniId || !cert.department?.trim()) continue;
 
       const certificateId = generateCertId();
       const signatoriesJson = cert.signatories && cert.signatories.length > 0
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
           certificateId,
           orgId: org.id,
           memberName: cert.memberName.trim(),
-          universityId: cert.universityId.trim(),
+          universityId: uniId,
           department: cert.department.trim(),
           session: cert.session?.trim() || null,
           post: cert.post?.trim() || null,

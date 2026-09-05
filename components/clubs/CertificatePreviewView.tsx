@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CertPDFData, exportCertificateImage, downloadCertPDF, downloadCertPNG } from '@/lib/club-cert-pdf';
 import { DEFAULT_THEME } from '@/lib/cert-theme';
+import IssuerBadge from './IssuerBadge';
 
 export default function CertificatePreviewView({ params }: { params: Promise<{ certificateId: string }> }) {
   const [certId, setCertId] = useState('');
@@ -135,7 +136,7 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
                 {cert.post && row('Post', cert.post)}
                 {cert.eventName && row('Event', cert.eventName)}
                 {cert.servicePeriod && row('Service Period', cert.servicePeriod)}
-                {row('Issued By', cert.issuedBy || cert.organization)}
+                {row('Issued By', <IssuerBadge issuer={cert.issuer} fallback={cert.issuedBy || cert.organization} />)}
                 {row('Issued', new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))}
               </div>
               {Array.isArray(cert.signatories) && cert.signatories.length > 0 && (

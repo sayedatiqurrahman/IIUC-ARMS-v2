@@ -37,6 +37,7 @@ import { deleteCourseFolder, findCourseFolderPathInRepo } from '@/lib/course-del
 import { isBlockedChat, updateBlocklist } from '@/lib/telegram/block';
 import { commitFilesToBranch } from '@/lib/github-commit';
 import { matchCourseFolder, normalizeCourseCode } from '@/lib/store/helpers';
+import { normalizeUniversityId } from '@/lib/utils';
 import { validateRepoPath } from '@/lib/repo-path';
 import { registerBotCommands } from '@/lib/telegram/commands';
 import { configuredSecret } from '@/lib/telegram/secret';
@@ -594,7 +595,7 @@ async function handleUploadDocument(chatId: number, msg: any, state: UploadFlowS
     await sendMessage(chatId, `🪪 Please send your <b>University ID</b> so we can track who uploaded this file.`);
     return;
   }
-  universityId = String(universityId).replace(/\s+/g, '').slice(0, 30);
+  universityId = normalizeUniversityId(String(universityId)).slice(0, 30);
 
   const base = sanitizeFileName(origName.replace(/\.[^.]+$/, ''));
   const nameParts = [base];

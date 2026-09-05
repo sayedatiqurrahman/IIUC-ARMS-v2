@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { config } from '@/lib/config';
+import { normalizeUniversityId } from '@/lib/utils';
 import { hasPermission } from '@/lib/permissions';
 import { hasAnyClubRole, parseClubRoles } from '@/lib/club-member-roles';
 
@@ -102,7 +103,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     const created = [];
     for (const cert of certificates) {
       const { memberName, universityId, department, session, post, eventName, servicePeriod, signatories } = cert;
-      if (!memberName?.trim() || !universityId?.trim() || !department?.trim()) continue;
+      const uniId = normalizeUniversityId(universityId);
+      if (!memberName?.trim() || !uniId || !department?.trim()) continue;
       const certificateId = generateCertId();
       const c = await prisma.clubCertificate.create({
         data: {
@@ -110,7 +112,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
           clubId: club.id,
           eventId: cert.eventId || null,
           memberName: memberName.trim(),
-          universityId: universityId.trim(),
+          universityId: uniId,
           department: department.trim(),
           session: session || null,
           post: post || null,
@@ -152,7 +154,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
     }
 
     const { memberName, universityId, department, session, post, eventName, servicePeriod, signatories } = data || {};
-    if (!memberName?.trim() || !universityId?.trim() || !department?.trim()) {
+    const uniId = normalizeUniversityId(universityId);
+    if (!memberName?.trim() || !uniId || !department?.trim()) {
       return NextResponse.json({ error: 'memberName, universityId, department are required' }, { status: 400 });
     }
 
@@ -165,7 +168,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
       where: { id: existing.id },
       data: {
         memberName: memberName.trim(),
-        universityId: universityId.trim(),
+        universityId: uniId,
         department: department.trim(),
         session: session || null,
         post: post || null,

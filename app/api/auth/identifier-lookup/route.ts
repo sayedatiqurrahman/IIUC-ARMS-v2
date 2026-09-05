@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { normalizeUniversityId } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,10 @@ export async function POST(req: NextRequest) {
       select: { userId: true, universityId: true },
     }).catch(() => [] as any[]);
 
-    const hit = matches.find((p: any) => (p.universityId || '').toString().toLowerCase() === id);
+    const hit = matches.find(
+      (p: any) =>
+        normalizeUniversityId((p.universityId || '').toString()).toLowerCase() === normalizeUniversityId(id).toLowerCase()
+    );
     if (hit?.userId) {
       // The account's canonical login email is its userId (or email field).
       return NextResponse.json({ email: hit.userId, versityId: true }, { status: 200 });

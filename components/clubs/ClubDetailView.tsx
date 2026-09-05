@@ -12,6 +12,7 @@ import BulkImportView from './BulkImportView';
 import Modal from '@/components/ui/Modal';
 import { downloadCertPDF, generateBulkCertPDF } from '@/lib/club-cert-pdf';
 import type { CertPDFData } from '@/lib/club-cert-pdf';
+import { normalizeUniversityId } from '@/lib/utils';
 import { ClubDetailSkeleton } from '@/components/ui/Skeleton';
 import AlumniTimeline from './AlumniTimeline';
 
@@ -1724,7 +1725,10 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
           {([['memberName', 'Member Name', true], ['universityId', 'University ID', true], ['department', 'Department', true], ['session', 'Session'], ['post', 'Post'], ['eventName', 'Event Name'], ['servicePeriod', 'Service Period']] as const).map(([key, label, required]) => (
             <div key={key}>
               <label className="text-sm text-dark-text2 font-semibold mb-1 block">{label}{required && <span className="text-red-400"> *</span>}</label>
-              <input type="text" value={certDraft[key]} onChange={e => setCertDraft(d => ({ ...d, [key]: e.target.value }))}
+              <input type="text" value={certDraft[key]} onChange={e => {
+                const v = key === 'universityId' ? normalizeUniversityId(e.target.value) : e.target.value;
+                setCertDraft(d => ({ ...d, [key]: v }));
+              }}
                 className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition" />
             </div>
           ))}

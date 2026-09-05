@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import IssuerBadge from './IssuerBadge';
 
 export default function VerifyView() {
   const searchParams = useSearchParams();
@@ -175,7 +176,7 @@ export default function VerifyView() {
                 </div>
                 <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 py-2">
                   <span className="text-xs text-dark-text2 uppercase tracking-wider font-semibold">Issued By</span>
-                  <span className="text-sm text-dark-text break-words">{cert.issuedBy}</span>
+                  <IssuerBadge issuer={cert.issuer} fallback={cert.issuedBy || cert.organization} />
                 </div>
 
                 {/* Signatories */}

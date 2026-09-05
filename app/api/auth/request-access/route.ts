@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { normalizeUniversityId } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const email = (body.email || '').toLowerCase().trim();
     const name = (body.name || '').trim();
-    const id = (body.id || '').trim();
+    const id = normalizeUniversityId((body.id || '').trim());
     const contact = (body.contact || '').trim();
     const gender = (body.gender || '').trim().toLowerCase();
 
