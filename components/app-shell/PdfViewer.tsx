@@ -1,8 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { getPdfFromCache, storePdfInCache } from '@/lib/pdf-cache';
 import { getPdfMetadata, isValidPdf } from '@/lib/pdf-meta';
+
+const AdobePdfViewer = dynamic(() => import('./AdobePdfViewer'), { ssr: false });
+
+/** Domains allowed by the Adobe PDF Embed credential (www.arms.iiuc.net etc.). */
+const ADOBE_DOMAINS = ['www.arms.iiuc.net', 'arms.iiuc.net', 'localhost', '127.0.0.1'];
 
 interface PdfViewerProps {
   item: any;
@@ -18,10 +24,22 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
   const [status, setStatus] = useState<Status>('loading');
   const [error, setError] = useState('');
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [bytes, setBytes] = useState<ArrayBuffer | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [progress, setProgress] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [useEmbed, setUseEmbed] = useState(true);
+
+  // PDF engine: 'adobe' (full-width inline + annotations) with fallback to native.
+  const adobeAvailable = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const host = window.location.hostname;
+    if (process.env.NEXT_PUBLIC_ADOBE_PDF_ENABLED === '1') return true;
+    if (process.env.NEXT_PUBLIC_ADOBE_PDF_ENABLED === '0') return false;
+    return ADOBE_DOMAINS.includes(host) || host.endsWith('.iiuc.net');
+  }, []);
+  const [engine, setEngine] = useState<'adobe' | 'native'>(adobeAvailable ? 'adobe' : 'native');
+  const [adobeNotified, setNotified] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const embedRef = useRef<HTMLIFrameElement>(null);
@@ -130,6 +148,7 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
 
         blobUrlRef.current = url;
         setBlobUrl(url);
+        setBytes(bytes);
         setStatus('ready');
       } catch (e: any) {
         if (cancelled) return;
@@ -243,6 +262,18 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
         <div className="flex items-center gap-1 shrink-0">
           {status === 'ready' && (
             <>
+              {/* Engine toggle */}
+              {adobeAvailable && (
+                <button
+                  onClick={() => setEngine((e) => (e === 'adobe' ? 'native' : 'adobe'))}
+                  className="pdf-btn px-2 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition text-xs flex items-center gap-1.5"
+                  title="Switch PDF engine (Adobe viewer / built-in)"
+                >
+                  <i className={`fas ${engine === 'adobe' ? 'fa-file-pdf text-red-400' : 'fa-code text-blue-400'}`}></i>
+                  {engine === 'adobe' ? 'Adobe' : 'Built-in'}
+                </button>
+              )}
+              <div className="w-px h-5 bg-[#334155] mx-1 hidden sm:block"></div>
               {/* Zoom controls */}
               <button onClick={zoomOut} className="pdf-btn px-2 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition text-xs" title="Zoom out (Ctrl+-)">
                 <i className="fas fa-minus"></i>
@@ -266,6 +297,13 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
             title="Download PDF">
             <i className="fas fa-download"></i>
           </a>
+
+          {/* Corner close (✕) */}
+          <button onClick={onClose}
+            className="pdf-btn ml-1 px-2.5 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-red-500/80 hover:border-red-500 transition text-sm"
+            title="Close (Esc)">
+            <i className="fas fa-times"></i>
+          </button>
         </div>
       </div>
 
@@ -322,8 +360,28 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
           </div>
         )}
 
+        {/* Adobe PDF Embed — full-width inline with annotations */}
+        {status === 'ready' && engine === 'adobe' && bytes && (
+          <div className="w-full h-full relative">
+            <AdobePdfViewer
+              bytes={bytes}
+              fileName={item.name || 'document.pdf'}
+              onFallback={() => {
+                setEngine('native');
+                setNotified(true);
+              }}
+            />
+            {adobeNotified && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 rounded-lg border border-amber-700/40 bg-[#111827]/95 px-3 py-1.5 text-[0.7rem] text-amber-200 shadow-xl max-w-[90%] text-center">
+                <i className="fas fa-triangle-exclamation mr-1"></i>
+                Adobe viewer could not start here (check the credential domain — it is registered for <strong>www.arms.iiuc.net</strong>). Switched to the built-in viewer.
+              </div>
+            )}
+          </div>
+        )}
+
         {/* PDF renderer — iframe (hides native toolbar via #toolbar=0) with object fallback */}
-        {status === 'ready' && blobUrl && (
+        {status === 'ready' && engine === 'native' && blobUrl && (
           <div
             ref={containerRef}
             className="w-full h-full relative transition-transform duration-150"
