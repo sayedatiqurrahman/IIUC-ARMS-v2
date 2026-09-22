@@ -63,6 +63,7 @@ export const RESERVED_APP_IDS = new Set([
   'creative-hub',
   'creativehub',
   'certificate-studio',
+  'research-toolkit',
 ]);
 
 export const APP_ID_REGEX = /^[a-z0-9][a-z0-9-]{1,29}$/;
@@ -113,6 +114,15 @@ export const BUILTIN_APPS: StudioApp[] = [
     icon: 'palette',
     source: 'builtin',
     path: '/studio/creative-hub',
+  },
+  {
+    id: 'research-toolkit',
+    title: 'Research Toolkit',
+    subtitle: 'Citations, transliteration, bilingual glossary, summarizer, analyzers & AI-style checks — English + Arabic.',
+    description: 'A research companion for the two languages you publish in: citation generator, Arabic↔Latin converter, bilingual academic glossary, extractive summarizer, frequency analyzer, outline generator, author-name converter, offline plagiarism check, AI-likeness scan and a humanization assistant. Everything runs in your browser.',
+    icon: 'school',
+    source: 'builtin',
+    path: '/studio/research-toolkit',
   },
 ];
 
