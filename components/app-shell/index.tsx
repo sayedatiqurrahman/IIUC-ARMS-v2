@@ -1151,9 +1151,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             dismissOnboarding();
             setShowOnboarding(false);
             setOnboardingDone(true);
-            // Bidirectional sync: save department + semester + gender to server profile
-            const semId = config.semesters.find(s => s.label === data.semester)?.id || data.semester;
-            updateProfile({ department: data.department, semester: semId, gender: data.gender });
+            // Bidirectional sync: save department + semester + gender to server
+            // profile — but only when the user is actually signed in. Anonymous
+            // personalization stays in localStorage and pre-fills the profile
+            // form after login.
+            if (status === 'authenticated') {
+              const semId = config.semesters.find(s => s.label === data.semester)?.id || data.semester;
+              updateProfile({ department: data.department, semester: semId, gender: data.gender });
+            }
           }}
           onClose={() => { dismissOnboarding(); setShowOnboarding(false); setOnboardingDone(true); }}
         />

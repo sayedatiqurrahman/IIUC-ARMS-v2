@@ -219,6 +219,9 @@ export const useAppStore = create<AppState>((set, get) => {
       const snapshot = { ...current };
       const updated = { ...current, ...p };
       set({ profile: updated, profileLoaded: true });
+      // Not signed in — keep the change locally only. No server request and no
+      // error toast; the local values pre-fill the profile form after login.
+      if (!current.email) return;
       try {
         const res = await fetch('/api/profile', {
           method: 'POST',

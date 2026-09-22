@@ -10,6 +10,7 @@ import SessionSelector from './SessionSelector';
 import TeacherInfoSection from './TeacherInfoSection';
 import SocialLinks from './SocialLinks';
 import { normalizeUniversityId } from '@/lib/utils';
+import { getOnboardingData } from '@/lib/onboarding-storage';
 
 function extractUniversityId(email: string): string {
   const match = email.match(/^(q\d+)/i);
@@ -65,17 +66,23 @@ export default function ProfileCard({
 
   const startEdit = () => {
     const autoId = profile.universityId || extractUniversityId(email);
+    // Personalize data (saved to localStorage even when not signed in) pre-fills
+    // the profile form so completion is automatic after login.
+    const onboarding = getOnboardingData();
+    const onboardingSemId = onboarding?.semester
+      ? config.semesters.find(s => s.label === onboarding.semester)?.id || onboarding.semester
+      : '';
     setProfileForm({
       universityId: autoId,
-      gender: (profile as any).gender || '',
+      gender: (profile as any).gender || (onboarding?.gender ?? ''),
       name: profile.name || '',
       title: profile.title || '',
       shortForm: profile.shortForm || '',
       whatsapp: profile.whatsapp,
       telegramId: profile.telegramId || '',
-      semester: profile.semester,
+      semester: profile.semester || onboardingSemId,
       section: profile.section || '',
-      department: profile.department || '',
+      department: profile.department || (onboarding?.department ?? ''),
       batchId: (profile as any).batchId || '',
       session: (profile as any).session || '',
       facebook: profile.facebook,

@@ -59,9 +59,17 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-      icon: '/arms-logo-icon.png',
-    apple: '/arms-logo-icon.png',
-    shortcut: '/arms-logo-icon.png',
+    icon: [
+      { url: `${siteUrl}/favicon.ico`, sizes: 'any' },
+      { url: `${siteUrl}/icon-32.png`, type: 'image/png', sizes: '32x32' },
+      { url: `${siteUrl}/icon-48.png`, type: 'image/png', sizes: '48x48' },
+      { url: `${siteUrl}/icon-192.png`, type: 'image/png', sizes: '192x192' },
+    ],
+    apple: [
+      { url: `${siteUrl}/apple-touch-icon.png`, sizes: '180x180' },
+      { url: `${siteUrl}/icon-152.png`, sizes: '152x152' },
+    ],
+    shortcut: `${siteUrl}/icon-48.png`,
   },
   manifest: '/manifest.json',
   alternates: {
@@ -97,16 +105,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/arms-logo-icon.png" sizes="any" />
-        <link rel="apple-touch-icon" href="/arms-logo-icon.png" />
+        <link rel="icon" type="image/x-icon" href={`${siteUrl}/favicon.ico`} />
+        <link rel="icon" type="image/png" sizes="32x32" href={`${siteUrl}/icon-32.png`} />
+        <link rel="icon" type="image/png" sizes="48x48" href={`${siteUrl}/icon-48.png`} />
+        <link rel="apple-touch-icon" sizes="180x180" href={`${siteUrl}/apple-touch-icon.png`} />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="IIUC-ARMS" />
         <meta name="theme-color" content="#0f172a" />
         <meta name="msapplication-TileColor" content="#0f172a" />
-        <meta name="msapplication-TileImage" content="/arms-logo-icon.png" />
+        <meta name="msapplication-TileImage" content={`${siteUrl}/icon-144.png`} />
         <meta name="google-site-verification" content="XgkbMrbzPfBjc-INVUQNQlSv53Ik2Gq04rrYb88aS9o" />
+        <meta name="google-site-verification" content="UDIdn7-WixkkceHoeYWJZ_5epOeBWOBKOQ1dDmrjy9U" />
         <meta name="msvalidate.01" content="DD448DBC883F1B6109FDB70D65A3BB56" />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css" />
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" />
