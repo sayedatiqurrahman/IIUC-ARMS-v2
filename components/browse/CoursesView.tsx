@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
 import ShareModal, { type ShareItem } from './ShareModal';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.vercel.app';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 
 interface CoursesViewProps {
   semesterCourses: any[];

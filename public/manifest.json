@@ -16,12 +16,12 @@
   "categories": ["education"],
   "handle_links": "preferred",
   "url_handlers": [
-    { "origin": "https://iiuc-arms.eu.cc" }
+    { "origin": "https://arms.iiuc.net" }
   ],
   "related_applications": [
     {
       "platform": "webapp",
-      "url": "https://iiuc-arms.eu.cc/manifest.json"
+      "url": "https://arms.iiuc.net/manifest.json"
     }
   ],
   "icons": [

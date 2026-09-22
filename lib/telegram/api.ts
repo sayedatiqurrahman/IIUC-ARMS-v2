@@ -3,7 +3,7 @@ import { getRepoBotToken } from '@/lib/github-app';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 export const API = `https://api.telegram.org/bot${TOKEN}`;
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 export const CHANNEL_ID = process.env.TELEGRAM_CHANNEL_ID || '';
 export const GROUP_ID = process.env.TELEGRAM_GROUP_ID || '';
 

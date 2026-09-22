@@ -13,6 +13,7 @@ import LatestNotices from '@/components/notices/LatestNotices';
 import BrowseHeader from '@/components/browse/BrowseHeader';
 import PageLoader from '@/components/PageLoader';
 import { refreshTreeUntilVisible } from '@/lib/tree-refresh';
+import { uploadFilesToGitHub, type ClientUploadFile } from '@/lib/gh-upload-client';
 import dynamic from 'next/dynamic';
 // Each browse view is loaded on demand — only the view you're actually in is
 // fetched/executed, so switching departments → semesters → courses → files
@@ -302,9 +303,59 @@ export default function BrowsePage() {
     }
     setQuickUploading(true);
     try {
+      const totalBytes = payload.reduce((s, f) => s + f.size, 0);
+      const message = `Upload ${payload.length === 1 ? payload[0].name : `${payload.length} files`} to ${target}`;
+
+      // The server upload route runs on Vercel, which caps request bodies at
+      // ~4.5 MB. For larger payloads, commit straight from the browser (the
+      // same LFS-aware engine the rich upload modal uses), so 55 MB+ files land
+      // without touching the server body limit.
+      if (totalBytes > 4 * 1024 * 1024) {
+        const tokenRes = await fetch('/api/github/upload-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ githubToken: (session as any)?.accessToken || undefined }),
+        });
+        const tokenData = await tokenRes.json().catch(() => ({}));
+        if (tokenRes.ok && !tokenData.error && tokenData.token) {
+          const filesPayload: ClientUploadFile[] = payload.map(f => ({
+            path: `${config.uploadPath}/${target}/${f.name}`,
+            file: f,
+          }));
+          const userEmail = email || (session as any)?.user?.email;
+          const identity = profile.githubLogin
+            ? { name: profile.name || profile.githubLogin, email: `${profile.githubLogin}@users.noreply.github.com` }
+            : userEmail
+              ? { name: profile.name || userName || userEmail.split('@')[0], email: userEmail }
+              : undefined;
+          const result = await uploadFilesToGitHub({
+            token: tokenData.token,
+            fallbackToken: tokenData.fallbackToken,
+            owner: config.owner,
+            repo: config.repo,
+            files: filesPayload,
+            message,
+            ...(identity ? { author: identity } : {}),
+          });
+          if (result.success) {
+            showToast(`Uploaded ${payload.length} file${payload.length !== 1 ? 's' : ''} to ${target}`, 'success');
+            useAppStore.getState().invalidateTreeCache();
+            loadTree(session?.accessToken || '');
+            return;
+          }
+          // Direct commit failed. Only fall back to the server route when the
+          // payload can actually fit inside Vercel's ~4.5 MB body limit —
+          // otherwise surface the direct error, which is the real one.
+          if (totalBytes > 4 * 1024 * 1024) {
+            showToast(result.error || 'Upload failed', 'error');
+            return;
+          }
+        }
+      }
+
       const formData = new FormData();
       for (const f of payload) formData.append('files', f, `${target}/${f.name}`);
-      formData.append('message', `Upload ${payload.length === 1 ? payload[0].name : `${payload.length} files`} to ${target}`);
+      formData.append('message', message);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 85000);
       try {
@@ -325,10 +376,10 @@ export default function BrowsePage() {
     } finally {
       setQuickUploading(false);
     }
-  }, [session?.accessToken, loadTree]);
+  }, [session, email, profile, userName, loadTree]);
 
   const handleFileShare = useCallback((path: string, name: string, isFolder: boolean) => {
-    const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+    const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
     const params = new URLSearchParams();
     if (currentDept) params.set('dept', getDepartmentFolder(currentDept));
     if (currentSem) params.set('sem', currentSem);

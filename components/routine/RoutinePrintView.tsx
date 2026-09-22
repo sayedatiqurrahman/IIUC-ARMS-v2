@@ -3,6 +3,7 @@
 import { forwardRef } from 'react';
 import type { RoutineItem } from './types';
 import { getDepartmentDisplayName } from '@/lib/departments';
+import { toWhatsAppLink } from '@/lib/whatsapp';
 import RoutineTable from './RoutineTable';
 import { useTeacherPhones } from './useTeacherPhones';
 
@@ -93,18 +94,30 @@ const RoutinePrintView = forwardRef<HTMLDivElement, { routine: RoutineItem }>(({
                 </tr>
               </thead>
               <tbody>
-                {routine.courses.map(c => (
-                  <tr key={c.code}>
-                    <td className="routine-legend-code-cell">{c.code}{c.credit ? `(${c.credit})` : ''}</td>
-                    <td>{c.title}</td>
-                    <td>
-                      {c.teacher}
-                      {c.teacher && phones[c.teacher.trim().toLowerCase()] && (
-                        <div style={{ fontSize: '0.68rem', color: '#555', marginTop: 2 }}>{phones[c.teacher.trim().toLowerCase()]}</div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {routine.courses.map(c => {
+                  const phone = c.teacher ? phones[c.teacher.trim().toLowerCase()] : '';
+                  const waLink = phone ? toWhatsAppLink(phone) : '';
+                  return (
+                    <tr key={c.code}>
+                      <td className="routine-legend-code-cell">{c.code}{c.credit ? `(${c.credit})` : ''}</td>
+                      <td>{c.title}</td>
+                      <td>
+                        {c.teacher}
+                        {phone && (
+                          <div style={{ fontSize: '0.68rem', marginTop: 2 }}>
+                            {waLink ? (
+                              <a href={waLink} target="_blank" rel="noopener noreferrer" style={{ color: '#166534', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <i className="fab fa-whatsapp" style={{ color: '#25D366', fontSize: '0.75rem' }}></i>{phone}
+                              </a>
+                            ) : (
+                              <span style={{ color: '#555' }}>{phone}</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

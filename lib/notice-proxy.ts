@@ -1,4 +1,4 @@
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 
 export function noticeAttachmentUrl(rawUrl: string): string {
   if (!rawUrl) return '';

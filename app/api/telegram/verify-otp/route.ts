@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_API;
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 const CONNECTIONS_URL = `${SITE_URL}/dashboard?tab=github`;
 
 async function sendTelegramMessage(chatId: string, text: string) {

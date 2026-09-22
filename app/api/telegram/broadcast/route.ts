@@ -6,7 +6,7 @@ import { sendMessageWithButtons } from '@/lib/telegram';
 
 const BOT_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN || ''}`;
 const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'iiuc_arms_bot';
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 
 // POST — send broadcast message to channel with Start Bot + Open App buttons
 export async function POST(req: NextRequest) {

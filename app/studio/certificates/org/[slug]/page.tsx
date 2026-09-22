@@ -138,7 +138,7 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
         const urls: Record<string, string> = {};
         for (const cert of data.certificates) {
           urls[cert.certificateId] = await QRCode.toDataURL(
-            `${typeof window !== 'undefined' ? window.location.origin : 'https://iiuc-arms.eu.cc'}/clubs/preview/${cert.certificateId}`,
+            `${typeof window !== 'undefined' ? window.location.origin : 'https://arms.iiuc.net'}/clubs/preview/${cert.certificateId}`,
             { width: 200, margin: 2 }
           );
         }
@@ -495,7 +495,7 @@ export default function StudioOrgDetailPage({ params }: { params: Promise<{ slug
               <div className="text-center mb-5">
                 <i className="fas fa-check-circle text-green-400 text-3xl mb-2 block"></i>
                 <h2 className="text-lg font-bold text-green-400">{issued.length} Certificate(s) Issued</h2>
-                <p className="text-xs text-dark-text2 mt-1">Verifiable at iiuc-arms.eu.cc/verify</p>
+                <p className="text-xs text-dark-text2 mt-1">Verifiable at arms.iiuc.net/verify</p>
               </div>
               <div className="flex items-center justify-center gap-3 mb-5">
                 <button onClick={handleBulkDownload} disabled={generatingPdf}

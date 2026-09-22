@@ -1242,7 +1242,7 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
   if (qrOn) {
     const { default: QRCode } = await import('qrcode');
     try {
-      const qrUrl = `${data.siteUrl || 'https://iiuc-arms.eu.cc'}/clubs/preview/${data.certificateId}`;
+      const qrUrl = `${data.siteUrl || 'https://arms.iiuc.net'}/clubs/preview/${data.certificateId}`;
       const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 640, margin: 4, errorCorrectionLevel: 'H', color: { dark: '#1a1a2e', light: '#ffffff' } });
       const qrSize = QR_SIZE_MM * EXPORT_PX_PER_MM;
       const qrX = C.cx - qrSize / 2, qrY = bandTopPx;
@@ -1350,7 +1350,7 @@ async function renderCertificate(pdf: any, data: CertPDFData, isFirstPage: boole
     await drawSignatures(pdf, t, signatories, closBase, bandTop);
   }
 
-  await drawFooter(pdf, t, data, data.siteUrl || 'https://iiuc-arms.eu.cc');
+  await drawFooter(pdf, t, data, data.siteUrl || 'https://arms.iiuc.net');
 }
 
 // ---------------------------------------------------------------------------

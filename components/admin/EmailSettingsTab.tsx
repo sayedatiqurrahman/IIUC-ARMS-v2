@@ -228,7 +228,7 @@ export default function EmailSettingsTab({ email, profileName, profileWhatsapp, 
               <Field label="Telegram Channel URL"><TextInput value={settings.theme.telegramChannel} onChange={v => setTheme({ telegramChannel: v })} placeholder="https://t.me/iiuc_arms" /></Field>
               <Field label="Telegram Group URL"><TextInput value={settings.theme.telegramGroup} onChange={v => setTheme({ telegramGroup: v })} placeholder="https://t.me/iiuc_arms_chat" /></Field>
               <Field label="Telegram Bot URL"><TextInput value={settings.theme.telegramBot} onChange={v => setTheme({ telegramBot: v })} placeholder="https://t.me/iiuc_arms_bot" /></Field>
-              <Field label="Support Page URL"><TextInput value={settings.theme.supportUrl} onChange={v => setTheme({ supportUrl: v })} placeholder="https://iiuc-arms.eu.cc/support" /></Field>
+              <Field label="Support Page URL"><TextInput value={settings.theme.supportUrl} onChange={v => setTheme({ supportUrl: v })} placeholder="https://arms.iiuc.net/support" /></Field>
             </div>
           </div>
 

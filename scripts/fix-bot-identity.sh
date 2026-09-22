@@ -24,7 +24,7 @@ if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
 fi
 
 API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
-SITE_URL="${NEXT_PUBLIC_SITE_URL:-https://iiuc-arms.eu.cc}"
+SITE_URL="${NEXT_PUBLIC_SITE_URL:-https://arms.iiuc.net}"
 
 BOT_NAME="IIUC-ARMS Bot"
 

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'IIUC Department Clubs — IIUC-ARMS',
     description: 'Explore official IIUC department clubs, events, and activities.',
-    images: [{ url: 'https://iiuc-arms.eu.cc/arms-logo-icon.png', width: 1200, height: 630, alt: 'IIUC Clubs' }],
+    images: [{ url: 'https://arms.iiuc.net/arms-logo-icon.png', width: 1200, height: 630, alt: 'IIUC Clubs' }],
   },
 };
 

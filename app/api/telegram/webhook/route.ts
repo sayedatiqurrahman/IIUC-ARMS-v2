@@ -36,15 +36,23 @@ import { getAppInstallations, getInstallationAccessToken } from '@/lib/github-ap
 import { deleteCourseFolder, findCourseFolderPathInRepo } from '@/lib/course-delete';
 import { isBlockedChat, updateBlocklist } from '@/lib/telegram/block';
 import { commitFilesToBranch } from '@/lib/github-commit';
+import { commitFileViaLFSToBranch } from '@/lib/github-lfs';
 import { matchCourseFolder, normalizeCourseCode } from '@/lib/store/helpers';
 import { normalizeUniversityId } from '@/lib/utils';
 import { validateRepoPath } from '@/lib/repo-path';
 import { registerBotCommands } from '@/lib/telegram/commands';
 import { configuredSecret } from '@/lib/telegram/secret';
 
+// Large bot uploads (downloading the file then committing it) can exceed a
+// default function timeout — allow up to 2 minutes like the other upload routes.
+export const maxDuration = 120;
+
 const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
 const GITHUB_API = 'https://api.github.com';
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+// GitHub's git-data blob API refuses blobs/files larger than this; anything
+// above must go through Git LFS (up to 500 MB per object).
+const GITHUB_LARGE_BLOB_LIMIT = 100 * 1024 * 1024;
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ─── Chat ID logging: every message the bot receives gets logged ───
@@ -122,7 +130,8 @@ async function resolveRequesterChat(userId: string): Promise<number | null> {
 
 // ═══ Telegram file-upload wizard ═══════════════════════════════════
 // BotFather-style step flow: department → semester → course (or create new)
-// → category → (Mid/Final → Spring/Autumn + year) → send file → GitHub.
+// → category → (Mid/Final — or +Combined for sheets/syllabi) → Notes/Questions
+// also pick Spring/Autumn + year, then send file → GitHub.
 // Upload state is persisted per-chat in SiteSettings.telegramUploadStates so a
 // server cold start never drops a user mid-flow.
 
@@ -133,7 +142,7 @@ interface UploadFlowState {
   courseFolder?: string;
   courseCode?: string;
   category?: string; // sheet|notes|questions|syllabus|other
-  term?: 'Mid' | 'Final';
+  term?: 'Mid' | 'Final' | 'Combined';
   season?: 'Spring' | 'Autumn';
   session?: string; // e.g. 'Spring 2024'
   stage: string; // dept|sem|course|newcourse|category|term|season|year|file|askid
@@ -143,10 +152,15 @@ interface UploadFlowState {
 }
 
 const UPLOAD_STATE_TTL = 12 * 60 * 60 * 1000;
-const MAX_BOT_UPLOAD_BYTES = 20 * 1024 * 1024;
+// Match the site's GitHub upload ceiling (config.maxUploadSizeMB, default 500 MB).
+const MAX_BOT_UPLOAD_BYTES = config.maxUploadSizeMB * 1024 * 1024;
 const SAFE_FILE_EXTS = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'webp', 'csv', 'txt', 'rtf', 'odt', 'ods']);
 const SESSION_YEARS = [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
-const TERM_CATEGORIES = new Set(['notes', 'sheet', 'questions']);
+const TERM_CATEGORIES = new Set(['notes', 'sheet', 'questions', 'syllabus']);
+// Only these categories are organized per session — notes and questions vary
+// season to season. Sheets and syllabi are session-agnostic, so they skip the
+// season/year step entirely.
+const SESSION_CATEGORIES = new Set(['notes', 'questions']);
 const UPLOAD_CATEGORIES: { key: string; label: string }[] = [
   { key: 'sheet', label: '📊 Sheets' },
   { key: 'notes', label: '📝 Notes' },
@@ -260,11 +274,13 @@ function uploadCategoryButtons(): any[][] {
   return rows;
 }
 
-function uploadTermButtons(): any[][] {
-  return [
+function uploadTermButtons(withCombined: boolean): any[][] {
+  const rows: any[][] = [
     [{ text: 'Mid', callback_data: 'up:term:Mid' }, { text: 'Final', callback_data: 'up:term:Final' }],
-    [{ text: '❌ Cancel', callback_data: 'up:cancel' }],
   ];
+  if (withCombined) rows.push([{ text: '🔄 Combined (Mid + Final)', callback_data: 'up:term:Combined' }]);
+  rows.push([{ text: '❌ Cancel', callback_data: 'up:cancel' }]);
+  return rows;
 }
 
 function uploadSeasonButtons(): any[][] {
@@ -275,7 +291,8 @@ function uploadSeasonButtons(): any[][] {
 }
 
 function uploadYearButtons(season: string): any[][] {
-  const rows = chunkBy(SESSION_YEARS.map(y => ({ text: `${season} ${y}`, callback_data: `up:session:${season}:${y}` })), 4);
+  // 2 years per row so the buttons stay readable on small screens.
+  const rows = chunkBy(SESSION_YEARS.map(y => ({ text: `${season} ${y}`, callback_data: `up:session:${season}:${y}` })), 2);
   rows.push([{ text: '❌ Cancel', callback_data: 'up:cancel' }]);
   return rows;
 }
@@ -322,7 +339,9 @@ function sanitizeFileName(name: string): string {
 function buildUploadFolderPath(state: UploadFlowState): string {
   const deptFolder = getDepartmentFolder(state.dept || '');
   const segs = [config.uploadPath, deptFolder, state.sem || '', state.courseFolder || ''];
-  if (state.term) segs.push(state.term);
+  // 'Combined' means the material already covers both Mid and Final — skip the
+  // term folder so no empty Mid/Final subfolder is created.
+  if (state.term && state.term !== 'Combined') segs.push(state.term);
   segs.push(state.category ? CATEGORY_META[state.category]?.folder || 'Other' : '');
   return segs.filter(Boolean).join('/');
 }
@@ -430,37 +449,57 @@ async function askUploadMessage(chatId: number, messageId: number, state: Upload
 async function downloadTelegramFile(fileId: string): Promise<{ buffer: Buffer; ext: string } | null> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return null;
+  // The hosted api.telegram.org cannot hand files larger than 20 MiB to the
+  // bot. A self-hosted Telegram Local Bot API server lifts that cap (files up
+  // to ~2000 MB) and is reachable via TELEGRAM_API_URL (e.g. http://127.0.0.1:8081).
+  const apiBase = (process.env.TELEGRAM_API_URL || 'https://api.telegram.org').replace(/\/+$/, '');
   try {
-    const g = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`);
+    const g = await fetch(`${apiBase}/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`);
     if (!g.ok) return null;
     const d = await g.json();
     const filePath: string = d?.result?.file_path;
     if (!filePath) return null;
-    const res = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`);
-    if (!res.ok) return null;
-    const buffer = Buffer.from(await res.arrayBuffer());
+    let buffer: Buffer;
+    // Local Bot API servers return an ABSOLUTE path on their own disk — read it
+    // directly instead of hitting the (cap-limited) HTTP file endpoint.
+    if (/^[A-Za-z]:[\\/]/.test(filePath) || filePath.startsWith('/')) {
+      const fs = await import('fs/promises');
+      buffer = await fs.readFile(filePath);
+    } else {
+      const res = await fetch(`${apiBase}/file/bot${token}/${filePath}`);
+      if (!res.ok) return null;
+      buffer = Buffer.from(await res.arrayBuffer());
+    }
     const ext = (filePath.split('.').pop() || '').toLowerCase();
     return { buffer, ext };
   } catch { return null; }
 }
 
 // Direct-to-main commit via the GitHub App bot token (falls back to env GITHUB_TOKEN).
-async function commitBotUpload(fullPath: string, contentBase64: string, message: string, authorName: string): Promise<string> {
+// Files above 100 MB go through Git LFS (pointer commit); smaller files use the
+// plain base64 blob path.
+async function commitBotUpload(fullPath: string, buffer: Buffer, message: string, authorName: string): Promise<string> {
   const token = await resolveGithubToken();
   if (!token) throw new Error('GitHub upload service is unavailable right now.');
   const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
   if (!refRes.ok) throw new Error(`Cannot read repository (${refRes.status}).`);
   const baseSha = (await refRes.json()).object.sha;
   const clean = authorName.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim() || 'Telegram Bot';
+  const author = { name: clean, email: `${clean.toLowerCase().replace(/[^a-z0-9]/g, '')}@users.noreply.github.com` };
+
+  if (buffer.length > GITHUB_LARGE_BLOB_LIMIT) {
+    return commitFileViaLFSToBranch({ token, owner: config.owner, repo: config.repo, branch: config.branch, baseSha, path: fullPath, buffer, message, author });
+  }
+
   return commitFilesToBranch({
     token,
     owner: config.owner,
     repo: config.repo,
     branch: config.branch,
     baseSha,
-    files: [{ path: fullPath, content: contentBase64 }],
+    files: [{ path: fullPath, content: buffer.toString('base64') }],
     message,
-    author: { name: clean, email: `${clean.toLowerCase().replace(/[^a-z0-9]/g, '')}@users.noreply.github.com` },
+    author,
   });
 }
 
@@ -470,7 +509,7 @@ async function commitBotUpload(fullPath: string, contentBase64: string, message:
 async function commitUserUpload(
   profile: { githubToken: string; githubLogin?: string | null; name?: string | null },
   fullPath: string,
-  contentBase64: string,
+  buffer: Buffer,
   message: string
 ): Promise<string> {
   const token = profile.githubToken;
@@ -509,6 +548,11 @@ async function commitUserUpload(
   if (!refRes.ok) throw new Error(`GitHub rejected your connected token (${refRes.status}) — check it in Dashboard → Connections → GitHub.`);
   const baseSha = (await refRes.json()).object.sha;
   const cleanName = authorName.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim() || 'GitHub User';
+  const author = { name: cleanName, email: authorEmail };
+
+  if (buffer.length > GITHUB_LARGE_BLOB_LIMIT) {
+    return commitFileViaLFSToBranch({ token, owner: config.owner, repo: config.repo, branch: config.branch, baseSha, path: fullPath, buffer, message, author });
+  }
 
   return commitFilesToBranch({
     token,
@@ -516,9 +560,9 @@ async function commitUserUpload(
     repo: config.repo,
     branch: config.branch,
     baseSha,
-    files: [{ path: fullPath, content: contentBase64 }],
+    files: [{ path: fullPath, content: buffer.toString('base64') }],
     message,
-    author: { name: cleanName, email: authorEmail },
+    author,
   });
 }
 
@@ -527,7 +571,7 @@ async function commitUserUpload(
 async function commitUpload(
   email: string | null,
   fullPath: string,
-  contentBase64: string,
+  buffer: Buffer,
   message: string,
   senderName: string
 ): Promise<{ commitSha: string; via: 'user' | 'bot'; githubUser?: string | null }> {
@@ -539,7 +583,7 @@ async function commitUpload(
         select: { githubToken: true, githubLogin: true, name: true },
       });
       if (prof?.githubToken) {
-        const commitSha = await commitUserUpload(prof as any, fullPath, contentBase64, message);
+        const commitSha = await commitUserUpload(prof as any, fullPath, buffer, message);
         return { commitSha, via: 'user', githubUser: prof.githubLogin || null };
       }
     } catch (e: any) {
@@ -547,7 +591,7 @@ async function commitUpload(
     }
   }
 
-  const commitSha = await commitBotUpload(fullPath, contentBase64, message, senderName);
+  const commitSha = await commitBotUpload(fullPath, buffer, message, senderName);
   return { commitSha, via: 'bot' };
 }
 
@@ -557,13 +601,13 @@ async function handleUploadDocument(chatId: number, msg: any, state: UploadFlowS
   const size = doc?.file_size || 0;
 
   if (size > MAX_BOT_UPLOAD_BYTES) {
-    await sendMessage(chatId, `❌ File is too large (${(size / 1048576).toFixed(1)} MB).\n\nMax is <b>20 MB</b> — split the file or use smaller files. Your upload is still waiting — send the file again.`);
+    await sendMessage(chatId, `❌ File is too large (${(size / 1048576).toFixed(1)} MB).\n\nMax is <b>${config.maxUploadSizeMB} MB</b> — split the file or use smaller files. Your upload is still waiting — send the file again.`);
     return;
   }
 
   const dl = await downloadTelegramFile(doc.file_id);
   if (!dl) {
-    await sendMessage(chatId, `❌ Could not download the file from Telegram. Please try again.`);
+    await sendMessage(chatId, `❌ Could not download the file from Telegram.\n\nNote: Telegram's hosted API only lets bots fetch files up to ~20 MB — larger files (this one is ${(size / 1048576).toFixed(1)} MB) require a self-hosted Telegram Bot API server (set <code>TELEGRAM_API_URL</code>). Otherwise please split the file under 20 MB and send it again.`);
     return;
   }
 
@@ -633,7 +677,7 @@ async function handleUploadDocument(chatId: number, msg: any, state: UploadFlowS
     const res = await commitUpload(
       verifiedEmail,
       fullPath,
-      dl.buffer.toString('base64'),
+      dl.buffer,
       `Add ${relPath} (via Telegram, ID-${universityId})`,
       senderName
     );
@@ -807,8 +851,11 @@ async function handleUploadCallback(cq: any, chatId: number, messageId: number, 
       state.stage = 'term';
       await setUploadState(chatId, state);
       await editMessageText(chatId, messageId,
-        `<b>📤 Upload</b>\n\n📚 <code>${esc(state.courseCode || '')}</code> · ${esc(CATEGORY_META[cat]?.label || cat)}\n\n<b>Mid</b> or <b>Final</b>?`,
-        { reply_markup: { inline_keyboard: uploadTermButtons() } }
+        `<b>📤 Upload</b>\n\n📚 <code>${esc(state.courseCode || '')}</code> · ${esc(CATEGORY_META[cat]?.label || cat)}\n\n`
+        + (SESSION_CATEGORIES.has(cat)
+            ? `<b>Mid</b> or <b>Final</b>?`
+            : `<b>Mid</b>, <b>Final</b>, or <b>Combined</b>?`),
+        { reply_markup: { inline_keyboard: uploadTermButtons(!SESSION_CATEGORIES.has(cat)) } }
       );
     } else {
       await askUploadMessage(chatId, messageId, state, cq?.from);
@@ -818,14 +865,21 @@ async function handleUploadCallback(cq: any, chatId: number, messageId: number, 
 
   if (action === 'term') {
     const term = args[1];
-    if (term !== 'Mid' && term !== 'Final') { await answerCallbackQuery(cq.id, 'Pick Mid or Final'); return; }
+    if (term !== 'Mid' && term !== 'Final' && term !== 'Combined') { await answerCallbackQuery(cq.id, 'Pick Mid, Final, or Combined'); return; }
     state.term = term;
-    state.stage = 'season';
     await setUploadState(chatId, state);
-    await editMessageText(chatId, messageId,
-      `<b>📤 Upload</b>\n\n📚 <code>${esc(state.courseCode || '')}</code> · ${term} · ${esc(CATEGORY_META[state.category || '']?.label || '')}\n\nWhich <b>season</b>?`,
-      { reply_markup: { inline_keyboard: uploadSeasonButtons() } }
-    );
+    // Sheets and syllabi are session-agnostic — go straight to the file step.
+    // Notes and questions are organized per season/year.
+    if (SESSION_CATEGORIES.has(state.category || '')) {
+      state.stage = 'season';
+      await setUploadState(chatId, state);
+      await editMessageText(chatId, messageId,
+        `<b>📤 Upload</b>\n\n📚 <code>${esc(state.courseCode || '')}</code> · ${term} · ${esc(CATEGORY_META[state.category || '']?.label || '')}\n\nWhich <b>season</b>?`,
+        { reply_markup: { inline_keyboard: uploadSeasonButtons() } }
+      );
+    } else {
+      await askUploadMessage(chatId, messageId, state, cq?.from);
+    }
     return;
   }
 

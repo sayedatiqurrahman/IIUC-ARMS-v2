@@ -55,7 +55,7 @@ export const DEFAULT_EMAIL_SETTINGS: EmailSettings = {
     telegramChannel: 'https://t.me/iiuc_arms',
     telegramGroup: 'https://t.me/iiuc_arms_chat',
     telegramBot: 'https://t.me/iiuc_arms_bot',
-    supportUrl: 'https://iiuc-arms.eu.cc/support',
+    supportUrl: 'https://arms.iiuc.net/support',
   },
   templates: [
     {
@@ -152,7 +152,7 @@ export function renderEmailHtml(settings: EmailSettings, tpl: EmailTemplate, opt
     .map(p => p.replace(/\n/g, '<br/>'))
     .map(p => `<p style="margin:0 0 16px 0;line-height:1.7;font-size:15px;color:${t.textColor}">${p}</p>`)
     .join('');
-  const origin = opts.origin || 'https://iiuc-arms.eu.cc';
+  const origin = opts.origin || 'https://arms.iiuc.net';
   const logo = t.logoUrl ? (t.logoUrl.startsWith('http') ? t.logoUrl : `${origin}${t.logoUrl}`) : `${origin}/arms-logo-icon.png`;
 
   const contactChips: string[] = [];

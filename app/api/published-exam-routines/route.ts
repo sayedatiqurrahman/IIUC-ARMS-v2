@@ -40,7 +40,7 @@ async function sendPublishedNotifications(routines: any[], sentBy: string) {
     getDeptName,
   } = await import('@/lib/telegram');
 
-  const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+  const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
   const EXAM_URL = `${SITE}/routine?tab=exam`;
   const SEAT_URL = `${SITE}/routine?tab=seatplan`;
   const TEACHER_URL = `${SITE}/routine?tab=teacher`;

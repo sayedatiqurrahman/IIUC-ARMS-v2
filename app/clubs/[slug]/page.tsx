@@ -10,7 +10,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     openGraph: {
       title: `${name} — IIUC Clubs`,
       description: `Details, events, and members of ${name} at IIUC.`,
-      images: [{ url: 'https://iiuc-arms.eu.cc/arms-logo-icon.png', width: 1200, height: 630, alt: name }],
+      images: [{ url: 'https://arms.iiuc.net/arms-logo-icon.png', width: 1200, height: 630, alt: name }],
     },
   };
 }

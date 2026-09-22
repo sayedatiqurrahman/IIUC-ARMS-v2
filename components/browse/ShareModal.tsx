@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.vercel.app';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 
 export interface ShareItem {
   title: string;

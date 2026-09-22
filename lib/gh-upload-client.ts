@@ -623,10 +623,11 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
             }});
             step(`Uploaded ${label} via LFS`);
           } catch (lfsErr: any) {
-            // If LFS is not enabled (404) and file fits in the blob API, fall
-            // back to base64 instead of dying. Progress continues from where
-            // it was — no reset, no glitch.
-            if (/not enabled/i.test(lfsErr?.message || '') && fileBytes <= GITHUB_MAX_BYTES) {
+            // If LFS fails for ANY reason (not enabled, batch error, network)
+            // and the file fits the blob API (≤100 MB), fall back to base64
+            // instead of dying — LFS is only strictly required above 100 MB.
+            // Progress continues from where it was — no reset, no glitch.
+            if (fileBytes <= GITHUB_MAX_BYTES) {
               step(`LFS unavailable — using blob API for ${label}`);
               emit(maxPct, `LFS unavailable — uploading ${label} via blob API…`);
               content = await fileToBase64(f.file, pct => {

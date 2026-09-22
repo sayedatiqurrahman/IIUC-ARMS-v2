@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import type { RoutineCourse } from './types';
+import { toWhatsAppLink } from '@/lib/whatsapp';
 
 export default function TeacherContacts({ courses }: { courses: RoutineCourse[] }) {
   const [facultyList, setFacultyList] = useState<any[]>([]);
@@ -42,7 +43,9 @@ export default function TeacherContacts({ courses }: { courses: RoutineCourse[] 
       </button>
       {expanded && (
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-          {matchedTeachers.map(({ name, member }) => (
+          {matchedTeachers.map(({ name, member }) => {
+            const waLink = member?.phone ? toWhatsAppLink(member.phone) : '';
+            return (
             <div key={name} className="flex items-center gap-3 p-3 bg-dark-bg2 border border-dark-border rounded-xl">
               {member?.memberType === 'staff' ? (
                 <div className="w-9 h-9 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0">
@@ -58,8 +61,8 @@ export default function TeacherContacts({ courses }: { courses: RoutineCourse[] 
                 {member?.title && <div className="text-[0.65rem] text-dark-text3 truncate">{member.title}</div>}
                 <div className="flex items-center gap-3 mt-1">
                   {member?.phone && (
-                    <a href={`tel:${member.phone}`} className="text-[0.65rem] text-dark-text3 hover:text-qsis flex items-center gap-1 no-underline">
-                      <i className="fas fa-phone text-[0.55rem]"></i>{member.phone}
+                    <a href={waLink || `tel:${member.phone}`} target={waLink ? '_blank' : undefined} rel={waLink ? 'noopener noreferrer' : undefined} className="text-[0.65rem] text-dark-text3 hover:text-qsis flex items-center gap-1 no-underline">
+                      <i className={waLink ? 'fab fa-whatsapp' : 'fas fa-phone'} style={waLink ? { color: '#25D366', fontSize: '0.7rem' } : { fontSize: '0.55rem' }}></i>{member.phone}
                     </a>
                   )}
                   {member?.email && (
@@ -70,7 +73,8 @@ export default function TeacherContacts({ courses }: { courses: RoutineCourse[] 
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

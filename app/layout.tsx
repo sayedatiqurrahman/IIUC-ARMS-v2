@@ -6,7 +6,7 @@ import Providers from '@/components/Providers';
 import AppShell from '@/components/app-shell';
 import './globals.css';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

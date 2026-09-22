@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No posting channels configured' }, { status: 400 });
     }
 
-    const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+    const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 
     // Determine which channels to post to
     let targetChannels = allChannels.filter(c => c.autoPost);

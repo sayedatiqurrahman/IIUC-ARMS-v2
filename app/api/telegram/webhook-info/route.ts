@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       for (const n of ['customClubRoles', 'supportConfig', 'postingChannels', 'telegramChats']) dbStatus[n] = false;
     }
 
-    const host = req.headers.get('host') || 'iiuc-arms.eu.cc';
+    const host = req.headers.get('host') || 'arms.iiuc.net';
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const siteUrl = `${protocol}://${host}`;
     const setupUrl = `${siteUrl}/api/telegram/setup?key=${webhookSecret}`;

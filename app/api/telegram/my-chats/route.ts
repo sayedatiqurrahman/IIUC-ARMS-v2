@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
     } catch {}
 
     // ─── 2. Try getUpdates as fallback for extra chats ───
-    const host = req.headers.get('host') || 'iiuc-arms.eu.cc';
+    const host = req.headers.get('host') || 'arms.iiuc.net';
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
     const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
 

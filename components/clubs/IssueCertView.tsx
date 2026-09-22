@@ -151,7 +151,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
         const urls: Record<string, string> = {};
         for (const cert of data.certificates) {
           urls[cert.certificateId] = await QRCode.toDataURL(
-            `${typeof window !== 'undefined' ? window.location.origin : 'https://iiuc-arms.eu.cc'}/clubs/preview/${cert.certificateId}`,
+            `${typeof window !== 'undefined' ? window.location.origin : 'https://arms.iiuc.net'}/clubs/preview/${cert.certificateId}`,
             { width: 200, margin: 2 }
           );
         }

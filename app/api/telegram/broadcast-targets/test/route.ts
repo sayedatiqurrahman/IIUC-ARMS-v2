@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { sendMessage } = await import('@/lib/telegram/api');
-    const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+    const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 
     const text = [
       '✅ <b>IIUC-ARMS Broadcast Test</b>',

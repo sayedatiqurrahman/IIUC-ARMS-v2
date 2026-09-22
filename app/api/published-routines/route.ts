@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
     // and specific semester(s) get notified, plus teachers assigned in the routine.
     try {
       const { sendDepartmentNotifications, sendTeacherNotifications, semesterLabelToId, semesterLabel, getDeptName } = await import('@/lib/telegram');
-      const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+      const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
       const ROUTINE_URL = `${SITE}/routine?tab=class`;
       const TEACHER_URL = `${SITE}/routine?tab=teacher`;
 

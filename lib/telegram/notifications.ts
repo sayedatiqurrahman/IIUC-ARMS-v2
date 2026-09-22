@@ -384,7 +384,7 @@ export async function notifyAdminsPendingAccount(email: string, name?: string, u
     const genderLabel = gender === 'male' ? 'Male' : gender === 'female' ? 'Female' : 'Not specified';
     // Deep link straight into the Pending list with this account pre-filtered,
     // so the reviewer lands on exactly this request (tab=users&sub=pending&q=email).
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://iiuc-arms.eu.cc';
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
     const reviewLink = `${baseUrl}/admin?tab=users&sub=pending&q=${encodeURIComponent(email)}`;
     const message = [
       `🆕 <b>New Access Request</b>`,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
@@ -8,7 +8,7 @@ import { showToast } from '@/lib/utils';
 import { ExamSlot, loadExamSlots, saveExamSlots, getEnabledSlots } from '@/lib/exam-routine-config';
 import CustomSelect from '@/components/CustomSelect';
 import MultiTeacherAutocomplete from '@/components/MultiTeacherAutocomplete';
-import { FACULTIES, findDepartment } from '@/lib/departments';
+import { FACULTIES, findDepartment, resolveDepartment, getDepartmentDisplayName } from '@/lib/departments';
 import {
   ExamRoutineItem,
   ExamRow,
@@ -22,7 +22,7 @@ import {
 import { ExamRoutineCard, ExamRoutinePrintView, ExamAllSemesterView } from '@/components/exam';
 import SchedulePublishModal from '@/components/SchedulePublishModal';
 
-export default function ExamRoutineView() {
+export default function ExamRoutineView({ dept }: { dept?: string }) {
   const { data: session } = useSession();
   const profile = useAppStore(s => s.profile);
 
@@ -129,6 +129,15 @@ export default function ExamRoutineView() {
   }, [rows, semester, sessionVal, department, examType, examSlots, viewMode, editingId]);
 
   const enabledSlots = getEnabledSlots(examSlots);
+
+  // When a department is resolved (auto-synced from the user's profile), the
+  // shared published pool is restricted to that department so students never
+  // see other departments' exam routines. Local drafts stay visible — they are
+  // the user's own work.
+  const visiblePublished = useMemo(
+    () => (dept ? publishedRoutines.filter(r => resolveDepartment(r.department) === dept) : publishedRoutines),
+    [publishedRoutines, dept],
+  );
 
   function startNew() {
     setEditingId(null);
@@ -317,7 +326,12 @@ export default function ExamRoutineView() {
               {profile.semester && <><span className="mx-1">&bull;</span><i className="fas fa-graduation-cap mr-1"></i>{config.semesters.find(s => s.id === profile.semester)?.label || profile.semester}</>}
             </p>
           )}
-          {!profile?.department && (
+          {!profile?.department && dept && (
+            <p className="text-[0.72rem] text-qsis mt-0.5">
+              <i className="fas fa-building mr-1"></i>{getDepartmentDisplayName(dept)}
+            </p>
+          )}
+          {!profile?.department && !dept && (
             <p className="text-[0.78rem] text-dark-text2 mt-0.5">
               {deptInfo ? `${deptInfo.department.shortName} — ${deptInfo.faculty.shortName}` : 'Create and manage exam routines'}
             </p>
@@ -389,7 +403,7 @@ export default function ExamRoutineView() {
               <p className="text-[0.75rem] text-dark-text3 mt-1">Click &quot;New Exam Routine&quot; to create one</p>
             </div>
           )}
-          {publishedRoutines.map(r => {
+          {visiblePublished.map(r => {
             const canEditPub = isOwner || (r.publishedBy?.email && r.publishedBy.email === email);
             return (
               <ExamRoutineCard key={r.id} routine={r} slots={r.slots || examSlots} onView={() => { setEditingId(r.id); setRows(r.rows); setExamSlots(r.slots || examSlots); setSemester(r.semester); setSessionVal(r.session); setDepartment(r.department); setExamType(r.examType); setViewMode('preview'); }} onEdit={canEditPub ? () => editRoutine(r) : undefined} onUnpublish={() => unpublishRoutine(r.id)} canManage={canPublish} isPublished currentUserEmail={email} isAdmin={isOwner} />
