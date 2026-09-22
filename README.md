@@ -2,7 +2,7 @@
 
 **IIUC Academic Resource Management System** — A full-stack web app + PWA for managing and sharing academic resources across all IIUC departments, with special focus on Qur'anic Sciences & Islamic Studies.
 
-## Live: [iiuc-arms.eu.cc](https://iiuc-arms.eu.cc)
+## Live: [arms.iiuc.net](https://arms.iiuc.net)
 
 ## Community
 - **WhatsApp Community:** [Join for updates](https://chat.whatsapp.com/BVsl3W6ep6D0JMyRzOIhUy)
