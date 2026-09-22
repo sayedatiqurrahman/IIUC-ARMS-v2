@@ -9,7 +9,8 @@
 //
 // Git LFS is only REQUIRED for files above 100 MB (the git-data blob API
 // ceiling). Files at or below 100 MB should use the plain base64 blob path.
-// Git LFS allows up to 500 MB per object.
+// Git LFS allows up to 2 GB per object on the Free/Pro plan (Team 4 GB,
+// Enterprise Cloud 5 GB).
 
 import crypto from 'crypto';
 import { ghFetch, commitFilesToBranch } from './github-commit';
@@ -17,7 +18,7 @@ import { ghFetch, commitFilesToBranch } from './github-commit';
 const LFS_API = (owner: string, repo: string) =>
   `https://api.github.com/repos/${owner}/${repo}.git/info/lfs/objects/batch`;
 
-const LFS_MAX_BYTES = 500 * 1024 * 1024;
+const LFS_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 
 async function extractMessage(res: Response): Promise<string> {
   try {
@@ -38,20 +39,37 @@ export async function uploadLFSPointerPayload(
   size: number,
   buffer: Buffer,
 ): Promise<void> {
-  const batchRes = await fetch(LFS_API(owner, repo), {
+  const lfsBatchBody = {
+    operation: 'upload',
+    transfers: ['basic'],
+    ref: { name: 'refs/heads/main' },
+    objects: [{ oid, size }],
+  };
+
+  // GitHub's LFS server rejects GitHub App installation tokens (ghs_) under the
+  // `token` scheme — they must be sent as `Bearer` (OAuth-style). Try `token`
+  // first (PATs), then retry with `Bearer` so both work.
+  let batchRes = await fetch(LFS_API(owner, repo), {
     method: 'POST',
     headers: {
       Authorization: `token ${token}`,
       Accept: 'application/vnd.github.git-lfs+json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      operation: 'upload',
-      transfers: ['basic'],
-      ref: { name: 'refs/heads/main' },
-      objects: [{ oid, size }],
-    }),
+    body: JSON.stringify(lfsBatchBody),
   });
+  if (batchRes.status === 401 || batchRes.status === 403) {
+    const bearerRes = await fetch(LFS_API(owner, repo), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.git-lfs+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(lfsBatchBody),
+    });
+    if (bearerRes.status !== 401 && bearerRes.status !== 403) batchRes = bearerRes;
+  }
 
   if (batchRes.status === 404) {
     throw new Error(
@@ -59,7 +77,13 @@ export async function uploadLFSPointerPayload(
     );
   }
   if (batchRes.status === 422) {
-    throw new Error(`File is ${Math.round(size / 1024 / 1024)} MB — GitHub LFS allows up to 500 MB per file.`);
+    throw new Error(`File is ${Math.round(size / 1024 / 1024)} MB — GitHub LFS allows up to 2 GB per file on the Free/Pro plan.`);
+  }
+  if (batchRes.status === 403) {
+    const msg = await extractMessage(batchRes);
+    throw new Error(
+      `GitHub LFS storage quota reached. ${msg || 'This repository is over its LFS data quota.'} Free LFS includes 2 GB storage / 1 GB bandwidth per month. Purchase GitHub storage (Settings → Billing → Large File Storage) or trim old LFS objects to continue.`,
+    );
   }
   if (!batchRes.ok) {
     throw new Error(`LFS batch request failed: ${await extractMessage(batchRes)}`);
@@ -89,7 +113,7 @@ export async function uploadLFSPointerPayload(
   }
 
   if (action.verify) {
-    const verifyRes = await fetch(action.verify, {
+    let verifyRes = await fetch(action.verify, {
       method: 'POST',
       headers: {
         Authorization: `token ${token}`,
@@ -98,6 +122,18 @@ export async function uploadLFSPointerPayload(
       },
       body: JSON.stringify({ oid, size }),
     });
+    if (!verifyRes.ok && (verifyRes.status === 401 || verifyRes.status === 403)) {
+      const bearerRes = await fetch(action.verify, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github.git-lfs+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ oid, size }),
+      });
+      if (bearerRes.ok) verifyRes = bearerRes;
+    }
     if (!verifyRes.ok) {
       throw new Error('LFS verification failed — the upload may be incomplete. Please try again.');
     }
@@ -122,7 +158,9 @@ export async function commitFileViaLFSToBranch(opts: CommitLFSOptions): Promise<
   const { token, owner, repo, branch, baseSha, path, buffer, message, author } = opts;
 
   if (buffer.length > LFS_MAX_BYTES) {
-    throw new Error(`${(buffer.length / 1024 / 1024).toFixed(1)} MB — maximum upload size is 500 MB.`);
+    throw new Error(
+      `${(buffer.length / 1024 / 1024).toFixed(1)} MB — GitHub LFS allows up to 2 GB per file on the Free/Pro plan. Split the file into parts smaller than 2 GB each.`,
+    );
   }
 
   const oid = crypto.createHash('sha256').update(buffer).digest('hex');

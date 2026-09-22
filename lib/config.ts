@@ -2,6 +2,15 @@ import { FACULTIES } from './departments';
 
 export type UserRole = 'admin' | 'manager' | 'teacher' | 'student' | 'user' | 'external';
 
+/** Human-readable size from a MB number (e.g. 2048 → "2 GB", 500 → "500 MB"). */
+export function formatSizeMB(mb: number): string {
+  if (mb >= 1024) {
+    const gb = mb / 1024;
+    return `${Number.isInteger(gb) ? gb : gb.toFixed(1)} GB`;
+  }
+  return `${mb} MB`;
+}
+
 export const APP_VERSION = '2.6.0';
 
 // Commit SHA of the build currently running (Vercel injects this at build time).
@@ -74,13 +83,13 @@ export const config = {
     return false;
   },
   maxFilesPerUpload: 10,
-  // GitHub LFS supports up to 500 MB per file; files >10 MB are automatically
-  // uploaded via LFS (raw binary, no base64 overhead). Files ≤10 MB use the
-  // standard git-data blob API (100 MB ceiling).
-  maxUploadSizeMB: 500,
+  // GitHub LFS supports up to 2 GB per file on the Free/Pro plan; files >10 MB
+  // are automatically uploaded via LFS (raw binary, no base64 overhead).
+  // Files ≤10 MB use the standard git-data blob API (100 MB ceiling).
+  maxUploadSizeMB: 2048,
   // Per-file cap. Files ≤10 MB go directly to the GitHub blob API (100 MB max).
-  // Files >10 MB are routed through Git LFS (up to 500 MB).
-  maxSingleFileUploadMB: 500,
+  // Files >10 MB are routed through Git LFS (up to 2 GB).
+  maxSingleFileUploadMB: 2048,
   academicExtensions: ['pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','webp','csv'],
   githubStarRepos: [
     { owner: 'sayedatiqurrahman', repo: 'IIUC-ACADEMIC-FILES-MANAFGER', label: 'IIUC Academic Files', description: 'All course materials live here', tags: 'PDFs, notes, routines, schedules' },

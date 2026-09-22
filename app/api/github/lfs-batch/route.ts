@@ -30,6 +30,28 @@ export async function POST(req: NextRequest) {
       },
     );
 
+    // GitHub's LFS server rejects GitHub App installation tokens (ghs_) under
+    // the `token` scheme — they must be sent as `Bearer` (OAuth-style). Retry
+    // once with Bearer so PATs and App tokens both work.
+    if (batchRes.status === 401 || batchRes.status === 403) {
+      const bearerRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}.git/info/lfs/objects/batch`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github.git-lfs+json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        },
+      );
+      if (bearerRes.status !== 401 && bearerRes.status !== 403) {
+        const data = await bearerRes.json();
+        return NextResponse.json(data, { status: bearerRes.status });
+      }
+    }
+
     const data = await batchRes.json();
     return NextResponse.json(data, { status: batchRes.status });
   } catch (err: any) {

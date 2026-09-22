@@ -50,7 +50,7 @@ export const maxDuration = 120;
 const COURSE_REGEX = /^[A-Z]{2,5}-?\d{3,5}[A-Z]?$/i;
 const GITHUB_API = 'https://api.github.com';
 // GitHub's git-data blob API refuses blobs/files larger than this; anything
-// above must go through Git LFS (up to 500 MB per object).
+// above must go through Git LFS (up to 2 GB per object on the Free/Pro plan).
 const GITHUB_LARGE_BLOB_LIMIT = 100 * 1024 * 1024;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -152,7 +152,7 @@ interface UploadFlowState {
 }
 
 const UPLOAD_STATE_TTL = 12 * 60 * 60 * 1000;
-// Match the site's GitHub upload ceiling (config.maxUploadSizeMB, default 500 MB).
+// Match the site's GitHub upload ceiling (config.maxUploadSizeMB, default 2 GB).
 const MAX_BOT_UPLOAD_BYTES = config.maxUploadSizeMB * 1024 * 1024;
 const SAFE_FILE_EXTS = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'webp', 'csv', 'txt', 'rtf', 'odt', 'ods']);
 const SESSION_YEARS = [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];

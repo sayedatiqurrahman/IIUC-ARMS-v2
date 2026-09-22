@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { config } from '@/lib/config';
+import { config, formatSizeMB } from '@/lib/config';
 import { FACULTIES, getFacultyIdForDepartment, getDepartmentFolder, resolveDepartmentId } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
 import { useAppStore } from '@/lib/store';
@@ -348,7 +348,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     }
 
     const valid = filtered.filter(f => f.size <= config.maxSingleFileUploadMB * 1024 * 1024);
-    if (valid.length < filtered.length) alert(`${filtered.length - valid.length} file(s) exceeded ${config.maxSingleFileUploadMB}MB and were skipped.`);
+    if (valid.length < filtered.length) alert(`${filtered.length - valid.length} file(s) exceeded ${formatSizeMB(config.maxSingleFileUploadMB)} and were skipped.`);
 
     // Compress client-side before upload (images, large PDFs, DOCX/PPTX/EPUB).
     // Each file is isolated: a compression failure/hang on one file must never
@@ -378,7 +378,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     if (newTotal > 10) { alert(`Max 10 files total across all courses. You can add ${10 - totalFiles + currentCourseFiles} more.`); return; }
 
     const oversized = valid2.find(f => f.size > config.maxUploadSizeMB * 1024 * 1024);
-    if (oversized) { alert(`"${oversized.name}" is ${(oversized.size / 1024 / 1024).toFixed(1)}MB — GitHub allows files up to ${config.maxUploadSizeMB}MB.`); return; }
+    if (oversized) { alert(`"${oversized.name}" is ${(oversized.size / 1024 / 1024).toFixed(1)}MB — GitHub allows files up to ${formatSizeMB(config.maxUploadSizeMB)}.`); return; }
 
     const newFiles: FileWithMeta[] = valid2.map(f => {
       if (isNotes) return { file: f, year: String(CURRENT_YEAR), yearRange: '' };
@@ -558,7 +558,7 @@ export default function UploadModal({ session, status, profile, onLogin, onClose
     }
 
     if (file.size > config.maxSingleFileUploadMB * 1024 * 1024) {
-      alert(`File exceeds ${config.maxSingleFileUploadMB}MB and was skipped.`);
+      alert(`File exceeds ${formatSizeMB(config.maxSingleFileUploadMB)} and was skipped.`);
       return;
     }
 

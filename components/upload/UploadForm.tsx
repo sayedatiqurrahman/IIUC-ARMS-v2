@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useMemo } from 'react';
-import { config } from '@/lib/config';
+import { config, formatSizeMB } from '@/lib/config';
 import { FACULTIES, getFacultyIdForDepartment, isShariahDepartmentId } from '@/lib/departments';
 import type { Profile } from '@/lib/store';
 import { showToast } from '@/lib/utils';
@@ -585,7 +585,7 @@ export default function UploadForm({
                       ? 'Select 2-3 images together (auto-merged into one PDF) or 1 PDF file'
                       : isExamCategory
                         ? '1 file only'
-                        : `Max 5 files, ${config.maxSingleFileUploadMB}MB each`}
+                        : `Max 5 files, ${formatSizeMB(config.maxSingleFileUploadMB)} each`}
                   </p>
                   <span className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-qsis/15 text-qsis text-[0.72rem] font-semibold">
                     <i className="fas fa-camera"></i> Upload from device or scan with camera

@@ -12,7 +12,8 @@
 
 const GITHUB_API = 'https://api.github.com';
 // GitHub refuses blobs/files larger than 100 MB via the git-data API.
-// Files above this size are uploaded via Git LFS (up to 500 MB).
+// Files above this size are uploaded via Git LFS (up to 2 GB per file on the
+// Free/Pro plan; Team 4 GB, Enterprise Cloud 5 GB).
 const GITHUB_MAX_BYTES = 100 * 1024 * 1024;
 // Files above this threshold are uploaded via Git LFS (raw binary, no base64
 // overhead, no 100 MB blob-API ceiling). LFS uploads raw bytes to GitHub's
@@ -20,8 +21,9 @@ const GITHUB_MAX_BYTES = 100 * 1024 * 1024;
 // 2 MB: almost all real files (PDFs, images, docs) benefit from raw binary
 // upload — faster, no 33% base64 bloat, real upload-progress events.
 const LFS_THRESHOLD_BYTES = 2 * 1024 * 1024;
-// LFS hard ceiling: GitHub LFS allows up to 500 MB per object.
-const LFS_MAX_BYTES = 500 * 1024 * 1024;
+// LFS hard ceiling: GitHub LFS allows up to 2 GB per object on Free/Pro
+// (the plan limit; Team=4 GB, Enterprise Cloud=5 GB). We must stay under it.
+const LFS_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 // Files are read and base64-encoded in 0.6MB slices to keep memory flat and to
 // drive live progress. The slice size is a multiple of 3 BYTES (base64 encodes
 // 3 bytes as 4 chars), so every intermediate slice encodes to base64 WITHOUT
@@ -144,7 +146,7 @@ export function textToBase64(text: string): string {
 
 // ─── Git LFS helpers ─────────────────────────────────────────────────────────
 // For files > 10 MB, upload raw binary directly to GitHub's LFS storage
-// (no base64 overhead, no 100 MB blob-API ceiling, up to 500 MB per file).
+// (no base64 overhead, no 100 MB blob-API ceiling, up to 2 GB per file).
 
 async function computeFileSHA256(file: File, onProgress?: (pct: number) => void): Promise<string> {
   // True streaming SHA-256: processes 4 MB chunks without concatenating into
@@ -258,7 +260,13 @@ async function uploadViaLFS(opts: {
     throw new Error('Git LFS is not enabled for this repository. Enable it at https://github.com/' + owner + '/' + repo + '/settings → Large File Storage.');
   }
   if (batchRes.status === 422) {
-    throw new Error(`File is ${Math.round(size / 1024 / 1024)} MB — GitHub LFS allows up to 500 MB per file.`);
+    throw new Error(`File is ${Math.round(size / 1024 / 1024)} MB — GitHub LFS allows up to 2 GB per file on the Free/Pro plan.`);
+  }
+  if (batchRes.status === 403) {
+    const msg = await extractError(batchRes);
+    throw new Error(
+      `GitHub LFS storage quota reached. ${msg || 'This repository is over its LFS data quota.'} Free LFS includes 2 GB storage per month / 1 GB bandwidth. Purchase GitHub storage (Settings → Billing → Large File Storage) or trim old LFS objects to continue.`
+    );
   }
   if (!batchRes.ok) {
     const msg = await extractError(batchRes);
@@ -330,6 +338,19 @@ async function uploadViaLFS(opts: {
       },
       body: JSON.stringify({ oid, size }),
     });
+    if (!verifyRes.ok && (verifyRes.status === 401 || verifyRes.status === 403)) {
+      // GitHub App installation tokens need the Bearer scheme (OAuth-style).
+      const retry = await fetch(action.verify, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github.git-lfs+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ oid, size }),
+      });
+      if (retry.ok) return;
+    }
     if (!verifyRes.ok) {
       throw new Error(`LFS verification failed — the upload may be incomplete. Please try again.`);
     }
@@ -653,7 +674,7 @@ async function runFileUpload(opts: ClientUploadOptions): Promise<ClientUploadRes
           }
         } else if (fileBytes > LFS_MAX_BYTES) {
           throw new ClientUploadError(
-            `${label} is ${(fileBytes / 1024 / 1024).toFixed(1)} MB — maximum upload size is 500 MB.`,
+            `${label} is ${(fileBytes / 1024 / 1024).toFixed(1)} MB — GitHub LFS allows up to 2 GB per file on the Free/Pro plan (this file exceeds it). Split the file into parts smaller than 2 GB each and upload them separately.`,
             413,
           );
         } else {

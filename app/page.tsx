@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { config } from '@/lib/config';
+import { config, formatSizeMB } from '@/lib/config';
 import { DEFAULT_PERMISSIONS } from '@/lib/permission-defaults';
 import { FACULTIES, getDepartmentFolder, getFacultyIdForDepartment } from '@/lib/departments';
 import { useAppStore } from '@/lib/store';
@@ -297,7 +297,7 @@ export default function BrowsePage() {
     const payload = files.slice(0, 5);
     for (const f of payload) {
       if (f.size > config.maxSingleFileUploadMB * 1024 * 1024) {
-        showToast(`${f.name} is larger than ${config.maxSingleFileUploadMB}MB`, 'error');
+        showToast(`${f.name} is larger than ${formatSizeMB(config.maxSingleFileUploadMB)}`, 'error');
         return;
       }
     }
