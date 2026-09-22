@@ -92,7 +92,7 @@ export default function RoutinePage() {
 
       {tab === 'class' && <RoutineView dept={dept} />}
       {tab === 'exam' && <ExamRoutineView dept={dept} />}
-      {tab === 'seatplan' && <SeatPlanView />}
+      {tab === 'seatplan' && <SeatPlanView dept={dept} />}
       {canUseTeacherTab && tab === 'teacher' && <TeacherRoutineView initialTeacher={teacherName || undefined} onTeacherChange={handleTeacherChange} />}
     </div>
   );

@@ -132,12 +132,13 @@ export default function ExamRoutineView({ dept }: { dept?: string }) {
 
   // When a department is resolved (auto-synced from the user's profile), the
   // shared published pool is restricted to that department so students never
-  // see other departments' exam routines. Local drafts stay visible — they are
-  // the user's own work.
-  const visiblePublished = useMemo(
-    () => (dept ? publishedRoutines.filter(r => resolveDepartment(r.department) === dept) : publishedRoutines),
-    [publishedRoutines, dept],
-  );
+  // see other departments' exam routines. Coordinators (owners/publishers)
+  // manage the full pool. Local drafts stay visible — they are the user's own work.
+  const visiblePublished = useMemo(() => {
+    if (isOwner || canPublish) return publishedRoutines;
+    if (dept) return publishedRoutines.filter(r => resolveDepartment(r.department) === dept);
+    return publishedRoutines.filter(r => !resolveDepartment(r.department));
+  }, [publishedRoutines, dept, isOwner, canPublish]);
 
   function startNew() {
     setEditingId(null);

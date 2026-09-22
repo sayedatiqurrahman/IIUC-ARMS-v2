@@ -94,9 +94,15 @@ export default function RoutineView({ dept }: { dept: string }) {
 
   const allVisibleRoutines = (() => {
     let all = [...publishedRoutines, ...sharedRoutines].filter(filterByGender);
-    // When a specific department is selected (e.g. auto-synced from the user's
-    // profile), restrict to that department. "All Departments" (empty) shows all.
-    if (dept) all = all.filter(r => resolveDepartment(r.department) === dept);
+    // Strict department isolation: when a department is known, only routines of
+    // that department are ever shown. When the department is unknown (not
+    // signed in / not personalised), a non-teacher user must never fall back to
+    // everyone else's pool — keep only genuinely department-less routines.
+    if (dept) {
+      all = all.filter(r => resolveDepartment(r.department) === dept);
+    } else if (!isTeacherPlus) {
+      all = all.filter(r => !resolveDepartment(r.department));
+    }
     // Teachers, managers, and admins see ALL semesters (role-based control)
     if (isTeacherPlus) return all;
     if (!userSemesterLabel) return all;

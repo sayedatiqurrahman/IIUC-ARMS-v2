@@ -6,7 +6,7 @@ import { useAppStore } from '@/lib/store';
 import { config } from '@/lib/config';
 import { showToast } from '@/lib/utils';
 import { ExamSlot, loadExamSlots, getEnabledSlots } from '@/lib/exam-routine-config';
-import { findDepartment } from '@/lib/departments';
+import { findDepartment, resolveDepartment } from '@/lib/departments';
 import { useConfirm } from '@/components/ConfirmModal';
 import SchedulePublishModal from '@/components/SchedulePublishModal';
 import {
@@ -19,7 +19,7 @@ import { SeatGrid } from '@/components/seatplan';
 import { SeatPlanPrintView } from '@/components/seatplan';
 import { StudentSeatFinder } from '@/components/seatplan';
 
-export default function SeatPlanView() {
+export default function SeatPlanView({ dept }: { dept?: string }) {
   const { data: session } = useSession();
   const { confirm, confirmDialog } = useConfirm();
   const profile = useAppStore(s => s.profile);
@@ -40,7 +40,7 @@ export default function SeatPlanView() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [scheduleTarget, setScheduleTarget] = useState<'publish' | null>(null);
   const [sessionVal, setSessionVal] = useState('');
-  const [department, setDepartment] = useState(profile.department || 'qsis');
+  const [department, setDepartment] = useState(dept || profile.department || 'qsis');
   const [examType, setExamType] = useState('Midterm');
   const [gender, setGender] = useState<'male' | 'female' | 'both'>('both');
   const [entries, setEntries] = useState<SeatPlanEntry[]>([]);
@@ -55,7 +55,7 @@ export default function SeatPlanView() {
   const [studentDate, setStudentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [studentGender, setStudentGender] = useState(() => { try { return localStorage.getItem('qsis-seatplan-gender') || ''; } catch { return ''; } });
   const [studentRoll, setStudentRoll] = useState('');
-  const [studentDept, setStudentDept] = useState(profile.department || 'qsis');
+  const [studentDept, setStudentDept] = useState(resolveDepartment(dept || '') || profile.department || '');
   const [findTriggered, setFindTriggered] = useState(false);
   const rollIdRef = useRef<HTMLInputElement>(null);
 
@@ -84,9 +84,10 @@ export default function SeatPlanView() {
   }, [showPublishMenu]);
 
   useEffect(() => {
-    if (profile.department) setStudentDept(profile.department);
+    const resolved = resolveDepartment(dept || '') || (profile.department ? resolveDepartment(profile.department) : '');
+    if (resolved) setStudentDept(resolved);
     if (profile.semester) setStudentSemester(profile.semester);
-  }, [profile.department, profile.semester]);
+  }, [dept, profile.department, profile.semester]);
 
   useEffect(() => {
     setFindTriggered(false);
@@ -174,7 +175,7 @@ export default function SeatPlanView() {
     const groups: Record<string, StudentResultGroup> = {};
 
     for (const plan of publishedPlans) {
-      if (plan.department && plan.department !== studentDept) continue;
+      if (plan.department && resolveDepartment(plan.department) !== resolveDepartment(studentDept)) continue;
       for (const entry of plan.entries) {
         if (!entry.room) continue;
         const matchesSemester = studentSemester && entry.semester === studentSemester;
@@ -245,10 +246,16 @@ export default function SeatPlanView() {
       const res = await fetch('/api/published-exam-routines');
       const data = await res.json();
       if (data.success && Array.isArray(data.routines)) {
-        setPublishedPlans(data.routines.filter((r: any) => r.type === 'seatplan' && r.status === 'published'));
+        // Coordinators manage every department; everyone else only sees their
+        // own department's published plans (or none when the department is unknown).
+        const isCoord = isOwner || canManageBatches;
+        setPublishedPlans(data.routines.filter((r: any) =>
+          r.type === 'seatplan' && r.status === 'published' &&
+          (isCoord || (dept ? resolveDepartment(r.department) === resolveDepartment(dept) : !resolveDepartment(r.department)))
+        ));
       }
     } catch {}
-  }, []);
+  }, [isOwner, canManageBatches, dept]);
 
   const [dateInputs, setDateInputs] = useState<string[]>(['']);
 
