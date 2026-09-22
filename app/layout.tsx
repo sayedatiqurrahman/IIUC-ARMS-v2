@@ -119,6 +119,57 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="google-site-verification" content="XgkbMrbzPfBjc-INVUQNQlSv53Ik2Gq04rrYb88aS9o" />
         <meta name="google-site-verification" content="UDIdn7-WixkkceHoeYWJZ_5epOeBWOBKOQ1dDmrjy9U" />
         <meta name="msvalidate.01" content="DD448DBC883F1B6109FDB70D65A3BB56" />
+        <script type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@graph': [
+                {
+                  '@type': 'WebSite',
+                  '@id': `${siteUrl}/#website`,
+                  url: siteUrl,
+                  name: 'IIUC-ARMS',
+                  description:
+                    'Academic Resource Management System for IIUC departments — browse notes, sheets, questions, and results.',
+                  publisher: { '@id': `${siteUrl}/#organization` },
+                  inLanguage: 'en',
+                  potentialAction: {
+                    '@type': 'SearchAction',
+                    target: {
+                      '@type': 'EntryPoint',
+                      urlTemplate: `${siteUrl}/?q={search_term_string}`,
+                    },
+                    'query-input': 'required name=search_term_string',
+                  },
+                },
+                {
+                  '@type': 'Organization',
+                  '@id': `${siteUrl}/#organization`,
+                  name: 'IIUC-ARMS',
+                  url: siteUrl,
+                  logo: {
+                    '@type': 'ImageObject',
+                    url: `${siteUrl}/icon-512.png`,
+                    width: 512,
+                    height: 512,
+                  },
+                },
+                {
+                  '@type': 'SiteNavigationElement',
+                  name: ['Browse', 'Routine', 'Studio', 'Team', 'Clubs'],
+                  url: [
+                    `${siteUrl}/`,
+                    `${siteUrl}/routine`,
+                    `${siteUrl}/studio`,
+                    `${siteUrl}/contributors`,
+                    `${siteUrl}/clubs`,
+                  ],
+                },
+              ],
+            }),
+          }}
+        />
+        <link rel="sitemap" type="application/xml" href={`${siteUrl}/sitemap.xml`} />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.3.1/css/all.min.css" />
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" />
         <script
