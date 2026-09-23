@@ -120,7 +120,6 @@ gtag('js', new Date());
 gtag('config', 'G-HW4QNEHD8B');`,
           }}
         />
-        <script src="https://app.secureprivacy.ai/script/6ab3deb214671a86a0100bb8.js" async />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(c,l,a,r,i,t,y){
