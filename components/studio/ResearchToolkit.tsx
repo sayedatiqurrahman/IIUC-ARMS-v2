@@ -2,15 +2,17 @@
 
 import { useState } from 'react';
 import CitationGenerator from './research/CitationGenerator';
-import PhoneticConverter from './research/PhoneticConverter';
 import Glossary from './research/Glossary';
 import Summarizer from './research/Summarizer';
 import FrequencyAnalyzer from './research/FrequencyAnalyzer';
 import OutlineGenerator from './research/OutlineGenerator';
 import AuthorNameConverter from './research/AuthorNameConverter';
 import Plagiarism from './research/Plagiarism';
-import AIDetector from './research/AIDetector';
-import Humanizer from './research/Humanizer';
+import AIHumanizer from './research/AIHumanizer';
+import FileVerify from './research/FileVerify';
+import CiteCheck from './research/CiteCheck';
+import PaperFormatter from './research/PaperFormatter';
+import { LocaleProvider, useLocale } from './research/locale';
 
 interface ToolDef {
   id: string;
@@ -24,32 +26,57 @@ interface ToolDef {
 
 const TOOLS: ToolDef[] = [
   { id: 'citations', label: 'Citation Generator', ar: 'مولّد الاستشهادات', icon: 'format_quote', blurb: 'APA, MLA, Chicago, IEEE + APA-ar for books, articles, web & theses, with a reference-list builder.', component: CitationGenerator },
-  { id: 'phonetic', label: 'Arabic ↔ Latin Converter', ar: 'محوّل العربية–لاتينية', icon: 'translate', blurb: 'Two-way phonetic conversion: Arabic script ⇄ Latin typing for names, titles and transliteration.', component: PhoneticConverter },
-  { id: 'glossary', label: 'Bilingual Glossary', ar: 'قاموس أكاديمي', icon: 'menu_book', blurb: '150+ English ↔ Arabic academic terms in research methods, statistics, writing and publishing.', component: Glossary },
+  { id: 'citecheck', label: 'Citation Verifier', ar: 'مدقق الاستشهادات', icon: 'verified', blurb: 'Paste a citation and check its style, author, year, journal, pages, DOI/URL — bilingual.', component: CiteCheck },
+  { id: 'aidetect', label: 'AI Detector & Humanizer', ar: 'كشف الذكاء الاصطناعي وتحسين الصياغة', icon: 'science', blurb: 'Quillbot-style: per-sentence likelihood scan with color-marked sentences, then rewrite suggestions for every flagged sentence.', component: AIHumanizer, tag: 'heuristic' },
+  { id: 'doccheck', label: 'Document Verifier', ar: 'فحص مستند كامل', icon: 'folder_open', blurb: 'Upload .docx / .pdf / .txt and verify the WHOLE file at once — stats, AI scan, rewrites and repeats. Read locally, never uploaded.', component: FileVerify, tag: 'local' },
+  { id: 'formats', label: 'Paper & Thesis Formatter', ar: 'تنسيق البحوث والرسائل', icon: 'article', blurb: 'Section-by-section roadmap and rules for APA / MLA / Chicago / IEEE papers and theses — English and Arabic.', component: PaperFormatter },
   { id: 'summarizer', label: 'Summarizer & Extractive Paraphrase', ar: 'مُلخّص النصوص', icon: 'summarize', blurb: 'Extractive sentence scoring for English and Arabic. Choose your target length.', component: Summarizer },
   { id: 'analyzer', label: 'Frequency Analyzer', ar: 'محلّل التكرار', icon: 'monitoring', blurb: 'Word & character counts, top frequency, bigrams, reading time and lexical density.', component: FrequencyAnalyzer },
   { id: 'outline', label: 'Outline Generator', ar: 'خريطة البحث', icon: 'account_tree', blurb: 'Standard and dissertation structures with English + Arabic headings in one click.', component: OutlineGenerator },
   { id: 'authors', label: 'Author Name Converter', ar: 'محوّل أسماء المؤلفين', icon: 'badge', blurb: 'Turn names into “Last, F. M.” citation form and produce the Arabic script.', component: AuthorNameConverter },
+  { id: 'glossary', label: 'Bilingual Glossary', ar: 'قاموس أكاديمي', icon: 'menu_book', blurb: '150+ English ↔ Arabic academic terms in research methods, statistics, writing and publishing.', component: Glossary },
   { id: 'plagiarism', label: 'Plagiarism Checker (offline)', ar: 'كاشف الاستنساخ', icon: 'fact_check', blurb: 'Finds duplicated phrases inside your draft and overlap between two drafts. No internet scan.', component: Plagiarism, tag: 'offline' },
-  { id: 'aidetect', label: 'AI-Likeness Scanner', ar: 'فحص أنماط الذكاء الاصطناعي', icon: 'science', blurb: 'Heuristic formulaic-likeness score — sentence rhythm, vocabulary diversity and clichés.', component: AIDetector, tag: 'heuristic' },
-  { id: 'humanize', label: 'Humanization Assistant', ar: 'مساعد تحسين الصياغة', icon: 'edit_note', blurb: 'Flags AI-typical phrasing and proposes natural alternatives; split runaway long sentences.', component: Humanizer, tag: 'heuristic' },
 ];
 
-export default function ResearchToolkit() {
+function LangToggle() {
+  const { lang, setLang } = useLocale();
+  return (
+    <div className="flex overflow-hidden rounded-xl border border-dark-border">
+      {(['en', 'ar'] as const).map((l) => (
+        <button
+          key={l}
+          onClick={() => setLang(l)}
+          className={`px-3 py-1.5 text-[0.68rem] font-bold transition cursor-pointer ${lang === l ? 'bg-qsis text-white' : 'bg-dark-bg2 text-dark-text2 hover:text-qsis'}`}
+        >
+          {l === 'en' ? 'English' : 'العربية'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Inner() {
   const [active, setActive] = useState<string | null>(null);
+  const { lang } = useLocale();
   const tool = TOOLS.find((t) => t.id === active) || null;
   const ActiveView = tool?.component || null;
+  const isAr = lang === 'ar';
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-qsis/30 bg-qsis/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[0.72rem] leading-relaxed text-dark-text2 max-w-xl">
-          <span className="font-bold text-qsis">English · العربية</span> — a research companion focused on the two languages
-          you publish in. Every tool runs entirely in your browser; nothing you paste leaves your device.
+        <p className="text-[0.72rem] leading-relaxed text-dark-text2 max-w-xl" dir={isAr ? 'rtl' : undefined}>
+          <span className="font-bold text-qsis">{isAr ? 'العربية · English' : 'English · العربية'}</span>
+          {isAr
+            ? ' — رفيق بحثي يركز على اللغتين اللتين تنشر بهما. كل أداة تعمل في متصفحك بالكامل؛ لا يُرسل أي نص إلى أي خادم.'
+            : ' — a research companion focused on the two languages you publish in. Every tool runs entirely in your browser; nothing you paste leaves your device.'}
         </p>
-        <span className="rounded-full border border-dark-border bg-dark-bg px-3 py-1 text-[0.62rem] text-dark-text3">
-          {TOOLS.length} tools · No sign-in · No uploads
-        </span>
+        <div className="flex items-center gap-3">
+          <LangToggle />
+          <span className="rounded-full border border-dark-border bg-dark-bg px-3 py-1 text-[0.62rem] text-dark-text3">
+            {TOOLS.length} tools · No sign-in · No uploads
+          </span>
+        </div>
       </div>
 
       {!tool ? (
@@ -64,9 +91,11 @@ export default function ResearchToolkit() {
                 <span className="material-symbols-outlined text-2xl text-qsis">{t.icon}</span>
                 {t.tag && <span className="rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[0.58rem] font-medium text-amber-300">{t.tag}</span>}
               </div>
-              <h3 className="text-[0.85rem] font-bold text-dark-text group-hover:text-qsis transition-colors">{t.label}</h3>
-              <p className="mt-0.5 text-[0.68rem] text-dark-text3" dir="rtl" lang="ar">{t.ar}</p>
-              <p className="mt-1.5 text-[0.7rem] text-dark-text2 leading-relaxed">{t.blurb}</p>
+              <h3 className="text-[0.85rem] font-bold text-dark-text group-hover:text-qsis transition-colors" dir={isAr ? 'rtl' : undefined}>
+                {isAr ? t.ar : t.label}
+              </h3>
+              <p className="mt-0.5 text-[0.68rem] text-dark-text3" dir={isAr ? undefined : 'rtl'} lang="ar">{isAr ? t.label : t.ar}</p>
+              <p className="mt-1.5 text-[0.7rem] text-dark-text2 leading-relaxed" dir={isAr ? 'rtl' : undefined}>{t.blurb}</p>
             </button>
           ))}
         </div>
@@ -74,18 +103,29 @@ export default function ResearchToolkit() {
         <div className="rounded-2xl border border-dark-border bg-dark-bg2/70 overflow-hidden">
           <div className="flex items-center gap-3 px-5 py-3.5 border-b border-dark-border bg-dark-bg2">
             <button onClick={() => setActive(null)} className="text-[0.72rem] text-dark-text2 hover:text-qsis transition cursor-pointer bg-transparent border-none flex items-center gap-1.5">
-              <i className="fas fa-arrow-left text-xs"></i> All tools
+              <i className="fas fa-arrow-left text-xs"></i> {isAr ? 'كل الأدوات' : 'All tools'}
             </button>
             <span className="w-px h-5 bg-dark-border"></span>
             <span className="material-symbols-outlined text-qsis text-xl">{tool.icon}</span>
-            <div>
-              <h2 className="text-[0.88rem] font-bold text-dark-text">{tool.label}</h2>
-              <p className="text-[0.64rem] text-dark-text3" dir="rtl" lang="ar">{tool.ar}</p>
+            <div className="flex-1 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-[0.88rem] font-bold text-dark-text" dir={isAr ? 'rtl' : undefined}>{isAr ? tool.ar : tool.label}</h2>
+                <p className="text-[0.64rem] text-dark-text3" dir={isAr ? undefined : 'rtl'} lang="ar">{isAr ? tool.label : tool.ar}</p>
+              </div>
+              <LangToggle />
             </div>
           </div>
           <div className="p-5">{ActiveView && <ActiveView />}</div>
         </div>
       )}
     </div>
+  );
+}
+
+export default function ResearchToolkit() {
+  return (
+    <LocaleProvider>
+      <Inner />
+    </LocaleProvider>
   );
 }
