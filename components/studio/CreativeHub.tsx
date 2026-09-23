@@ -160,6 +160,68 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
   const [authors, setAuthors] = useState<any[]>([]);
   const [communityLoading, setCommunityLoading] = useState(true);
   const [tab, setTab] = useState<EditorTab>('gallery');
+  const [lang, setLang] = useState<'en' | 'ar'>('en');
+  const isAr = lang === 'ar';
+
+  const L = {
+    tagline: isAr ? 'أغلفة الأبحاث والواجبات والتقارير الأكاديمية' : 'Thesis, assignment cover pages & academic design hub',
+    import: isAr ? 'استيراد .iucd' : 'Import .iucd',
+    close: isAr ? 'إغلاق' : 'Close',
+    tabs: (draftsCount: number) =>
+      [
+        ['gallery', isAr ? 'القوالب' : 'Templates', 'fa-th-large'],
+        ['drafts', isAr ? `مسوداتي${draftsCount ? ` (${draftsCount})` : ''}` : `My Drafts${draftsCount ? ` (${draftsCount})` : ''}`, 'fa-save'],
+        ['community', isAr ? 'المجتمع' : 'Community', 'fa-globe'],
+      ] as [EditorTab, string, string][],
+    manualMode: isAr ? 'تصميم يدوي' : 'Manual design',
+    autoMode: isAr ? 'ملء تلقائي' : 'Auto-filled form',
+    formMode: isAr ? 'ملء الحقول' : 'Form fill-up',
+    communityDesign: isAr ? 'تصميم من المجتمع' : 'community design',
+    fillUp: isAr ? 'ملء الحقول' : 'Fill-up fields',
+    manualEdit: isAr ? 'تحرير يدوي' : 'Manual edit',
+    publish: isAr ? 'نشر' : 'Publish',
+    fieldCount: (n: number) => (isAr ? `${n} حقل قابل للتعديل` : `${n} editable field${n === 1 ? '' : 's'}`),
+    clickToOpen: isAr ? 'اضغط للفتح' : 'click to open',
+    noDrafts: isAr ? 'لا توجد مسودات بعد. اختر قالبا من القوالب للبدء.' : 'No drafts yet. Pick a template from the gallery to start.',
+    resume: isAr ? 'متابعة' : 'Resume',
+    edited: (d: string) => (isAr ? `عدّل ${new Date(d).toLocaleString()}` : `Edited ${new Date(d).toLocaleString()}`),
+    selectDepartment: isAr ? 'اختر القسم…' : 'Select department…',
+    enterValue: (label: string) => (isAr ? `أدخل ${label}` : `Enter ${label.toLowerCase()}`),
+    autoFill: isAr ? 'ملء تلقائي من بيانات ملفي' : 'Auto-fill from my dashboard profile',
+    fillLive: isAr ? 'ملء الحقول · تُحدَّث المعاينة لحظيا' : 'Form Fill-up · fields update the preview live',
+    done: isAr ? 'تم' : 'Done',
+    communityTitle: isAr ? 'تصميمات المجتمع' : 'Community designs',
+    communitySub: isAr ? 'منشورة من مركز الإبداع إلى مستودع القوالب.' : 'Published from the Creative Hub into the themes repo.',
+    publishYours: isAr ? 'انشر تصميمك' : 'Publish yours',
+    loadingCommunity: isAr ? 'جارٍ تحميل تصميمات المجتمع…' : 'Loading community designs…',
+    noCommunity: isAr ? 'لا توجد تصميمات مجتمعية بعد — كن أول من ينشر!' : 'No community designs yet — be the first to publish!',
+    loadingCommunityDesign: isAr ? 'جارٍ تحميل التصميم…' : 'Loading community design…',
+    openedCommunity: isAr ? 'فُتح التصميم — املأ تفاصيلك أدناه.' : 'Design opened — fill in your details below.',
+    loadFail: isAr ? 'تعذّر تحميل هذا التصميم من المستودع.' : 'Could not load that design from the repo.',
+    contributors: isAr ? 'مساهمو التصميمات' : 'Design Contributors',
+    designU: (n: number) => (isAr ? `${n} تصميم` : `${n} design${n === 1 ? '' : 's'}`),
+    formFill: isAr ? 'ملء النموذج' : 'Form Fill-up',
+    manualEditTitle: isAr ? 'التحرير اليدوي' : 'Manual Edit',
+    pageLabel: (s: string) => s || 'A4',
+    newProject: isAr ? 'مشروع جديد' : 'New project',
+    pubFields: isAr ? 'حقول التصميم' : 'Design fields',
+    pubAssigned: isAr ? 'الحقول المعيَّنة' : 'Assigned form fields',
+    pubNoMapped: isAr ? 'لا يوجد نص مربوط بحقل حتى الآن. الربط يحوّل النص إلى حقول تعبئة للمستخدمين الآخرين.' : 'No text is mapped to a form field yet. Mapping turns your text into fill-up inputs for other users.',
+    pubOpenEditor: isAr ? 'افتح المحرر لربط الحقول' : 'Open editor to assign fields',
+    pubBgNote: isAr ? 'تُرفع الخلفية الممسوحة كصوره assets/bg.png وتوضع النصوص في مواضعها على الصفحة تماما.' : 'The flattened background is uploaded as assets/bg.png and text fields are positioned exactly where they sit on the page.',
+    pubNoFields: isAr ? 'لم تُعثر على بيانات data-field-type — سيُرفض النشر.' : 'No data-field-type attributes found — publishing will be rejected.',
+    pubFormat: isAr ? 'صيغة القالب' : 'Template format',
+    pubSource: isAr ? 'مصدر القالب *' : 'Template source *',
+    pubMd: isAr ? 'Markdown — عناصر {{field_type}}' : 'Markdown — {' + '{' + '{{field_type}}' + '}' + '} placeholders',
+    pubHtml: isAr ? 'HTML — سمات data-field-type' : 'HTML — data-field-type attributes',
+    pubName: isAr ? 'اسم التصميم *' : 'Design name *',
+    pubLanguage: isAr ? 'اللغة' : 'Language',
+    pubCategory: isAr ? 'الفئة' : 'Category',
+    pubSubtitle: isAr ? 'عنوان فرعي (اختياري)' : 'Subtitle (optional)',
+    pubDescr: isAr ? 'الوصف (اختياري)' : 'Description (optional)',
+    pubPreview: isAr ? 'معاينة النشر' : 'Publish preview',
+    pubConnect: isAr ? 'كيف يربط النموذج' : 'How the form connects',
+  };
 
   // Active design project
   const [selected, setSelected] = useState<HubTheme | null>(null);
@@ -402,7 +464,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
   // ─── Auto-Fill from dashboard profile ────────────────────────────────────
   const applyAutoFill = useCallback(() => {
     if (!profileLoaded) {
-      showToast('Complete your dashboard profile first to auto-fill.', 'info');
+      showToast(isAr ? 'أكمل ملفك الشخصي في لوحة المتابعة أولا للملء التلقائي.' : 'Complete your dashboard profile first to auto-fill.', 'info');
       return;
     }
     const filled: Record<string, string> = {};
@@ -412,7 +474,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
       if (value) filled[t] = value;
     });
     if (Object.keys(filled).length === 0) {
-      showToast('No matching profile data found for this design.', 'info');
+      showToast(isAr ? 'لا توجد بيانات ملف شخصي مطابقة لهذا التصميم.' : 'No matching profile data found for this design.', 'info');
       return;
     }
     setFields((prev) => {
@@ -421,7 +483,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
       return next;
     });
     setMode('form-fill');
-    showToast('This data is pulled from your dashboard profile.', 'success');
+    showToast(isAr ? 'يُجلب هذا من ملفك الشخصي في لوحة المتابعة.' : 'This data is pulled from your dashboard profile.', 'success');
   }, [profileLoaded, fieldTypes, profile, persistDraft]);
 
   // ─── Manual editor callbacks ─────────────────────────────────────────────
@@ -802,21 +864,34 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
       {/* Header */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold">Creative Hub</h2>
-          <p className="text-[0.82rem] text-dark-text2">Thesis, assignment cover pages &amp; academic design hub</p>
+          <h2 className="text-2xl font-bold">{isAr ? 'مركز الإبداع' : 'Creative Hub'}</h2>
+          <p className="text-[0.82rem] text-dark-text2" dir={isAr ? 'rtl' : undefined}>{L.tagline}</p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex overflow-hidden rounded-xl border border-dark-border">
+            {(['en', 'ar'] as const).map((l) => (
+              <button
+                key={l}
+                onClick={() => setLang(l)}
+                className={`px-3 py-2 text-[0.68rem] font-bold transition cursor-pointer ${
+                  lang === l ? 'bg-indigo-600 text-white' : 'bg-dark-bg2 text-dark-text2 hover:text-indigo-400'
+                }`}
+              >
+                {l === 'en' ? 'English' : 'العربية'}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => importRef.current?.click()}
             className="rounded-xl border border-dark-border bg-dark-bg2 px-3 py-2 text-[0.7rem] font-medium text-dark-text transition hover:border-indigo-500 hover:text-indigo-400"
           >
-            <i className="fas fa-upload mr-1"></i>Import .iucd
+            <i className="fas fa-upload mr-1"></i>{L.import}
           </button>
           <button
             onClick={onClose}
             className="rounded-xl border border-dark-border bg-dark-bg2 px-3 py-2 text-[0.7rem] font-medium text-dark-text transition hover:border-rose-500 hover:text-rose-400"
           >
-            <i className="fas fa-times mr-1"></i>Close
+            <i className="fas fa-times mr-1"></i>{L.close}
           </button>
         </div>
         <input
@@ -834,13 +909,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
 
       {/* Tabs */}
       <div className="mb-5 flex gap-2">
-        {(
-          [
-            ['gallery', 'Templates', 'fa-th-large'],
-            ['drafts', `My Drafts${drafts.length ? ` (${drafts.length})` : ''}`, 'fa-save'],
-            ['community', 'Community', 'fa-globe'],
-          ] as [EditorTab, string, string][]
-        ).map(([id, label, icon]) => (
+        {L.tabs(drafts.length).map(([id, label, icon]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -864,11 +933,11 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-[0.82rem] font-bold text-indigo-300">{currentDraftName}</h3>
-            <p className="text-[0.62rem] text-dark-text3">
-              {isManual ? 'Manual design' : mode === 'auto-fill' ? 'Auto-filled form' : 'Form fill-up'} ·{' '}
+            <h3 className="truncate text-[0.82rem] font-bold text-indigo-300" dir={isAr ? 'rtl' : undefined}>{currentDraftName}</h3>
+            <p className="text-[0.62rem] text-dark-text3" dir={isAr ? 'rtl' : undefined}>
+              {isManual ? L.manualMode : mode === 'auto-fill' ? L.autoMode : L.formMode} ·{' '}
               {PAGE_SIZES[pageSize]?.label || 'A4'} ·{' '}
-              {selected.source === 'community' ? 'community design' : selected.name || 'imported'}
+              {selected.source === 'community' ? L.communityDesign : selected.name || 'imported'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -877,14 +946,14 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                 onClick={() => setFormOpen(true)}
                 className="rounded-lg bg-indigo-600 px-3 py-2 text-[0.68rem] font-semibold text-white transition hover:bg-indigo-500"
               >
-                <i className="fas fa-pen mr-1"></i>Fill-up fields
+                <i className="fas fa-pen mr-1"></i>{L.fillUp}
               </button>
             )}
             <button
               onClick={() => void openManual()}
               className="rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-3 py-2 text-[0.68rem] font-semibold text-emerald-300 transition hover:bg-emerald-900/40"
             >
-              <i className="fas fa-draw-polygon mr-1"></i>Manual edit
+              <i className="fas fa-draw-polygon mr-1"></i>{L.manualEdit}
             </button>
             <button
               onClick={() => void exportPng()}
@@ -911,7 +980,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
               onClick={() => setPublishOpen(true)}
               className="rounded-lg bg-indigo-600 px-3 py-2 text-[0.68rem] font-semibold text-white transition hover:bg-indigo-500"
             >
-              <i className="fas fa-share-alt mr-1"></i>Publish
+              <i className="fas fa-share-alt mr-1"></i>{L.publish}
             </button>
           </div>
         </div>
@@ -944,11 +1013,11 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                 </div>
               </div>
               <div className="p-3">
-                <h4 className="text-[0.8rem] font-semibold">{theme.name}</h4>
-                <p className="mt-1 line-clamp-2 text-[0.65rem] text-dark-text3">{theme.description}</p>
-                <p className="mt-2 text-[0.6rem] text-indigo-400">
+                <h4 className="text-[0.8rem] font-semibold" dir={isAr ? 'rtl' : undefined}>{theme.name}</h4>
+                <p className="mt-1 line-clamp-2 text-[0.65rem] text-dark-text3" dir={isAr ? 'rtl' : undefined}>{theme.description}</p>
+                <p className="mt-2 text-[0.6rem] text-indigo-400" dir={isAr ? 'rtl' : undefined}>
                   <i className="fas fa-edit mr-1"></i>
-                  {theme.fields.length} editable field{theme.fields.length === 1 ? '' : 's'} · click to open
+                  {L.fieldCount(theme.fields.length)} · {L.clickToOpen}
                 </p>
               </div>
             </div>
@@ -962,35 +1031,35 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
           {drafts.length === 0 ? (
             <div className="rounded-xl border border-dashed border-dark-border bg-dark-bg2 p-10 text-center">
               <i className="fas fa-inbox mb-3 text-3xl text-dark-text3"></i>
-              <p className="text-[0.8rem] text-dark-text2">No drafts yet. Pick a template from the gallery to start.</p>
+              <p className="text-[0.8rem] text-dark-text2">{L.noDrafts}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {drafts.map((d) => (
                 <div key={d.id} className="rounded-xl border border-dark-border bg-dark-bg2 p-4 transition hover:border-indigo-500">
                   <div className="flex items-center justify-between">
-                    <h4 className="truncate text-[0.78rem] font-semibold">{d.name}</h4>
+                    <h4 className="truncate text-[0.78rem] font-semibold" dir={isAr ? 'rtl' : undefined}>{d.name}</h4>
                     <button
                       onClick={() => void removeDraft(d.id)}
                       className="text-dark-text3 transition hover:text-rose-400"
-                      title="Delete draft"
+                      title={isAr ? 'حذف المسودة' : 'Delete draft'}
                     >
                       <i className="fas fa-trash"></i>
                     </button>
                   </div>
-                  <p className="mt-1 text-[0.6rem] text-dark-text3">
-                    {d.mode === 'form-fill' ? 'Form Fill-up' : d.mode === 'auto-fill' ? 'Auto-Fill' : 'Manual'}
+                  <p className="mt-1 text-[0.6rem] text-dark-text3" dir={isAr ? 'rtl' : undefined}>
+                    {d.mode === 'form-fill' ? isAr ? 'ملء نموذج' : 'Form Fill-up' : d.mode === 'auto-fill' ? isAr ? 'ملء تلقائي' : 'Auto-Fill' : isAr ? 'يدوي' : 'Manual'}
                     {' · '}
                     {PAGE_SIZES[d.pageSize]?.label || 'A4'}
                   </p>
                   <p className="mt-1 text-[0.58rem] text-dark-text3">
-                    Edited {new Date(d.updatedAt).toLocaleString()}
+                    {L.edited(String(d.updatedAt))}
                   </p>
                   <button
                     onClick={() => resumeDraft(d)}
                     className="mt-3 w-full rounded-lg bg-indigo-600 py-2 text-[0.7rem] font-semibold text-white transition hover:bg-indigo-500"
                   >
-                    <i className="fas fa-play mr-1"></i>Resume
+                    <i className="fas fa-play mr-1"></i>{L.resume}
                   </button>
                 </div>
               ))}
@@ -1004,25 +1073,25 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
         <div>
           <div className="mb-4 flex items-center justify-between rounded-xl border border-dark-border bg-dark-bg2 px-4 py-3">
             <div>
-              <p className="text-[0.72rem] text-dark-text2">Community designs</p>
-              <p className="text-[0.62rem] text-dark-text3">Published from the Creative Hub into the themes repo.</p>
+              <p className="text-[0.72rem] text-dark-text2" dir={isAr ? 'rtl' : undefined}>{L.communityTitle}</p>
+              <p className="text-[0.62rem] text-dark-text3" dir={isAr ? 'rtl' : undefined}>{L.communitySub}</p>
             </div>
             <button
               onClick={() => setPublishOpen(true)}
               className="rounded-lg bg-indigo-600 px-3 py-2 text-[0.68rem] font-semibold text-white transition hover:bg-indigo-500"
             >
-              <i className="fas fa-share mr-1"></i>Publish yours
+              <i className="fas fa-share mr-1"></i>{L.publishYours}
             </button>
           </div>
 
           {communityLoading ? (
-            <div className="py-10 text-center text-[0.72rem] text-dark-text3">
-              <i className="fas fa-spinner fa-spin mr-2 text-indigo-400"></i>Loading community designs…
+            <div className="py-10 text-center text-[0.72rem] text-dark-text3" dir={isAr ? 'rtl' : undefined}>
+              <i className="fas fa-spinner fa-spin mr-2 text-indigo-400"></i>{L.loadingCommunity}
             </div>
           ) : community.length === 0 ? (
             <div className="rounded-xl border border-dashed border-dark-border bg-dark-bg2 p-10 text-center">
               <i className="fas fa-users mb-3 text-3xl text-dark-text3"></i>
-              <p className="text-[0.8rem] text-dark-text2">No community designs yet — be the first to publish!</p>
+              <p className="text-[0.8rem] text-dark-text2" dir={isAr ? 'rtl' : undefined}>{L.noCommunity}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1030,7 +1099,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                 <div
                   key={d.id}
                   onClick={() => {
-                    showToast('Loading community design…', 'info');
+                    showToast(L.loadingCommunityDesign, 'info');
                     fetch(d.html)
                       .then((r) => r.text())
                       .then((html) => {
@@ -1064,9 +1133,9 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                           createdAt: Date.now(),
                         }).then(refreshDrafts);
                         setFormOpen(true);
-                        showToast('Design opened — fill in your details below.', 'success');
+                        showToast(L.openedCommunity, 'success');
                       })
-                      .catch(() => showToast('Could not load that design from the repo.', 'error'));
+                      .catch(() => showToast(L.loadFail, 'error'));
                   }}
                   className="group cursor-pointer overflow-hidden rounded-xl border border-dark-border bg-dark-bg2 transition hover:border-emerald-500"
                 >
@@ -1099,8 +1168,8 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
 
           {authors.length > 0 && (
             <div className="mt-6 rounded-xl border border-dark-border bg-dark-bg2 p-4">
-              <h3 className="mb-3 text-[0.8rem] font-semibold">
-                <i className="fas fa-trophy mr-1 text-emerald-400"></i>Design Contributors
+              <h3 className="mb-3 text-[0.8rem] font-semibold" dir={isAr ? 'rtl' : undefined}>
+                <i className="fas fa-trophy mr-1 text-emerald-400"></i>{L.contributors}
               </h3>
               <div className="flex flex-wrap gap-2">
                 {authors
@@ -1109,7 +1178,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                   .map((a: any) => (
                     <span key={a.email || a.githubLogin} className="rounded-full border border-emerald-700/40 bg-emerald-900/20 px-3 py-1 text-[0.62rem] text-emerald-300">
                       <i className="fas fa-palette mr-1"></i>
-                      {a.name} · {a.designCount} design{a.designCount === 1 ? '' : 's'}
+                      {a.name} · {L.designU(a.designCount || 0)}
                     </span>
                   ))}
               </div>
@@ -1138,28 +1207,28 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                 </ScaledA4>
               </div>
               <div className="flex flex-col justify-center gap-3">
-                <p className="text-[0.7rem] text-dark-text2">
+                <p className="text-[0.7rem] text-dark-text2" dir={isAr ? 'rtl' : undefined}>
                   <i className="fas fa-edit mr-1 text-indigo-400"></i>
-                  {selectionTheme.fields.length} editable field{selectionTheme.fields.length === 1 ? '' : 's'} ·{' '}
+                  {L.fieldCount(selectionTheme.fields.length)} ·{' '}
                   {PAGE_SIZES[selectionTheme.pageSize]?.label || 'A4'}
                 </p>
                 <button
                   onClick={() => openFormFromTheme(selectionTheme)}
                   className="rounded-xl bg-indigo-600 py-3 text-[0.78rem] font-bold text-white transition hover:bg-indigo-500"
                 >
-                  <i className="fas fa-pen mr-2"></i>Form Fill-up
+                  <i className="fas fa-pen mr-2"></i>{L.formFill}
                 </button>
                 <button
                   onClick={() => void openManualFromTheme(selectionTheme)}
                   className="rounded-xl border border-emerald-700/50 bg-emerald-900/20 py-3 text-[0.78rem] font-bold text-emerald-300 transition hover:bg-emerald-900/40"
                 >
-                  <i className="fas fa-draw-polygon mr-2"></i>Manual Edit
+                  <i className="fas fa-draw-polygon mr-2"></i>{L.manualEditTitle}
                 </button>
                 <button
                   onClick={() => setSelectionTheme(null)}
                   className="rounded-xl border border-dark-border py-2.5 text-[0.72rem] font-semibold text-dark-text2 transition hover:text-rose-400"
                 >
-                  Close
+                  {L.close}
                 </button>
               </div>
             </div>
@@ -1173,11 +1242,11 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
           <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-dark-border bg-dark-bg2">
             <div className="flex items-center justify-between border-b border-dark-border px-5 py-3">
               <div className="min-w-0">
-                <h3 className="truncate text-[0.95rem] font-bold text-indigo-300">{currentDraftName}</h3>
-                <p className="text-[0.62rem] text-dark-text3">Form Fill-up · fields update the preview live</p>
+                <h3 className="truncate text-[0.95rem] font-bold text-indigo-300" dir={isAr ? 'rtl' : undefined}>{currentDraftName}</h3>
+                <p className="text-[0.62rem] text-dark-text3" dir={isAr ? 'rtl' : undefined}>{L.fillLive}</p>
               </div>
               <button onClick={() => setFormOpen(false)} className="rounded-lg border border-dark-border px-3 py-1.5 text-[0.7rem] font-semibold text-dark-text2 transition hover:text-indigo-400">
-                Done
+                {L.done}
               </button>
             </div>
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto p-5 md:grid-cols-2">
@@ -1196,7 +1265,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                     onClick={applyAutoFill}
                     className="rounded-xl bg-emerald-600 px-4 py-2 text-[0.7rem] font-semibold text-white transition hover:bg-emerald-500"
                   >
-                    <i className="fas fa-bolt mr-1"></i>Auto-fill from my dashboard profile
+                    <i className="fas fa-bolt mr-1"></i>{L.autoFill}
                   </button>
                 )}
                 {fieldTypes.map((type) => (
@@ -1208,7 +1277,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                         onChange={(e) => updateField(type, e.target.value)}
                         className="w-full rounded-lg border border-dark-border bg-dark-bg px-3 py-2 text-[0.75rem] text-dark-text outline-none transition focus:border-indigo-500"
                       >
-                        <option value="">Select department…</option>
+                        <option value="">{L.selectDepartment}</option>
                         {departmentOptions.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
@@ -1219,7 +1288,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                         value={fields[type] || ''}
                         onChange={(e) => updateField(type, e.target.value)}
                         className="w-full rounded-lg border border-dark-border bg-dark-bg px-3 py-2 text-[0.75rem] text-dark-text outline-none transition focus:border-indigo-500"
-                        placeholder={`Enter ${fieldLabel(type).toLowerCase()}`}
+                        placeholder={L.enterValue(fieldLabel(type))}
                       />
                     )}
                   </div>
@@ -1257,7 +1326,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                     onClick={() => setPublishOpen(true)}
                     className="rounded-xl bg-indigo-600 px-3 py-2 text-[0.68rem] font-semibold text-white transition hover:bg-indigo-500"
                   >
-                    <i className="fas fa-share-alt mr-1"></i>Publish
+                    <i className="fas fa-share-alt mr-1"></i>{L.publish}
                   </button>
                 </div>
               </div>
@@ -1271,8 +1340,8 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
         <div className="fixed inset-0 z-[240] flex items-center justify-center bg-black/70 p-4">
           <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-dark-border bg-dark-bg2 p-5">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[0.95rem] font-bold text-indigo-300">
-                <i className="fas fa-globe mr-1"></i>Publish to Community
+              <h3 className="text-[0.95rem] font-bold text-indigo-300" dir={isAr ? 'rtl' : undefined}>
+                <i className="fas fa-globe mr-1"></i>{isAr ? 'نشر إلى المجتمع' : 'Publish to Community'}
               </h3>
               <button onClick={() => setPublishOpen(false)} className="text-dark-text3 transition hover:text-rose-400">
                 <i className="fas fa-times"></i>
@@ -1287,7 +1356,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                   publishSource === 'design' ? 'bg-indigo-600 text-white' : 'border border-dark-border text-dark-text2 hover:text-indigo-400'
                 }`}
               >
-                <i className="fas fa-file-image mr-1"></i>This design
+                <i className="fas fa-file-image mr-1"></i>{isAr ? 'هذا التصميم' : 'This design'}
               </button>
               <button
                 onClick={() => setPublishSource('template')}
@@ -1295,7 +1364,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                   publishSource === 'template' ? 'bg-indigo-600 text-white' : 'border border-dark-border text-dark-text2 hover:text-indigo-400'
                 }`}
               >
-                <i className="fas fa-code mr-1"></i>New HTML / Markdown template
+                <i className="fas fa-code mr-1"></i>{isAr ? 'قالب HTML / Markdown جديد' : 'New HTML / Markdown template'}
               </button>
             </div>
 
@@ -1303,12 +1372,10 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
               <div className="space-y-3">
                 {isManual ? (
                   <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/10 p-3">
-                    <p className="text-[0.62rem] font-semibold text-emerald-300">Assigned form fields</p>
+                    <p className="text-[0.62rem] font-semibold text-emerald-300">{L.pubAssigned}</p>
                     {mappedFieldList.length === 0 ? (
                       <div className="mt-2">
-                        <p className="text-[0.62rem] text-rose-400">
-                          No text is mapped to a form field yet. Mapping turns your text into fill-up inputs for other users.
-                        </p>
+                        <p className="text-[0.62rem] text-rose-400">{L.pubNoMapped}</p>
                         <button
                           onClick={() => {
                             setPublishOpen(false);
@@ -1316,7 +1383,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                           }}
                           className="mt-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-[0.65rem] font-semibold text-white transition hover:bg-emerald-500"
                         >
-                          <i className="fas fa-draw-polygon mr-1"></i>Open editor to assign fields
+                          <i className="fas fa-draw-polygon mr-1"></i>{L.pubOpenEditor}
                         </button>
                       </div>
                     ) : (
@@ -1329,12 +1396,12 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                       </div>
                     )}
                     <p className="mt-2 text-[0.58rem] text-dark-text3">
-                      The flattened background is uploaded as assets/bg.png and text fields are positioned exactly where they sit on the page.
+                      {L.pubBgNote}
                     </p>
                   </div>
                 ) : (
                   <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/10 p-3">
-                    <p className="text-[0.62rem] font-semibold text-emerald-300">Design fields</p>
+                    <p className="text-[0.62rem] font-semibold text-emerald-300">{L.pubFields}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {fieldTypes.map((t) => (
                         <span key={t} className="rounded-full border border-emerald-700/40 bg-emerald-900/30 px-2.5 py-1 text-[0.6rem] text-emerald-300">
@@ -1343,7 +1410,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                       ))}
                     </div>
                     {fieldTypes.length === 0 && (
-                      <p className="mt-2 text-[0.62rem] text-rose-400">No data-field-type attributes found — publishing will be rejected.</p>
+                      <p className="mt-2 text-[0.62rem] text-rose-400">{L.pubNoFields}</p>
                     )}
                   </div>
                 )}
@@ -1351,18 +1418,18 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
             ) : (
               <div className="space-y-3">
                 <div>
-                  <label className="mb-1 block text-[0.6rem] text-dark-text2">Template format</label>
+                  <label className="mb-1 block text-[0.6rem] text-dark-text2">{L.pubFormat}</label>
                   <select
                     value={templateIsMd ? 'md' : 'html'}
                     onChange={(e) => setTemplateIsMd(e.target.value === 'md')}
                     className="w-full rounded-lg border border-dark-border bg-dark-bg px-3 py-2 text-[0.75rem] text-dark-text outline-none focus:border-indigo-500"
                   >
-                    <option value="md">Markdown — {'{{field_type}}'} placeholders</option>
-                    <option value="html">HTML — data-field-type attributes</option>
+                    <option value="md">{L.pubMd}</option>
+                    <option value="html">{L.pubHtml}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-[0.6rem] text-dark-text2">Template source *</label>
+                  <label className="mb-1 block text-[0.6rem] text-dark-text2">{L.pubSource}</label>
                   <textarea
                     value={templateText}
                     onChange={(e) => setTemplateText(e.target.value)}
@@ -1376,7 +1443,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                   />
                 </div>
                 <div className="rounded-xl border border-dark-border bg-dark-bg p-3">
-                  <p className="text-[0.6rem] font-semibold text-dark-text2">How the form connects</p>
+                  <p className="text-[0.6rem] font-semibold text-dark-text2">{L.pubConnect}</p>
                   <p className="mt-1 text-[0.58rem] text-dark-text3">
                     In HTML add <code className="text-emerald-300">data-field-type="student_name"</code> to an element; in
                     Markdown write <code className="text-emerald-300">{'{{student_name}}'}</code>. Each unique type becomes a
@@ -1397,7 +1464,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
             {/* Metadata */}
             <div className="mt-4 space-y-3">
               <div>
-                <label className="mb-1 block text-[0.6rem] text-dark-text2">Design name *</label>
+                <label className="mb-1 block text-[0.6rem] text-dark-text2">{L.pubName}</label>
                 <input
                   type="text"
                   value={publishMeta.name}
@@ -1408,7 +1475,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-[0.6rem] text-dark-text2">Language</label>
+                  <label className="mb-1 block text-[0.6rem] text-dark-text2">{L.pubLanguage}</label>
                   <select
                     value={publishMeta.language}
                     onChange={(e) => setPublishMeta((p) => ({ ...p, language: e.target.value }))}
@@ -1420,7 +1487,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-[0.6rem] text-dark-text2">Category</label>
+                  <label className="mb-1 block text-[0.6rem] text-dark-text2">{L.pubCategory}</label>
                   <div className="flex gap-2 pt-1">
                     {['thesis', 'assignment'].map((c) => (
                       <button
@@ -1442,7 +1509,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-[0.6rem] text-dark-text2">Subtitle (optional)</label>
+                <label className="mb-1 block text-[0.6rem] text-dark-text2">{L.pubSubtitle}</label>
                 <input
                   type="text"
                   value={publishMeta.subtitle}
@@ -1452,7 +1519,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[0.6rem] text-dark-text2">Description (optional)</label>
+                <label className="mb-1 block text-[0.6rem] text-dark-text2">{L.pubDescr}</label>
                 <textarea
                   value={publishMeta.description}
                   onChange={(e) => setPublishMeta((p) => ({ ...p, description: e.target.value }))}
@@ -1463,7 +1530,7 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
               </div>
 
               <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/10 p-3">
-                <p className="text-[0.6rem] font-semibold text-emerald-300">Publish preview</p>
+                <p className="text-[0.6rem] font-semibold text-emerald-300">{L.pubPreview}</p>
                 <p className="mt-1 break-all text-[0.6rem] text-dark-text2">
                   <span className="text-dark-text3">Folder:</span> {folderPreview}
                 </p>
@@ -1479,9 +1546,9 @@ export default function CreativeHub({ onClose }: CreativeHubProps) {
                 className="w-full rounded-xl bg-indigo-600 py-3 text-[0.75rem] font-bold text-white transition hover:bg-indigo-500 disabled:opacity-50"
               >
                 {isPublishing ? (
-                  <span><i className="fas fa-spinner fa-spin mr-2"></i>Publishing…</span>
+                  <span><i className="fas fa-spinner fa-spin mr-2"></i>{isAr ? 'جارٍ النشر…' : 'Publishing…'}</span>
                 ) : (
-                  <span><i className="fas fa-rocket mr-2"></i>Publish Design</span>
+                  <span><i className="fas fa-rocket mr-2"></i>{isAr ? 'نشر التصميم' : 'Publish Design'}</span>
                 )}
               </button>
             </div>
