@@ -329,6 +329,19 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
     setAddingEvent(false);
   }
 
+  async function handleDeleteEvent(evId: string, evTitle: string) {
+    if (!window.confirm(`Delete event "${evTitle}"? Its photos are removed from GitHub and its certificates are detached.`)) return;
+    try {
+      const res = await fetch(`/api/clubs/${slug}/events`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: evId }),
+      });
+      const data = await res.json();
+      if (data.success) loadClub(slug);
+      else alert(data.error || 'Failed to delete event');
+    } catch { alert('Network error'); }
+  }
+
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
@@ -1336,7 +1349,9 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                             )}
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="text-base font-bold text-dark-text">{ev.title}</h4>
+                                <a href={`/clubs/${slug}/events/${ev.id}`} className="text-base font-bold text-dark-text hover:text-qsis transition no-underline">
+                                  {ev.title}
+                                </a>
                                 {evTheme && (
                                   <span className="text-[0.6rem] px-1.5 py-0.5 rounded-full border font-semibold text-qsis bg-qsis/10 border-qsis/30">
                                     <i className="fas fa-palette mr-0.5"></i>{evTheme.displayName}
@@ -1386,6 +1401,17 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                         </div>
                         <div className="border-t border-dark-border px-5 py-2 flex items-center gap-4 text-xs text-dark-text2">
                           <span>Posted {timeAgo(ev.createdAt)}</span>
+                          <span className="flex-1"></span>
+                          {canManage && (
+                            <>
+                              <a href={`/clubs/${slug}/events/${ev.id}`} className="text-qsis hover:underline font-semibold no-underline">
+                                <i className="fas fa-images mr-1"></i>Photos
+                              </a>
+                              <button onClick={() => handleDeleteEvent(ev.id, ev.title)} className="text-red-400 hover:text-red-300 font-semibold">
+                                <i className="fas fa-trash mr-1"></i>Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                       );

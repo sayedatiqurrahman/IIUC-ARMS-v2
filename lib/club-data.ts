@@ -25,7 +25,10 @@ export interface ClubDataEvent {
   description?: string;
   eventDate?: string;
   venue?: string;
+  theme?: string;
   coverUrl?: string;
+  gallery?: string[];
+  assetsPath?: string;
   createdBy: string;
   createdAt: string;
 }
@@ -71,6 +74,15 @@ function headers(): Record<string, string> {
 
 export function clubDataPath(slug: string, file: string): string {
   return `${CLUBS_FOLDER}/${slug}/${file}`;
+}
+
+// Repository folder for a club event's images, e.g.
+// "clubs/dept-cse/events/foundation-day-2025-05-01". Kept stable per event by
+// storing it back on the event row so later renames do not orphan images.
+export function eventAssetsFolder(clubSlug: string, title: string, eventDate?: string): string {
+  const name = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'event';
+  const date = eventDate ? new Date(eventDate).toISOString().slice(0, 10) : '';
+  return `${CLUBS_FOLDER}/${clubSlug}/events/${name}${date ? `-${date}` : ''}`;
 }
 
 export async function readClubFile<T>(slug: string, file: string): Promise<T | null> {
@@ -179,6 +191,10 @@ export async function syncClubFromDB(slug: string): Promise<{ synced: boolean; c
     const events: ClubDataEvent[] = club.events.map(e => ({
       id: e.id, title: e.title, description: e.description || undefined,
       eventDate: e.eventDate?.toISOString(), venue: e.venue || undefined,
+      theme: e.theme || undefined,
+      coverUrl: e.coverUrl || undefined,
+      gallery: e.gallery ? (() => { try { return JSON.parse(e.gallery); } catch { return undefined; } })() : undefined,
+      assetsPath: e.assetsPath || undefined,
       createdBy: e.createdBy, createdAt: e.createdAt.toISOString(),
     }));
 

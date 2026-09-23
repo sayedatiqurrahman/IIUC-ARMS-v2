@@ -359,6 +359,9 @@ model ClubEvent {
   eventDate   DateTime?
   venue       String?
   theme       String?  // JSON: CertTheme used for this event's certificates
+  coverUrl    String?  // event cover/banner image (GitHub raw URL)
+  gallery     String?  // JSON: [url, ...] event photos (GitHub raw URLs)
+  assetsPath  String?  // repo folder: clubs/{slug}/events/{eventFolder}
   createdBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
