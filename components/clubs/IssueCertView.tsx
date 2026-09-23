@@ -4,8 +4,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAppStore } from '@/lib/store';
 import { parseClubRoles } from '@/lib/club-member-roles';
 import QRCode from 'qrcode';
-import { downloadCertPDF, generateBulkCertPDF, CertPDFData } from '@/lib/club-cert-pdf';
-import { CertSignatory, CertTheme, DEFAULT_THEME, THEME_PRESETS } from '@/lib/cert-theme';
+import { downloadCertPDF, generateBulkCertPDF, exportCertificateImage, CertPDFData } from '@/lib/club-cert-pdf';
+import { CertSignatory, CertTheme, CertLogoKey, DEFAULT_THEME, THEME_PRESETS } from '@/lib/cert-theme';
+import CertDesignPanel from '@/components/studio/CertDesignPanel';
 import { generateSignatureDataURL, signatureTextFor } from '@/lib/signature-gen';
 import { normalizeUniversityId } from '@/lib/utils';
 
@@ -17,6 +18,36 @@ interface CertRow {
   post: string;
   eventName: string;
   servicePeriod: string;
+  eventId: string;
+}
+
+const CUSTOM_THEMES_KEY = 'arms.customThemes';
+
+function loadCustomThemes(): CertTheme[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_THEMES_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((t: any) => t && t.name && t.colors) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistCustomThemes(list: CertTheme[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(list));
+  } catch {}
+}
+
+function categoryLabel(cat?: string): { label: string; cls: string } {
+  switch (cat) {
+    case 'event': return { label: 'Event', cls: 'text-amber-300 bg-amber-500/10 border-amber-500/30' };
+    case 'other': return { label: 'Others', cls: 'text-dark-text2 bg-dark-bg3 border-dark-border' };
+    case 'custom': return { label: 'Custom', cls: 'text-qsis bg-qsis/10 border-qsis/30' };
+    default: return { label: 'Membership', cls: 'text-green-300 bg-green-500/10 border-green-500/30' };
+  }
 }
 
 const defaultSignatories: CertSignatory[] = [
@@ -30,10 +61,15 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
   const [club, setClub] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
-  const [rows, setRows] = useState<CertRow[]>([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '' }]);
+  const [rows, setRows] = useState<CertRow[]>([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '', eventId: '' }]);
   const [signatories, setSignatories] = useState<CertSignatory[]>(defaultSignatories);
   const [themes, setThemes] = useState<CertTheme[]>(THEME_PRESETS);
+  const [customThemes, setCustomThemes] = useState<CertTheme[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<CertTheme>(DEFAULT_THEME);
+  const [events, setEvents] = useState<any[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState('');
+  const [showDesigner, setShowDesigner] = useState(false);
+  const [workingTheme, setWorkingTheme] = useState<CertTheme>(DEFAULT_THEME);
   const [issuing, setIssuing] = useState(false);
   const [issued, setIssued] = useState<any[]>([]);
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -41,18 +77,24 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
   const [sigPreviews, setSigPreviews] = useState<Record<number, string>>({});
   const sigFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
+  const allThemes = [...themes, ...customThemes];
+
   useEffect(() => {
     params.then(async p => {
       setSlug(p.slug);
+      setCustomThemes(loadCustomThemes());
       try {
-        const [clubRes, themesRes] = await Promise.all([
+        const [clubRes, themesRes, eventsRes] = await Promise.all([
           fetch(`/api/clubs/${p.slug}`),
           fetch('/api/clubs/themes'),
+          fetch(`/api/clubs/${p.slug}/events`),
         ]);
         const clubData = await clubRes.json();
         const themesData = await themesRes.json();
+        const eventsData = await eventsRes.json();
         setClub(clubData.club);
         if (themesData.themes) setThemes(themesData.themes);
+        if (Array.isArray(eventsData.events)) setEvents(eventsData.events);
 
         if (clubData.club?.department) {
           setRows(prev => prev.map((r, idx) => idx === 0 && !r.department ? { ...r, department: clubData.club.department } : r));
@@ -81,7 +123,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
   }
 
   function addRow() {
-    setRows(prev => [...prev, { memberName: '', universityId: '', department: club?.department || '', session: '', post: '', eventName: '', servicePeriod: '' }]);
+    setRows(prev => [...prev, { memberName: '', universityId: '', department: club?.department || '', session: '', post: '', eventName: selectedEventId && events.find(e => e.id === selectedEventId)?.title || '', servicePeriod: '', eventId: selectedEventId }]);
   }
 
   function removeRow(i: number) {
@@ -120,6 +162,111 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
     if (sigFileRefs.current[i]) sigFileRefs.current[i]!.value = '';
   }
 
+  // ---- Event-aware issuing -------------------------------------------------
+
+  function selectEvent(evId: string) {
+    setSelectedEventId(evId);
+    const ev = events.find(e => e.id === evId);
+    setRows(prev => prev.map(r => ({
+      ...r,
+      eventId: evId,
+      eventName: ev ? ev.title : '',
+    })));
+    if (ev?.theme) {
+      try {
+        const t = JSON.parse(ev.theme);
+        if (t && t.name) setSelectedTheme(t);
+      } catch {}
+    }
+  }
+
+  async function saveEventTheme() {
+    if (!selectedEventId) {
+      alert('Select an event first to save its certificate design.');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/clubs/${slug}/events`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedEventId, theme: selectedTheme }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEvents(prev => prev.map(e => e.id === selectedEventId ? { ...e, theme: JSON.stringify(selectedTheme) } : e));
+        alert(`Saved "${selectedTheme.displayName}" as the design for this event.`);
+      } else {
+        alert(data.error || 'Failed to save event design');
+      }
+    } catch {
+      alert('Failed to save event design');
+    }
+  }
+
+  // ---- Custom theme designer ------------------------------------------------
+
+  function startNewTheme() {
+    setWorkingTheme({
+      ...selectedTheme,
+      name: `custom-${Date.now()}`,
+      displayName: selectedTheme.displayName,
+      category: 'custom',
+      published: false,
+    });
+    setShowDesigner(true);
+  }
+
+  function editCurrentTheme() {
+    setWorkingTheme({ ...selectedTheme });
+    setShowDesigner(true);
+  }
+
+  function saveCustomTheme() {
+    let name = workingTheme.name || `custom-${Date.now()}`;
+    if (allThemes.some(x => x.name === name)) name = `custom-${Date.now()}`;
+    const t: CertTheme = {
+      ...workingTheme,
+      name,
+      displayName: workingTheme.displayName?.trim() || 'Custom Theme',
+      category: 'custom',
+      published: false,
+    };
+    const next = [...customThemes.filter(x => x.name !== t.name), t];
+    setCustomThemes(next);
+    persistCustomThemes(next);
+    setSelectedTheme(t);
+    setShowDesigner(false);
+  }
+
+  function removeCustomTheme(name: string) {
+    if (!window.confirm(`Remove custom theme "${name}"?`)) return;
+    const next = customThemes.filter(t => t.name !== name);
+    setCustomThemes(next);
+    persistCustomThemes(next);
+    if (selectedTheme.name === name) setSelectedTheme(DEFAULT_THEME);
+  }
+
+  // ---- Logo position pickers --------------------------------------------------
+
+  function updateLogoPosition(side: 'left' | 'right', logo: CertLogoKey) {
+    if (showDesigner) {
+      setWorkingTheme(prev => ({
+        ...prev,
+        design: {
+          ...(prev.design || {}),
+          logoPositions: { ...(prev.design?.logoPositions || {}), [side]: logo },
+        },
+      }));
+      return;
+    }
+    setSelectedTheme(t => ({
+      ...t,
+      design: {
+        ...(t.design || {}),
+        logoPositions: { ...(t.design?.logoPositions || {}), [side]: logo },
+      },
+    }));
+  }
+
   const getSigPreview = useCallback(async (sig: CertSignatory, i: number) => {
     if (sig.signatureUrl) return sig.signatureUrl;
     if (sigPreviews[i]) return sigPreviews[i];
@@ -156,7 +303,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
           );
         }
         setQrUrls(urls);
-        setRows([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '' }]);
+        setRows([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: selectedEventId && events.find(e => e.id === selectedEventId)?.title || '', servicePeriod: '', eventId: selectedEventId }]);
       } else {
         alert(data.error || 'Failed to issue');
       }
@@ -238,28 +385,110 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
         {issued.length === 0 ? (
           <div className="space-y-4">
             <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
-              <h3 className="text-sm font-bold text-dark-text mb-3"><i className="fas fa-palette text-qsis mr-2"></i>Certificate Theme</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {themes.map(theme => (
+              <h3 className="text-sm font-bold text-dark-text mb-1"><i className="fas fa-calendar-day text-qsis mr-2"></i>Event (optional)</h3>
+              <p className="text-xs text-dark-text2 mb-3">Select an event to design its certificate collection. Certificates issued for an event are grouped under it on the club page and linked to the event design.</p>
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <select value={selectedEventId} onChange={e => selectEvent(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis">
+                  <option value="">-- No event (general certificate) --</option>
+                  {events.map(ev => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.title}{ev.eventDate ? ` — ${new Date(ev.eventDate).toLocaleDateString()}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {selectedEventId && (
+                  <div className="flex gap-2 flex-wrap">
+                    <a href={`/clubs/${slug}?event=${selectedEventId}`} target="_blank" rel="noopener noreferrer"
+                      className="px-3 py-2 bg-dark-bg3 text-dark-text border border-dark-border rounded-lg text-xs font-semibold hover:border-qsis transition no-underline">
+                      <i className="fas fa-list mr-1"></i>View Event
+                    </a>
+                    <button onClick={saveEventTheme}
+                      className="px-3 py-2 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition">
+                      <i className="fas fa-save mr-1"></i>Save Design to Event
+                    </button>
+                  </div>
+                )}
+              </div>
+              {selectedEventId && (
+                <p className="text-xs text-dark-text3 mt-2"><i className="fas fa-info-circle mr-1"></i>Recipients below are tagged to this event automatically.</p>
+              )}
+            </div>
+
+            <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h3 className="text-sm font-bold text-dark-text"><i className="fas fa-palette text-qsis mr-2"></i>Certificate Theme</h3>
+                <div className="flex gap-2">
+                  <button onClick={editCurrentTheme}
+                    className="text-xs font-semibold text-dark-text2 hover:text-qsis"><i className="fas fa-sliders-h mr-1"></i>Edit Current</button>
+                  <button onClick={startNewTheme}
+                    className="text-xs font-semibold text-qsis"><i className="fas fa-plus mr-1"></i>New Custom Theme</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {allThemes.map(theme => (
                   <button key={theme.name} onClick={() => setSelectedTheme(theme)}
-                    className={`p-3 rounded-xl border text-left transition-all text-xs ${
+                    className={`text-left rounded-xl overflow-hidden border transition-all ${
                       selectedTheme.name === theme.name
-                        ? 'border-qsis bg-qsis/10 text-qsis'
-                        : 'border-dark-border bg-dark-bg text-dark-text2 hover:border-qsis/40'
+                        ? 'border-qsis ring-1 ring-qsis/40'
+                        : 'border-dark-border hover:border-qsis/40'
                     }`}>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: `rgb(${theme.colors.primary.join(',')})` }}></div>
-                      <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: `rgb(${theme.colors.secondary.join(',')})` }}></div>
-                      <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: `rgb(${theme.colors.background.join(',')})` }}></div>
+                    <ThemePreview theme={theme} club={club} />
+                    <div className="p-2.5 bg-dark-bg">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-dark-text truncate">{theme.displayName}</span>
+                        {theme.category === 'custom' && (
+                          <button onClick={e => { e.stopPropagation(); removeCustomTheme(theme.name); }}
+                            title="Delete this custom theme"
+                            className="text-red-400 hover:text-red-300 shrink-0"><i className="fas fa-trash"></i></button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <span className={`text-[0.6rem] px-1.5 py-0.5 rounded-full border font-semibold ${categoryLabel(theme.category).cls}`}>
+                          {categoryLabel(theme.category).label}
+                        </span>
+                        <span className="text-[0.6rem] text-dark-text3 truncate">
+                          {(theme.design?.text?.subtitle || theme.title?.subtitle || '').toUpperCase()}
+                        </span>
+                      </div>
                     </div>
-                    <span className="font-semibold block">{theme.displayName}</span>
-                    {theme.publishedBy && theme.publishedBy !== 'system' && (
-                      <span className="text-[0.6rem] text-dark-text3">by {theme.publishedBy}</span>
-                    )}
                   </button>
                 ))}
               </div>
+
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-dark-bg border border-dark-border rounded-xl p-4">
+                <LogoPositionPicker label="Left seal" value={selectedTheme.design?.logoPositions?.left || 'iiuc'} onChange={v => updateLogoPosition('left', v)} />
+                <LogoPositionPicker label="Right seal" value={selectedTheme.design?.logoPositions?.right || 'club'} onChange={v => updateLogoPosition('right', v)} />
+              </div>
+              <p className="text-xs text-dark-text3 mt-2"><i className="fas fa-info-circle mr-1"></i>Many IIUC certificates carry two award seals. Choose which logo appears in each seal.</p>
             </div>
+
+            {showDesigner && (
+              <div className="bg-dark-bg2 border border-qsis/40 rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-bold text-dark-text"><i className="fas fa-paint-brush text-qsis mr-2"></i>Design Custom Theme</h3>
+                  <button onClick={() => setShowDesigner(false)} className="text-dark-text2 hover:text-dark-text text-xs"><i className="fas fa-times"></i></button>
+                </div>
+                <div className="mb-4 max-w-sm">
+                  <label className="text-[0.68rem] text-dark-text2 mb-1 block">Theme name</label>
+                  <input type="text" value={workingTheme.displayName || ''}
+                    onChange={e => setWorkingTheme(t => ({ ...t, displayName: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis"
+                    placeholder="e.g. Our Annual Tech Fest" />
+                </div>
+                <CertDesignPanel theme={workingTheme} onChange={setWorkingTheme} />
+                <div className="mt-4 flex gap-2 flex-wrap">
+                  <button onClick={saveCustomTheme}
+                    className="px-5 py-2 bg-qsis text-white rounded-lg text-sm font-bold hover:opacity-90 transition">
+                    <i className="fas fa-check mr-1"></i>Save Custom Theme
+                  </button>
+                  <button onClick={() => setShowDesigner(false)}
+                    className="px-4 py-2 bg-dark-bg3 text-dark-text border border-dark-border rounded-lg text-sm font-semibold hover:border-qsis transition">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
@@ -499,5 +728,66 @@ function SignaturePreview({ sig, index, getSigPreview }: { sig: CertSignatory; i
         <span className="text-[0.6rem] text-dark-text3 italic">No signature</span>
       )}
     </div>
+  );
+}
+
+function ThemePreview({ theme, club }: { theme: CertTheme; club: any }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const build = async () => {
+      try {
+        const data: CertPDFData = {
+          certificateId: 'IIUC-SAMPLE-0001',
+          memberName: 'Md. Abdul Karim',
+          universityId: 'Q233099',
+          department: 'CSE',
+          session: '2022-23',
+          post: '',
+          eventName: theme.category === 'event' ? 'Annual Programming Contest' : '',
+          servicePeriod: '',
+          clubName: club?.name || 'Student Club',
+          clubLogoUrl: club?.logoUrl || undefined,
+          iiucLogoUrl: '/iiuc-logo.png',
+          issuedBy: club?.name || 'Student Club',
+          issuedAt: new Date().toISOString(),
+          signatories: [],
+          theme,
+        };
+        const u = await exportCertificateImage(data, 'png', 560);
+        if (!cancelled) setUrl(u);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    };
+    build();
+    return () => { cancelled = true; };
+  }, [theme.name, club?.logoUrl, club?.name, theme.category, theme.design?.text?.subtitle, theme.colors.primary[0], theme.colors.primary[1], theme.colors.primary[2]]);
+
+  return (
+    <div className="aspect-[1.414] bg-dark-bg flex items-center justify-center overflow-hidden">
+      {failed ? (
+        <span className="text-[0.6rem] text-dark-text3">Preview unavailable</span>
+      ) : url ? (
+        <img src={url} alt={theme.displayName} className="w-full h-full object-cover" loading="lazy" />
+      ) : (
+        <i className="fas fa-spinner fa-spin text-dark-text3 text-sm"></i>
+      )}
+    </div>
+  );
+}
+
+function LogoPositionPicker({ label, value, onChange }: { label: string; value: CertLogoKey; onChange: (v: CertLogoKey) => void }) {
+  return (
+    <label className="flex items-center justify-between gap-2 text-xs text-dark-text2">
+      <span className="font-semibold whitespace-nowrap">{label}</span>
+      <select value={value} onChange={e => onChange(e.target.value as CertLogoKey)}
+        className="flex-1 max-w-[200px] px-2.5 py-1.5 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-xs outline-none focus:border-qsis">
+        <option value="iiuc">IIUC University Logo</option>
+        <option value="club">Club Logo</option>
+      </select>
+    </label>
   );
 }

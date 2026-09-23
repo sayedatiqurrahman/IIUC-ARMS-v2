@@ -16,6 +16,41 @@ function generateCertId(): string {
   return id;
 }
 
+// Every certificate recipient is treated as a member: ensure a (stub) Profile +
+// club membership exists so the person appears in the member list and their
+// certificates stay linked. Already-registered students link their real account.
+async function ensureRecipientMember(clubId: string, cert: { memberName: string; universityId: string; department: string }) {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const uniId = normalizeUniversityId(cert.universityId || '');
+    const name = cert.memberName?.trim();
+    const dept = cert.department?.trim();
+    if (!uniId || !name) return;
+
+    const existing = await prisma.profile.findFirst({ where: { universityId: uniId } });
+    if (existing) {
+      await prisma.clubMember.upsert({
+        where: { clubId_userId: { clubId, userId: existing.userId } },
+        update: {},
+        create: { clubId, userId: existing.userId, role: 'member', assignedBy: 'system' },
+      });
+      return;
+    }
+
+    const userId = `stub.uid.${uniId.toLowerCase()}`;
+    await prisma.profile.upsert({
+      where: { userId },
+      update: { name: name || undefined, department: dept || undefined, universityId: uniId },
+      create: { userId, name, department: dept || undefined, universityId: uniId },
+    });
+    await prisma.clubMember.upsert({
+      where: { clubId_userId: { clubId, userId } },
+      update: {},
+      create: { clubId, userId, role: 'member', assignedBy: 'system' },
+    });
+  } catch {}
+}
+
 async function canIssueCertificates(email: string, clubId: string): Promise<boolean> {
   const { prisma } = await import('@/lib/prisma');
   const profile = await prisma.profile.findUnique({ where: { userId: email } });
@@ -50,6 +85,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     const url = new URL(req.url);
     const search = url.searchParams.get('search');
     const universityId = url.searchParams.get('universityId');
+    const eventId = url.searchParams.get('eventId');
     const { slug } = await params;
     if (!slug) return NextResponse.json({ certificates: [] });
     const { prisma } = await import('@/lib/prisma');
@@ -57,6 +93,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     if (!club) return NextResponse.json({ certificates: [] });
 
     const where: any = { clubId: club.id };
+    if (eventId) {
+      where.eventId = eventId;
+    }
     if (search) {
       where.OR = [
         { memberName: { contains: search } },
@@ -123,6 +162,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
         },
       });
       created.push(c);
+      // Recipients become members (stub profile auto-created when needed).
+      await ensureRecipientMember(club.id, { memberName: memberName.trim(), universityId: uniId, department: department.trim() });
     }
 
     return NextResponse.json({ success: true, certificates: created, count: created.length });

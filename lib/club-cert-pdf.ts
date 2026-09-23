@@ -1,5 +1,5 @@
 import QRCode from 'qrcode';
-import { CertTheme, DEFAULT_THEME, getRoleRecognition, CertSignatory, resolveDesign } from './cert-theme';
+import { CertTheme, DEFAULT_THEME, getRoleRecognition, CertSignatory, resolveDesign, resolveLogoPositions } from './cert-theme';
 
 export interface CertPDFData {
   certificateId: string;
@@ -491,10 +491,11 @@ function fitLogoInCircle(ratio: number, photoR: number, pad: number): { w: numbe
   return { w, h };
 }
 
-async function drawSeal(p: any, t: CertTheme, logos: { iiuc?: string; club?: string }, label?: string) {
+async function drawSeal(p: any, t: CertTheme, logos: { iiuc?: string; club?: string }) {
   const green: [number, number, number] = [22, 139, 10];
   const greenDeep: [number, number, number] = [17, 110, 8];
   const r = SEAL_D / 2;
+  const pos = resolveLogoPositions(t);
 
   const drawOne = async (cx: number, url?: string, sub?: string) => {
     // Outer green ring.
@@ -534,8 +535,8 @@ async function drawSeal(p: any, t: CertTheme, logos: { iiuc?: string; club?: str
     }
   };
 
-  await drawOne(SEAL_CX_L, logos.iiuc, label || 'UNIVERSITY');
-  await drawOne(SEAL_CX_R, logos.club);
+  await drawOne(SEAL_CX_L, logos[pos.left], pos.left === 'iiuc' ? 'UNIVERSITY' : undefined);
+  await drawOne(SEAL_CX_R, logos[pos.right], pos.right === 'iiuc' ? 'UNIVERSITY' : undefined);
 }
 
 // Measure how far below the signature line the tallest block (signature names +
@@ -954,8 +955,9 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
         ctx.fillText(sub, cx, cy + r + mmPx(3.6));
       }
     };
-    await sealPx(SEAL_CX_L, data.iiucLogoUrl, 'UNIVERSITY');
-    await sealPx(SEAL_CX_R, data.clubLogoUrl);
+    const pos = resolveLogoPositions(t);
+    await sealPx(SEAL_CX_L, pos.left === 'iiuc' ? data.iiucLogoUrl : data.clubLogoUrl, pos.left === 'iiuc' ? 'UNIVERSITY' : undefined);
+    await sealPx(SEAL_CX_R, pos.right === 'iiuc' ? data.iiucLogoUrl : data.clubLogoUrl, pos.right === 'iiuc' ? 'UNIVERSITY' : undefined);
   }
 
   // ---- Header (university + department, centered, small) ----

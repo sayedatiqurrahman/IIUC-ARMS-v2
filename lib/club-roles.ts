@@ -17,6 +17,7 @@ export interface ClubDataMember {
   profileWhatsapp?: string | null;
   profileTitle?: string | null;
   profileSemester?: string | null;
+  profileUniversityId?: string | null;
 }
 
 export const CLUB_ROLES: Record<string, { label: string; group: string; color: string; icon: string; order: number }> = {

@@ -104,6 +104,8 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
 
   const [certSearch, setCertSearch] = useState('');
   const [certResults, setCertResults] = useState<any[]>([]);
+  const [allCerts, setAllCerts] = useState<any[]>([]);
+  const [certEventFilter, setCertEventFilter] = useState('');
   const [editingCert, setEditingCert] = useState<any>(null);
   const [editCertSaving, setEditCertSaving] = useState(false);
   const [certDraft, setCertDraft] = useState({ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '' });
@@ -148,6 +150,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
       const res = await fetch(`/api/clubs/${s}`);
       const data = await res.json();
       setClub(data.club);
+      loadAllCerts();
     } catch {}
     setLoading(false);
   }
@@ -360,14 +363,44 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
     e.target.value = '';
   }
 
-  async function handleCertSearch(query?: string) {
+  async function handleCertSearch(query?: string, eventId?: string) {
     const q = query !== undefined ? query : certSearch;
+    const ev = eventId !== undefined ? eventId : certEventFilter;
     try {
-      const url = q ? `/api/clubs/${slug}/certificates?search=${encodeURIComponent(q)}` : `/api/clubs/${slug}/certificates`;
+      const params = new URLSearchParams();
+      if (q) params.set('search', q);
+      if (ev) params.set('eventId', ev);
+      const qs = params.toString();
+      const url = `/api/clubs/${slug}/certificates${qs ? `?${qs}` : ''}`;
       const res = await fetch(url);
       const data = await res.json();
       setCertResults(data.certificates || []);
     } catch {}
+  }
+
+  async function loadAllCerts() {
+    try {
+      const res = await fetch(`/api/clubs/${slug}/certificates`);
+      const data = await res.json();
+      setAllCerts(data.certificates || []);
+    } catch {}
+  }
+
+  // Jump straight to the certificates of one member (by university ID or name).
+  function openMemberCertificates(m: ClubDataMember) {
+    const q = m.profileUniversityId || dn(m);
+    if (certEventFilter) setCertEventFilter('');
+    setSection('certificates');
+    setCertSearch(q);
+    handleCertSearch(q);
+  }
+
+  // Filter the certificates section by a specific event ('' clears the filter).
+  function applyCertEventFilter(evId: string) {
+    setCertEventFilter(evId);
+    setSection('certificates');
+    setCertSearch('');
+    handleCertSearch('', evId);
   }
 
   async function handleBulkDownload() {
@@ -1116,7 +1149,7 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                         </div>
                         {memberView === 'grid' ? (
                           /* ═══ GRID VIEW ═══ */
-                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {members.map((m: ClubDataMember) => {
                               const ri = CLUB_ROLES[m.role];
                               const img = memberImage(m);
@@ -1124,13 +1157,19 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                               return (
                                 <div key={`${m.userId}-${m.role}`} className="bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden hover:border-dark-border transition group">
                                   {/* Profile image */}
-                                  <div className="w-full aspect-square bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-2xl font-bold text-dark-text relative overflow-hidden">
+                                  <div className="w-full aspect-[3/2] bg-gradient-to-br from-qsis/60 to-qsis flex items-center justify-center text-2xl font-bold text-dark-text relative overflow-hidden">
                                     {img ? <img src={img} alt="" className="w-full h-full object-cover" /> : ui(m)}
                                     {m.isClubAdmin && <span className="absolute top-2 right-2 text-[0.5rem] px-1.5 py-0.5 rounded bg-qsis/90 text-dark-text font-bold">ADMIN</span>}
                                   </div>
                                   <div className="p-3">
                                     <p className="text-sm font-semibold text-dark-text truncate">{dn(m)}</p>
-                                    {m.profileDepartment && <p className="text-[0.6rem] text-dark-text2 truncate">{m.profileDepartment}</p>}
+                                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                      {m.profileDepartment && <span className="text-[0.6rem] text-dark-text2 truncate">{m.profileDepartment}</span>}
+                                      {m.profileUniversityId && (
+                                        <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-dark-bg3 text-dark-text2 font-mono"><i className="fas fa-id-card mr-0.5 text-qsis"></i>{m.profileUniversityId}</span>
+                                      )}
+                                      {m.profileSemester && <span className="text-[0.55rem] px-1.5 py-0.5 rounded bg-dark-bg3 text-dark-text2"><i className="fas fa-graduation-cap mr-0.5 text-qsis"></i>{m.profileSemester}</span>}
+                                    </div>
                                     <span className={`inline-flex items-center gap-1 text-[0.6rem] px-2 py-0.5 rounded-full border font-semibold mt-1.5 ${ROLE_BADGE[m.role] || ROLE_BADGE.member}`}>
                                       <i className={`fas ${ri?.icon || 'fa-user'}`}></i> {getRoleLabel(m.role, customClubRoles)}
                                     </span>
@@ -1162,6 +1201,10 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                         </a>
                                       )}
                                     </div>
+                                    <button onClick={() => openMemberCertificates(m)} title="View this member's certificates"
+                                      className="mt-1.5 inline-flex items-center gap-1 text-[0.6rem] text-yellow-400 hover:text-yellow-300 font-semibold transition">
+                                      <i className="fas fa-award"></i> Certificates
+                                    </button>
                                     {/* Actions */}
                                     {(canManage || m.userId === profile.email) && (
                                       <div className="flex items-center gap-1 mt-2 pt-2 border-t border-dark-border">
@@ -1228,6 +1271,10 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                                         })}
                                       </div>
                                     )}
+                                    <button onClick={() => openMemberCertificates(m)} title="View this member's certificates"
+                                      className="mt-1 inline-flex items-center gap-1 text-[0.6rem] text-yellow-400 hover:text-yellow-300 font-semibold transition no-underline">
+                                      <i className="fas fa-award"></i> Certificates
+                                    </button>
                                   </div>
                                   {/* Actions */}
                                   {(canManage || m.userId === profile.email) && (
@@ -1273,7 +1320,10 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {club.events.map((ev: any) => (
+                    {club.events.map((ev: any) => {
+                      const evCerts = (allCerts || []).filter((c: any) => c.eventId === ev.id);
+                      const evTheme = (() => { try { return ev.theme ? JSON.parse(ev.theme) : null; } catch { return null; } })();
+                      return (
                       <div key={ev.id} className="bg-dark-bg2 border border-dark-border rounded-xl overflow-hidden">
                         <div className="p-5">
                           <div className="flex items-start gap-4">
@@ -1285,7 +1335,14 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
-                              <h4 className="text-base font-bold text-dark-text">{ev.title}</h4>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-base font-bold text-dark-text">{ev.title}</h4>
+                                {evTheme && (
+                                  <span className="text-[0.6rem] px-1.5 py-0.5 rounded-full border font-semibold text-qsis bg-qsis/10 border-qsis/30">
+                                    <i className="fas fa-palette mr-0.5"></i>{evTheme.displayName}
+                                  </span>
+                                )}
+                              </div>
                               {ev.venue && <p className="text-sm text-dark-text2 mt-1"><i className="fas fa-location-dot mr-1 text-qsis"></i>{ev.venue}</p>}
                               {ev.description && <p className="text-sm text-dark-text mt-2 leading-relaxed">{ev.description}</p>}
                               {ev.eventDate && (
@@ -1296,12 +1353,43 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                               )}
                             </div>
                           </div>
+
+                          {evCerts.length > 0 && (
+                            <div className="mt-4 bg-dark-bg border border-dark-border rounded-xl p-3">
+                              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                <p className="text-xs font-bold text-yellow-400"><i className="fas fa-award mr-1"></i>{evCerts.length} certificate{evCerts.length !== 1 ? 's' : ''}</p>
+                                <button onClick={() => applyCertEventFilter(ev.id)} className="text-xs text-qsis hover:underline font-semibold">
+                                  <i className="fas fa-filter mr-0.5"></i>View all in Certificates
+                                </button>
+                              </div>
+                              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                                {evCerts.slice(0, 50).map((c: any) => (
+                                  <div key={c.id || c.certificateId} className="flex items-center gap-2 text-[0.7rem]">
+                                    <span className="font-mono text-dark-text2 shrink-0">{c.certificateId}</span>
+                                    <span className="text-dark-text truncate">{c.memberName}</span>
+                                    <span className="text-dark-text2/60 shrink-0">{c.universityId}</span>
+                                    <span className="ml-auto flex items-center gap-1.5 shrink-0">
+                                      <a href={`/clubs/preview/${c.certificateId}`} target="_blank" rel="noopener noreferrer"
+                                        className="text-qsis hover:text-qsis no-underline" title="View & verify">
+                                        <i className="fas fa-external-link-alt"></i>
+                                      </a>
+                                      <button onClick={() => downloadCertPDF(toCertPDFData(c))}
+                                        className="text-red-400 hover:text-red-300" title="Download PDF">
+                                        <i className="fas fa-file-pdf"></i>
+                                      </button>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <div className="border-t border-dark-border px-5 py-2 flex items-center gap-4 text-xs text-dark-text2">
                           <span>Posted {timeAgo(ev.createdAt)}</span>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1327,18 +1415,38 @@ export default function ClubDetailView({ params }: { params: Promise<{ slug: str
                   </div>
                 </div>
                 <div className="bg-dark-bg2 rounded-xl border border-dark-border p-4 mb-4">
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <div className="relative flex-1">
                       <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-dark-text2 text-sm"></i>
                       <input type="text" value={certSearch} onChange={e => setCertSearch(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleCertSearch()}
                         className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition"
-                        placeholder="Search by name or ID..." />
+                        placeholder="Search by name, certificate ID or university ID..." />
                     </div>
+                    {(club.events || []).length > 0 && (
+                      <select value={certEventFilter} onChange={e => applyCertEventFilter(e.target.value)}
+                        className="px-3 py-2.5 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-sm outline-none focus:border-qsis transition">
+                        <option value="">All events</option>
+                        {(club.events || []).map((ev: any) => (
+                          <option key={ev.id} value={ev.id}>{ev.title}</option>
+                        ))}
+                      </select>
+                    )}
                     <button onClick={() => handleCertSearch()} className="px-4 py-2.5 bg-qsis hover:bg-qsis/80 text-dark-text rounded-lg text-sm font-semibold transition">
                       <i className="fas fa-search"></i>
                     </button>
                   </div>
+                  {certEventFilter && (
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-xs text-qsis">
+                        <i className="fas fa-filter mr-1"></i>
+                        Showing certificates for: <span className="font-semibold">{club.events?.find((ev: any) => ev.id === certEventFilter)?.title || 'Event'}</span>
+                      </p>
+                      <button onClick={() => applyCertEventFilter('')} className="text-xs text-dark-text2 hover:text-dark-text">
+                        <i className="fas fa-times mr-0.5"></i>Clear
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {certResults.length === 0 ? (
                   <div className="bg-dark-bg2 rounded-xl border border-dark-border p-12 text-center">

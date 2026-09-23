@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
       const profiles = memberEmails.length > 0
         ? await prisma.profile.findMany({
             where: { userId: { in: memberEmails } },
-            select: { userId: true, name: true, image: true, githubAvatar: true, department: true, whatsapp: true, title: true, semester: true },
+            select: { userId: true, name: true, image: true, githubAvatar: true, department: true, whatsapp: true, title: true, semester: true, universityId: true },
           })
         : [];
       const profileMap = new Map(profiles.map((p: any) => [p.userId, p]));
@@ -48,6 +48,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
           profileWhatsapp: p?.whatsapp || null,
           profileTitle: p?.title || null,
           profileSemester: p?.semester || null,
+          profileUniversityId: p?.universityId || null,
         };
       });
 

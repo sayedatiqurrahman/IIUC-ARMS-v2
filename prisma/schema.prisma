@@ -358,6 +358,7 @@ model ClubEvent {
   description String?
   eventDate   DateTime?
   venue       String?
+  theme       String?  // JSON: CertTheme used for this event's certificates
   createdBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

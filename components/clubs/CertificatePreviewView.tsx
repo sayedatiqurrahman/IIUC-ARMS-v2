@@ -11,6 +11,7 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
   const [valid, setValid] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [viewTheme, setViewTheme] = useState<any>(null);
 
   useEffect(() => {
     params.then(p => {
@@ -30,6 +31,7 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
       setValid(data.valid);
       if (data.valid && data.certificate) {
         setCert(data.certificate);
+        setViewTheme(data.theme || DEFAULT_THEME);
         const pdfData = toCertPDFData(data.certificate);
         const url = await exportCertificateImage(pdfData, 'png', 1600);
         setPreviewUrl(url);
@@ -56,7 +58,7 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
       issuedBy: c.issuedBy || c.organization || '',
       issuedAt: c.issuedAt || new Date().toISOString(),
       signatories: Array.isArray(c.signatories) ? c.signatories : [],
-      theme: DEFAULT_THEME,
+      theme: viewTheme || DEFAULT_THEME,
     };
   }
 

@@ -55,9 +55,28 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cer
       include: { club: { select: { name: true, slug: true, department: true, logoUrl: true } } },
     });
     if (cert) {
+      // Resolve the design used for this certificate: event theme first, then
+      // the club's custom theme, otherwise the client falls back to the default.
+      let theme: any = null;
+      try {
+        if (cert.eventId) {
+          const ev = await prisma.clubEvent.findUnique({
+            where: { id: cert.eventId },
+            select: { theme: true },
+          });
+          if (ev?.theme) theme = JSON.parse(ev.theme);
+        }
+        if (!theme) {
+          const { readClubTheme } = await import('@/lib/club-data');
+          theme = await readClubTheme(cert.club.slug) || null;
+        }
+      } catch {
+        theme = null;
+      }
       return NextResponse.json({
         valid: true,
         source: 'club',
+        theme,
         certificate: {
           certificateId: cert.certificateId,
           memberName: cert.memberName,

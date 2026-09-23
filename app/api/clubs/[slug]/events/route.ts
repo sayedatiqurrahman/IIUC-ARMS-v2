@@ -51,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     }
 
     const body = await req.json();
-    const { title, description, eventDate, venue } = body;
+    const { title, description, eventDate, venue, theme } = body;
     if (!title?.trim()) return NextResponse.json({ error: 'Event title required' }, { status: 400 });
 
     const event = await prisma.clubEvent.create({
@@ -61,6 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
         description: description || null,
         eventDate: eventDate ? new Date(eventDate) : null,
         venue: venue || null,
+        theme: theme ? JSON.stringify(theme) : null,
         createdBy: email,
       },
     });
@@ -68,5 +69,42 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     return NextResponse.json({ success: true, event });
   } catch {
     return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  const rl = rateLimit(req, RATE_LIMITS.faculty);
+  if (!rl.success) return rl.response!;
+  try {
+    const email = await getUserEmail(req);
+    if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { slug } = await params;
+    const { prisma } = await import('@/lib/prisma');
+    const club = await prisma.club.findUnique({ where: { slug } });
+    if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+
+    if (!(await canManageEvents(email, club.id))) {
+      return NextResponse.json({ error: 'Not authorized to manage events' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    if (!body.id) return NextResponse.json({ error: 'Event id required' }, { status: 400 });
+
+    const data: any = {};
+    if (typeof body.title === 'string' && body.title.trim()) data.title = body.title.trim();
+    if (typeof body.description === 'string') data.description = body.description || null;
+    if (body.eventDate !== undefined) data.eventDate = body.eventDate ? new Date(body.eventDate) : null;
+    if (typeof body.venue === 'string') data.venue = body.venue || null;
+    if (body.theme !== undefined) data.theme = body.theme ? JSON.stringify(body.theme) : null;
+
+    const event = await prisma.clubEvent.update({
+      where: { id: body.id },
+      data,
+    });
+
+    return NextResponse.json({ success: true, event });
+  } catch {
+    return NextResponse.json({ error: 'Failed to update event' }, { status: 500 });
   }
 }
