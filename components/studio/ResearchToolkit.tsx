@@ -5,13 +5,12 @@ import CitationGenerator from './research/CitationGenerator';
 import Glossary from './research/Glossary';
 import Summarizer from './research/Summarizer';
 import FrequencyAnalyzer from './research/FrequencyAnalyzer';
-import OutlineGenerator from './research/OutlineGenerator';
 import AuthorNameConverter from './research/AuthorNameConverter';
 import Plagiarism from './research/Plagiarism';
 import AIHumanizer from './research/AIHumanizer';
 import FileVerify from './research/FileVerify';
 import CiteCheck from './research/CiteCheck';
-import PaperFormatter from './research/PaperFormatter';
+import OutlineFormatter from './research/OutlineFormatter';
 import { LocaleProvider, useLocale } from './research/locale';
 
 interface ToolDef {
@@ -29,10 +28,9 @@ const TOOLS: ToolDef[] = [
   { id: 'citecheck', label: 'Citation Verifier', ar: 'مدقق الاستشهادات', icon: 'verified', blurb: 'Paste a citation and check its style, author, year, journal, pages, DOI/URL — bilingual.', component: CiteCheck },
   { id: 'aidetect', label: 'AI Detector & Humanizer', ar: 'كشف الذكاء الاصطناعي وتحسين الصياغة', icon: 'science', blurb: 'Quillbot-style: per-sentence likelihood scan with color-marked sentences, then rewrite suggestions for every flagged sentence.', component: AIHumanizer, tag: 'heuristic' },
   { id: 'doccheck', label: 'Document Verifier', ar: 'فحص مستند كامل', icon: 'folder_open', blurb: 'Upload .docx / .pdf / .txt and verify the WHOLE file at once — stats, AI scan, rewrites and repeats. Read locally, never uploaded.', component: FileVerify, tag: 'local' },
-  { id: 'formats', label: 'Paper & Thesis Formatter', ar: 'تنسيق البحوث والرسائل', icon: 'article', blurb: 'Section-by-section roadmap and rules for APA / MLA / Chicago / IEEE papers and theses — English and Arabic.', component: PaperFormatter },
+  { id: 'formats', label: 'Outline & Formatter', ar: 'خريطة البحث والتنسيق', icon: 'article', blurb: 'Combined: research/dissertation outline (Standard or Thesis) with content bullets + APA / MLA / Chicago / IEEE / Arabic formatting rules, English & Arabic.', component: OutlineFormatter },
   { id: 'summarizer', label: 'Summarizer & Extractive Paraphrase', ar: 'مُلخّص النصوص', icon: 'summarize', blurb: 'Extractive sentence scoring for English and Arabic. Choose your target length.', component: Summarizer },
   { id: 'analyzer', label: 'Frequency Analyzer', ar: 'محلّل التكرار', icon: 'monitoring', blurb: 'Word & character counts, top frequency, bigrams, reading time and lexical density.', component: FrequencyAnalyzer },
-  { id: 'outline', label: 'Outline Generator', ar: 'خريطة البحث', icon: 'account_tree', blurb: 'Standard and dissertation structures with English + Arabic headings in one click.', component: OutlineGenerator },
   { id: 'authors', label: 'Author Name Converter', ar: 'محوّل أسماء المؤلفين', icon: 'badge', blurb: 'Turn names into “Last, F. M.” citation form and produce the Arabic script.', component: AuthorNameConverter },
   { id: 'glossary', label: 'Bilingual Glossary', ar: 'قاموس أكاديمي', icon: 'menu_book', blurb: '150+ English ↔ Arabic academic terms in research methods, statistics, writing and publishing.', component: Glossary },
   { id: 'plagiarism', label: 'Plagiarism Checker (offline)', ar: 'كاشف الاستنساخ', icon: 'fact_check', blurb: 'Finds duplicated phrases inside your draft and overlap between two drafts. No internet scan.', component: Plagiarism, tag: 'offline' },

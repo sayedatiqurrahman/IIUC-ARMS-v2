@@ -173,6 +173,9 @@ async function getNoticesToken(): Promise<string | null> {
   return process.env.GITHUB_TOKEN || null;
 }
 
+// Alias exported so cron jobs can reuse the same token resolution.
+export { getNoticesToken };
+
 /** Check if a notice has expired based on its expiresAt field. */
 export function isNoticeExpired(notice: Notice): boolean {
   if (!notice.expiresAt) return false;
@@ -301,9 +304,13 @@ export async function removeExpiredNotices(
   const alive = notices.filter(n => !isNoticeExpired(n));
   const removed = before - alive.length;
   if (removed > 0) {
-    // Delete attachments of expired notices from GitHub
+    // Delete attachments of expired notices from GitHub (log failures, keep going)
     for (const notice of expired) {
-      await deleteNoticeAttachments(notice, token, author).catch(() => {});
+      try {
+        await deleteNoticeAttachments(notice, token, author);
+      } catch (e: any) {
+        console.error(`[notices] attachment delete failed for "${notice.title}":`, e?.message);
+      }
     }
     await writeNoticesIndex(alive, token, `notice: auto-delete ${removed} expired notice(s)`, author);
   }

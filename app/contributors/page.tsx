@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
 import ContributorsView from '@/components/contributors';
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
+
 export const metadata: Metadata = {
   title: 'Contributors — IIUC-ARMS',
   description: 'Meet the developers and contributors behind IIUC-ARMS — the open-source academic resource and research management system for IIUC.',
   keywords: ['IIUC-ARMS contributors', 'IIUC developers', 'IIUC open source', 'academic platform contributors'],
+  alternates: { canonical: `${siteUrl}/contributors` },
   openGraph: {
     title: 'IIUC-ARMS Contributors',
     description: 'Developers and resource providers who built the IIUC academic platform.',

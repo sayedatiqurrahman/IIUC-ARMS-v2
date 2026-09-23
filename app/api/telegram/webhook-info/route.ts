@@ -53,7 +53,8 @@ export async function GET(req: NextRequest) {
 
     const host = req.headers.get('host') || 'arms.iiuc.net';
     const protocol = req.headers.get('x-forwarded-proto') || 'https';
-    const siteUrl = `${protocol}://${host}`;
+    const requestUrl = `${protocol}://${host}`;
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net').replace(/\/+$/, '');
     const setupUrl = `${siteUrl}/api/telegram/setup?key=${webhookSecret}`;
 
     return NextResponse.json({
@@ -67,10 +68,12 @@ export async function GET(req: NextRequest) {
         lastErrorMessage: whInfo.result.last_error_message,
         maxConnections: whInfo.result.max_connections,
       } : null,
+      expectedWebhookUrl: `${siteUrl}/api/telegram/webhook`,
       webhookSecret: webhookSecret ? `${webhookSecret.substring(0, 4)}${'*'.repeat(webhookSecret.length - 4)}` : null,
       webhookSecretRaw: webhookSecret,
       setupUrl,
-      siteUrl,
+      siteUrl: requestUrl,
+      canonicalSiteUrl: siteUrl,
       dbColumns: dbStatus,
       allColumnsExist: Object.values(dbStatus).every(Boolean),
     });

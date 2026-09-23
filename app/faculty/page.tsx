@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
 import FacultyView from '@/components/views/FacultyView';
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
+
 export const metadata: Metadata = {
   title: 'Faculty & Staff Directory — IIUC-ARMS',
   description: 'Browse faculty members, teachers, and staff across all departments at IIUC. Find contact info, designations, and department details.',
   keywords: ['IIUC faculty', 'IIUC teachers', 'IIUC staff', 'IIUC department staff', 'IIUC-ARMS faculty directory'],
+  alternates: { canonical: `${siteUrl}/faculty` },
   openGraph: {
     title: 'IIUC-ARMS Faculty & Staff Directory',
     description: 'Browse faculty members and staff across all IIUC departments.',

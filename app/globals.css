@@ -180,6 +180,13 @@ button { font-family: inherit; }
 .viewer-overlay.active { display:flex; }
 .viewer-container { background:#111827; width:100%; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 
+/* PDF viewer fullscreen: hide the app toolbar, keep a floating close button. */
+.pdf-viewer-root:fullscreen { background:#0a0f1e; }
+.pdf-viewer-root:fullscreen .pdf-toolbar { display:none; }
+.pdf-viewer-root:fullscreen::backdrop { background:#000; }
+.pdf-overlay-close { position:absolute; top:0.75rem; right:0.75rem; z-index:40; }
+.pdf-overlay-close:hover { background:rgba(220,38,38,.85) !important; }
+
 .toast { position:fixed; bottom:20px; right:20px; padding:12px 20px; border-radius:12px; color:white; font-weight:600; font-size:0.85rem; z-index:2000; transform:translateY(100px); opacity:0; transition:all .3s; }
 .toast.show { transform:translateY(0); opacity:1; }
 .toast.success { background:#22c55e; }

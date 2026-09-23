@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { removeExpiredNotices } from '@/lib/notices';
+import { removeExpiredNotices, getNoticesToken } from '@/lib/notices';
+
+export const maxDuration = 30;
 
 /** POST /api/notices/cleanup — remove expired notices from the index. */
 export async function POST(req: NextRequest) {
@@ -11,7 +13,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const token = process.env.GITHUB_TOKEN || '';
+    const token = (await getNoticesToken()) || '';
     if (!token) return NextResponse.json({ error: 'No GitHub token configured' }, { status: 500 });
 
     const removed = await removeExpiredNotices(token, { name: 'IIUC-ARMS Cron', email: 'bot@iiuc-arms.eu.cc' });

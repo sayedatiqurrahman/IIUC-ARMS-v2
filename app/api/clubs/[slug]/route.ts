@@ -3,6 +3,7 @@ import { getUserEmail } from '@/lib/get-user';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { config } from '@/lib/config';
 import { hasPermission } from '@/lib/permissions';
+import { readClubConfig } from '@/lib/club-data';
 
 async function isClubOfficer(email: string, clubId: string): Promise<{ allowed: boolean; role?: string }> {
   const { prisma } = await import('@/lib/prisma');
@@ -12,25 +13,74 @@ async function isClubOfficer(email: string, clubId: string): Promise<{ allowed: 
   return { allowed: officerRoles.includes(member.role), role: member.role };
 }
 
+// Clubs live in both the DB and the clubs/<slug>/config.json folder in the repo.
+// Creation initialises the repo folder async, but the DB row can be missing if
+// that step raced or the club existed before the DB was wired up. When the DB
+// misses, hydrate from config.json so the club page still works (and seed the DB
+// row opportunistically so it shows up in listings afterwards).
+async function resolveClubRow(slug: string) {
+  const { prisma } = await import('@/lib/prisma');
+  const found = await prisma.club.findUnique({ where: { slug } });
+  if (found) return { club: found, seeded: false };
+
+  const cfg = await readClubConfig(slug);
+  if (!cfg) return { club: null, seeded: false };
+
+  let created: any = null;
+  try {
+    created = await prisma.club.create({
+      data: {
+        name: cfg.name || slug.replace(/-/g, ' '),
+        slug,
+        department: cfg.department || '',
+        description: cfg.description || null,
+        logoUrl: cfg.logoUrl || null,
+        coverUrl: cfg.coverUrl || null,
+        createdBy: cfg.createdBy || 'system',
+      },
+    });
+  } catch {
+    // Concurrent create/lookup race — try the read once more.
+    created = await prisma.club.findUnique({ where: { slug } });
+  }
+  return { club: created, seeded: true };
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const rl = rateLimit(_req, RATE_LIMITS.faculty);
   if (!rl.success) return rl.response!;
   try {
-    const { slug } = await params;
+    let { slug } = await params;
     if (!slug) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+    slug = decodeURIComponent(slug).trim().toLowerCase();
+    const { club, seeded } = await resolveClubRow(slug);
+    if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
     const { prisma } = await import('@/lib/prisma');
-      const club = await prisma.club.findUnique({
-        where: { slug },
-        include: {
-          members: { orderBy: { createdAt: 'asc' } },
-          events: { orderBy: { eventDate: 'desc' }, take: 20 },
-          _count: { select: { members: true, events: true, certificates: true } },
-        },
-      });
-      if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+
+      const clubData = seeded
+        ? club
+        : await prisma.club.findUnique({
+            where: { slug },
+            include: {
+              members: { orderBy: { createdAt: 'asc' } },
+              events: { orderBy: { eventDate: 'desc' }, take: 20 },
+              _count: { select: { members: true, events: true, certificates: true } },
+            },
+          });
+      if (!clubData) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+
+      // A club seeded from repo config.json has no member/event rows yet — mirror
+      // the repo's members.json/events.json so the page isn't blank.
+      let members = (clubData as any).members || [];
+      let events = (clubData as any).events || [];
+      if (seeded) {
+        const { readClubMembers, readClubEvents } = await import('@/lib/club-data');
+        members = await readClubMembers(slug);
+        events = await readClubEvents(slug);
+      }
 
       // Enrich members with Profile data (name, image, department, contact)
-      const memberEmails = (club.members || []).map((m: any) => m.userId);
+      const memberEmails = (members || []).map((m: any) => m.userId || m.email || '').filter(Boolean);
       const profiles = memberEmails.length > 0
         ? await prisma.profile.findMany({
             where: { userId: { in: memberEmails } },
@@ -38,8 +88,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
           })
         : [];
       const profileMap = new Map(profiles.map((p: any) => [p.userId, p]));
-      const enrichedMembers = (club.members || []).map((m: any) => {
-        const p = profileMap.get(m.userId);
+      const enrichedMembers = (members || []).map((m: any) => {
+        const p = profileMap.get(m.userId || m.email);
         return {
           ...m,
           profileName: p?.name || null,
@@ -52,7 +102,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
         };
       });
 
-      return NextResponse.json({ club: { ...club, members: enrichedMembers } });
+      return NextResponse.json({ club: { ...clubData, members: enrichedMembers, events, seeded } });
   } catch {
     return NextResponse.json({ error: 'Club not found' }, { status: 404 });
   }

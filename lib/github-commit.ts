@@ -46,7 +46,7 @@ export async function ghPut(url: string, token: string, body: any) {
 // Returns the commit SHA on success, or throws with a short reason string.
 export async function commitFilesToBranch(opts: CommitFilesOptions): Promise<string> {
   const { token, owner, repo, branch, baseSha, files, message } = opts;
-  if (files.length === 0) throw new Error('no-files');
+  if (files.length === 0 && !(opts.deletePaths && opts.deletePaths.length > 0)) throw new Error('no-files');
   const identityPayload = opts.author ? { author: opts.author, committer: opts.committer || opts.author } : {};
 
   // 1. Create a blob for each file in parallel

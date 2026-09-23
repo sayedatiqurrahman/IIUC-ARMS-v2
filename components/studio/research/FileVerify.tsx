@@ -6,6 +6,8 @@ import { analyzeText } from '@/lib/research/analyzer';
 import { assessAILikeness } from '@/lib/research/ai-detect';
 import { humanizeReport } from '@/lib/research/humanize';
 import { findMatchesIn } from '@/lib/research/plagiarism';
+import { demoResult } from '@/lib/research/demo-data';
+import { downloadDocxReport } from '@/lib/research/report-docx';
 import { useLocale } from './locale';
 import { Btn, CopyButton, Note, outBoxCls } from './ui';
 
@@ -16,6 +18,7 @@ export default function FileVerify() {
   const isAr = lang === 'ar';
   const [extracted, setExtracted] = useState<ExtractResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<Tab>('overview');
   const [drag, setDrag] = useState(false);
@@ -33,8 +36,9 @@ export default function FileVerify() {
   const onFile = async (f: File) => {
     setError('');
     setBusy(true);
+    setProgress(0);
     try {
-      const res = await extractTextFromFile(f);
+      const res = await extractTextFromFile(f, (p) => setProgress(p));
       setExtracted(res);
       setTab('overview');
     } catch (e: any) {
@@ -42,6 +46,46 @@ export default function FileVerify() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const loadDemo = () => {
+    setError('');
+    const d = demoResult();
+    setExtracted({ ...d, ocrUsed: false });
+    setTab('overview');
+  };
+
+  const exportDocx = async () => {
+    if (!extracted || !analysis) return;
+    const aiColor = (s: number) => (s <= 35 ? '#22c55e' : s < 62 ? '#facc15' : '#ef4444');
+    await downloadDocxReport({
+      fileName: extracted.fileName,
+      aiScore: analysis.ai.score,
+      aiLabel: analysis.ai.label,
+      aiColor: aiColor(analysis.ai.score),
+      overview: [
+        { label: isAr ? 'الجمل' : 'Sentences', value: String(analysis.stats.sentences) },
+        { label: isAr ? 'الكلمات' : 'Words', value: String(analysis.stats.words) },
+        { label: isAr ? 'الكثافة المعجمية' : 'Lexical density', value: `${Math.round(analysis.stats.ttr * 100)}%` },
+        { label: isAr ? 'التكرار' : 'Repetition', value: `${analysis.repeats.repeatPercent.toFixed(1)}%` },
+      ],
+      sentences: analysis.ai.sentences.map((s) => ({
+        text: s.sentence,
+        score: s.score,
+        color: aiColor(s.score),
+        label: s.label,
+        hits: s.hits || [],
+      })),
+      rewrites: analysis.human.sentences.map((s) => ({ original: s.original, alternatives: s.alternatives })),
+      repeats: {
+        percent: analysis.repeats.repeatPercent,
+        totalRepeatWords: analysis.repeats.totalRepeatWords,
+        totalWords: analysis.repeats.totalWords,
+        hits: analysis.repeats.hits,
+      },
+      text: extracted.text,
+      lang: isAr ? 'ar' : 'en',
+    });
   };
 
   const tabs: Array<{ id: Tab; label: string }> = [
@@ -55,7 +99,7 @@ export default function FileVerify() {
 
   return (
     <div className="space-y-4">
-      <div
+      <label
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => {
@@ -64,8 +108,18 @@ export default function FileVerify() {
           const f = e.dataTransfer.files?.[0];
           if (f) onFile(f);
         }}
-        className={`rounded-2xl border-2 border-dashed p-8 text-center transition ${drag ? 'border-qsis bg-qsis/10' : 'border-dark-border bg-dark-bg2/50'}`}
+        className={`block rounded-2xl border-2 border-dashed p-8 text-center transition cursor-pointer ${drag ? 'border-qsis bg-qsis/10' : 'border-dark-border bg-dark-bg2/50 hover:border-qsis/50'}`}
       >
+        <input
+          type="file"
+          accept=".txt,.md,.docx,.pdf"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onFile(f);
+            e.target.value = '';
+          }}
+        />
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-qsis/15 text-qsis">
           <span className="material-symbols-outlined text-2xl">folder_open</span>
         </div>
@@ -75,24 +129,12 @@ export default function FileVerify() {
         <p className="mt-1 text-[0.68rem] text-dark-text3">
           {isAr ? '.docx / .pdf / .txt — لا يُرفع شيء إلى أي خادم' : '.docx / .pdf / .txt — nothing is uploaded to any server'}
         </p>
-        <label className="mt-4 inline-block cursor-pointer">
-          <span className="rounded-xl bg-qsis px-4 py-2 text-[0.78rem] font-semibold text-white transition hover:brightness-110">
-            {isAr ? 'اختيار ملف' : 'Choose a file'}
-          </span>
-          <input
-            type="file"
-            accept=".txt,.md,.docx,.pdf"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onFile(f);
-              e.target.value = '';
-            }}
-          />
-        </label>
-        {busy && <p className="mt-3 text-[0.7rem] text-qsis">{isAr ? 'جارٍ استخراج النص…' : 'Extracting text…'}</p>}
+        <span className="mt-4 inline-block rounded-xl bg-qsis px-4 py-2 text-[0.78rem] font-semibold text-white transition hover:brightness-110">
+          {isAr ? 'اختيار ملف' : 'Choose a file'}
+        </span>
+        {busy && <p className="mt-3 text-[0.7rem] text-qsis">{isAr ? 'جارٍ استخراج النص…' : 'Extracting text…'} {progress > 0 && Math.round(progress * 100) + '%'}</p>}
         {error && <p className="mt-3 text-[0.7rem] text-red-400">{error}</p>}
-      </div>
+      </label>
 
       {extracted && analysis && (
         <>
@@ -108,7 +150,14 @@ export default function FileVerify() {
                 </button>
               ))}
             </div>
-            <span className="text-[0.68rem] text-dark-text3">{extracted.fileName} · {extracted.words} {isAr ? 'كلمة' : 'words'}</span>
+            <span className="text-[0.68rem] text-dark-text3">
+              {extracted.fileName} · {extracted.words} {isAr ? 'كلمة' : 'words'}
+              {extracted.ocrUsed && (
+                <span className="ml-1.5 rounded-full bg-qsis/15 border border-qsis/30 px-1.5 py-0.5 text-qsis">
+                  {isAr ? 'تعرف ضوئي (OCR)' : 'OCR'}
+                </span>
+              )}
+            </span>
           </div>
 
           {tab === 'overview' && (
@@ -214,17 +263,29 @@ export default function FileVerify() {
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <Btn variant="ghost" onClick={() => setExtracted(null)}>{isAr ? 'ملف آخر' : 'Another file'}</Btn>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Btn variant="ghost" onClick={() => setExtracted(null)}>{isAr ? 'ملف آخر' : 'Another file'}</Btn>
+              <Btn variant="ghost" onClick={exportDocx}>
+                <i className="material-symbols-outlined align-middle text-sm">download</i>{' '}
+                {isAr ? 'تحميل التقرير (.docx)' : 'Download report (.docx)'}
+              </Btn>
+            </div>
             <CopyButton label={isAr ? 'نسخ النص' : 'Copy text'} text={extracted.text} />
           </div>
         </>
       )}
 
+      {!extracted && (
+        <div className="flex justify-end">
+          <Btn variant="ghost" onClick={loadDemo}>{isAr ? 'جرّب بيانات تجريبية' : 'Try demo data'}</Btn>
+        </div>
+      )}
+
       <Note>
         {isAr
-          ? 'يُستخرج النص داخل متصفحك فقط ثم تُجرى كل الفحوصات محليا. الملفات الممسوحة ضوئيا (صور داخل PDF) تحتاج إلى OCR ولا يدعمها هذا الاستخراج.'
-          : 'Text is extracted and analysed entirely in your browser. Scanned/image-only PDFs need OCR and are not supported by this extractor.'}
+          ? 'يُستخرج النص داخل متصفحك فقط ثم تُجرى كل الفحوصات محليا. الملفات الممسوحة ضوئيا تُقرأ تلقائيا عبر OCR على الجهاز.'
+          : 'Text is extracted and analysed entirely in your browser. Scanned/image-only PDFs are now read automatically via on-device OCR.'}
       </Note>
     </div>
   );

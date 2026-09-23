@@ -22,9 +22,10 @@ export async function GET(req: NextRequest) {
   }
 
   const API = `https://api.telegram.org/bot${token}`;
-  const host = req.headers.get('host') || '';
-  const protocol = req.headers.get('x-forwarded-proto') || 'https';
-  const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
+  // Pin the webhook to the canonical site URL so re-registration never points
+  // Telegram at a preview/vercel.app/apex URL that doesn't answer this bot.
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net').replace(/\/+$/, '');
+  const webhookUrl = `${siteUrl}/api/telegram/webhook`;
 
   try {
     // 0. Verify bot is connected

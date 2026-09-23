@@ -72,6 +72,18 @@ export const PAPER_GUIDES: PaperFormatGuide[] = [
     ],
   },
   {
+    id: 'chicago',
+    name: 'Research Paper — Chicago',
+    nameAr: 'بحث علمي — شيكاغو',
+    sections: ENGLISH_SECTIONS,
+    rules: [
+      { en: 'Two systems: Notes-Bibliography (humanities) or Author-Date (sciences).', ar: 'نظامان: الحواشي وقائمة المصادر، أو المؤلف-التاريخ.' },
+      { en: 'Footnotes/endnotes numbered with superscript; full citation on first use.', ar: 'حواشي سفلية مرقمة؛ توثيق كامل عند أول ورود.' },
+      { en: 'Bibliography entries are single-spaced with hanging indent.', ar: 'قائمة المصادر بتباعد مفرد مع تعليق السطر الأول.' },
+      { en: 'Title page style follows your department (no running head in Chicago).', ar: 'صفحة العنوان حسب قسمك (بلا ترويسة في شيكاغو).' },
+    ],
+  },
+  {
     id: 'thesis',
     name: 'Thesis / Dissertation',
     nameAr: 'رسالة علمية',

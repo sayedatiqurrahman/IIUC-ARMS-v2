@@ -10,6 +10,17 @@ const DEFAULT_NOTICE_TTL_DAYS = 183;
 
 export async function GET() {
   let notices = await readNoticesIndex();
+  // Self-heal: purge expired entries (fire-and-forget so reads stay fast).
+  const expired = notices.some(n => isNoticeExpired(n));
+  if (expired) {
+    try {
+      const { getNoticesToken, removeExpiredNotices } = await import('@/lib/notices');
+      const token = await getNoticesToken();
+      if (token) {
+        removeExpiredNotices(token, { name: 'IIUC-ARMS Cron', email: 'cron@iiuc-arms.eu.cc' }).catch(() => {});
+      }
+    } catch {}
+  }
   // Filter out expired and scheduled (not yet published) notices
   notices = notices.filter(n => !isNoticeExpired(n) && n.status !== 'scheduled');
   return NextResponse.json({ success: true, notices });

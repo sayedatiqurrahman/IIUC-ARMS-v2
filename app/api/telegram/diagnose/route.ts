@@ -27,7 +27,12 @@ export async function GET(req: NextRequest) {
 
   const host = req.headers.get('host') || '';
   const proto = req.headers.get('x-forwarded-proto') || 'https';
-  out.expectedWebhookUrl = `${proto}://${host}/api/telegram/webhook`;
+  const expectedWebhookUrl = `${proto}://${host}/api/telegram/webhook`;
+  // Canonical target: the webhook MUST live on the production site URL.
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net').replace(/\/+$/, '');
+  const canonicalWebhookUrl = `${siteUrl}/api/telegram/webhook`;
+  out.expectedWebhookUrl = expectedWebhookUrl;
+  out.canonicalWebhookUrl = canonicalWebhookUrl;
 
   if (token) {
     const infoRes = await fetch(`${API}/getWebhookInfo`).catch(() => null);
@@ -47,6 +52,7 @@ export async function GET(req: NextRequest) {
     out.checks = {
       webhookRegistered: Boolean(wi.url),
       urlMatchesThisDeployment: wi.url === out.expectedWebhookUrl,
+      urlMatchesCanonical: wi.url === out.canonicalWebhookUrl,
       lastError: wi.last_error_message || null,
       lastErrorDate: wi.last_error_date ? new Date(wi.last_error_date * 1000).toISOString() : null,
       lastOkConnection: wi.last_successful_connection ? new Date(wi.last_successful_connection * 1000).toISOString() : null,
@@ -58,8 +64,8 @@ export async function GET(req: NextRequest) {
       out.verdict = 'Webhook is NOT registered. Visit /api/telegram/setup?key=<secret> to register it.';
     } else if (wi.last_error_message) {
       out.verdict = `Telegram last failed to deliver an update (${wi.last_error_message}). Usually a secret_token mismatch — re-run /api/telegram/setup?key=<secret> after confirming TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_WEBHOOK_SECRET are set.`;
-    } else if (wi.url !== out.expectedWebhookUrl) {
-      out.verdict = 'Webhook points at a different URL. Re-run /api/telegram/setup?key=<secret> on the current deployment.';
+    } else if (wi.url !== out.canonicalWebhookUrl) {
+      out.verdict = `Webhook points at the wrong URL (${wi.url}). It must be ${out.canonicalWebhookUrl} — re-run /api/telegram/setup?key=<secret> on the production deployment to re-register it.`;
     } else {
       out.verdict = 'Webhook looks healthy. If the bot still does not reply, check Vercel function logs for the [TG] Webhook received lines.';
     }

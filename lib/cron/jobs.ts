@@ -8,8 +8,8 @@ export interface CronJob extends CronJobMeta {
 // ─── Job implementations ─────────────────────────────────────────
 
 async function runNoticeCleanup() {
-  const { removeExpiredNotices } = await import('@/lib/notices');
-  const token = process.env.GITHUB_TOKEN || '';
+  const { removeExpiredNotices, getNoticesToken } = await import('@/lib/notices');
+  const token = (await getNoticesToken()) || '';
   if (!token) return { success: false, message: 'No GitHub token configured' };
   const removed = await removeExpiredNotices(token, { name: 'IIUC-ARMS Cron', email: 'cron@iiuc-arms.eu.cc' });
   return { success: true, message: `Removed ${removed} expired notice(s)`, details: removed > 0 ? undefined : 'No expired notices found' };

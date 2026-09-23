@@ -24,29 +24,50 @@ export interface ExtractResult {
   paragraphs: number;
   words: number;
   chars: number;
+  ocrUsed?: boolean;
 }
 
 function countWords(text: string): number {
   return text.split(/[\s.,;:!؟؟\u060C\u061B]+/).filter(Boolean).length;
 }
 
-export async function extractTextFromFile(file: File): Promise<ExtractResult> {
+export async function extractTextFromFile(file: File, onProgress?: (p: number) => void): Promise<ExtractResult> {
   const kind = detectFileKind(file.name);
   let text = '';
+  let ocrUsed = false;
 
   if (kind === 'text') {
     text = await file.text();
   } else if (kind === 'docx') {
     text = await extractDocx(file);
   } else if (kind === 'pdf') {
-    text = await extractPdfText(file);
+    try {
+      text = await extractPdfText(file);
+      if (onProgress) onProgress(0.4);
+    } catch {
+      text = '';
+    }
+    if (text.trim().length < 40) {
+      // Text-based extraction found nothing — it's likely a scanned/image-only
+      // PDF. Rasterize the pages and run on-device OCR (tesseract).
+      try {
+        if (onProgress) onProgress(0.5);
+        const ocrText = await extractPdfViaOcr(file, (p) => onProgress && onProgress(0.5 + p * 0.5));
+        if (ocrText.trim().length > 10) {
+          text = ocrText;
+          ocrUsed = true;
+        }
+      } catch {
+        // OCR failed too — keep whatever quick text we found.
+      }
+    }
   } else {
     throw new Error(`Unsupported file type “${file.name}”. Please upload .txt, .docx or a text-based .pdf.`);
   }
 
   text = text.replace(/\r\n/g, '\n').trim();
   if (!text) {
-    throw new Error(`No readable text found in “${file.name}”. It may be a scanned/ image-only file — export it as digital text first.`);
+    throw new Error(`No readable text found in “${file.name}”. It looks like a scanned/image-only document — OCR could not read it either. Try a higher-quality scan or export it as digital text first.`);
   }
 
   return {
@@ -56,7 +77,37 @@ export async function extractTextFromFile(file: File): Promise<ExtractResult> {
     paragraphs: text.split(/\n\s*\n/).filter((p) => p.trim()).length || 1,
     words: countWords(text),
     chars: text.length,
+    ocrUsed,
   };
+}
+
+async function extractPdfViaOcr(file: File, onProgress?: (p: number) => void): Promise<string> {
+  const [{ getDocument, GlobalWorkerOptions }, { ocrImage }] = await Promise.all([
+    import('pdfjs-dist'),
+    import('@/lib/ocr'),
+  ]);
+  if (!GlobalWorkerOptions.workerSrc) GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await getDocument({ data }).promise;
+  const parts: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    if (onProgress) onProgress((i - 1) / pdf.numPages);
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) continue;
+    // pdf.js v4+: canvasContext expects a Canvas-like object; pako-free render.
+    await page.render({ canvasContext: ctx, viewport } as any).promise;
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) continue;
+    const { text: pageText } = await ocrImage(blob);
+    if (pageText.trim()) parts.push(pageText.trim());
+  }
+  await (pdf as any).destroy?.();
+  return parts.join('\n\n');
 }
 
 async function extractDocx(file: File): Promise<string> {

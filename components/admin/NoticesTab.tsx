@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Notice, NoticeCategory, MainNoticeCategory } from '@/lib/notices';
 import { CATEGORY_META, MAIN_CATEGORY_META, SUBCATEGORIES_FOR_MAIN, mainCategoryOf } from '@/lib/notices';
 import NoticePublishModal, { type NoticePublishOptions } from '@/components/notices/NoticePublishModal';
+import { showToast } from '@/lib/utils';
 
 const MAIN_CATEGORIES = Object.keys(MAIN_CATEGORY_META) as MainNoticeCategory[];
 
@@ -149,13 +150,21 @@ export default function NoticesTab() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this notice?')) return;
     try {
-      await fetch('/api/notices', {
+      const res = await fetch('/api/notices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete', id }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        showToast(data.error || 'Failed to delete notice', 'error');
+        return;
+      }
+      showToast('Notice deleted', 'success');
       fetchNotices();
-    } catch {}
+    } catch {
+      showToast('Failed to delete notice — check your connection', 'error');
+    }
   };
 
   const formatDate = (d: string) => {

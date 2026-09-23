@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import Script from 'next/script';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import Providers from '@/components/Providers';
@@ -72,9 +71,6 @@ export const metadata: Metadata = {
     shortcut: `${siteUrl}/icon-48.png`,
   },
   manifest: '/manifest.json',
-  alternates: {
-    canonical: siteUrl,
-  },
   category: 'education',
 };
 
@@ -105,10 +101,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
-        <link rel="icon" type="image/x-icon" href={`${siteUrl}/favicon.ico`} />
-        <link rel="icon" type="image/png" sizes="32x32" href={`${siteUrl}/icon-32.png`} />
-        <link rel="icon" type="image/png" sizes="48x48" href={`${siteUrl}/icon-48.png`} />
-        <link rel="apple-touch-icon" sizes="180x180" href={`${siteUrl}/apple-touch-icon.png`} />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -119,6 +111,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="google-site-verification" content="XgkbMrbzPfBjc-INVUQNQlSv53Ik2Gq04rrYb88aS9o" />
         <meta name="google-site-verification" content="UDIdn7-WixkkceHoeYWJZ_5epOeBWOBKOQ1dDmrjy9U" />
         <meta name="msvalidate.01" content="DD448DBC883F1B6109FDB70D65A3BB56" />
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-HW4QNEHD8B" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-HW4QNEHD8B');`,
+          }}
+        />
+        <script src="https://app.secureprivacy.ai/script/6ab3deb214671a86a0100bb8.js" async />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(c,l,a,r,i,t,y){
+  c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+  t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+  y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+})(window, document, "clarity", "script", "ymthdw3fw7");`,
+          }}
+        />
         <script type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
@@ -178,13 +189,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen" suppressHydrationWarning>
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-HW4QNEHD8B" strategy="afterInteractive" />
-        <Script id="ga-init" strategy="afterInteractive">{`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', 'G-HW4QNEHD8B');
-        `}</Script>
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
         <Providers>
           <AppShell>{children}</AppShell>

@@ -11,6 +11,8 @@ export async function GET(req: NextRequest) {
   const host = req.headers.get('host') || '';
   const proto = req.headers.get('x-forwarded-proto') || 'https';
   const expectedWebhookUrl = `${proto}://${host}/api/telegram/webhook`;
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net').replace(/\/+$/, '');
+  const canonicalWebhookUrl = `${siteUrl}/api/telegram/webhook`;
 
   const out: Record<string, any> = {
     ts: new Date().toISOString(),
@@ -20,6 +22,7 @@ export async function GET(req: NextRequest) {
       GITHUB_TOKEN: process.env.GITHUB_TOKEN ? 'SET' : 'unset',
     },
     expectedWebhookUrl,
+    canonicalWebhookUrl,
   };
 
   if (!token) {
@@ -46,6 +49,7 @@ export async function GET(req: NextRequest) {
     out.checks = {
       webhookRegistered: Boolean(wi.url),
       urlMatchesThisDeployment: wi.url === expectedWebhookUrl,
+      urlMatchesCanonical: wi.url === canonicalWebhookUrl,
       registeredUrl: wi.url,
       lastError: wi.last_error_message || null,
       lastErrorDate: wi.last_error_date ? new Date(wi.last_error_date * 1000).toISOString() : null,
@@ -55,8 +59,8 @@ export async function GET(req: NextRequest) {
 
     if (!wi.url) {
       out.verdict = 'NO webhook registered. Open the Admin panel → Telegram → Webhook Setup → "Re-register Webhook", or visit this URL while logged in as admin.';
-    } else if (wi.url !== expectedWebhookUrl) {
-      out.verdict = `Webhook points at a DIFFERENT URL (${wi.url}). Re-register it on this deployment as described above.`;
+    } else if (wi.url !== canonicalWebhookUrl) {
+      out.verdict = `Webhook points at the WRONG URL (${wi.url}). It must be ${canonicalWebhookUrl}. Re-register it on the production deployment as described above.`;
     } else if (wi.last_error_message) {
       out.verdict = `Telegram last FAILED to deliver updates: "${wi.last_error_message}". This usually means the secret_token registered on the webhook differs from TELEGRAM_BOT_WEBHOOK_SECRET / TELEGRAM_BOT_TOKEN in Vercel — re-register as above.`;
     } else if (wi.last_successful_connection) {

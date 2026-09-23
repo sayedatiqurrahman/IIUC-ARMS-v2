@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getJobById, CRON_JOBS } from '@/lib/cron/jobs';
 
+// Cleanup-heavy job batch can exceed the default duration limit on slower GitHub
+// API responses — allow up to 60s.
+export const maxDuration = 60;
+
 /**
  * GET /api/cron?job=notice-cleanup
  * Called by Vercel Cron (sends GET requests). Auth via CRON_SECRET.
+ * Vercel Cron automatically attaches `Authorization: Bearer $CRON_SECRET` only
+ * when the CRON_SECRET env var is set on the project — so it must exist there.
+ * `?secret=` is accepted as a manual-run fallback (admin tools/curl).
  */
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
+  const querySecret = req.nextUrl.searchParams.get('secret');
   const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || (authHeader !== `Bearer ${cronSecret}` && querySecret !== cronSecret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

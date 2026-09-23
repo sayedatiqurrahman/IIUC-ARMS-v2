@@ -7,7 +7,7 @@ import { useAppStore } from '@/lib/store';
 interface AdobePdfViewerProps {
   bytes: ArrayBuffer;
   fileName: string;
-  onFallback: () => void;
+  onFallback: (reason?: string) => void;
 }
 
 const FALLBACK_CLIENT_ID = '4ea26969b1694366af6bcfd4cff60671';
@@ -50,6 +50,7 @@ export default function AdobePdfViewer({ bytes, fileName, onFallback }: AdobePdf
   const fallbackTimer = useRef<number | null>(null);
   const resolvedRef = useRef(false);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [failReason, setFailReason] = useState('');
   const { data: session } = useSession();
   const profile = useAppStore((s) => s.profile);
 
@@ -57,23 +58,28 @@ export default function AdobePdfViewer({ bytes, fileName, onFallback }: AdobePdf
     let cancelled = false;
     const clientId = process.env.NEXT_PUBLIC_ADOBE_PDF_CLIENT_ID || FALLBACK_CLIENT_ID;
 
-    const doFallback = () => {
+    const doFallback = (reason?: string) => {
       if (cancelled || resolvedRef.current) return;
       resolvedRef.current = true;
       if (fallbackTimer.current) window.clearTimeout(fallbackTimer.current);
       setPhase('failed');
-      onFallback();
+      setFailReason(reason || '');
+      onFallback(reason);
     };
 
     (async () => {
       const ok = await ensureSdk();
       if (cancelled) return;
-      if (!ok) return doFallback();
+      if (!ok) return doFallback('Adobe View SDK could not be loaded.');
 
       try {
         const div = containerRef.current;
-        if (!div) return doFallback();
-        div.innerHTML = '';
+        if (!div) return doFallback('Viewer container not found.');
+
+        // The SDK complains if it finds a stale container from a previous run.
+        if (div.querySelector('iframe')) {
+          div.innerHTML = '';
+        }
 
         const adobeDCView = new window.AdobeDC.View({ clientId, divId: 'adobe-dc-view' });
 
@@ -86,7 +92,9 @@ export default function AdobePdfViewer({ bytes, fileName, onFallback }: AdobePdf
             setPhase('ready');
           }
           if (/error|invalid|exception|failed/i.test(t) && !/download/i.test(t)) {
-            doFallback();
+            const desc = String(event?.description || '');
+            const code = String(event?.code || '');
+            doFallback(desc ? `${t}: ${desc}` : code ? `Adobe error (${code})` : `Adobe error: ${t}`);
           }
         });
 
@@ -119,11 +127,15 @@ export default function AdobePdfViewer({ bytes, fileName, onFallback }: AdobePdf
         fallbackTimer.current = window.setTimeout(() => {
           if (resolvedRef.current) return;
           const mounted = div.querySelector('iframe');
-          doFallback();
+          doFallback(
+            mounted
+              ? 'Adobe viewer iframe mounted but no document event arrived.'
+              : 'Adobe viewer did not mount (likely the credential is not registered for this domain — check NEXT_PUBLIC_ADOBE_PDF_CLIENT_ID in the Adobe console).'
+          );
           void mounted;
         }, 8000);
-      } catch (e) {
-        doFallback();
+      } catch (e: any) {
+        doFallback(e?.message || 'Adobe SDK threw an error.');
       }
     })();
 
@@ -143,6 +155,14 @@ export default function AdobePdfViewer({ bytes, fileName, onFallback }: AdobePdf
             </div>
             <p className="text-sm text-gray-400">Starting Adobe PDF viewer…</p>
             <p className="text-[0.7rem] text-gray-600 mt-1">Annotations, print &amp; download available inline</p>
+          </div>
+        </div>
+      )}
+      {phase === 'failed' && failReason && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#0a0f1e] z-10">
+          <div className="text-center max-w-sm px-4">
+            <i className="fas fa-triangle-exclamation text-amber-400 text-3xl mb-3"></i>
+            <p className="text-xs text-amber-200/90 leading-relaxed">{failReason}</p>
           </div>
         </div>
       )}

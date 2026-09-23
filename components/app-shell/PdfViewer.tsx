@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { getPdfFromCache, storePdfInCache } from '@/lib/pdf-cache';
 import { getPdfMetadata, isValidPdf } from '@/lib/pdf-meta';
+import { toggleFullscreen } from '@/lib/fullscreen';
 
 const AdobePdfViewer = dynamic(() => import('./AdobePdfViewer'), { ssr: false });
 
@@ -40,8 +41,33 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
   }, []);
   const [engine, setEngine] = useState<'adobe' | 'native'>(adobeAvailable ? 'adobe' : 'native');
   const [adobeNotified, setNotified] = useState(false);
+  const [adobeFailReason, setAdobeFailReason] = useState('');
+
+  // Stable identity so AdobePdfViewer's effect does not restart on parent renders.
+  const onAdobeFallback = useCallback((reason?: string) => {
+    setEngine('native');
+    setAdobeFailReason(reason || '');
+    setNotified(true);
+  }, []);
+
+  // Remember the user's engine choice between sessions.
+  useEffect(() => {
+    if (!adobeAvailable) return;
+    try {
+      const saved = window.localStorage.getItem('qsis.pdfEngine');
+      if (saved === 'native') setEngine('native');
+    } catch {}
+  }, [adobeAvailable]);
+
+  useEffect(() => {
+    if (!adobeAvailable) return;
+    try {
+      window.localStorage.setItem('qsis.pdfEngine', engine);
+    } catch {}
+  }, [engine, adobeAvailable]);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const embedRef = useRef<HTMLIFrameElement>(null);
   const objectRef = useRef<HTMLObjectElement>(null);
   const zoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -238,9 +264,9 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col">
+    <div ref={rootRef} className="fixed inset-0 z-[1500] bg-[#0a0f1e] flex flex-col pdf-viewer-root">
       {/* ═══ TOOLBAR ═══ */}
-      <div className="flex items-center justify-between px-3 py-2 bg-[#111827] border-b border-[#1e293b] shrink-0 gap-2 wco-titlebar-pad">
+      <div className="flex items-center justify-between px-3 py-2 bg-[#111827] border-b border-[#1e293b] shrink-0 gap-2 wco-titlebar-pad pdf-toolbar">
         {/* Left: file info */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <button onClick={onClose} className="text-gray-400 hover:text-white transition p-1.5 shrink-0" title="Close (Esc)">
@@ -290,6 +316,13 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
               <div className="w-px h-5 bg-[#334155] mx-1 hidden sm:block"></div>
             </>
           )}
+
+          {/* Fullscreen */}
+          <button onClick={() => toggleFullscreen(rootRef.current)}
+            className="pdf-btn px-2 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition text-xs"
+            title="Fullscreen">
+            <i className="fas fa-expand"></i>
+          </button>
 
           {/* Download */}
           <a href={fullUrl} download={item.name}
@@ -366,15 +399,23 @@ export default function PdfViewer({ item, onClose }: PdfViewerProps) {
             <AdobePdfViewer
               bytes={bytes}
               fileName={item.name || 'document.pdf'}
-              onFallback={() => {
-                setEngine('native');
-                setNotified(true);
-              }}
+              onFallback={onAdobeFallback}
             />
+            {/* Always-visible close over the Adobe top bar (also in fullscreen) */}
+            <button
+              onClick={onClose}
+              className="pdf-overlay-close w-8 h-8 rounded-full bg-black/60 backdrop-blur border border-white/20 text-white hover:bg-red-600/80 transition flex items-center justify-center cursor-pointer"
+              title="Close (Esc)"
+            >
+              <i className="fas fa-times text-sm"></i>
+            </button>
             {adobeNotified && (
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 rounded-lg border border-amber-700/40 bg-[#111827]/95 px-3 py-1.5 text-[0.7rem] text-amber-200 shadow-xl max-w-[90%] text-center">
                 <i className="fas fa-triangle-exclamation mr-1"></i>
-                Adobe viewer could not start here (check the credential domain — it is registered for <strong>www.arms.iiuc.net</strong>). Switched to the built-in viewer.
+                {adobeFailReason || (
+                  <>Adobe viewer could not start here. Make sure the credential (<span className="font-mono">NEXT_PUBLIC_ADOBE_PDF_CLIENT_ID</span>) is registered for domain <strong>{typeof window !== 'undefined' ? window.location.hostname : ''}</strong> in the Adobe console.</>
+                )}
+                {' '}<span className="opacity-80">Switched to the built-in viewer.</span>
               </div>
             )}
           </div>

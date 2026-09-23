@@ -1,9 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { assessAILikeness } from '@/lib/research/ai-detect';
 import { humanizeReport } from '@/lib/research/humanize';
+import { findMatchesIn } from '@/lib/research/plagiarism';
 import { extractTextFromFile } from '@/lib/research/file-extract';
+import { DEMO_TEXT_EN } from '@/lib/research/demo-data';
+import { downloadDocxReport } from '@/lib/research/report-docx';
 import { useLocale } from './locale';
 import { Btn, CopyButton, Field, Note, outBoxCls, TextArea } from './ui';
 
@@ -16,9 +19,12 @@ export default function AIHumanizer() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [applied, setApplied] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const verdict = useMemo(() => (text.trim().length > 10 ? assessAILikeness(text) : null), [text]);
   const report = useMemo(() => (text.trim().length > 10 ? humanizeReport(text) : null), [text, applied]);
+  const repeats = useMemo(() => (text.trim().length > 10 ? findMatchesIn(text) : null), [text]);
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
 
   const L = {
     input: isAr ? 'الصق النص أو ارفع ملفا' : 'Paste your text or upload a file',
@@ -32,6 +38,9 @@ export default function AIHumanizer() {
     flagged: isAr ? 'جملة تشبه الصياغة الآلية' : 'AI-like phrase',
     noFlags: isAr ? 'لا توجد صياغات مشكوك فيها.' : 'No obvious formulaic phrasing.',
     current: isAr ? 'النص الحالي' : 'Current text',
+    demo: isAr ? 'جرّب نصا تجريبيا' : 'Try demo text',
+    open: isAr ? 'اختيار ملف…' : 'Choose file…',
+    report: isAr ? 'تحميل التقرير (.docx)' : 'Download report (.docx)',
   };
 
   const handleFile = async (f: File) => {
@@ -60,6 +69,38 @@ export default function AIHumanizer() {
     setApplied(true);
   };
 
+  const exportDocx = async () => {
+    if (!verdict || !report || !repeats) return;
+    await downloadDocxReport({
+      fileName: 'pasted-text.txt',
+      aiScore: verdict.score,
+      aiLabel: verdict.label,
+      aiColor: aiColor(verdict.score),
+      overview: [
+        { label: isAr ? 'الجمل' : 'Sentences', value: String(verdict.sentences.length) },
+        { label: isAr ? 'الكلمات' : 'Words', value: String(wordCount) },
+        { label: isAr ? 'جمل مشكوك فيها' : 'AI-like sentences', value: String(verdict.sentences.filter((s) => s.score > 35).length) },
+        { label: isAr ? 'التكرار' : 'Repetition', value: `${repeats.repeatPercent.toFixed(1)}%` },
+      ],
+      sentences: verdict.sentences.map((s) => ({
+        text: s.sentence,
+        score: s.score,
+        color: aiColor(s.score),
+        label: s.label,
+        hits: s.hits || [],
+      })),
+      rewrites: report.sentences.map((s) => ({ original: s.original, alternatives: s.alternatives })),
+      repeats: {
+        percent: repeats.repeatPercent,
+        totalRepeatWords: repeats.totalRepeatWords,
+        totalWords: repeats.totalWords,
+        hits: repeats.hits,
+      },
+      text,
+      lang: isAr ? 'ar' : 'en',
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -69,10 +110,8 @@ export default function AIHumanizer() {
           </div>
         </Field>
         <div className="shrink-0 flex flex-col items-start gap-1.5">
-          <label className="inline-block cursor-pointer">
-            <Btn type="button">{L.choose}</Btn>
-            <input type="file" accept=".txt,.md,.docx,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
-          </label>
+          <Btn type="button" onClick={() => fileRef.current?.click()} title={L.open}>{L.choose}</Btn>
+          <input ref={fileRef} type="file" accept=".txt,.md,.docx,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
           <span className="text-[0.62rem] text-dark-text3">{L.drop}</span>
           {busy && <span className="text-[0.65rem] text-qsis">{isAr ? 'قراءة الملف…' : 'Reading…'}</span>}
           {err && <span className="text-[0.65rem] text-red-400">{err}</span>}
@@ -133,9 +172,15 @@ export default function AIHumanizer() {
             )}
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-[0.7rem] font-semibold text-dark-text2">{L.current}</span>
-            <CopyButton text={text} />
+            <div className="flex items-center gap-2">
+              <Btn variant="ghost" onClick={() => { setText(DEMO_TEXT_EN); setApplied(false); }}>{L.demo}</Btn>
+              <Btn variant="ghost" onClick={exportDocx}>
+                <i className="material-symbols-outlined align-middle text-sm">download</i>{' '}{L.report}
+              </Btn>
+              <CopyButton text={text} />
+            </div>
           </div>
           <div className={outBoxCls} dir="auto">{text || <span className="text-dark-text3">{isAr ? 'الصق نصا للبدء.' : 'Paste text to begin.'}</span>}</div>
 

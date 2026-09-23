@@ -4,7 +4,7 @@ import { getRoleLabel } from '@/lib/club-roles';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'Member Profile | IIUC-ARMS' };
+export const metadata: Metadata = { title: 'Member Profile | IIUC-ARMS', robots: { index: false, follow: false } };
 
 async function resolveProfile(id: string) {
   const { prisma } = await import('@/lib/prisma');

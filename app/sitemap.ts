@@ -60,6 +60,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.4,
     },
+    {
+      url: `${siteUrl}/support`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.4,
+    },
   ];
 
   return staticPages;

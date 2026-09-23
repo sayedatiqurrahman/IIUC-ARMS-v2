@@ -45,9 +45,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const host = req.headers.get('host') || req.nextUrl.host;
-  const protocol = req.headers.get('x-forwarded-proto') || 'https';
-  const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
+  // Always register the webhook against the canonical production URL
+  // (arms.iiuc.net), not the request's Host header — Vercel previews, the
+  // *.vercel.app URL, or an apex iiuc.net redirect would otherwise register a
+  // stale/parity URL and Telegram would stop delivering updates.
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net').replace(/\/+$/, '');
+  const webhookUrl = `${siteUrl}/api/telegram/webhook`;
 
   try {
     const res = await fetch(`${API}/setWebhook`, {
