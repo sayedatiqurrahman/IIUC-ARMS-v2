@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import VerifyView from '@/components/clubs/VerifyView';
 
 export const metadata: Metadata = {
-  title: 'Verify Certificate — IIUC-ARMS',
+  title: 'Verify Certificate',
   description: 'Verify the authenticity of any IIUC club certificate. Scan QR code or enter certificate ID.',
   robots: { index: false, follow: false },
   openGraph: {

@@ -468,7 +468,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/" className="flex items-center gap-3 no-underline wco-no-drag tb-logo-wrap" onClick={(e) => { e.preventDefault(); goHome(); router.push('/'); }}>
             <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={40} height={40} className="w-10 h-10 p-1 rounded-full border-2 border-qsis object-contain bg-white tb-logo" priority />
             <div>
-              <h1 className="text-[1.1rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent tb-title">IIUC-ARMS</h1>
+              <div className="text-[1.1rem] font-bold bg-gradient-to-br from-qsis to-accent bg-clip-text text-transparent tb-title">IIUC-ARMS</div>
               <span className="text-[0.7rem] text-dark-text2 hidden md:block tb-subtitle">Academic Resource System</span>
             </div>
           </Link>

@@ -1,6 +1,6 @@
 import { MetadataRoute } from 'next';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net').replace(/\/+$/, '');
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -42,6 +42,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: '/',
       },
     ],
+    host: `${siteUrl}/`,
     sitemap: `${siteUrl}/sitemap.xml`,
   };
 }

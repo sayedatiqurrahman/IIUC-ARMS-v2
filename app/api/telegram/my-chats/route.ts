@@ -2,28 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-import { configuredSecret } from '@/lib/telegram/secret';
-
-const BOT_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN || ''}`;
+import {
+  callTelegramApi,
+  deleteTelegramWebhook,
+  getTelegramBot,
+  getTelegramWebhookUrl,
+  registerTelegramWebhook,
+} from '@/lib/telegram/webhook';
 
 async function verifyAuth(req: NextRequest) {
   const email = await getUserEmail(req);
   if (!email) return { error: 'Unauthorized' };
+
   const { prisma } = await import('@/lib/prisma');
   const callerProfile = await prisma.profile.findUnique({ where: { userId: email } });
   const effectiveRole = config.getEffectiveRole(email, callerProfile?.role);
   if (effectiveRole !== 'admin' && effectiveRole !== 'manager' && !config.ownerEmails.includes(email)) {
     return { error: 'Forbidden' };
   }
+
   return { email };
 }
 
-/**
- * GET /api/telegram/my-chats
- *
- * Primary: reads chats logged by the webhook handler from SiteSettings.telegramChats
- * Fallback: drops webhook → getUpdates → re-register (for chats not yet seen by webhook)
- */
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.admin);
   if (!rl.success) return rl.response!;
@@ -34,137 +34,94 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.error === 'Unauthorized' ? 401 : 403 });
     }
 
-    const token = process.env.TELEGRAM_BOT_TOKEN || '';
-    const webhookSecret = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || '';
-    if (!token) {
+    if (!process.env.TELEGRAM_BOT_TOKEN) {
       return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN not set' }, { status: 500 });
     }
 
-    const meRes = await fetch(`${BOT_API}/getMe`);
-    const meData = await meRes.json();
-    if (!meData.ok) {
-      return NextResponse.json({ error: 'Bot token invalid: ' + (meData.description || '') }, { status: 500 });
-    }
-
+    const me = await getTelegramBot();
     const { prisma } = await import('@/lib/prisma');
     const p = prisma as any;
 
-    // ─── 1. Read chats logged by webhook ───
     let loggedChats: any[] = [];
     try {
-      // Ensure column exists
       const tableInfo = await p.$queryRawUnsafe(`PRAGMA table_info(SiteSettings)`);
-      const cols = new Set((tableInfo as any[]).map((c: any) => c.name));
+      const cols = new Set((tableInfo as any[]).map((column: any) => column.name));
       if (!cols.has('telegramChats')) {
         await p.$executeRawUnsafe(`ALTER TABLE SiteSettings ADD COLUMN telegramChats TEXT`);
       } else {
         const rows = await p.$queryRawUnsafe(`SELECT telegramChats FROM SiteSettings WHERE id = 'site-settings'`);
         const raw = (rows as any[])[0]?.telegramChats;
-        if (raw) {
-          loggedChats = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        }
+        if (raw) loggedChats = typeof raw === 'string' ? JSON.parse(raw) : raw;
       }
     } catch {}
-
-    // ─── 2. Try getUpdates as fallback for extra chats ───
-    const host = req.headers.get('host') || 'arms.iiuc.net';
-    const protocol = req.headers.get('x-forwarded-proto') || 'https';
-    const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
 
     let extraChats: any[] = [];
-    let dropped = false;
     let reRegistered = false;
+    let discoveryError: string | null = null;
 
     try {
-      // Drop webhook briefly
-      const dropRes = await fetch(`${BOT_API}/deleteWebhook`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ drop_pending_updates: false }),
+      await deleteTelegramWebhook();
+      const updates = await callTelegramApi<any[]>('getUpdates', {
+        limit: 100,
+        allowed_updates: ['message', 'callback_query', 'my_chat_member'],
       });
-      dropped = (await dropRes.json()).ok;
+      const seen = new Set(loggedChats.map((chat: any) => String(chat.id)));
 
-      if (dropped) {
-        // Fetch any pending updates
-        const updatesRes = await fetch(`${BOT_API}/getUpdates?limit=100&allowed_updates=["message","callback_query","my_chat_member"]`);
-        const updatesData = await updatesRes.json();
-
-        if (updatesData.ok && Array.isArray(updatesData.result)) {
-          const seen = new Set(loggedChats.map((c: any) => String(c.id)));
-          for (const u of updatesData.result) {
-            const chat = u.message?.chat || u.callback_query?.message?.chat || u.my_chat_member?.chat;
-            if (chat?.id && !seen.has(String(chat.id))) {
-              seen.add(String(chat.id));
-              extraChats.push({
-                id: chat.id,
-                title: chat.title || chat.first_name || 'Unknown',
-                type: chat.type,
-                username: chat.username,
-              });
-            }
-          }
+      for (const update of updates) {
+        const chat = update.message?.chat || update.callback_query?.message?.chat || update.my_chat_member?.chat;
+        if (chat?.id && !seen.has(String(chat.id))) {
+          seen.add(String(chat.id));
+          extraChats.push({
+            id: chat.id,
+            title: chat.title || chat.first_name || 'Unknown',
+            type: chat.type,
+            username: chat.username,
+          });
         }
-
-        // Re-register webhook
-        const reRegRes = await fetch(`${BOT_API}/setWebhook`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: webhookUrl,
-            secret_token: configuredSecret(),
-            allowed_updates: ['message', 'callback_query'],
-            drop_pending_updates: false,
-          }),
-        });
-        reRegistered = (await reRegRes.json()).ok;
       }
-    } catch {}
-
-    // ─── 3. Merge and get member counts ───
-    const allChats = [...loggedChats, ...extraChats];
-    const chatsMap = new Map<number, any>();
-    for (const c of allChats) {
-      const id = typeof c.id === 'string' ? parseInt(c.id) : c.id;
-      if (!chatsMap.has(id)) {
-        chatsMap.set(id, { ...c, id });
-      }
+    } catch (error) {
+      discoveryError = error instanceof Error ? error.message : 'Failed to read pending updates';
+    } finally {
+      const registration = await registerTelegramWebhook();
+      reRegistered = registration.info.url === getTelegramWebhookUrl();
     }
 
-    // Get member counts for groups/channels
+    const allChats = [...loggedChats, ...extraChats];
+    const chatsMap = new Map<number, any>();
+    for (const chat of allChats) {
+      const id = typeof chat.id === 'string' ? parseInt(chat.id) : chat.id;
+      if (!chatsMap.has(id)) chatsMap.set(id, { ...chat, id });
+    }
+
     for (const chat of Array.from(chatsMap.values())) {
       if (chat.type === 'group' || chat.type === 'supergroup' || chat.type === 'channel') {
         try {
-          const countRes = await fetch(`${BOT_API}/getChatMemberCount`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chat.id }),
-          });
-          const countData = await countRes.json();
-          if (countData.ok) chat.memberCount = countData.result;
+          const memberCount = await callTelegramApi<number>('getChatMemberCount', { chat_id: chat.id });
+          chat.memberCount = memberCount;
         } catch {}
       }
     }
 
     const chats = Array.from(chatsMap.values()).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-    const channels = chats.filter(c => c.type === 'channel');
-    const groups = chats.filter(c => c.type === 'group' || c.type === 'supergroup');
-    const privateChats = chats.filter(c => c.type === 'private');
+    const channels = chats.filter((chat) => chat.type === 'channel');
+    const groups = chats.filter((chat) => chat.type === 'group' || chat.type === 'supergroup');
+    const privateChats = chats.filter((chat) => chat.type === 'private');
 
     return NextResponse.json({
       success: true,
-      bot: { id: meData.result.id, username: meData.result.username, name: meData.result.first_name },
+      bot: { id: me.id, username: me.username, name: me.first_name },
       chats,
       channels,
       groups,
       privateChats,
       total: chats.length,
-      source: {
-        logged: loggedChats.length,
-        extra: extraChats.length,
-      },
+      source: { logged: loggedChats.length, extra: extraChats.length },
+      discoveryError,
       webhookReRegistered: reRegistered,
+      webhookUrl: getTelegramWebhookUrl(),
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to discover chats' }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to discover chats';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

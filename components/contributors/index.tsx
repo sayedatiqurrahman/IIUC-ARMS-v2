@@ -116,12 +116,15 @@ export default function ContributorsView() {
   return (
     <section className="mb-5">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold flex items-center gap-2"><i className="fas fa-users"></i> Contributors</h3>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-xl font-bold flex items-center gap-2"><i className="fas fa-users"></i> Contributors</h1>
         <button className="inline-flex items-center gap-[6px] px-3 py-[5px] rounded-xl border border-dark-border bg-dark-bg3 text-dark-text cursor-pointer text-[0.75rem] font-semibold" onClick={() => router.push('/')}>
           <i className="fas fa-arrow-left"></i> Back
         </button>
       </div>
+      <p className="text-xs text-dark-text2 mb-4 max-w-2xl leading-relaxed">
+        The open-source developers, designers, and academic resource providers behind IIUC-ARMS.
+      </p>
 
       {contributorsLoading ? (
         <div className="loading-container">

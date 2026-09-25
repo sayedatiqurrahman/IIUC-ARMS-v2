@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserEmail } from '@/lib/get-user';
 import { config } from '@/lib/config';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import {
+  getCanonicalSiteUrl,
+  getTelegramBot,
+  getTelegramWebhookInfo,
+  getTelegramWebhookUrl,
+} from '@/lib/telegram/webhook';
 
-const BOT_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN || ''}`;
-
-/**
- * GET /api/telegram/webhook-info
- * Returns: webhook status, secret, setup URL, bot info, and DB column status.
- * Owner/admin only.
- */
 export async function GET(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.admin);
   if (!rl.success) return rl.response!;
@@ -25,66 +24,48 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const token = process.env.TELEGRAM_BOT_TOKEN || '';
-    const webhookSecret = process.env.TELEGRAM_BOT_WEBHOOK_SECRET || '';
-    if (!token) {
-      return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN not set' }, { status: 500 });
-    }
-
-    // Get bot info
-    const meRes = await fetch(`${BOT_API}/getMe`);
-    const meData = await meRes.json();
-
-    // Get current webhook info from Telegram
-    const whInfoRes = await fetch(`${BOT_API}/getWebhookInfo`);
-    const whInfo = await whInfoRes.json();
-
-    // Check DB columns
+    const bot = await getTelegramBot();
+    const info = await getTelegramWebhookInfo();
+    const expectedWebhookUrl = getTelegramWebhookUrl();
     const p = prisma as any;
     const dbStatus: Record<string, boolean> = {};
+
     try {
       const tableInfo = await p.$queryRawUnsafe(`PRAGMA table_info(SiteSettings)`);
-      const cols = new Set((tableInfo as any[]).map((c: any) => c.name));
-      const needed = ['customClubRoles', 'supportConfig', 'postingChannels', 'telegramChats'];
-      for (const n of needed) dbStatus[n] = cols.has(n);
+      const cols = new Set((tableInfo as any[]).map((column: any) => column.name));
+      for (const name of ['customClubRoles', 'supportConfig', 'postingChannels', 'telegramChats']) {
+        dbStatus[name] = cols.has(name);
+      }
     } catch {
-      for (const n of ['customClubRoles', 'supportConfig', 'postingChannels', 'telegramChats']) dbStatus[n] = false;
+      for (const name of ['customClubRoles', 'supportConfig', 'postingChannels', 'telegramChats']) {
+        dbStatus[name] = false;
+      }
     }
-
-    const host = req.headers.get('host') || 'arms.iiuc.net';
-    const protocol = req.headers.get('x-forwarded-proto') || 'https';
-    const requestUrl = `${protocol}://${host}`;
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net').replace(/\/+$/, '');
-    const setupUrl = `${siteUrl}/api/telegram/setup?key=${webhookSecret}`;
 
     return NextResponse.json({
       success: true,
-      bot: meData.ok ? { id: meData.result.id, username: meData.result.username, name: meData.result.first_name } : null,
-      webhook: whInfo.ok ? {
-        url: whInfo.result.url,
-        hasCustomCertificate: whInfo.result.has_custom_certificate,
-        pendingUpdateCount: whInfo.result.pending_update_count,
-        lastErrorDate: whInfo.result.last_error_date,
-        lastErrorMessage: whInfo.result.last_error_message,
-        maxConnections: whInfo.result.max_connections,
-      } : null,
-      expectedWebhookUrl: `${siteUrl}/api/telegram/webhook`,
-      webhookSecret: webhookSecret ? `${webhookSecret.substring(0, 4)}${'*'.repeat(webhookSecret.length - 4)}` : null,
-      webhookSecretRaw: webhookSecret,
-      setupUrl,
-      siteUrl: requestUrl,
-      canonicalSiteUrl: siteUrl,
+      bot: { id: bot.id, username: bot.username, name: bot.first_name },
+      webhook: {
+        url: info.url,
+        hasCustomCertificate: info.has_custom_certificate,
+        pendingUpdateCount: info.pending_update_count,
+        lastErrorDate: info.last_error_date || null,
+        lastErrorMessage: info.last_error_message || null,
+        maxConnections: info.max_connections,
+      },
+      expectedWebhookUrl,
+      urlMatchesCanonical: info.url === expectedWebhookUrl,
+      secretConfigured: Boolean(process.env.TELEGRAM_BOT_WEBHOOK_SECRET),
+      siteUrl: getCanonicalSiteUrl(),
       dbColumns: dbStatus,
       allColumnsExist: Object.values(dbStatus).every(Boolean),
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to get webhook info' }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to get webhook info';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-/**
- * POST /api/telegram/webhook-info — Run auto-migration
- */
 export async function POST(req: NextRequest) {
   const rl = rateLimit(req, RATE_LIMITS.admin);
   if (!rl.success) return rl.response!;
@@ -103,32 +84,30 @@ export async function POST(req: NextRequest) {
     const p = prisma as any;
     const migrations: string[] = [];
     const errors: string[] = [];
-
     const columns = [
       { name: 'customClubRoles', type: 'TEXT' },
       { name: 'supportConfig', type: 'TEXT' },
       { name: 'postingChannels', type: 'TEXT' },
       { name: 'telegramChats', type: 'TEXT' },
     ];
-
     const tableInfo = await p.$queryRawUnsafe(`PRAGMA table_info(SiteSettings)`);
-    const existingCols = new Set((tableInfo as any[]).map((c: any) => c.name));
+    const existingCols = new Set((tableInfo as any[]).map((column: any) => column.name));
 
-    for (const col of columns) {
-      if (!existingCols.has(col.name)) {
+    for (const column of columns) {
+      if (!existingCols.has(column.name)) {
         try {
-          await p.$executeRawUnsafe(`ALTER TABLE SiteSettings ADD COLUMN ${col.name} ${col.type}`);
-          migrations.push(`Added ${col.name}`);
-        } catch (e: any) {
-          errors.push(`${col.name}: ${e?.message || 'unknown error'}`);
+          await p.$executeRawUnsafe(`ALTER TABLE SiteSettings ADD COLUMN ${column.name} ${column.type}`);
+          migrations.push(`Added ${column.name}`);
+        } catch (error: any) {
+          errors.push(`${column.name}: ${error?.message || 'unknown error'}`);
         }
       } else {
-        migrations.push(`${col.name} already exists`);
+        migrations.push(`${column.name} already exists`);
       }
     }
 
     return NextResponse.json({ success: errors.length === 0, migrations, errors });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Migration failed' }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || 'Migration failed' }, { status: 500 });
   }
 }

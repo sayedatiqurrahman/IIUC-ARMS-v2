@@ -4,7 +4,7 @@ import NoticeBoardView from '@/components/notices/NoticeBoard';
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 
 export const metadata: Metadata = {
-  title: 'Notice Board — IIUC-ARMS',
+  title: 'Notice Board',
   description: 'IIUC notice board — academic notices, calendar updates, exam schedules, and announcements. Stay updated with IIUC-ARMS.',
   keywords: ['IIUC notice', 'IIUC academic notice', 'IIUC calendar', 'IIUC exam schedule', 'IIUC-ARMS'],
   alternates: { canonical: `${siteUrl}/notices` },

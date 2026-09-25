@@ -6,7 +6,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   return {
-    title: 'Notice — IIUC-ARMS',
+    title: 'Notice',
     description: 'Notice details from IIUC-ARMS Notice Board.',
     alternates: { canonical: `${siteUrl}/notices/${id}` },
     openGraph: {

@@ -5,7 +5,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   return {
-    title: 'Blog Post — IIUC-ARMS',
+    title: 'Blog Post',
     description: 'Article from the IIUC-ARMS blog.',
     alternates: { canonical: `${siteUrl}/blog/${slug}` },
   };

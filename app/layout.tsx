@@ -5,7 +5,7 @@ import Providers from '@/components/Providers';
 import AppShell from '@/components/app-shell';
 import './globals.css';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net').replace(/\/+$/, '');
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: siteUrl,
+    url: `${siteUrl}/`,
     siteName: 'IIUC-ARMS',
     title: 'IIUC-ARMS',
     description: 'Academic resource and research management system for IIUC departments.',
@@ -86,7 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     '@type': 'WebApplication',
     name: 'IIUC-ARMS',
     alternateName: 'IIUC Academic Resource & Research Management System',
-    url: siteUrl,
+    url: `${siteUrl}/`,
     description: 'Academic resource and research management system for IIUC departments.',
     applicationCategory: 'EducationalApplication',
     operatingSystem: 'Web',
@@ -137,7 +137,7 @@ gtag('config', 'G-HW4QNEHD8B');`,
                 {
                   '@type': 'WebSite',
                   '@id': `${siteUrl}/#website`,
-                  url: siteUrl,
+                  url: `${siteUrl}/`,
                   name: 'IIUC-ARMS',
                   description:
                     'Academic Resource Management System for IIUC departments — browse notes, sheets, questions, and results.',
@@ -156,7 +156,7 @@ gtag('config', 'G-HW4QNEHD8B');`,
                   '@type': 'Organization',
                   '@id': `${siteUrl}/#organization`,
                   name: 'IIUC-ARMS',
-                  url: siteUrl,
+                  url: `${siteUrl}/`,
                   logo: {
                     '@type': 'ImageObject',
                     url: `${siteUrl}/icon-512.png`,

@@ -4,7 +4,7 @@ import FacultyView from '@/components/views/FacultyView';
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
 
 export const metadata: Metadata = {
-  title: 'Faculty & Staff Directory — IIUC-ARMS',
+  title: 'Faculty & Staff Directory',
   description: 'Browse faculty members, teachers, and staff across all departments at IIUC. Find contact info, designations, and department details.',
   keywords: ['IIUC faculty', 'IIUC teachers', 'IIUC staff', 'IIUC department staff', 'IIUC-ARMS faculty directory'],
   alternates: { canonical: `${siteUrl}/faculty` },

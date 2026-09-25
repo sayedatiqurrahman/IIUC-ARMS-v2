@@ -24,7 +24,7 @@ if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
 fi
 
 API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
-SITE_URL="${NEXT_PUBLIC_SITE_URL:-https://arms.iiuc.net}"
+SITE_URL="https://arms.iiuc.net"
 
 BOT_NAME="IIUC-ARMS Bot"
 
@@ -90,11 +90,9 @@ curl -s "${API}/setMyCommands" -H "Content-Type: application/json" \
 echo ""
 echo "→ Re-pointing webhook to ${SITE_URL}/api/telegram/webhook ..."
 WEBHOOK_SECRET="${TELEGRAM_BOT_WEBHOOK_SECRET:-${TELEGRAM_BOT_TOKEN}}"
-# The app's webhook handler rejects updates unless X-Telegram-Bot-Api-Secret-Token
-# matches (TELEGRAM_BOT_WEBHOOK_SECRET, falling back to TELEGRAM_BOT_TOKEN), so the
-# webhook MUST be registered with the same secret_token.
+WEBHOOK_SECRET="$(printf '%s' "$WEBHOOK_SECRET" | python3 -c "import re,sys; print(re.sub(r'[^A-Za-z0-9_-]', '', sys.stdin.read()) or 'IIUC-ARMS-BOT')")"
 curl -s "${API}/setWebhook" -H "Content-Type: application/json" \
-  -d "{\"url\":\"${SITE_URL}/api/telegram/webhook\",\"secret_token\":$(python3 -c "import json,sys;print(json.dumps(sys.argv[1]))" "$WEBHOOK_SECRET"),\"allowed_updates\":[\"message\",\"callback_query\"],\"drop_pending_updates\":true}" | python3 -m json.tool 2>/dev/null || true
+  -d "{\"url\":\"${SITE_URL}/api/telegram/webhook\",\"secret_token\":$(python3 -c "import json,sys;print(json.dumps(sys.argv[1]))" "$WEBHOOK_SECRET"),\"allowed_updates\":[\"message\",\"callback_query\"],\"drop_pending_updates\":false}" | python3 -m json.tool 2>/dev/null || true
 
 echo ""
 echo "→ Webhook info:"

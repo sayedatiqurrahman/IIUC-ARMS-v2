@@ -1,72 +1,58 @@
 import { MetadataRoute } from 'next';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net';
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://arms.iiuc.net').replace(/\/+$/, '');
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date();
-
-  const staticPages: MetadataRoute.Sitemap = [
+  return [
     {
       url: siteUrl,
-      lastModified: now,
       changeFrequency: 'daily',
       priority: 1.0,
     },
     {
       url: `${siteUrl}/contributors`,
-      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
       url: `${siteUrl}/faculty`,
-      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.7,
     },
     {
       url: `${siteUrl}/notices`,
-      lastModified: now,
       changeFrequency: 'daily',
       priority: 0.9,
     },
     {
       url: `${siteUrl}/routine`,
-      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.6,
     },
     {
       url: `${siteUrl}/blog`,
-      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.7,
     },
     {
       url: `${siteUrl}/history`,
-      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.3,
     },
     {
       url: `${siteUrl}/clubs`,
-      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
       url: `${siteUrl}/studio`,
-      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.4,
     },
     {
       url: `${siteUrl}/support`,
-      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.4,
     },
   ];
-
-  return staticPages;
 }

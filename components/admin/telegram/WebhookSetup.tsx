@@ -12,9 +12,9 @@ interface WebhookInfo {
     lastErrorMessage: string | null;
     maxConnections: number;
   } | null;
-  webhookSecret: string | null;
-  webhookSecretRaw: string;
-  setupUrl: string;
+  expectedWebhookUrl: string;
+  urlMatchesCanonical: boolean;
+  secretConfigured: boolean;
   siteUrl: string;
   dbColumns: Record<string, boolean>;
   allColumnsExist: boolean;
@@ -26,7 +26,6 @@ export default function WebhookSetup() {
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [showSecret, setShowSecret] = useState(false);
   const [reRegistering, setReRegistering] = useState(false);
   const [reRegistered, setReRegistered] = useState<{ ok: boolean; msg: string } | null>(null);
 
@@ -66,16 +65,15 @@ export default function WebhookSetup() {
     setReRegistering(true);
     setReRegistered(null);
     try {
-      const res = await fetch(`/api/telegram/setup?key=${info?.webhookSecretRaw || ''}`);
+      const res = await fetch('/api/telegram/setup', { method: 'POST' });
       const data = await res.json();
-      if (data.webhook?.ok || data.webhook?.result?.ok) {
-        const url = data.webhookInfo?.url || '?';
+      if (data.success && data.webhookInfo?.url === info.expectedWebhookUrl) {
         const cmds = data.commands?.ok ? 'command menu OK' : 'command menu FAILED';
         const pending = data.webhookInfo?.pendingUpdateCount ?? 0;
-        setReRegistered({ ok: true, msg: `Webhook → ${url} · ${cmds} · ${pending} pending update(s)` });
-        fetchInfo();
-      } else if (data.success) {
-        setReRegistered({ ok: true, msg: `Done: ${Array.isArray(data.commands) ? data.commands.join(', ') : 'webhook re-registered'}, ${data.bot?.result?.username ? '@' + data.bot.result.username : ''}` });
+        setReRegistered({
+          ok: true,
+          msg: `Webhook → ${data.webhookInfo.url} · ${cmds} · ${pending} pending update(s)`,
+        });
         fetchInfo();
       } else {
         setReRegistered({ ok: false, msg: data.error || 'Failed to re-register' });
@@ -110,8 +108,7 @@ export default function WebhookSetup() {
   }
 
   const wh = info.webhook;
-  const isWebhookSet = wh?.url?.includes('/api/telegram/webhook');
-  const hasErrors = wh?.lastErrorMessage && wh.lastErrorMessage.length > 0;
+  const isWebhookSet = Boolean(wh?.url && wh.url === info.expectedWebhookUrl && info.urlMatchesCanonical);
 
   return (
     <div className="space-y-4">
@@ -127,7 +124,7 @@ export default function WebhookSetup() {
               <p className="text-xs text-dark-text2">@{info.bot.username}</p>
             </div>
             <span className={`px-2 py-1 rounded-full text-xs font-medium ${isWebhookSet ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
-              {isWebhookSet ? 'Webhook Active' : 'No Webhook'}
+              {isWebhookSet ? 'Webhook Active' : wh?.url ? 'Wrong Domain' : 'No Webhook'}
             </span>
           </div>
         </div>
@@ -178,68 +175,30 @@ export default function WebhookSetup() {
         )}
       </div>
 
-      {/* Setup URLs — copyable */}
       <div className="p-4 rounded-xl bg-dark-bg3 border border-dark-border">
         <h4 className="text-sm font-semibold text-dark-text mb-3">
-          <i className="fas fa-key text-amber-400 mr-2"></i>Setup & Secrets
+          <i className="fas fa-link text-cyan-400 mr-2"></i>Canonical Webhook
         </h4>
 
-        {/* Webhook Secret */}
         <div className="mb-3">
-          <label className="text-xs text-dark-text2 block mb-1">Webhook Secret</label>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 px-3 py-2 rounded-lg bg-dark-bg2 border border-dark-border font-mono text-xs text-dark-text">
-              {showSecret ? info.webhookSecretRaw : (info.webhookSecret || '(not set)')}
-            </div>
-            <button
-              onClick={() => setShowSecret(!showSecret)}
-              className="px-2 py-2 rounded-lg bg-dark-bg2 border border-dark-border text-dark-text2 hover:text-dark-text transition text-xs"
-              title={showSecret ? 'Hide' : 'Show'}
-            >
-              <i className={`fas ${showSecret ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-            </button>
-            <button
-              onClick={() => copyText('secret', info.webhookSecretRaw)}
-              className={`px-2 py-2 rounded-lg border transition text-xs ${
-                copiedField === 'secret' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-dark-bg2 border-dark-border text-dark-text2 hover:text-dark-text'
-              }`}
-              title="Copy"
-            >
-              <i className={`fas ${copiedField === 'secret' ? 'fa-check' : 'fa-copy'}`}></i>
-            </button>
-          </div>
-        </div>
-
-        {/* Setup URL */}
-        <div className="mb-3">
-          <label className="text-xs text-dark-text2 block mb-1">Setup URL (open to register webhook)</label>
+          <label className="text-xs text-dark-text2 block mb-1">Expected URL</label>
           <div className="flex items-center gap-2">
             <div className="flex-1 px-3 py-2 rounded-lg bg-dark-bg2 border border-dark-border font-mono text-[0.65rem] text-dark-text truncate">
-              {info.setupUrl}
+              {info.expectedWebhookUrl}
             </div>
             <button
-              onClick={() => copyText('setup', info.setupUrl)}
+              onClick={() => copyText('webhook', info.expectedWebhookUrl)}
               className={`px-2 py-2 rounded-lg border transition text-xs ${
-                copiedField === 'setup' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-dark-bg2 border-dark-border text-dark-text2 hover:text-dark-text'
+                copiedField === 'webhook' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-dark-bg2 border-dark-border text-dark-text2 hover:text-dark-text'
               }`}
               title="Copy"
             >
-              <i className={`fas ${copiedField === 'setup' ? 'fa-check' : 'fa-copy'}`}></i>
+              <i className={`fas ${copiedField === 'webhook' ? 'fa-check' : 'fa-copy'}`}></i>
             </button>
-            <a
-              href={info.setupUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-2 py-2 rounded-lg bg-dark-bg2 border border-dark-border text-dark-text2 hover:text-dark-text transition text-xs"
-              title="Open in browser"
-            >
-              <i className="fas fa-external-link-alt"></i>
-            </a>
           </div>
         </div>
 
-        {/* Site URL */}
-        <div>
+        <div className="mb-3">
           <label className="text-xs text-dark-text2 block mb-1">Site URL</label>
           <div className="flex items-center gap-2">
             <div className="flex-1 px-3 py-2 rounded-lg bg-dark-bg2 border border-dark-border font-mono text-xs text-dark-text">
@@ -255,6 +214,13 @@ export default function WebhookSetup() {
               <i className={`fas ${copiedField === 'site' ? 'fa-check' : 'fa-copy'}`}></i>
             </button>
           </div>
+        </div>
+
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-dark-text2">Webhook secret</span>
+          <span className={info.secretConfigured ? 'text-emerald-400' : 'text-amber-400'}>
+            {info.secretConfigured ? 'Dedicated secret configured' : 'Using bot token fallback'}
+          </span>
         </div>
       </div>
 

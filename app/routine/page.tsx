@@ -83,6 +83,12 @@ export default function RoutinePage() {
 
   return (
     <div>
+      <header className="mb-4">
+        <h1 className="text-xl sm:text-2xl font-bold text-dark-text mb-1">Class &amp; Exam Routine</h1>
+        <p className="text-xs sm:text-sm text-dark-text2 max-w-2xl leading-relaxed">
+          Browse class routines, exam routines, seat plans, and teacher schedules for every department at IIUC.
+        </p>
+      </header>
       <div className="flex gap-1 mb-5 p-1 bg-dark-bg2 border border-dark-border rounded-xl">
         {tabBtn('class', 'Class Routine', 'Class', 'fas fa-calendar-alt')}
         {tabBtn('exam', 'Exam Routine', 'Exam', 'fas fa-file-alt')}
