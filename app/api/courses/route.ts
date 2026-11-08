@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { getUserEmail } from '@/lib/get-user';
+import { authOptions } from '@/lib/auth-options';
 import { config } from '@/lib/config';
 import { getDepartmentFolder, getDepartmentIdByFolder } from '@/lib/departments';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
 import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData, resolveGithubToken } from '@/lib/telegram';
 import { getAllFilesInFolder, deleteCourseFolder, findCourseFolderPathInRepo } from '@/lib/course-delete';
+import { commitFilesToBranch } from '@/lib/github-commit';
+import { decrypt, isEncrypted } from '@/lib/crypto';
 
 const COURSE_SUBFOLDERS = ['Mid/NOTES', 'Mid/Previous Questions', 'Final/NOTES', 'Final/Previous Questions', 'sheet', 'Syllabus', 'Other'];
 
@@ -28,39 +32,78 @@ function ghHeaders(token: string) {
   };
 }
 
-async function batchCreateGitkeepFiles(token: string, folderPath: string, paths: string[]): Promise<number> {
-  if (paths.length === 0) return 0;
+// Read the branch tree and report which standard course subfolders are missing.
+// Returns null when the repo tree cannot be read with this token.
+async function inspectCourseFolders(token: string, basePath: string, subfolders: string[]): Promise<{ missing: string[]; exists: boolean } | null> {
   const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
-  if (!refRes.ok) return 0;
-  const refData = await refRes.json();
-  const baseCommitSha = refData.object.sha;
+  if (!refRes.ok) return null;
+  const baseCommitSha = (await refRes.json()).object.sha;
 
   const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
-  if (!commitRes.ok) return 0;
-  const commitData = await commitRes.json();
-  const baseTreeSha = commitData.tree.sha;
+  if (!commitRes.ok) return null;
+  const baseTreeSha = (await commitRes.json()).tree.sha;
 
-  const treeItems = paths.map(p => ({ path: `${p}/.gitkeep`, mode: '100644', type: 'blob' as const, content: '' }));
+  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees/${baseTreeSha}?recursive=1`, { headers: ghHeaders(token) });
+  if (!treeRes.ok) return null;
+  const tree = (await treeRes.json()).tree || [];
+  const paths = new Set<string>(tree.map((item: any) => String(item.path || '')));
+  const prefix = basePath + '/';
+  const exists = Array.from(paths).some(p => p === basePath || p.startsWith(prefix));
+  const missing = subfolders.filter(sf => !paths.has(`${basePath}/${sf}/.gitkeep`));
+  return { missing, exists };
+}
 
-  const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
-    method: 'POST', headers: ghHeaders(token),
-    body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems }),
-  });
-  if (!treeRes.ok) return 0;
-  const treeData = await treeRes.json();
+// Create the missing subfolders in ONE atomic commit using the shared
+// blobs → tree → commit → ref helper (same path as uploads, so it works with
+// both a user PAT and the app bot token). Returns a short error reason.
+async function createCourseFolders(token: string, basePath: string, subfolders: string[]): Promise<string> {
+  if (subfolders.length === 0) return '';
+  try {
+    const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
+    if (!refRes.ok) return `ref:${refRes.status}`;
+    const baseSha = (await refRes.json()).object.sha;
 
-  const newCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
-    method: 'POST', headers: ghHeaders(token),
-    body: JSON.stringify({ message: `Create course folders: ${folderPath}`, tree: treeData.sha, parents: [baseCommitSha] }),
-  });
-  if (!newCommitRes.ok) return 0;
-  const newCommitData = await newCommitRes.json();
+    await commitFilesToBranch({
+      token,
+      owner: config.owner,
+      repo: config.repo,
+      branch: config.branch,
+      baseSha,
+      files: subfolders.map(sf => ({ path: `${basePath}/${sf}/.gitkeep`, content: '' })),
+      message: `Create course folders: ${basePath}`,
+    });
+    return '';
+  } catch (e: any) {
+    return String(e?.message || e || 'unknown error');
+  }
+}
 
-  await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
-    method: 'PATCH', headers: ghHeaders(token),
-    body: JSON.stringify({ sha: newCommitData.sha, force: true }),
-  });
-  return paths.length;
+// Try every available write token (user PAT → OAuth session → app bot) so a
+// user who can already upload to the repo can also create a course, even when
+// the bot token is read-only/misconfigured. Mirrors the upload/rename flows.
+async function resolveWriteTokens(req: NextRequest, email: string): Promise<string[]> {
+  const tokens: string[] = [];
+  const add = (t?: string | null) => {
+    if (t && t.length > 0 && !tokens.includes(t)) tokens.push(t);
+  };
+
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const profile = await prisma.profile.findUnique({ where: { userId: email }, select: { githubToken: true } });
+    if (profile?.githubToken) {
+      const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
+      if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) add(decrypted);
+    }
+  } catch {}
+
+  try {
+    const session = await getServerSession(authOptions);
+    if ((session as any)?.accessToken) add((session as any).accessToken);
+  } catch {}
+
+  try { add(await resolveGithubToken()); } catch {}
+
+  return tokens;
 }
 
 // Rename a course folder on GitHub by remapping every blob under the old
@@ -201,8 +244,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: semesterCheck.reason }, { status: 403 });
     }
 
-    const botToken = await resolveGithubToken();
-    if (!botToken) {
+    const tokens = await resolveWriteTokens(req, email);
+    if (tokens.length === 0) {
       return NextResponse.json({ error: 'GitHub uploader is not connected. Please contact an admin.' }, { status: 400 });
     }
 
@@ -210,29 +253,38 @@ export async function POST(req: NextRequest) {
     const courseFolder = `${code.toUpperCase()} - ${cleanTitle}`;
     const basePath = `${config.uploadPath}/${getDepartmentFolder(department)}/${semester}/${courseFolder}`;
 
-    // GitHub is the source of truth — check if the course folder already exists.
-    // A targeted contents check is much cheaper than a full recursive tree fetch.
+    // GitHub is the source of truth. Read the branch tree once to see which
+    // standard subfolders (Mid/NOTES, Final/NOTES, sheet, …) already exist and
+    // create only the missing ones in a single atomic commit.
     let alreadyExisted = false;
-    try {
-      const probePath = `${basePath}/Mid/NOTES/.gitkeep`;
-      const probeEncoded = probePath.split('/').map(encodeURIComponent).join('/');
-      const probeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${probeEncoded}`, { headers: ghHeaders(botToken) });
-      alreadyExisted = probeRes.ok;
-    } catch {}
+    let foldersReady = false;
+    let lastError = '';
+    for (const token of tokens) {
+      const info = await inspectCourseFolders(token, basePath, COURSE_SUBFOLDERS);
+      if (!info) {
+        lastError = lastError || 'Could not read the repository tree';
+        continue;
+      }
+      alreadyExisted = info.exists;
+      if (info.missing.length === 0) { foldersReady = true; break; }
+      const reason = await createCourseFolders(token, basePath, info.missing);
+      if (!reason) { foldersReady = true; break; }
+      lastError = reason;
+    }
 
-    if (!alreadyExisted) {
-      const allPaths = COURSE_SUBFOLDERS.map(sf => `${basePath}/${sf}`);
-      const created = await batchCreateGitkeepFiles(botToken, basePath, allPaths);
-      if (created === 0) {
-        // Tree cache may be stale — re-check GitHub directly before failing
-        try {
-          const encoded = basePath.split('/').map(encodeURIComponent).join('/');
-          const checkRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${encoded}`, { headers: ghHeaders(botToken) });
-          alreadyExisted = checkRes.ok;
-        } catch {}
-        if (!alreadyExisted) {
-          return NextResponse.json({ error: 'Failed to create course folders on GitHub' }, { status: 500 });
-        }
+    if (!foldersReady) {
+      // Tree cache / eventual consistency — re-check GitHub directly before failing.
+      try {
+        const probePath = `${basePath}/Mid/NOTES/.gitkeep`;
+        const probeEncoded = probePath.split('/').map(encodeURIComponent).join('/');
+        const probeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${probeEncoded}`, { headers: ghHeaders(tokens[0]) });
+        alreadyExisted = probeRes.ok;
+      } catch {}
+      if (!alreadyExisted) {
+        console.error(`[course-create] failed ${code} at ${basePath}: ${lastError}`);
+        return NextResponse.json({
+          error: `Failed to create course folders on GitHub${lastError ? ` (${lastError})` : ''}. Please try again or contact an admin.`,
+        }, { status: 500 });
       }
     }
 

@@ -20,6 +20,10 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [signupName, setSignupName] = useState('');
+  const [signupId, setSignupId] = useState('');
+  const [signupContact, setSignupContact] = useState('');
+  const [signupGender, setSignupGender] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
@@ -55,6 +59,7 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
   useEffect(() => {
     if (!isOpen) {
       setEmail(''); setPassword(''); setError(''); setSuccess('');
+      setSignupName(''); setSignupId(''); setSignupContact(''); setSignupGender('');
       setShowForgotPassword(false); setForgotPasswordEmail(''); setForgotPasswordSent(false);
       setTurnstileReady(false); setLoginMode('password'); setMagicLinkSent(false);
       setTotpStep(false); setTotpAvailable(false); setTotpCode(''); setTotpTargetEmail('');
@@ -188,7 +193,11 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         // Only open the gate when the account genuinely isn't approved and
         // ISN'T a linked identity. A linked or approved account must never see
         // this gate — it signs in like any university account.
-        if (status?.needsApproval && status.status !== 'active' && !status.linked) {
+        // On a fresh SIGN-UP, let the form collect the name/ID once and store
+        // them via request-access, so the user is never asked again after
+        // approval. Existing pending/rejected accounts still see the gate.
+        const freshSignup = isSignUp && !status?.status;
+        if (status?.needsApproval && status.status !== 'active' && !status.linked && !freshSignup) {
           setAccessGate({ email: e, status: status.status || null });
           setLoading(false);
           return;
@@ -197,12 +206,56 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
 
       let user: any;
       if (isSignUp) {
+        // Non-university (personal) emails must submit their verification
+        // details exactly once — at account creation — so they are never asked
+        // for their name/ID again after approval.
+        const personalEmail = !isUniversityEmail(effectiveEmail);
+        if (personalEmail) {
+          if (!signupName.trim()) { setError('Please enter your full name as it appears on your university certificate.'); setLoading(false); return; }
+          if (!signupId.trim() || signupId.trim().length < 3) { setError('Please enter your student/university ID so a manager can verify you.'); setLoading(false); return; }
+        }
+
         const turnstileValid = await verifyTurnstileToken();
         if (!turnstileValid) { setLoading(false); return; }
 
         const result = await signUpWithEmail(effectiveEmail, password);
         user = result.user;
-        setSuccess('Account created! A verification email has been sent to your inbox. Please verify your email before signing in. Check your spam/junk folder and "All Mail" if you don\'t see it.');
+
+        let requestStored = false;
+        let requestError = '';
+        if (personalEmail) {
+          try {
+            const reqRes = await fetch('/api/auth/request-access', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: effectiveEmail,
+                name: signupName.trim(),
+                id: signupId.trim(),
+                contact: signupContact.trim(),
+                gender: signupGender,
+              }),
+            });
+            const reqData = await reqRes.json().catch(() => ({}));
+            requestStored = !!reqData.success;
+            if (!requestStored) requestError = reqData.error || '';
+          } catch {
+            requestError = 'Network error';
+          }
+        }
+
+        if (personalEmail && !requestStored) {
+          setError(`Your account was created, but we couldn't save your verification details${requestError ? `: ${requestError}` : ''}. Please submit them once via "request access".`);
+          setIsSignUp(false);
+          setLoading(false);
+          return;
+        }
+
+        setSuccess(
+          personalEmail
+            ? 'Account created! Your verification details were submitted and a manager will approve your account. Please verify your email before signing in — check spam/junk and "All Mail" if you don\'t see it.'
+            : 'Account created! A verification email has been sent to your inbox. Please verify your email before signing in. Check your spam/junk folder and "All Mail" if you don\'t see it.'
+        );
         setIsSignUp(false);
         setLoading(false);
         return;
@@ -621,6 +674,14 @@ export default function LoginModal({ isOpen, onClose, preRenderedTurnstileContai
         setEmail={setEmail}
         password={password}
         setPassword={setPassword}
+        fullName={signupName}
+        setFullName={setSignupName}
+        universityId={signupId}
+        setUniversityId={setSignupId}
+        contact={signupContact}
+        setContact={setSignupContact}
+        gender={signupGender}
+        setGender={setSignupGender}
         loading={loading}
         error={error}
         success={success}

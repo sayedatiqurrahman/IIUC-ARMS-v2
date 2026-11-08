@@ -139,34 +139,68 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       return NextResponse.json({ error: 'certificates array required' }, { status: 400 });
     }
 
-    const created = [];
-    for (const cert of certificates) {
-      const { memberName, universityId, department, session, post, eventName, servicePeriod, signatories } = cert;
-      const uniId = normalizeUniversityId(universityId);
-      if (!memberName?.trim() || !uniId || !department?.trim()) continue;
-      const certificateId = generateCertId();
-      const c = await prisma.clubCertificate.create({
-        data: {
-          certificateId,
-          clubId: club.id,
-          eventId: cert.eventId || null,
-          memberName: memberName.trim(),
-          universityId: uniId,
-          department: department.trim(),
-          session: session || null,
-          post: post || null,
-          eventName: eventName || null,
-          servicePeriod: servicePeriod || null,
-          signatories: signatories ? JSON.stringify(signatories) : null,
-          issuedBy: email,
-        },
-      });
-      created.push(c);
-      // Recipients become members (stub profile auto-created when needed).
-      await ensureRecipientMember(club.id, { memberName: memberName.trim(), universityId: uniId, department: department.trim() });
+    if (certificates.length > 500) {
+      return NextResponse.json({ error: 'Too many certificates in one batch (max 500). Please split the file.' }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, certificates: created, count: created.length });
+    const created: any[] = [];
+    const results: Array<{ index: number; status: 'success' | 'error'; certificateId?: string; error?: string }> = [];
+    for (let i = 0; i < certificates.length; i++) {
+      const cert = certificates[i];
+      try {
+        const { memberName, universityId, department, session, post, eventName, servicePeriod, signatories } = cert;
+        const uniId = normalizeUniversityId(universityId);
+        if (!memberName?.trim() || !uniId || !department?.trim()) {
+          results.push({ index: i, status: 'error', error: 'Name, university ID and department are required' });
+          continue;
+        }
+        let certificateId = generateCertId();
+        let c: any = null;
+        for (let attempt = 0; attempt < 3 && !c; attempt++) {
+          try {
+            c = await prisma.clubCertificate.create({
+              data: {
+                certificateId,
+                clubId: club.id,
+                eventId: cert.eventId || null,
+                memberName: memberName.trim(),
+                universityId: uniId,
+                department: department.trim(),
+                session: session || null,
+                post: post || null,
+                eventName: eventName || null,
+                servicePeriod: servicePeriod || null,
+                signatories: signatories ? JSON.stringify(signatories) : null,
+                email: typeof cert.email === 'string' && cert.email.trim() ? cert.email.trim().toLowerCase() : null,
+                issuedBy: email,
+              },
+            });
+          } catch (e: any) {
+            // Retry only on a rare certificateId collision.
+            if (String(e?.message || '').toLowerCase().includes('unique') && attempt < 2) {
+              certificateId = generateCertId();
+              continue;
+            }
+            throw e;
+          }
+        }
+        created.push(c);
+        results.push({ index: i, status: 'success', certificateId: c.certificateId });
+        // Recipients become members (stub profile auto-created when needed).
+        await ensureRecipientMember(club.id, { memberName: memberName.trim(), universityId: uniId, department: department.trim() });
+      } catch (e: any) {
+        console.error('[cert-issue] row failed:', e?.message || e);
+        results.push({ index: i, status: 'error', error: e?.message || 'Failed to create certificate' });
+      }
+    }
+
+    return NextResponse.json({
+      success: created.length > 0,
+      certificates: created,
+      count: created.length,
+      summary: { total: certificates.length, created: created.length, failed: certificates.length - created.length },
+      results,
+    });
   } catch {
     return NextResponse.json({ error: 'Failed to issue certificates' }, { status: 500 });
   }

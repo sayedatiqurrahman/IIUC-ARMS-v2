@@ -82,11 +82,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Dismissal is per-session only: the banner returns on the next visit until
+  // the app is actually installed (requirement: keep prompting until installed).
   const [installBannerDismissed, setInstallBannerDismissed] = useState(false);
   const [canInstall, setCanInstall] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showIosInstallHelp, setShowIosInstallHelp] = useState(false);
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (localStorage.getItem('qsis-install-banner-dismissed') === 'true') setInstallBannerDismissed(true);
+    try {
+      if (sessionStorage.getItem('iiuc-install-banner-dismissed') === 'true') setInstallBannerDismissed(true);
+    } catch {}
     const onBeforeInstall = (e: any) => {
       e.preventDefault();
       setCanInstall(e);
@@ -102,6 +107,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       window.removeEventListener('appinstalled', onAppInstalled);
     };
   }, []);
+
+  const dismissInstallBanner = () => {
+    setInstallBannerDismissed(true);
+    try { sessionStorage.setItem('iiuc-install-banner-dismissed', 'true'); } catch {}
+  };
+
+  const handleInstallClick = async () => {
+    if (canInstall) {
+      await canInstall.prompt();
+      const choice = await canInstall.userChoice.catch(() => null);
+      if (choice?.outcome === 'accepted') {
+        setInstallBannerDismissed(true);
+        try { sessionStorage.setItem('iiuc-install-banner-dismissed', 'true'); } catch {}
+      }
+      setCanInstall(null);
+      return;
+    }
+    setShowIosInstallHelp(true);
+  };
 
   const showInstallBanner = isInBrowser() && !installBannerDismissed && (canInstall !== null || isIOSBrowser());
 
@@ -460,6 +484,48 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               Later
             </button>
           )}
+        </div>
+      )}
+      {showInstallBanner && (
+        <div className="bg-dark-bg2 border-b border-qsis/30 px-4 py-2.5 z-[200] relative">
+          <div className="max-w-[1200px] mx-auto flex items-center gap-3 flex-wrap sm:flex-nowrap">
+            <Image src="/arms-logo-icon.png" alt="IIUC-ARMS" width={34} height={34} className="w-[34px] h-[34px] p-0.5 rounded-lg border border-qsis object-contain bg-white flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[0.82rem] font-semibold text-dark-text leading-tight">Install the IIUC-ARMS app</p>
+              <p className="text-[0.7rem] text-dark-text2 leading-tight">Faster access, offline support and a home-screen icon.</p>
+            </div>
+            <button
+              onClick={handleInstallClick}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-qsis text-white text-[0.76rem] font-semibold border-none cursor-pointer hover:opacity-90 transition-opacity flex-shrink-0"
+            >
+              <i className="fas fa-download"></i> Install
+            </button>
+            <button
+              onClick={dismissInstallBanner}
+              className="w-7 h-7 rounded-lg bg-transparent text-dark-text3 hover:text-dark-text hover:bg-dark-bg3 border-none cursor-pointer flex-shrink-0"
+              title="Dismiss for now"
+              aria-label="Dismiss install banner"
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+      )}
+      {showIosInstallHelp && (
+        <div className="fixed inset-0 z-[300] bg-black/60 flex items-center justify-center p-4" onClick={() => setShowIosInstallHelp(false)}>
+          <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-2">
+              <i className="fas fa-mobile-alt text-qsis"></i>
+              <h4 className="text-[0.9rem] font-bold text-dark-text">Install IIUC-ARMS</h4>
+            </div>
+            <p className="text-[0.78rem] text-dark-text2 mb-3">Add the app to your Home Screen for a full-screen, app-like experience:</p>
+            <ol className="text-[0.78rem] text-dark-text2 space-y-1.5 list-decimal list-inside mb-3">
+              <li>Tap the <strong className="text-dark-text">Share</strong> button in your browser</li>
+              <li>Tap <strong className="text-dark-text">Add to Home Screen</strong></li>
+              <li>Tap <strong className="text-dark-text">Add</strong></li>
+            </ol>
+            <button onClick={() => setShowIosInstallHelp(false)} className="w-full py-2 rounded-lg bg-qsis text-white text-[0.8rem] font-semibold cursor-pointer border-none">Got it</button>
+          </div>
         </div>
       )}
       {/* NAVBAR */}
@@ -1146,6 +1212,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <OnboardingModal
           initialDept={profile.department || undefined}
           initialSemester={profile.semester ? (config.semesters.find(s => s.id === profile.semester)?.label || profile.semester) : undefined}
+          initialGender={profile.gender || undefined}
           onComplete={(data) => {
             setStoreOnboarding(data);
             dismissOnboarding();

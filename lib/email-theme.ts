@@ -225,7 +225,7 @@ export function renderEmailHtml(settings: EmailSettings, tpl: EmailTemplate, opt
                   <td align="center" style="font-size:12px;color:${t.mutedColor};line-height:1.6">
                     ${escapeHtml(t.footerText)}
                     <br/>
-                    <span style="color:${t.primaryColor}">${escapeHtml(t.appName)}</span> &nbsp;·&nbsp; ${new Date().getFullYear()}
+                    <a href="${escapeHtml(origin)}" style="color:${t.primaryColor};text-decoration:none;font-weight:600">${escapeHtml(t.appName)}</a> &nbsp;·&nbsp; <a href="${escapeHtml(origin)}" style="color:${t.mutedColor};text-decoration:none">${escapeHtml(origin.replace(/^https?:\/\//, ''))}</a> &nbsp;·&nbsp; ${new Date().getFullYear()}
                   </td>
                 </tr>
               </table>
@@ -239,7 +239,7 @@ export function renderEmailHtml(settings: EmailSettings, tpl: EmailTemplate, opt
 </html>`;
 }
 
-export function emailPlainParts(settings: EmailSettings, tpl: EmailTemplate, opts: { name?: string; email?: string; universityId?: string; role?: string; message?: string; senderEmail?: string } = {}): { subject: string; body: string } {
+export function emailPlainParts(settings: EmailSettings, tpl: EmailTemplate, opts: { name?: string; email?: string; universityId?: string; role?: string; message?: string; senderEmail?: string; origin?: string } = {}): { subject: string; body: string } {
   const vars = EMAIL_VARS(settings, opts);
   const body = interpolate(tpl.body, vars);
   const subject = interpolate(tpl.subject, vars);
@@ -247,6 +247,7 @@ export function emailPlainParts(settings: EmailSettings, tpl: EmailTemplate, opt
     `—`,
     `${settings.theme.appName} · ${settings.theme.tagline}`,
   ];
+  if (opts.origin) footer.push(`Open ${settings.theme.appName}: ${opts.origin}`);
   if (settings.theme.senderName) footer.push(`Sent by ${settings.theme.senderName}`);
   if (settings.theme.whatsapp) footer.push(`WhatsApp: ${settings.theme.whatsapp}`);
   if (settings.theme.telegram) footer.push(`Telegram: ${settings.theme.telegram}`);

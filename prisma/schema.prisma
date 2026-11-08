@@ -385,6 +385,7 @@ model ClubCertificate {
   eventName     String?
   servicePeriod String?
   signatories   String?  // JSON: [{name, designation, title}]
+  email         String?  // recipient email supplied at bulk-issue time
   issuedBy      String
   issuedAt      DateTime @default(now())
 
@@ -458,6 +459,20 @@ model StudioCertificate {
   @@index([orgId])
   @@index([certificateId])
   @@index([universityId])
+}
+
+// Gmail accounts connected via Google OAuth for sending mail through the Gmail
+// API (no SMTP). The refresh token is stored encrypted with TOKEN_ENCRYPTION_KEY.
+model EmailSender {
+  id           String   @id @default(cuid())
+  userId       String                       // app user (email) who connected it
+  email        String   @unique             // connected Gmail address
+  refreshToken String                       // encrypted
+  scope        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // Per-email two-factor (authenticator) configuration. Keyed by email so a

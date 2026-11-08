@@ -222,10 +222,17 @@ export default function AccessGate({ email: initialEmail = '', status, onClose, 
               className="w-full py-2.5 rounded-lg bg-qsis text-white text-[0.82rem] font-semibold border-none cursor-pointer hover:opacity-90 transition-opacity">
               <i className="fas fa-graduation-cap mr-1"></i> I have a university email — sign in with it
             </button>
-            <button onClick={() => { setMode('form'); setError(''); }}
-              className="w-full py-2.5 rounded-lg border border-qsis text-qsis text-[0.82rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors">
-              <i className="fas fa-id-card mr-1"></i> I don&apos;t have one — request access with my ID
-            </button>
+            {statusPending ? (
+              <div className="w-full py-2.5 px-3 rounded-lg bg-dark-bg border border-dark-border text-dark-text2 text-[0.76rem] text-center">
+                <i className="fas fa-check-circle text-green-400 mr-1"></i>
+                Your details were already submitted — no need to enter them again.
+              </div>
+            ) : (
+              <button onClick={() => { setMode('form'); setError(''); }}
+                className="w-full py-2.5 rounded-lg border border-qsis text-qsis text-[0.82rem] font-semibold cursor-pointer hover:bg-qsis/10 transition-colors">
+                <i className="fas fa-id-card mr-1"></i> I don&apos;t have one — request access with my ID
+              </button>
+            )}
             {showBackToHome && (
               <a href="/" className="block w-full py-1.5 rounded-lg bg-transparent text-dark-text2 text-[0.75rem] font-semibold cursor-pointer hover:text-dark-text transition-colors text-center no-underline">
                 <i className="fas fa-arrow-left mr-1"></i> Back to Home

@@ -9,6 +9,7 @@ import { CertSignatory, CertTheme, CertLogoKey, DEFAULT_THEME, THEME_PRESETS } f
 import CertDesignPanel from '@/components/studio/CertDesignPanel';
 import { generateSignatureDataURL, signatureTextFor } from '@/lib/signature-gen';
 import { normalizeUniversityId } from '@/lib/utils';
+import { parseSpreadsheetFile, mapCertificateRows, downloadCsvTemplate } from '@/lib/spreadsheet';
 
 interface CertRow {
   memberName: string;
@@ -19,6 +20,16 @@ interface CertRow {
   eventName: string;
   servicePeriod: string;
   eventId: string;
+  email: string;
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
 const CUSTOM_THEMES_KEY = 'arms.customThemes';
@@ -61,7 +72,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
   const [club, setClub] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
-  const [rows, setRows] = useState<CertRow[]>([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '', eventId: '' }]);
+  const [rows, setRows] = useState<CertRow[]>([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: '', servicePeriod: '', eventId: '', email: '' }]);
   const [signatories, setSignatories] = useState<CertSignatory[]>(defaultSignatories);
   const [themes, setThemes] = useState<CertTheme[]>(THEME_PRESETS);
   const [customThemes, setCustomThemes] = useState<CertTheme[]>([]);
@@ -76,6 +87,18 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
   const [expandedSig, setExpandedSig] = useState<number | null>(null);
   const [sigPreviews, setSigPreviews] = useState<Record<number, string>>({});
   const sigFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+  // Bulk import + logo + email
+  const [importingFile, setImportingFile] = useState(false);
+  const [importMsg, setImportMsg] = useState('');
+  const bulkFileRef = useRef<HTMLInputElement | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoFileRef = useRef<HTMLInputElement | null>(null);
+  const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; email?: string; configured?: boolean } | null>(null);
+  const [emailSubject, setEmailSubject] = useState('Your certificate is ready');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailResult, setEmailResult] = useState<any>(null);
 
   const allThemes = [...themes, ...customThemes];
 
@@ -118,12 +141,54 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
     });
   }, [profile.email, profile.role]);
 
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    fetch('/api/email/gmail/status')
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setGmailStatus(d); })
+      .catch(() => { if (!cancelled) setGmailStatus({ connected: false }); });
+
+    const gmail = new URLSearchParams(window.location.search).get('gmail');
+    if (gmail === 'connected') setImportMsg('Gmail connected — you can now email certificates.');
+    else if (gmail === 'unconfigured') setImportMsg('Gmail sending is not configured on this deployment yet.');
+    else if (gmail === 'norefresh') setImportMsg('Google did not return a refresh token. Remove the app from your Google account permissions and try again.');
+    else if (gmail === 'error') setImportMsg('Could not connect Gmail. Please try again.');
+
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  const [issuedHydrated, setIssuedHydrated] = useState(false);
+  useEffect(() => {
+    if (!slug) return;
+    try {
+      const raw = sessionStorage.getItem(`arms.issued.${slug}`);
+      if (raw) setIssued(JSON.parse(raw));
+    } catch {}
+    setIssuedHydrated(true);
+  }, [slug]);
+  useEffect(() => {
+    if (!issuedHydrated || !slug) return;
+    try {
+      if (issued.length) sessionStorage.setItem(`arms.issued.${slug}`, JSON.stringify(issued));
+      else sessionStorage.removeItem(`arms.issued.${slug}`);
+    } catch {}
+  }, [issued, slug, issuedHydrated]);
+
+  useEffect(() => {
+    if (!club?.name) return;
+    setEmailSubject(`Your ${club.name} certificate`);
+    setEmailMessage(
+      `Hi {{name}},\n\nCongratulations! Your certificate from ${club.name} is ready.\n\nCertificate ID: {{certificateId}}\nVerify: {{verifyUrl}}\n\nYou can download and share it using the link above.\n\nBest regards,\n${club.name}`
+    );
+  }, [club?.name]);
+
   function updateRow(i: number, field: keyof CertRow, value: string) {
     setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
   }
 
   function addRow() {
-    setRows(prev => [...prev, { memberName: '', universityId: '', department: club?.department || '', session: '', post: '', eventName: selectedEventId && events.find(e => e.id === selectedEventId)?.title || '', servicePeriod: '', eventId: selectedEventId }]);
+    setRows(prev => [...prev, { memberName: '', universityId: '', department: club?.department || '', session: '', post: '', eventName: selectedEventId && events.find(e => e.id === selectedEventId)?.title || '', servicePeriod: '', eventId: selectedEventId, email: '' }]);
   }
 
   function removeRow(i: number) {
@@ -303,7 +368,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
           );
         }
         setQrUrls(urls);
-        setRows([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: selectedEventId && events.find(e => e.id === selectedEventId)?.title || '', servicePeriod: '', eventId: selectedEventId }]);
+        setRows([{ memberName: '', universityId: '', department: '', session: '', post: '', eventName: selectedEventId && events.find(e => e.id === selectedEventId)?.title || '', servicePeriod: '', eventId: selectedEventId, email: '' }]);
       } else {
         alert(data.error || 'Failed to issue');
       }
@@ -342,6 +407,127 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
     setGeneratingPdf(false);
   }
 
+  // ---- Bulk import (CSV / Excel) -------------------------------------------
+
+  async function handleBulkFile(file: File) {
+    setImportingFile(true);
+    setImportMsg('');
+    try {
+      const matrix = await parseSpreadsheetFile(file);
+      const parsed = mapCertificateRows(matrix);
+      if (parsed.length === 0) {
+        setImportMsg('No rows found. Make sure the first row contains column headers like memberName, universityId, department, email.');
+        return;
+      }
+      const evTitle = selectedEventId ? (events.find(e => e.id === selectedEventId)?.title || '') : '';
+      const imported: CertRow[] = parsed.map(r => ({
+        memberName: r.memberName,
+        universityId: normalizeUniversityId(r.universityId),
+        department: r.department || club?.department || '',
+        session: r.session,
+        post: r.post,
+        eventName: r.eventName || evTitle,
+        servicePeriod: r.servicePeriod,
+        eventId: selectedEventId,
+        email: r.email,
+      }));
+      setRows(prev => {
+        const nonEmpty = prev.filter(r => r.memberName.trim() || r.universityId.trim() || r.email.trim());
+        return nonEmpty.length === 0 ? imported : [...nonEmpty, ...imported];
+      });
+      setImportMsg(`Imported ${imported.length} row(s) from ${file.name}. Review the list, then issue.`);
+    } catch (e: any) {
+      setImportMsg(`Could not read file: ${e?.message || 'unknown error'}`);
+    } finally {
+      setImportingFile(false);
+      if (bulkFileRef.current) bulkFileRef.current.value = '';
+    }
+  }
+
+  // ---- Club logo upload ------------------------------------------------------
+
+  async function handleLogoFile(file: File) {
+    if (!file.type.startsWith('image/')) return;
+    setLogoUploading(true);
+    try {
+      const image = await fileToDataUrl(file);
+      const res = await fetch(`/api/clubs/${slug}/logo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image, type: 'logo' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setClub((c: any) => ({ ...(c || {}), logoUrl: data.logoUrl }));
+      } else {
+        alert(data.error || 'Logo upload failed');
+      }
+    } catch {
+      alert('Logo upload failed');
+    } finally {
+      setLogoUploading(false);
+      if (logoFileRef.current) logoFileRef.current.value = '';
+    }
+  }
+
+  // ---- Email certificates via connected Gmail (no SMTP) ----------------------
+
+  async function handleDisconnectGmail() {
+    if (!confirm('Disconnect Gmail? You can reconnect anytime.')) return;
+    try {
+      await fetch('/api/email/gmail/disconnect', { method: 'POST' });
+      setGmailStatus({ connected: false, configured: gmailStatus?.configured !== false });
+      setEmailResult(null);
+    } catch {}
+  }
+
+  async function handleSendEmails() {
+    if (issued.length === 0) return;
+    setSendingEmail(true);
+    setEmailResult(null);
+    const ids = issued.map(c => c.certificateId);
+    const chunkSize = 40;
+    const allResults: any[] = [];
+    try {
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const res = await fetch(`/api/clubs/${slug}/certificates/email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            certificateIds: chunk,
+            subject: emailSubject,
+            message: emailMessage,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          allResults.push(...(data.results || []));
+          setEmailResult({
+            success: true,
+            results: allResults,
+            summary: {
+              sent: allResults.filter(r => r.status === 'sent').length,
+              skipped: allResults.filter(r => r.status === 'skipped').length,
+              failed: allResults.filter(r => r.status === 'failed').length,
+            },
+          });
+        } else if (data.needsConnect) {
+          setGmailStatus(s => ({ ...(s || { connected: false }), connected: false, configured: data.configured !== false }));
+          alert(data.error || 'Connect your Gmail account first.');
+          break;
+        } else {
+          alert(data.error || 'Failed to send emails');
+          break;
+        }
+      }
+    } catch {
+      alert('Network error while sending emails');
+    } finally {
+      setSendingEmail(false);
+    }
+  }
+
   if (loading) return (
     <div className="min-h-screen bg-dark-bg flex items-center justify-center">
       <i className="fas fa-spinner fa-spin text-qsis text-2xl"></i>
@@ -372,15 +558,23 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
           <p className="text-sm text-dark-text2 mt-1">Generate verifiable certificates with unique IDs and QR codes</p>
         </div>
 
-        {!club?.logoUrl && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4 flex items-start gap-3">
-            <i className="fas fa-exclamation-triangle text-amber-400 mt-0.5"></i>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-400">No club logo set</p>
-              <p className="text-xs text-dark-text2 mt-0.5">Your certificates won't display the club logo. <a href={`/clubs/${slug}`} className="text-amber-400 font-semibold hover:underline no-underline">Upload your club logo</a> in the club settings first for a complete certificate.</p>
-            </div>
+        <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-4 mb-4 flex items-center gap-3 flex-wrap">
+          <div className="w-12 h-12 rounded-lg bg-dark-bg border border-dark-border flex items-center justify-center overflow-hidden flex-shrink-0">
+            {club?.logoUrl
+              ? <img src={club.logoUrl} alt="Club logo" className="w-full h-full object-contain" />
+              : <i className="fas fa-image text-dark-text3"></i>}
           </div>
-        )}
+          <div className="flex-1 min-w-[180px]">
+            <p className="text-sm font-semibold text-dark-text">Club logo</p>
+            <p className="text-xs text-dark-text2">{club?.logoUrl ? 'This logo is printed on every certificate.' : 'No club logo set — upload one to complete your certificates.'}</p>
+          </div>
+          <input ref={logoFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoFile(f); }} />
+          <button onClick={() => logoFileRef.current?.click()} disabled={logoUploading}
+            className="px-3 py-1.5 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition disabled:opacity-50">
+            {logoUploading ? <><i className="fas fa-spinner fa-spin mr-1"></i>Uploading...</> : <><i className="fas fa-upload mr-1"></i>{club?.logoUrl ? 'Replace logo' : 'Upload logo'}</>}
+          </button>
+        </div>
 
         {issued.length === 0 ? (
           <div className="space-y-4">
@@ -574,9 +768,28 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
             </div>
 
             <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <h3 className="text-sm font-bold text-dark-text"><i className="fas fa-users text-qsis mr-2"></i>Certificate Recipients</h3>
-                <button onClick={addRow} className="text-qsis text-xs font-semibold hover:underline"><i className="fas fa-plus mr-1"></i>Add More</button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input ref={bulkFileRef} type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleBulkFile(f); }} />
+                  <button onClick={() => bulkFileRef.current?.click()} disabled={importingFile}
+                    className="px-3 py-1.5 bg-qsis/10 text-qsis border border-qsis/30 rounded-lg text-xs font-semibold hover:bg-qsis/20 transition disabled:opacity-50">
+                    {importingFile ? <><i className="fas fa-spinner fa-spin mr-1"></i>Reading...</> : <><i className="fas fa-file-import mr-1"></i>Import CSV / Excel</>}
+                  </button>
+                  <button onClick={downloadCsvTemplate}
+                    className="px-3 py-1.5 bg-dark-bg3 text-dark-text2 border border-dark-border rounded-lg text-xs font-semibold hover:text-dark-text transition">
+                    <i className="fas fa-download mr-1"></i>Template
+                  </button>
+                  <button onClick={addRow} className="text-qsis text-xs font-semibold hover:underline"><i className="fas fa-plus mr-1"></i>Add Row</button>
+                </div>
+              </div>
+              <div className="mb-3 rounded-xl bg-dark-bg border border-dark-border p-3">
+                <p className="text-[0.68rem] text-dark-text2">
+                  <i className="fas fa-info-circle text-qsis mr-1"></i>
+                  Upload a <strong>.csv</strong> or <strong>.xlsx</strong> file. Columns: <code>memberName, universityId, department, session, post, servicePeriod, eventName, email</code>. Only name, ID and department are required — email is optional (used to send certificates).
+                </p>
+                {importMsg && <p className="text-[0.68rem] text-qsis mt-2"><i className="fas fa-check-circle mr-1"></i>{importMsg}</p>}
               </div>
               <div className="space-y-4">
                 {rows.map((row, i) => (
@@ -624,7 +837,13 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
                           className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis"
                           placeholder="2022-23" />
                       </div>
-                      <div className="sm:col-span-2">
+                      <div>
+                        <label className="text-[0.68rem] text-dark-text2 mb-1 block">Email (optional)</label>
+                        <input type="email" value={row.email} onChange={e => updateRow(i, 'email', e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis"
+                          placeholder="student@example.com" />
+                      </div>
+                      <div>
                         <label className="text-[0.68rem] text-dark-text2 mb-1 block">Event Name (optional)</label>
                         <input type="text" value={row.eventName} onChange={e => updateRow(i, 'eventName', e.target.value)}
                           className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis"
@@ -658,6 +877,71 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
                 </button>
               </div>
             </div>
+
+            {/* Email certificates (Gmail API — no SMTP) */}
+            <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-5 mb-6">
+              <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                <h3 className="text-sm font-bold text-dark-text"><i className="fas fa-envelope text-qsis mr-2"></i>Email certificates</h3>
+                {gmailStatus?.connected && (
+                  <span className="text-[0.68rem] text-green-400 flex items-center gap-2">
+                    <span><i className="fas fa-check-circle mr-1"></i>Connected as {gmailStatus.email}</span>
+                    <button onClick={handleDisconnectGmail} className="text-dark-text2 hover:text-red-400 underline">Disconnect</button>
+                  </span>
+                )}
+              </div>
+
+              {gmailStatus === null ? (
+                <p className="text-xs text-dark-text2"><i className="fas fa-spinner fa-spin mr-1"></i>Checking Gmail connection...</p>
+              ) : gmailStatus.connected ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[0.68rem] text-dark-text2 mb-1 block">Subject</label>
+                    <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis" />
+                  </div>
+                  <div>
+                    <label className="text-[0.68rem] text-dark-text2 mb-1 block">
+                      Message <span className="text-dark-text3">— supports {'{{name}}'}, {'{{certificateId}}'}, {'{{verifyUrl}}'}, {'{{universityId}}'}, {'{{clubName}}'}</span>
+                    </label>
+                    <textarea value={emailMessage} onChange={e => setEmailMessage(e.target.value)} rows={6}
+                      className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg2 text-dark-text text-sm outline-none focus:border-qsis resize-y" />
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={handleSendEmails} disabled={sendingEmail || issued.length === 0}
+                      className="px-4 py-2 bg-qsis text-white rounded-lg text-sm font-bold hover:opacity-90 transition disabled:opacity-50">
+                      {sendingEmail ? <><i className="fas fa-spinner fa-spin mr-1"></i>Sending...</> : <><i className="fas fa-paper-plane mr-1"></i>Send to recipients</>}
+                    </button>
+                    <span className="text-[0.65rem] text-dark-text3">Emails are branded with the app name and link at the bottom.</span>
+                  </div>
+                  {emailResult && (
+                    <div className={`rounded-xl border p-3 text-xs ${emailResult.summary?.failed > 0 ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-green-500/10 border-green-500/30 text-green-300'}`}>
+                      <p className="font-semibold"><i className="fas fa-envelope-circle-check mr-1"></i>Sent {emailResult.summary?.sent || 0}, skipped {emailResult.summary?.skipped || 0}, failed {emailResult.summary?.failed || 0}</p>
+                      {Array.isArray(emailResult.results) && emailResult.results.filter((r: any) => r.status !== 'sent').length > 0 && (
+                        <div className="mt-1 space-y-0.5">
+                          {emailResult.results.filter((r: any) => r.status !== 'sent').slice(0, 8).map((r: any, i: number) => (
+                            <p key={i} className="text-[0.62rem] text-dark-text2">{r.email || r.certificateId}: {r.error || r.status}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs text-dark-text2 mb-3">
+                    Connect your Gmail (or Google Workspace) account once. Emails are sent through the Gmail API — no SMTP setup needed.
+                  </p>
+                  <a href={`/api/email/gmail/connect?returnTo=${encodeURIComponent(`/clubs/${slug}/certificates/issue`)}`}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-800 rounded-lg text-sm font-bold hover:bg-gray-100 transition no-underline">
+                    <i className="fab fa-google text-red-500"></i> Connect Gmail
+                  </a>
+                  {gmailStatus.configured === false && (
+                    <p className="text-[0.65rem] text-amber-400 mt-2"><i className="fas fa-exclamation-triangle mr-1"></i>Gmail sending is not configured on this deployment yet (missing Google OAuth keys).</p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-4">
               {issued.map(cert => (
                 <div key={cert.id} className="bg-dark-bg2 border border-dark-border rounded-2xl p-5">
@@ -675,6 +959,7 @@ export default function IssueCertView({ params }: { params: Promise<{ slug: stri
                         <div><span className="text-dark-text2">UID:</span> <span className="text-dark-text">{cert.universityId}</span></div>
                         <div><span className="text-dark-text2">Dept:</span> <span className="text-dark-text">{cert.department}</span></div>
                         {cert.post && <div><span className="text-dark-text2">Post:</span> <span className="text-qsis">{cert.post}</span></div>}
+                        {cert.email && <div className="col-span-2"><span className="text-dark-text2">Email:</span> <span className="text-dark-text">{cert.email}</span></div>}
                       </div>
                       <div className="mt-3 flex gap-2 flex-wrap">
                         <a href={`/clubs/preview/${cert.certificateId}`} target="_blank" rel="noopener noreferrer"

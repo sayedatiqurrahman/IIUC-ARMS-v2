@@ -287,6 +287,10 @@ async function main() {
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`, 'ClubEvent');
   await safeExec(`CREATE INDEX IF NOT EXISTS "ClubEvent_clubId_idx" ON "ClubEvent"("clubId")`, 'ClubEvent clubId idx');
+  await safeExec(`ALTER TABLE "ClubEvent" ADD COLUMN "theme" TEXT`, 'ClubEvent.theme col');
+  await safeExec(`ALTER TABLE "ClubEvent" ADD COLUMN "coverUrl" TEXT`, 'ClubEvent.coverUrl col');
+  await safeExec(`ALTER TABLE "ClubEvent" ADD COLUMN "gallery" TEXT`, 'ClubEvent.gallery col');
+  await safeExec(`ALTER TABLE "ClubEvent" ADD COLUMN "assetsPath" TEXT`, 'ClubEvent.assetsPath col');
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "ClubCertificate" (
     "id" TEXT NOT NULL PRIMARY KEY, "certificateId" TEXT NOT NULL,
@@ -300,6 +304,7 @@ async function main() {
   await safeExec(`CREATE INDEX IF NOT EXISTS "ClubCertificate_universityId_idx" ON "ClubCertificate"("universityId")`, 'ClubCertificate uniId idx');
   await safeExec(`ALTER TABLE "ClubCertificate" ADD COLUMN "servicePeriod" TEXT`, 'ClubCertificate.servicePeriod col');
   await safeExec(`ALTER TABLE "ClubCertificate" ADD COLUMN "signatories" TEXT`, 'ClubCertificate.signatories col');
+  await safeExec(`ALTER TABLE "ClubCertificate" ADD COLUMN "email" TEXT`, 'ClubCertificate.email col');
 
   await safeExec(`CREATE TABLE IF NOT EXISTS "ClubClaim" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -346,6 +351,18 @@ async function main() {
   await safeExec(`CREATE INDEX IF NOT EXISTS "StudioCertificate_orgId_idx" ON "StudioCertificate"("orgId")`, 'StudioCertificate.orgId idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "StudioCertificate_certificateId_idx" ON "StudioCertificate"("certificateId")`, 'StudioCertificate.certificateId idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "StudioCertificate_universityId_idx" ON "StudioCertificate"("universityId")`, 'StudioCertificate.universityId idx');
+
+  // ── EmailSender table (Gmail OAuth senders; refresh tokens encrypted) ──
+  await safeExec(`CREATE TABLE IF NOT EXISTS "EmailSender" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "email" TEXT NOT NULL UNIQUE,
+    "refreshToken" TEXT NOT NULL,
+    "scope" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'EmailSender table');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "EmailSender_userId_idx" ON "EmailSender"("userId")`, 'EmailSender.userId idx');
 
   // ── TotpAccount table (per-email authenticator config, incl. linked emails) ──
   await safeExec(`CREATE TABLE IF NOT EXISTS "TotpAccount" (

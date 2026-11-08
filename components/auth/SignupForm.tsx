@@ -5,6 +5,14 @@ interface SignupFormProps {
   setEmail: (v: string) => void;
   password: string;
   setPassword: (v: string) => void;
+  fullName: string;
+  setFullName: (v: string) => void;
+  universityId: string;
+  setUniversityId: (v: string) => void;
+  contact: string;
+  setContact: (v: string) => void;
+  gender: string;
+  setGender: (v: string) => void;
   loading: boolean;
   error: string;
   success: string;
@@ -16,13 +24,18 @@ interface SignupFormProps {
   onSwitchToLogin: () => void;
 }
 
+const isUniversityEmail = (e: string) => /@(?:ugrad\.)?iiuc\.ac\.bd$/i.test(e.trim());
+
 export default function SignupForm({
   email, setEmail, password, setPassword,
+  fullName, setFullName, universityId, setUniversityId,
+  contact, setContact, gender, setGender,
   loading, error, success,
   onEmailSignup, onGoogleLogin, onClose,
   turnstileContainerId, turnstileReady,
   onSwitchToLogin,
 }: SignupFormProps) {
+  const needsApproval = !!email && !isUniversityEmail(email);
   return (
     <div className="modal active">
       <div className="modal-content">
@@ -108,6 +121,49 @@ export default function SignupForm({
                 required
               />
             </div>
+
+            {needsApproval && (
+              <div className="mb-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <p className="text-[0.72rem] text-amber-300 mb-2">
+                  <i className="fas fa-id-card mr-1"></i>
+                  Personal email detected — submit your details once now. A manager verifies them to approve your account, and you won&apos;t be asked again.
+                </p>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
+                    placeholder="Full name as on your university certificate"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
+                    placeholder="Student / University ID (e.g. C211086)"
+                    value={universityId}
+                    onChange={(e) => setUniversityId(e.target.value)}
+                    required
+                  />
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
+                    placeholder="WhatsApp / Telegram number with country code (optional)"
+                    value={contact}
+                    onChange={(e) => setContact(e.target.value)}
+                  />
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-dark-border bg-dark-bg text-dark-text text-[0.82rem] outline-none focus:border-qsis transition-colors"
+                  >
+                    <option value="">Select gender (optional)</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                </div>
+              </div>
+            )}
 
             {/* Turnstile Widget */}
             <div className="mb-4 flex justify-center">

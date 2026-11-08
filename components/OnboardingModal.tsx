@@ -13,11 +13,12 @@ import {
 export type { OnboardingData };
 export { getOnboardingData, hasDismissedOnboarding, dismissOnboarding, setOnboardingData, clearOnboardingData } from '@/lib/onboarding-storage';
 
-export default function OnboardingModal({ onComplete, onClose, initialDept, initialSemester }: {
+export default function OnboardingModal({ onComplete, onClose, initialDept, initialSemester, initialGender }: {
   onComplete: (data: OnboardingData) => void;
   onClose: () => void;
   initialDept?: string;
   initialSemester?: string;
+  initialGender?: string;
 }) {
   const allDepts = getAllDepartments();
 
@@ -34,7 +35,7 @@ export default function OnboardingModal({ onComplete, onClose, initialDept, init
       || initialSemester
     : undefined;
 
-  const [gender, setGender] = useState<'male' | 'female'>('male');
+  const [gender, setGender] = useState<'male' | 'female'>(initialGender === 'female' ? 'female' : 'male');
   const [semester, setSemester] = useState(matchedSem || config.semesters[0]?.label || '1st Semester');
   const [fileView, setFileView] = useState<'all-prioritized' | 'my-semester-only'>('all-prioritized');
   const [step, setStep] = useState(0);

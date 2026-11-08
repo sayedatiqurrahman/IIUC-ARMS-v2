@@ -57,9 +57,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
     if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
     const { prisma } = await import('@/lib/prisma');
 
-      const clubData = seeded
-        ? club
-        : await prisma.club.findUnique({
+      let clubData: any = seeded ? club : null;
+      if (!seeded) {
+        try {
+          clubData = await prisma.club.findUnique({
             where: { slug },
             include: {
               members: { orderBy: { createdAt: 'asc' } },
@@ -67,6 +68,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
               _count: { select: { members: true, events: true, certificates: true } },
             },
           });
+        } catch (err: any) {
+          // A missing/renamed column on a related table (e.g. ClubEvent) must
+          // not turn the whole club page into a 404. Fall back to a safe query.
+          console.error('[club-detail] include query failed:', err?.message || err);
+          const base = await prisma.club.findUnique({ where: { slug } });
+          if (base) {
+            let members: any[] = [];
+            let events: any[] = [];
+            let counts: any = undefined;
+            try { members = await prisma.clubMember.findMany({ where: { clubId: base.id }, orderBy: { createdAt: 'asc' } }); } catch {}
+            try { events = await prisma.clubEvent.findMany({ where: { clubId: base.id }, orderBy: { eventDate: 'desc' }, take: 20 }); } catch {}
+            try {
+              const [m, e, c] = await Promise.all([
+                prisma.clubMember.count({ where: { clubId: base.id } }),
+                prisma.clubEvent.count({ where: { clubId: base.id } }),
+                prisma.clubCertificate.count({ where: { clubId: base.id } }),
+              ]);
+              counts = { members: m, events: e, certificates: c };
+            } catch {}
+            clubData = { ...base, members, events, _count: counts };
+          }
+        }
+      }
       if (!clubData) return NextResponse.json({ error: 'Club not found' }, { status: 404 });
 
       // A club seeded from repo config.json has no member/event rows yet — mirror
@@ -103,8 +127,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
       });
 
       return NextResponse.json({ club: { ...clubData, members: enrichedMembers, events, seeded } });
-  } catch {
-    return NextResponse.json({ error: 'Club not found' }, { status: 404 });
+  } catch (err: any) {
+    console.error('[club-detail] error:', err?.message || err);
+    return NextResponse.json({ error: 'Failed to load club' }, { status: 500 });
   }
 }
 
