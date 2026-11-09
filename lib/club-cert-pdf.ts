@@ -69,7 +69,7 @@ function loadGoogleFonts(): Promise<void> {
   return new Promise((resolve) => {
     const link = document.createElement('link');
     link.href =
-      'https://fonts.googleapis.com/css2?family=Great+Vibes&family=Allura&family=Cinzel:wght@500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Dancing+Script:wght@600;700&display=swap';
+      'https://fonts.googleapis.com/css2?family=Dynalight&family=Great+Vibes&family=Allura&family=Cinzel:wght@500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Dancing+Script:wght@600;700&display=swap';
     link.rel = 'stylesheet';
     link.onload = () => { scriptFontsLoaded = true; resolve(); };
     link.onerror = () => { scriptFontsLoaded = true; resolve(); };

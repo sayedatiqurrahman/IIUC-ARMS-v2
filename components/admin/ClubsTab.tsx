@@ -140,13 +140,24 @@ export default function ClubsTab({ email, effectiveRole, profile, customPermissi
           <h2 className="text-xl font-bold text-white">Clubs</h2>
           <p className="text-sm text-gray-400">Manage all clubs in the system</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="bg-qsis hover:bg-qsis-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
-          <i className="fas fa-plus mr-2" />
-          Create Club
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {effectiveRole === 'admin' && (
+            <button
+              onClick={() => router.push('/admin/contributor-certificate')}
+              className="border border-qsis/40 text-qsis hover:bg-qsis/10 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              <i className="fas fa-signature mr-2" />
+              Contributor Certificate
+            </button>
+          )}
+          <button
+            onClick={() => setShowCreate(true)}
+            className="bg-qsis hover:bg-qsis-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            <i className="fas fa-plus mr-2" />
+            Create Club
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">

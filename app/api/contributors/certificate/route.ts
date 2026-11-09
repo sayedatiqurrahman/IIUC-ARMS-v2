@@ -34,15 +34,31 @@ export async function POST(req: NextRequest) {
     const { prisma } = await import('@/lib/prisma');
     const key = snapshot.login.toLowerCase();
 
-    let templateId: string | null = null;
+    // Admin-managed appearance (signature image, signatory labels, logo, design).
+    let settings: any = null;
     try {
-      const tpl = await prisma.certificateTemplate.findFirst({
-        where: { scope: 'contributor', isDefault: true },
-        orderBy: { updatedAt: 'desc' },
-        select: { id: true },
-      });
-      templateId = tpl?.id || null;
+      settings = await prisma.contributorCertificateSettings.findUnique({ where: { id: 'default' } });
     } catch {}
+
+    let templateId: string | null = settings?.templateId || null;
+    if (!templateId) {
+      try {
+        const tpl = await prisma.certificateTemplate.findFirst({
+          where: { scope: 'contributor', isDefault: true },
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true },
+        });
+        templateId = tpl?.id || null;
+      } catch {}
+    }
+
+    const signatory: any = {
+      name: settings?.signatoryName || config.founderName,
+      title: settings?.signatoryTitle || 'Founder',
+      designation: settings?.signatoryDesignation || config.founderAgency,
+      autoSignature: false,
+    };
+    if (settings?.signatureUrl) signatory.signatureUrl = settings.signatureUrl;
 
     const data = {
       memberName: snapshot.name,
@@ -50,12 +66,13 @@ export async function POST(req: NextRequest) {
       avatarUrl: snapshot.avatarUrl || null,
       githubUrl: snapshot.githubUrl || null,
       role: snapshot.role || 'Contributor',
-      department: snapshot.departmentLabel || snapshot.department || null,
+      // Contributor recognition belongs to IIUC-ARMS as a whole; it is not a
+      // department or club certificate.
+      department: null,
       universityId: snapshot.universityId || null,
       contributionData: JSON.stringify(snapshot),
-      signatories: JSON.stringify([
-        { name: config.founderName, title: 'Founder', designation: config.founderAgency },
-      ]),
+      signatories: JSON.stringify([signatory]),
+      organizationLogo: settings?.organizationLogo || '/pl-logo.png',
       templateId,
     };
 

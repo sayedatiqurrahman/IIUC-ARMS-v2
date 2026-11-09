@@ -16,6 +16,7 @@ export default function IssuerBadge({ issuer, fallback }: { issuer: any; fallbac
     parts.push(roleLabel ? `${roleLabel} · ${membership.club.name}` : membership.club.name);
   } else {
     if (issuer.title) parts.push(issuer.title);
+    if (issuer.designation) parts.push(issuer.designation);
     if (issuer.department) parts.push(issuer.department);
   }
   const label = parts.filter(Boolean).join(' — ');

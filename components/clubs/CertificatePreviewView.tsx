@@ -6,7 +6,7 @@ import { DEFAULT_THEME } from '@/lib/cert-theme';
 import TemplateCertificate, { TemplateCertificateHandle } from '@/components/certificates/TemplateCertificate';
 import IssuerBadge from './IssuerBadge';
 
-export default function CertificatePreviewView({ params }: { params: Promise<{ certificateId: string }> }) {
+export default function CertificatePreviewView({ params, certificateId }: { params?: Promise<{ certificateId: string }>; certificateId?: string }) {
   const [certId, setCertId] = useState('');
   const [cert, setCert] = useState<any>(null);
   const [valid, setValid] = useState<boolean | null>(null);
@@ -17,11 +17,17 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
   const templateRef = useRef<TemplateCertificateHandle>(null);
 
   useEffect(() => {
-    params.then(p => {
+    if (certificateId) {
+      setCertId(certificateId);
+      verifyCert(certificateId);
+      return;
+    }
+    params?.then(p => {
       setCertId(p.certificateId);
       verifyCert(p.certificateId);
     });
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [certificateId]);
 
   async function verifyCert(id: string) {
     if (!id.trim()) return;
@@ -68,11 +74,32 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
       bodyLines.push('Your work helps thousands of students access academic resources every day.');
     }
 
-    const signatories = Array.isArray(c.signatories) && c.signatories.length > 0
+    const isContributor = c.source === 'contributor';
+    const rawSignatories = Array.isArray(c.signatories) && c.signatories.length > 0
       ? c.signatories
-      : c.source === 'contributor'
-        ? [{ name: 'Sayed Atiqur Rahman', title: 'Founder', designation: 'IIUC-ARMS' }]
+      : isContributor
+        ? [{ name: 'Sayed Atiqur Rahman', title: 'Founder', designation: 'Programming Light' }]
         : [];
+    // Contributor certificates never fall back to the canned auto-signature;
+    // only the admin-uploaded signature image is shown.
+    const signatories = isContributor
+      ? rawSignatories.map((s: any) => ({ ...s, autoSignature: false }))
+      : rawSignatories;
+
+    const baseTheme: any = viewTheme || DEFAULT_THEME;
+    // Contributor certificates use the Programming Light presenter logo (left
+    // seal) plus the IIUC university seal (right), and the Dynalight calligraphy
+    // name font.
+    const theme = isContributor
+      ? {
+          ...baseTheme,
+          design: {
+            ...(baseTheme.design || {}),
+            fonts: { ...(baseTheme.design?.fonts || {}), nameScriptFont: 'Dynalight', nameSize: 26 },
+            logoPositions: { left: 'club', right: 'iiuc' },
+          },
+        }
+      : baseTheme;
 
     return {
       certificateId: c.certificateId,
@@ -84,12 +111,12 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
       eventName: c.eventName || '',
       servicePeriod: c.servicePeriod || '',
       clubName: c.organization || 'Organization',
-      clubLogoUrl: c.organizationLogo || undefined,
+      clubLogoUrl: isContributor ? (c.organizationLogo || '/pl-logo.png') : (c.organizationLogo || undefined),
       iiucLogoUrl: '/iiuc-logo.png',
       issuedBy: c.issuedBy || c.organization || '',
       issuedAt: c.issuedAt || new Date().toISOString(),
       signatories,
-      theme: viewTheme || DEFAULT_THEME,
+      theme,
       bodyLines: bodyLines.length > 0 ? bodyLines : undefined,
     };
   }
@@ -182,12 +209,22 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
                 {row('Certificate ID', cert.certificateId, true)}
                 {row('Member Name', cert.memberName)}
                 {row('University ID', cert.universityId, true)}
-                {row('Department', cert.department)}
+                {cert.source !== 'contributor' && cert.department && row('Department', cert.department)}
                 {cert.session && row('Session', cert.session)}
                 {cert.post && row('Post', cert.post)}
                 {cert.eventName && row('Event', cert.eventName)}
                 {cert.servicePeriod && row('Service Period', cert.servicePeriod)}
-                {row('Issued By', <IssuerBadge issuer={cert.issuer} fallback={cert.issuedBy || cert.organization} />)}
+                {row(
+                  'Issued By',
+                  <IssuerBadge
+                    issuer={
+                      cert.source === 'contributor'
+                        ? { ...(cert.issuer || {}), name: 'Programming Light', title: null, designation: null, department: null, clubMemberships: [] }
+                        : cert.issuer
+                    }
+                    fallback={cert.issuedBy || cert.organization}
+                  />
+                )}
                 {row('Issued', new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))}
               </div>
               {cert.source === 'contributor' && cert.contributionData?.totals && (
@@ -223,7 +260,9 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
                         <div className="w-1 h-1 rounded-full bg-qsis"></div>
                         <span className="text-dark-text font-semibold">{sig.name}</span>
                         <span className="text-dark-text3">—</span>
-                        <span className="text-dark-text2">{sig.title || sig.designation || ''}</span>
+                        <span className="text-dark-text2">
+                          {[sig.title, sig.designation].filter(Boolean).join(' · ')}
+                        </span>
                       </div>
                     ))}
                   </div>

@@ -479,7 +479,8 @@ model ContributorCertificate {
   department       String?
   universityId     String?
   contributionData String                    // JSON snapshot (counts, repos, recent events)
-  signatories      String?                   // JSON: [{name, designation, title}]
+  signatories      String?                   // JSON: [{name, designation, title, signatureUrl}]
+  organizationLogo String?                   // logo used on the certificate (admin-configurable)
   templateId       String?                   // optional CertificateTemplate
   issuedBy         String   @default("IIUC-ARMS")
   issuedAt         DateTime @default(now())
@@ -487,6 +488,22 @@ model ContributorCertificate {
 
   @@index([githubLogin])
   @@index([certificateId])
+}
+
+// Admin-managed appearance of auto-generated contributor certificates:
+// signature image, signatory labels, issuer logo, and the default HTML design.
+model ContributorCertificateSettings {
+  id                   String   @id @default("default")
+  templateId           String?
+  signatureUrl         String?  // data URL or hosted image URL (admin upload)
+  signatoryName        String   @default("Sayed Atiqur Rahman")
+  signatoryTitle       String   @default("Founder")
+  signatoryDesignation String   @default("Programming Light")
+  organizationLogo     String   @default("/pl-logo.png")
+  updatedBy            String?
+  updatedAt            DateTime @updatedAt
+
+  @@index([templateId])
 }
 
 // Uploadable HTML/CSS certificate designs shared by every certificate type.

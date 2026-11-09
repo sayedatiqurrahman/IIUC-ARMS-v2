@@ -374,10 +374,28 @@ async function main() {
     "issuedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`, 'ContributorCertificate table');
+  await safeExec(`ALTER TABLE "ContributorCertificate" ADD COLUMN "organizationLogo" TEXT`, 'ContributorCertificate.organizationLogo col');
   await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "ContributorCertificate_certificateId_key" ON "ContributorCertificate"("certificateId")`, 'ContributorCertificate.certificateId unique');
   await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "ContributorCertificate_githubLogin_key" ON "ContributorCertificate"("githubLogin")`, 'ContributorCertificate.githubLogin unique');
   await safeExec(`CREATE INDEX IF NOT EXISTS "ContributorCertificate_githubLogin_idx" ON "ContributorCertificate"("githubLogin")`, 'ContributorCertificate.githubLogin idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "ContributorCertificate_certificateId_idx" ON "ContributorCertificate"("certificateId")`, 'ContributorCertificate.certificateId idx');
+
+  // ── ContributorCertificateSettings (admin-managed signature / logo / design) ──
+  await safeExec(`CREATE TABLE IF NOT EXISTS "ContributorCertificateSettings" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "templateId" TEXT,
+    "signatureUrl" TEXT,
+    "signatoryName" TEXT NOT NULL DEFAULT 'Sayed Atiqur Rahman',
+    "signatoryTitle" TEXT NOT NULL DEFAULT 'Founder',
+    "signatoryDesignation" TEXT NOT NULL DEFAULT 'Programming Light',
+    "organizationLogo" TEXT NOT NULL DEFAULT '/pl-logo.png',
+    "updatedBy" TEXT,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'ContributorCertificateSettings table');
+  await safeExec(`UPDATE "ContributorCertificateSettings" SET "organizationLogo" = '/pl-logo.png' WHERE "organizationLogo" = '/arms-logo-icon.png'`, 'ContributorCertificateSettings organizationLogo update');
+  await safeExec(`UPDATE "ContributorCertificateSettings" SET "signatoryDesignation" = 'Programming Light' WHERE "signatoryDesignation" IS NULL OR "signatoryDesignation" = 'IIUC-ARMS'`, 'ContributorCertificateSettings signatoryDesignation update');
+  await safeExec(`UPDATE "ContributorCertificate" SET "signatories" = REPLACE("signatories", 'IIUC-ARMS', 'Programming Light') WHERE "signatories" IS NOT NULL AND "signatories" LIKE '%IIUC-ARMS%'`, 'ContributorCertificate signatories update');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ContributorCertificateSettings_templateId_idx" ON "ContributorCertificateSettings"("templateId")`, 'ContributorCertificateSettings.templateId idx');
 
   // ── CertificateTemplate table (uploadable HTML/CSS designs) ──
   await safeExec(`CREATE TABLE IF NOT EXISTS "CertificateTemplate" (

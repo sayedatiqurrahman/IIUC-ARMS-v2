@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { CONTRIBUTOR_TEMPLATE_CSS, CONTRIBUTOR_TEMPLATE_HTML } from '@/lib/cert-template';
 import type { PrismaClient } from '@prisma/client';
+
+const BUILTIN_CONTRIBUTOR_TEMPLATE = {
+  id: 'builtin-contributor',
+  name: 'IIUC-ARMS Contributor',
+  scope: 'contributor',
+  html: CONTRIBUTOR_TEMPLATE_HTML,
+  css: CONTRIBUTOR_TEMPLATE_CSS,
+};
 
 // Resolve the person who issued the certificate (issuedBy stores the issuer's
 // email) into a public profile + club memberships, so views can show a linked
@@ -166,16 +175,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cer
       let signatories: any[] = [];
       try { snapshot = JSON.parse(contributorCert.contributionData || 'null'); } catch {}
       try { signatories = JSON.parse(contributorCert.signatories || '[]'); } catch {}
+      // Contributor certificates are recognition from IIUC-ARMS as a whole; they
+      // are never a club or department certificate and never use a canned
+      // signature. The signatory keeps the founder name with the Programming
+      // Light issuer brand, falling back to the default signatory.
+      signatories = signatories.map((s: any) => ({
+        ...s,
+        title: s?.title || 'Founder',
+        designation: s?.designation || 'Programming Light',
+        autoSignature: false,
+      }));
+      if (signatories.length === 0) {
+        signatories = [{ name: 'Sayed Atiqur Rahman', title: 'Founder', designation: 'Programming Light', autoSignature: false }];
+      }
       return NextResponse.json({
         valid: true,
         source: 'contributor',
         theme: null,
-        template: await getTemplate(prisma, contributorCert.templateId),
+        template: (await getTemplate(prisma, contributorCert.templateId)) || BUILTIN_CONTRIBUTOR_TEMPLATE,
         certificate: {
           certificateId: contributorCert.certificateId,
           memberName: contributorCert.memberName,
           universityId: contributorCert.universityId || contributorCert.githubLogin,
-          department: contributorCert.department || 'IIUC-ARMS Contributors',
+          department: null,
           session: null,
           post: contributorCert.role || 'Contributor',
           eventName: 'Open Source Contribution',
@@ -184,16 +206,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cer
           issuedAt: contributorCert.issuedAt,
           issuedBy: contributorCert.issuedBy,
           issuer: signatories.find((s: any) => s?.name)
-            ? {
-                userId: '',
-                name: signatories.find((s: any) => s?.name).name,
-                title: signatories.find((s: any) => s?.name).title || signatories.find((s: any) => s?.name).designation || null,
-                department: null,
-                clubMemberships: [],
-              }
-            : null,
+              ? {
+                  userId: '',
+                  name: signatories.find((s: any) => s?.name).name,
+                  title: signatories.find((s: any) => s?.name).title || signatories.find((s: any) => s?.name).designation || null,
+                  designation: signatories.find((s: any) => s?.name).designation || null,
+                  department: null,
+                  clubMemberships: [],
+                }
+              : null,
           organization: 'IIUC-ARMS',
-          organizationLogo: '/iiuc-logo.png',
+          organizationLogo: contributorCert.organizationLogo || '/pl-logo.png',
           organizationSlug: 'iiuc-arms',
           githubLogin: contributorCert.githubLogin,
           githubUrl: contributorCert.githubUrl,

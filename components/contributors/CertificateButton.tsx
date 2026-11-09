@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface Props {
   c: any;
@@ -8,27 +8,11 @@ interface Props {
 }
 
 export default function CertificateButton({ c, size = 'sm' }: Props) {
-  const [generating, setGenerating] = useState(false);
+  const router = useRouter();
 
-  async function handleGetCertificate() {
-    setGenerating(true);
-    try {
-      const res = await fetch('/api/contributors/certificate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ login: c.login }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        window.open(data.verifyUrl, '_blank', 'noopener,noreferrer');
-      } else {
-        alert(data?.error || 'Could not generate your certificate');
-      }
-    } catch {
-      alert('Could not generate your certificate');
-    } finally {
-      setGenerating(false);
-    }
+  function handleGetCertificate() {
+    if (!c?.login) return;
+    router.push(`/certificates/contributor/${encodeURIComponent(c.login)}`);
   }
 
   const sizeClass = size === 'md'
@@ -40,11 +24,10 @@ export default function CertificateButton({ c, size = 'sm' }: Props) {
   return (
     <button
       onClick={handleGetCertificate}
-      disabled={generating}
       title="Generate your certificate"
-      className={`${sizeClass} rounded-lg bg-qsis/10 border border-qsis/30 text-qsis font-semibold hover:bg-qsis hover:text-white transition-all flex items-center justify-center cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${size === 'md' ? '' : 'flex-shrink-0'}`}
+      className={`${sizeClass} rounded-lg bg-qsis/10 border border-qsis/30 text-qsis font-semibold hover:bg-qsis hover:text-white transition-all flex items-center justify-center cursor-pointer ${size === 'md' ? '' : 'flex-shrink-0'}`}
     >
-      <i className={`fas ${generating ? 'fa-spinner fa-spin' : 'fa-certificate'} ${iconSize}`}></i>
+      <i className={`fas fa-certificate ${iconSize}`}></i>
       {size === 'md' && <span>Get Certificate</span>}
     </button>
   );

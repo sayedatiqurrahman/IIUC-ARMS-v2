@@ -46,7 +46,31 @@ const TemplateCertificate = forwardRef<TemplateCertificateHandle, Props>(functio
   ref,
 ) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => {
+      const cs = getComputedStyle(el);
+      const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      const width = el.clientWidth - pad;
+      if (width > 0) setScale(Math.min(1, width / 1123));
+    };
+    update();
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(update);
+      ro.observe(el);
+    }
+    window.addEventListener('resize', update);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, []);
 
   const resolvedSiteUrl = siteUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://arms.iiuc.net');
 
@@ -113,14 +137,23 @@ const TemplateCertificate = forwardRef<TemplateCertificateHandle, Props>(functio
   );
 
   return (
-    <iframe
-      ref={iframeRef}
-      title={`Certificate ${cert?.certificateId || ''}`}
-      srcDoc={doc}
-      sandbox="allow-same-origin"
+    <div
+      ref={wrapRef}
       className={className || 'w-full rounded-xl border border-dark-border bg-white'}
-      style={{ aspectRatio: '1123 / 794', minHeight: 320 }}
-    />
+      style={{ overflow: 'hidden' }}
+    >
+      <div style={{ width: '100%', height: 794 * scale, position: 'relative' }}>
+        <div style={{ width: 1123, height: 794, margin: '0 auto', transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+          <iframe
+            ref={iframeRef}
+            title={`Certificate ${cert?.certificateId || ''}`}
+            srcDoc={doc}
+            sandbox="allow-same-origin"
+            style={{ width: 1123, height: 794, border: 0, display: 'block', background: '#ffffff' }}
+          />
+        </div>
+      </div>
+    </div>
   );
 });
 
