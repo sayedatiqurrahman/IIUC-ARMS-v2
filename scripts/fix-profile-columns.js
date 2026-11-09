@@ -352,6 +352,48 @@ async function main() {
   await safeExec(`CREATE INDEX IF NOT EXISTS "StudioCertificate_certificateId_idx" ON "StudioCertificate"("certificateId")`, 'StudioCertificate.certificateId idx');
   await safeExec(`CREATE INDEX IF NOT EXISTS "StudioCertificate_universityId_idx" ON "StudioCertificate"("universityId")`, 'StudioCertificate.universityId idx');
 
+  await safeExec(`ALTER TABLE "ClubCertificate" ADD COLUMN "templateId" TEXT`, 'ClubCertificate.templateId col');
+  await safeExec(`ALTER TABLE "StudioCertificate" ADD COLUMN "templateId" TEXT`, 'StudioCertificate.templateId col');
+
+  // ── ContributorCertificate table (auto-generated GitHub performance certs) ──
+  await safeExec(`CREATE TABLE IF NOT EXISTS "ContributorCertificate" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "certificateId" TEXT NOT NULL,
+    "githubLogin" TEXT NOT NULL,
+    "memberName" TEXT NOT NULL,
+    "email" TEXT,
+    "avatarUrl" TEXT,
+    "githubUrl" TEXT,
+    "role" TEXT,
+    "department" TEXT,
+    "universityId" TEXT,
+    "contributionData" TEXT NOT NULL,
+    "signatories" TEXT,
+    "templateId" TEXT,
+    "issuedBy" TEXT NOT NULL DEFAULT 'IIUC-ARMS',
+    "issuedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'ContributorCertificate table');
+  await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "ContributorCertificate_certificateId_key" ON "ContributorCertificate"("certificateId")`, 'ContributorCertificate.certificateId unique');
+  await safeExec(`CREATE UNIQUE INDEX IF NOT EXISTS "ContributorCertificate_githubLogin_key" ON "ContributorCertificate"("githubLogin")`, 'ContributorCertificate.githubLogin unique');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ContributorCertificate_githubLogin_idx" ON "ContributorCertificate"("githubLogin")`, 'ContributorCertificate.githubLogin idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "ContributorCertificate_certificateId_idx" ON "ContributorCertificate"("certificateId")`, 'ContributorCertificate.certificateId idx');
+
+  // ── CertificateTemplate table (uploadable HTML/CSS designs) ──
+  await safeExec(`CREATE TABLE IF NOT EXISTS "CertificateTemplate" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "scope" TEXT NOT NULL DEFAULT 'global',
+    "ownerId" TEXT,
+    "html" TEXT NOT NULL,
+    "css" TEXT NOT NULL,
+    "isDefault" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`, 'CertificateTemplate table');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "CertificateTemplate_scope_idx" ON "CertificateTemplate"("scope")`, 'CertificateTemplate.scope idx');
+  await safeExec(`CREATE INDEX IF NOT EXISTS "CertificateTemplate_ownerId_idx" ON "CertificateTemplate"("ownerId")`, 'CertificateTemplate.ownerId idx');
+
   // ── EmailSender table (Gmail OAuth senders; refresh tokens encrypted) ──
   await safeExec(`CREATE TABLE IF NOT EXISTS "EmailSender" (
     "id" TEXT NOT NULL PRIMARY KEY,

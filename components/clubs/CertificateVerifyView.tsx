@@ -87,7 +87,9 @@ export default function CertificateVerifyView({ params }: { params: Promise<{ ce
                 <span className="font-mono font-bold text-dark-text break-all">{cert.certificateId}</span>
               </div>
               <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
-                <span className="text-dark-text2">{cert.source === 'studio' ? 'Organization' : 'Club'}</span>
+                <span className="text-dark-text2">
+                  {cert.source === 'contributor' ? 'Issued By' : cert.source === 'studio' ? 'Organization' : 'Club'}
+                </span>
                 <span className="font-semibold text-dark-text">{cert.club?.name || cert.organization}</span>
               </div>
               <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4 text-sm">
@@ -135,6 +137,20 @@ export default function CertificateVerifyView({ params }: { params: Promise<{ ce
                         {sig.designation && <span className="text-dark-text3">({sig.designation})</span>}
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+              {cert.source === 'contributor' && cert.contributionData?.totals && (
+                <div className="border-t border-dark-border pt-3 mt-3">
+                  <p className="text-[0.7rem] text-dark-text3 mb-2 font-semibold">CONTRIBUTION RECORD</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="px-2 py-0.5 rounded-full bg-qsis/10 border border-qsis/30 text-[0.62rem] font-bold text-qsis">{cert.contributionData.totals.total} total</span>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-[0.62rem] font-bold text-blue-400">{cert.contributionData.totals.code + cert.contributionData.totals.data} commits</span>
+                    <span className="px-2 py-0.5 rounded-full bg-accent/10 border border-accent/30 text-[0.62rem] font-bold text-accent">{cert.contributionData.totals.issues} issues</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[0.62rem] font-bold text-emerald-400">{cert.contributionData.totals.designs} designs</span>
+                    {cert.contributionData.totals.prs > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-[0.62rem] font-bold text-purple-400">{cert.contributionData.totals.prs} PRs</span>
+                    )}
                   </div>
                 </div>
               )}

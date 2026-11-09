@@ -18,6 +18,8 @@ export interface CertPDFData {
   siteUrl?: string;
   signatories?: CertSignatory[];
   theme?: CertTheme;
+  /** Overrides the generated body paragraphs (used by contributor certificates). */
+  bodyLines?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -394,19 +396,23 @@ async function drawBody(p: any, t: CertTheme, data: CertPDFData, startY: number,
   const recText = recognition ? `We sincerely appreciate your ${recognition}.` : '';
   const paragraphs: string[] = [];
 
-  if (data.eventName) {
-    paragraphs.push(`In recognition of your active participation in the event "${data.eventName}"`);
-  }
-  if (data.post && data.clubName) {
-    paragraphs.push(
-      `for your distinguished service and sincere contribution as ${data.post} of ${data.clubName} in strengthening the activities of our club and department, throughout ${data.servicePeriod || data.session || 'your tenure'}.`,
-    );
-  } else if (data.clubName) {
-    paragraphs.push(
-      `for your sincere service and active contribution as a member of ${data.clubName}, throughout ${data.servicePeriod || data.session || 'your tenure'}.`,
-    );
+  if (data.bodyLines && data.bodyLines.length > 0) {
+    paragraphs.push(...data.bodyLines.filter((line) => !!line && line.trim()));
   } else {
-    paragraphs.push('for your sincere service, dedication, and invaluable contribution to our organization.');
+    if (data.eventName) {
+      paragraphs.push(`In recognition of your active participation in the event "${data.eventName}"`);
+    }
+    if (data.post && data.clubName) {
+      paragraphs.push(
+        `for your distinguished service and sincere contribution as ${data.post} of ${data.clubName} in strengthening the activities of our club and department, throughout ${data.servicePeriod || data.session || 'your tenure'}.`,
+      );
+    } else if (data.clubName) {
+      paragraphs.push(
+        `for your sincere service and active contribution as a member of ${data.clubName}, throughout ${data.servicePeriod || data.session || 'your tenure'}.`,
+      );
+    } else {
+      paragraphs.push('for your sincere service, dedication, and invaluable contribution to our organization.');
+    }
   }
 
   // Total height in mm of paragraphs + recognition at a given body size.
@@ -1076,10 +1082,14 @@ async function renderCertificateCanvas(data: CertPDFData): Promise<string> {
 
   // body paragraphs
   const paragraphs: string[] = [];
-  if (data.eventName) paragraphs.push(`In recognition of your active participation in the event "${data.eventName}"`);
-  if (data.post && data.clubName) paragraphs.push(`for your distinguished service and sincere contribution as ${data.post} of ${data.clubName} in strengthening the activities of our club and department, throughout ${data.servicePeriod || data.session || 'your tenure'}.`);
-  else if (data.clubName) paragraphs.push(`for your sincere service and active contribution as a member of ${data.clubName}, throughout ${data.servicePeriod || data.session || 'your tenure'}.`);
-  else paragraphs.push('for your sincere service, dedication, and invaluable contribution to our organization.');
+  if (data.bodyLines && data.bodyLines.length > 0) {
+    paragraphs.push(...data.bodyLines.filter((line) => !!line && line.trim()));
+  } else {
+    if (data.eventName) paragraphs.push(`In recognition of your active participation in the event "${data.eventName}"`);
+    if (data.post && data.clubName) paragraphs.push(`for your distinguished service and sincere contribution as ${data.post} of ${data.clubName} in strengthening the activities of our club and department, throughout ${data.servicePeriod || data.session || 'your tenure'}.`);
+    else if (data.clubName) paragraphs.push(`for your sincere service and active contribution as a member of ${data.clubName}, throughout ${data.servicePeriod || data.session || 'your tenure'}.`);
+    else paragraphs.push('for your sincere service, dedication, and invaluable contribution to our organization.');
+  }
   const recText = getRoleRecognition(data.post || '') ? `We sincerely appreciate your ${getRoleRecognition(data.post || '')}.` : '';
 
   const maxWmm = SEAL_BODY_W;

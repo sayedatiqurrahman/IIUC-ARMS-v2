@@ -8,7 +8,6 @@ import { rateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { hasPermission, canAddCourseToSemester } from '@/lib/permissions';
 import { getDeptFullName, sendMessageWithButton, sendMessageWithButtons, buildBrowseLink, buildCourseLink, courseDeleteConfirmData, courseDeleteRejectData, resolveGithubToken } from '@/lib/telegram';
 import { getAllFilesInFolder, deleteCourseFolder, findCourseFolderPathInRepo } from '@/lib/course-delete';
-import { commitFilesToBranch } from '@/lib/github-commit';
 import { decrypt, isEncrypted } from '@/lib/crypto';
 
 const COURSE_SUBFOLDERS = ['Mid/NOTES', 'Mid/Previous Questions', 'Final/NOTES', 'Final/Previous Questions', 'sheet', 'Syllabus', 'Other'];
@@ -53,29 +52,83 @@ async function inspectCourseFolders(token: string, basePath: string, subfolders:
   return { missing, exists };
 }
 
-// Create the missing subfolders in ONE atomic commit using the shared
-// blobs → tree → commit → ref helper (same path as uploads, so it works with
-// both a user PAT and the app bot token). Returns a short error reason.
+// Create the missing subfolders in ONE atomic commit (tree → commit → ref).
+// Uses inline empty content exactly like the working /api/github/create-folder
+// route, so it does not depend on the blobs API or on creating temporary files.
+// Returns '' on success or a short reason string on failure.
 async function createCourseFolders(token: string, basePath: string, subfolders: string[]): Promise<string> {
   if (subfolders.length === 0) return '';
   try {
     const refRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, { headers: ghHeaders(token) });
     if (!refRes.ok) return `ref:${refRes.status}`;
-    const baseSha = (await refRes.json()).object.sha;
+    const baseCommitSha = (await refRes.json()).object.sha;
 
-    await commitFilesToBranch({
-      token,
-      owner: config.owner,
-      repo: config.repo,
-      branch: config.branch,
-      baseSha,
-      files: subfolders.map(sf => ({ path: `${basePath}/${sf}/.gitkeep`, content: '' })),
-      message: `Create course folders: ${basePath}`,
+    const baseCommitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits/${baseCommitSha}`, { headers: ghHeaders(token) });
+    if (!baseCommitRes.ok) return `commit-read:${baseCommitRes.status}`;
+    const baseTreeSha = (await baseCommitRes.json()).tree.sha;
+
+    const treeRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/trees`, {
+      method: 'POST',
+      headers: ghHeaders(token),
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree: subfolders.map(sf => ({
+          path: `${basePath}/${sf}/.gitkeep`,
+          mode: '100644',
+          type: 'blob',
+          content: '',
+        })),
+      }),
     });
-    return '';
+    if (!treeRes.ok) {
+      const detail = (await treeRes.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 200);
+      return `createtree:${treeRes.status}${detail ? ` ${detail}` : ''}`;
+    }
+    const newTreeSha = (await treeRes.json()).sha;
+
+    const commitRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/commits`, {
+      method: 'POST',
+      headers: ghHeaders(token),
+      body: JSON.stringify({
+        message: `Create course folders: ${basePath}`,
+        tree: newTreeSha,
+        parents: [baseCommitSha],
+      }),
+    });
+    if (!commitRes.ok) return `commit:${commitRes.status}`;
+    const newCommitSha = (await commitRes.json()).sha;
+
+    const refUpdateRes = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/git/refs/heads/${config.branch}`, {
+      method: 'PATCH',
+      headers: ghHeaders(token),
+      body: JSON.stringify({ sha: newCommitSha, force: true }),
+    });
+    return refUpdateRes.ok ? '' : `refupdate:${refUpdateRes.status}`;
   } catch (e: any) {
     return String(e?.message || e || 'unknown error');
   }
+}
+
+// Fallback: create each missing .gitkeep through the Contents API. Slower (one
+// commit per folder) but works with tokens that cannot use the git data API.
+async function createCourseFoldersViaContents(token: string, basePath: string, subfolders: string[]): Promise<string> {
+  for (const sf of subfolders) {
+    const path = `${basePath}/${sf}/.gitkeep`;
+    const encoded = path.split('/').map(encodeURIComponent).join('/');
+    try {
+      const res = await fetch(`${GITHUB_API}/repos/${config.owner}/${config.repo}/contents/${encoded}`, {
+        method: 'PUT',
+        headers: ghHeaders(token),
+        body: JSON.stringify({ message: `Create folder: ${basePath}/${sf}`, content: '' }),
+      });
+      if (res.ok || res.status === 422) continue;
+      const detail = (await res.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 160);
+      return `contents:${res.status}${detail ? ` ${detail}` : ''}`;
+    } catch (e: any) {
+      return String(e?.message || e || 'contents-error');
+    }
+  }
+  return '';
 }
 
 // Try every available write token (user PAT → OAuth session → app bot) so a
@@ -89,10 +142,16 @@ async function resolveWriteTokens(req: NextRequest, email: string): Promise<stri
 
   try {
     const { prisma } = await import('@/lib/prisma');
-    const profile = await prisma.profile.findUnique({ where: { userId: email }, select: { githubToken: true } });
+    const profile = await prisma.profile.findUnique({ where: { userId: email }, select: { githubToken: true, githubInstallationId: true } });
     if (profile?.githubToken) {
       const decrypted = isEncrypted(profile.githubToken) ? decrypt(profile.githubToken) : profile.githubToken;
       if (decrypted.startsWith('ghp_') || decrypted.startsWith('github_pat_')) add(decrypted);
+    }
+    if (profile?.githubInstallationId) {
+      try {
+        const { getInstallationAccessToken } = await import('@/lib/github-app');
+        add(await getInstallationAccessToken(Number(profile.githubInstallationId)));
+      } catch {}
     }
   } catch {}
 
@@ -101,6 +160,7 @@ async function resolveWriteTokens(req: NextRequest, email: string): Promise<stri
     if ((session as any)?.accessToken) add((session as any).accessToken);
   } catch {}
 
+  if (process.env.GITHUB_TOKEN) add(process.env.GITHUB_TOKEN);
   try { add(await resolveGithubToken()); } catch {}
 
   return tokens;
@@ -269,7 +329,11 @@ export async function POST(req: NextRequest) {
       if (info.missing.length === 0) { foldersReady = true; break; }
       const reason = await createCourseFolders(token, basePath, info.missing);
       if (!reason) { foldersReady = true; break; }
-      lastError = reason;
+      // The git data API can be blocked/rate-limited even when contents write
+      // works, so retry the same folders through the Contents API.
+      const fallback = await createCourseFoldersViaContents(token, basePath, info.missing);
+      if (!fallback) { foldersReady = true; break; }
+      lastError = `${reason}; ${fallback}`;
     }
 
     if (!foldersReady) {

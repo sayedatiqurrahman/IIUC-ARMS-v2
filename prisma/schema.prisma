@@ -386,6 +386,7 @@ model ClubCertificate {
   servicePeriod String?
   signatories   String?  // JSON: [{name, designation, title}]
   email         String?  // recipient email supplied at bulk-issue time
+  templateId    String?  // optional CertificateTemplate used for rendering
   issuedBy      String
   issuedAt      DateTime @default(now())
 
@@ -451,6 +452,7 @@ model StudioCertificate {
   eventName     String?                   // event name
   servicePeriod String?                   // e.g. "2024-2025"
   signatories   String?                   // JSON: [{name, designation, title}]
+  templateId    String?                   // optional CertificateTemplate used for rendering
   issuedBy      String                    // email of issuer
   issuedAt      DateTime @default(now())
 
@@ -459,6 +461,50 @@ model StudioCertificate {
   @@index([orgId])
   @@index([certificateId])
   @@index([universityId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Contributor certificates — auto-generated from public GitHub performance
+// ═══════════════════════════════════════════════════════════════════════
+
+model ContributorCertificate {
+  id               String   @id @default(cuid())
+  certificateId    String   @unique          // e.g. "IIUC-XKMR-B572-ETGQ"
+  githubLogin      String   @unique          // idempotent on-demand generation key
+  memberName       String
+  email            String?
+  avatarUrl        String?
+  githubUrl        String?
+  role             String?
+  department       String?
+  universityId     String?
+  contributionData String                    // JSON snapshot (counts, repos, recent events)
+  signatories      String?                   // JSON: [{name, designation, title}]
+  templateId       String?                   // optional CertificateTemplate
+  issuedBy         String   @default("IIUC-ARMS")
+  issuedAt         DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([githubLogin])
+  @@index([certificateId])
+}
+
+// Uploadable HTML/CSS certificate designs shared by every certificate type.
+// Placeholders like {{memberName}} / {{certificateId}} are replaced at render
+// time by lib/cert-template.ts.
+model CertificateTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  scope     String   @default("global")     // global | club | studio | contributor
+  ownerId   String?                         // creator email; null for system defaults
+  html      String
+  css       String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scope])
+  @@index([ownerId])
 }
 
 // Gmail accounts connected via Google OAuth for sending mail through the Gmail

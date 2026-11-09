@@ -13,17 +13,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const githubAppIdConfigured = !!process.env.GITHUB_APP_ID;
+  const githubOauthIdConfigured = !!process.env.GITHUB_ID;
   const appIdConfigured = !!(process.env.GITHUB_APP_ID || process.env.GITHUB_ID);
   const privateKeyConfigured = !!process.env.GITHUB_PRIVATE_KEY;
+  const appIdLooksNumeric = /^\d+$/.test(process.env.GITHUB_APP_ID || '');
 
   let installationForRepo = false;
   let botTokenMints = false;
   let botCanReadRepo = false;
   let botInstallationId: number | null = null;
+  let contentsPermission: string | null = null;
   try {
     const instId = await getRepoInstallation(config.owner, config.repo);
     installationForRepo = !!instId;
     botInstallationId = instId;
+    if (instId) {
+      const { generateJWT } = await import('@/lib/github-app');
+      const res = await fetch(`https://api.github.com/app/installations/${instId}`, {
+        headers: { Authorization: `Bearer ${generateJWT()}`, Accept: 'application/vnd.github.v3+json' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        contentsPermission = data?.permissions?.contents ?? null;
+      }
+    }
   } catch {}
   try {
     const token = await getRepoBotToken(config.owner, config.repo);
@@ -38,11 +52,16 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     appIdConfigured,
+    githubAppIdConfigured,
+    githubOauthIdConfigured,
+    appIdLooksNumeric,
     privateKeyConfigured,
     installationForRepo,
     botInstallationId,
     botTokenMints,
     botCanReadRepo,
+    contentsPermission,
+    contentsWritable: contentsPermission === 'write',
     targetRepo: `${config.owner}/${config.repo}`,
     envTokenConfigured: !!process.env.GITHUB_TOKEN,
   });

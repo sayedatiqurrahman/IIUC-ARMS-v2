@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CertPDFData, exportCertificateImage, downloadCertPDF, downloadCertPNG } from '@/lib/club-cert-pdf';
 import { DEFAULT_THEME } from '@/lib/cert-theme';
+import TemplateCertificate, { TemplateCertificateHandle } from '@/components/certificates/TemplateCertificate';
 import IssuerBadge from './IssuerBadge';
 
 export default function CertificatePreviewView({ params }: { params: Promise<{ certificateId: string }> }) {
@@ -12,6 +13,8 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
   const [loading, setLoading] = useState(true);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [viewTheme, setViewTheme] = useState<any>(null);
+  const [template, setTemplate] = useState<any>(null);
+  const templateRef = useRef<TemplateCertificateHandle>(null);
 
   useEffect(() => {
     params.then(p => {
@@ -25,6 +28,7 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
     setLoading(true);
     setValid(null);
     setPreviewUrl(null);
+    setTemplate(null);
     try {
       const res = await fetch(`/api/clubs/verify/${id.trim().toUpperCase()}`);
       const data = await res.json();
@@ -32,9 +36,12 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
       if (data.valid && data.certificate) {
         setCert(data.certificate);
         setViewTheme(data.theme || DEFAULT_THEME);
-        const pdfData = toCertPDFData(data.certificate);
-        const url = await exportCertificateImage(pdfData, 'png', 1600);
-        setPreviewUrl(url);
+        setTemplate(data.template || null);
+        if (!data.template) {
+          const pdfData = toCertPDFData(data.certificate);
+          const url = await exportCertificateImage(pdfData, 'png', 1600);
+          setPreviewUrl(url);
+        }
       }
     } catch {
       setValid(false);
@@ -43,6 +50,30 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
   }
 
   function toCertPDFData(c: any): CertPDFData {
+    const contribution = c.contributionData;
+    const bodyLines: string[] = [];
+    if (contribution?.totals) {
+      const commits = (contribution.totals.code || 0) + (contribution.totals.data || 0);
+      const parts: string[] = [];
+      if (commits) parts.push(`${commits} commit${commits === 1 ? '' : 's'}`);
+      if (contribution.totals.issues) parts.push(`${contribution.totals.issues} issue${contribution.totals.issues === 1 ? '' : 's'}`);
+      if (contribution.totals.designs) parts.push(`${contribution.totals.designs} design${contribution.totals.designs === 1 ? '' : 's'}`);
+      if (contribution.totals.prs) parts.push(`${contribution.totals.prs} pull request${contribution.totals.prs === 1 ? '' : 's'}`);
+      bodyLines.push(
+        'in recognition of outstanding open-source contributions to IIUC-ARMS and the IIUC academic community.',
+      );
+      if (parts.length) {
+        bodyLines.push(`${parts.join(', ')} across ${contribution.repos?.length || 1} public repositor${(contribution.repos?.length || 1) === 1 ? 'y' : 'ies'}.`);
+      }
+      bodyLines.push('Your work helps thousands of students access academic resources every day.');
+    }
+
+    const signatories = Array.isArray(c.signatories) && c.signatories.length > 0
+      ? c.signatories
+      : c.source === 'contributor'
+        ? [{ name: 'Sayed Atiqur Rahman', title: 'Founder', designation: 'IIUC-ARMS' }]
+        : [];
+
     return {
       certificateId: c.certificateId,
       memberName: c.memberName,
@@ -57,19 +88,26 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
       iiucLogoUrl: '/iiuc-logo.png',
       issuedBy: c.issuedBy || c.organization || '',
       issuedAt: c.issuedAt || new Date().toISOString(),
-      signatories: Array.isArray(c.signatories) ? c.signatories : [],
+      signatories,
       theme: viewTheme || DEFAULT_THEME,
+      bodyLines: bodyLines.length > 0 ? bodyLines : undefined,
     };
   }
 
-  function handleDownloadPDF() {
+  async function handleDownloadPDF() {
     if (!cert) return;
-    try { downloadCertPDF(toCertPDFData(cert)); } catch { alert('Failed to download PDF'); }
+    try {
+      if (template) await templateRef.current?.downloadPdf();
+      else downloadCertPDF(toCertPDFData(cert));
+    } catch { alert('Failed to download PDF'); }
   }
 
-  function handleDownloadPNG() {
+  async function handleDownloadPNG() {
     if (!cert) return;
-    try { downloadCertPNG(toCertPDFData(cert)); } catch { alert('Failed to download PNG'); }
+    try {
+      if (template) await templateRef.current?.downloadPng();
+      else downloadCertPNG(toCertPDFData(cert));
+    } catch { alert('Failed to download PNG'); }
   }
 
   const row = (label: string, value: React.ReactNode, mono = false) => (
@@ -111,7 +149,7 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
             <i className="fas fa-spinner fa-spin text-qsis text-2xl"></i>
             <p className="text-sm text-dark-text2 mt-3">Rendering certificate...</p>
           </div>
-        ) : valid === true && cert && previewUrl ? (
+        ) : valid === true && cert && (previewUrl || template) ? (
           <div className="space-y-5">
             <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -121,10 +159,21 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
                     <i className="fas fa-check-circle mr-1"></i>Verified
                   </span>
                 </div>
-                <p className="text-xs text-dark-text2">{cert.source === 'studio' ? 'Organization' : 'Club'}: <span className="text-qsis font-semibold">{cert.organization}</span></p>
+                <p className="text-xs text-dark-text2">
+                  {cert.source === 'contributor'
+                    ? 'Contributor Certificate'
+                    : cert.source === 'studio'
+                      ? 'Organization'
+                      : 'Club'}:{' '}
+                  <span className="text-qsis font-semibold">{cert.organization}</span>
+                </p>
               </div>
-              <img src={previewUrl} alt={`Certificate ${cert.certificateId}`}
-                className="w-full rounded-xl border border-dark-border shadow-lg object-contain" />
+              {template ? (
+                <TemplateCertificate ref={templateRef} template={template} cert={cert} />
+              ) : (
+                <img src={previewUrl} alt={`Certificate ${cert.certificateId}`}
+                  className="w-full rounded-xl border border-dark-border shadow-lg object-contain" />
+              )}
             </div>
 
             <div className="bg-dark-bg2 border border-dark-border rounded-2xl p-4 sm:p-6">
@@ -141,6 +190,30 @@ export default function CertificatePreviewView({ params }: { params: Promise<{ c
                 {row('Issued By', <IssuerBadge issuer={cert.issuer} fallback={cert.issuedBy || cert.organization} />)}
                 {row('Issued', new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))}
               </div>
+              {cert.source === 'contributor' && cert.contributionData?.totals && (
+                <div className="border-t border-dark-border pt-3 mt-4">
+                  <p className="text-[0.7rem] text-dark-text3 mb-2 font-semibold">CONTRIBUTION RECORD</p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="px-2.5 py-1 rounded-full bg-qsis/10 border border-qsis/30 text-[0.68rem] font-bold text-qsis">{cert.contributionData.totals.total} Total Contributions</span>
+                    <span className="px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-[0.68rem] font-bold text-blue-400">{cert.contributionData.totals.code + cert.contributionData.totals.data} Commits</span>
+                    <span className="px-2.5 py-1 rounded-full bg-accent/10 border border-accent/30 text-[0.68rem] font-bold text-accent">{cert.contributionData.totals.issues} Issues</span>
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[0.68rem] font-bold text-emerald-400">{cert.contributionData.totals.designs} Designs</span>
+                    <span className="px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-[0.68rem] font-bold text-purple-400">{cert.contributionData.totals.prs} PRs</span>
+                  </div>
+                  {Array.isArray(cert.contributionData.recent) && cert.contributionData.recent.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[0.7rem] text-dark-text3 mb-1 font-semibold">RECENT CONTRIBUTIONS</p>
+                      {cert.contributionData.recent.slice(0, 5).map((e: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 text-[0.72rem]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-qsis shrink-0"></span>
+                          <span className="text-dark-text2 truncate flex-1">{e.title}</span>
+                          <span className="text-dark-text3 shrink-0">{e.repoLabel}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {Array.isArray(cert.signatories) && cert.signatories.length > 0 && (
                 <div className="border-t border-dark-border pt-3 mt-4">
                   <p className="text-[0.7rem] text-dark-text3 mb-2 font-semibold">SIGNATORIES</p>

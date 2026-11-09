@@ -84,7 +84,7 @@ const CLOUD_CACHE_TTL = 60 * 1000;
 let cloudCache: { key: string; ts: number; data: CloudTeacherMap } | null = null;
 
 async function getCloudFileToken(): Promise<string | null> {
-  const appId = process.env.GITHUB_ID;
+  const appId = process.env.GITHUB_APP_ID || process.env.GITHUB_ID;
   const privateKey = (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/^"/, '').replace(/"$/, '');
   if (!appId || !privateKey) return null;
   const jwt = makeJwt(appId, privateKey);
@@ -191,7 +191,7 @@ function parseCourseFolder(name: string): { code: string; title: string } | null
 }
 
 export async function fetchCoursesFromGitHub(deptId: string, semester: string): Promise<{ code: string; title: string }[]> {
-  const appId = process.env.GITHUB_ID;
+  const appId = process.env.GITHUB_APP_ID || process.env.GITHUB_ID;
   const privateKey = (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/^"/, '').replace(/"$/, '');
   if (!appId || !privateKey) return [];
 
@@ -220,7 +220,7 @@ export async function fetchCoursesFromGitHub(deptId: string, semester: string): 
 }
 
 export async function createCourseFolder(deptId: string, semester: string, courseCode: string, courseTitle: string): Promise<{ success: boolean; error?: string }> {
-  const appId = process.env.GITHUB_ID;
+  const appId = process.env.GITHUB_APP_ID || process.env.GITHUB_ID;
   const privateKey = (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/^"/, '').replace(/"$/, '');
   if (!appId || !privateKey) return { success: false, error: 'GitHub App not configured' };
 
@@ -237,7 +237,13 @@ export async function createCourseFolder(deptId: string, semester: string, cours
 
     const refRes = await api('GET', `/repos/${config.owner}/${config.repo}/git/refs/heads/main`, null, tok);
     if (refRes.s !== 200) return { success: false, error: 'Failed to get ref' };
-    let currentSha = refRes.d.object.sha;
+    const currentSha = refRes.d.object.sha;
+
+    // The trees API needs a *tree* SHA for base_tree, not a commit SHA.
+    const baseCommitRes = await api('GET', `/repos/${config.owner}/${config.repo}/git/commits/${currentSha}`, null, tok);
+    if (baseCommitRes.s !== 200) return { success: false, error: 'Failed to read commit' };
+    const baseTreeSha = baseCommitRes.d.tree?.sha;
+    if (!baseTreeSha) return { success: false, error: 'Failed to read tree' };
 
     const folderName = `${safeCode} - ${safeTitle}`;
     const subfolders = ['Mid/NOTES', 'Mid/Previous Questions', 'Final/NOTES', 'Final/Previous Questions', 'sheet', 'Syllabus', 'Other'];
@@ -245,10 +251,10 @@ export async function createCourseFolder(deptId: string, semester: string, cours
     const paths = subfolders.map(sf => `${config.uploadPath}/${deptFolder}/${safeSem}/${folderName}/${sf}/.gitkeep`);
 
     const treeRes = await api('POST', `/repos/${config.owner}/${config.repo}/git/trees`, {
-      base_tree: currentSha,
+      base_tree: baseTreeSha,
       tree: paths.map(p => ({ path: p, mode: '100644', type: 'blob', sha: 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391' })),
     }, tok);
-    if (treeRes.s !== 201) return { success: false, error: 'Failed to create tree' };
+    if (treeRes.s !== 201) return { success: false, error: `Failed to create tree (${treeRes.s})` };
 
     const commitRes = await api('POST', `/repos/${config.owner}/${config.repo}/git/commits`, {
       message: `Add course folder: ${folderName} in ${deptFolder}/${safeSem}`,
@@ -265,7 +271,7 @@ export async function createCourseFolder(deptId: string, semester: string, cours
 }
 
 export async function createDepartmentFolders(deptId: string): Promise<{ success: boolean; created: number; error?: string }> {
-  const appId = process.env.GITHUB_ID;
+  const appId = process.env.GITHUB_APP_ID || process.env.GITHUB_ID;
   const privateKey = (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/^"/, '').replace(/"$/, '');
 
   if (!appId || !privateKey) {
@@ -282,11 +288,17 @@ export async function createDepartmentFolders(deptId: string): Promise<{ success
 
     const refRes = await api('GET', `/repos/${config.owner}/${config.repo}/git/refs/heads/main`, null, tok);
     if (refRes.s !== 200) return { success: false, created: 0, error: 'Failed to get ref' };
-    let currentSha = refRes.d.object.sha;
+    let currentCommitSha = refRes.d.object.sha;
+
+    // Resolve the commit's tree SHA — the trees API expects a tree SHA.
+    const baseCommitRes = await api('GET', `/repos/${config.owner}/${config.repo}/git/commits/${currentCommitSha}`, null, tok);
+    if (baseCommitRes.s !== 200) return { success: false, created: 0, error: 'Failed to read commit' };
+    let currentTreeSha = baseCommitRes.d.tree?.sha;
+    if (!currentTreeSha) return { success: false, created: 0, error: 'Failed to read tree' };
 
     // Get existing tree
-    const treeRes = await api('GET', `/repos/${config.owner}/${config.repo}/git/trees/${currentSha}?recursive=1`, null, tok);
-    const existing = new Set(treeRes.d.tree.map((f: any) => f.path));
+    const treeRes = await api('GET', `/repos/${config.owner}/${config.repo}/git/trees/${currentTreeSha}?recursive=1`, null, tok);
+    const existing = new Set((treeRes.d?.tree || []).map((f: any) => f.path));
 
     // Build paths — only semester folders and related-sources (course subfolders are created on demand)
     const paths: string[] = [];
@@ -317,7 +329,7 @@ export async function createDepartmentFolders(deptId: string): Promise<{ success
       }));
 
       const treeRes2 = await api('POST', `/repos/${config.owner}/${config.repo}/git/trees`, {
-        base_tree: currentSha,
+        base_tree: currentTreeSha,
         tree: entries,
       }, tok);
 
@@ -326,17 +338,18 @@ export async function createDepartmentFolders(deptId: string): Promise<{ success
       const commitRes = await api('POST', `/repos/${config.owner}/${config.repo}/git/commits`, {
         message: `Create folder structure for ${deptId} (batch ${batchNum}/${totalBatches})`,
         tree: treeRes2.d.sha,
-        parents: [currentSha],
+        parents: [currentCommitSha],
       }, tok);
 
       if (commitRes.s !== 201) continue;
 
-      currentSha = commitRes.d.sha;
+      currentCommitSha = commitRes.d.sha;
+      currentTreeSha = treeRes2.d.sha;
       created += batch.length;
     }
 
     if (created > 0) {
-      await api('PATCH', `/repos/${config.owner}/${config.repo}/git/refs/heads/main`, { sha: currentSha, force: true }, tok);
+      await api('PATCH', `/repos/${config.owner}/${config.repo}/git/refs/heads/main`, { sha: currentCommitSha, force: true }, tok);
     }
 
     return { success: true, created };

@@ -65,6 +65,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       return NextResponse.json({ error: 'No certificates provided' }, { status: 400 });
     }
 
+    let defaultTemplateId: string | null = null;
+    try {
+      const tpl = await prisma.certificateTemplate.findFirst({
+        where: { scope: 'studio', isDefault: true },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
+      }) || await prisma.certificateTemplate.findFirst({
+        where: { scope: 'global', isDefault: true },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
+      });
+      defaultTemplateId = tpl?.id || null;
+    } catch {}
+
     const created = [];
     for (const cert of certificates) {
       const uniId = normalizeUniversityId(cert.universityId);
@@ -87,6 +101,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
           eventName: cert.eventName?.trim() || null,
           servicePeriod: cert.servicePeriod?.trim() || null,
           signatories: signatoriesJson,
+          templateId: cert.templateId || defaultTemplateId,
           issuedBy: email,
         },
       });

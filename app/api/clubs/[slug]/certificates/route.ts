@@ -143,6 +143,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       return NextResponse.json({ error: 'Too many certificates in one batch (max 500). Please split the file.' }, { status: 400 });
     }
 
+    // Resolve the design used when the caller doesn't pick one explicitly:
+    // a club-scoped default wins, then a global default.
+    let defaultTemplateId: string | null = null;
+    try {
+      const tpl = await prisma.certificateTemplate.findFirst({
+        where: { scope: 'club', isDefault: true },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
+      }) || await prisma.certificateTemplate.findFirst({
+        where: { scope: 'global', isDefault: true },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
+      });
+      defaultTemplateId = tpl?.id || null;
+    } catch {}
+
     const created: any[] = [];
     const results: Array<{ index: number; status: 'success' | 'error'; certificateId?: string; error?: string }> = [];
     for (let i = 0; i < certificates.length; i++) {
@@ -173,6 +189,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
                 signatories: signatories ? JSON.stringify(signatories) : null,
                 email: typeof cert.email === 'string' && cert.email.trim() ? cert.email.trim().toLowerCase() : null,
                 issuedBy: email,
+                templateId: cert.templateId || defaultTemplateId,
               },
             });
           } catch (e: any) {
@@ -250,6 +267,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
         eventName: eventName || null,
         servicePeriod: servicePeriod || null,
         signatories: signatories ? JSON.stringify(signatories) : null,
+        templateId: (data as any)?.templateId || null,
       },
     });
 

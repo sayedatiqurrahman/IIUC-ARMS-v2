@@ -41,6 +41,33 @@ async function getIssuer(prisma: PrismaClient, issuedBy: string) {
   };
 }
 
+async function getTemplate(prisma: PrismaClient, templateId?: string | null) {
+  if (!templateId) return null;
+  try {
+    return await prisma.certificateTemplate.findUnique({
+      where: { id: templateId },
+      select: { id: true, name: true, scope: true, html: true, css: true },
+    });
+  } catch {
+    return null;
+  }
+}
+
+function formatPeriod(first?: string | null, last?: string | null): string | null {
+  const fmt = (iso?: string | null) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  };
+  const a = fmt(first);
+  const b = fmt(last);
+  if (a && b && a !== b) return `${a} – ${b}`;
+  if (a) return `Since ${a}`;
+  if (b) return `Until ${b}`;
+  return null;
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ certificateId: string }> }) {
   const rl = rateLimit(_req, RATE_LIMITS.faculty);
   if (!rl.success) return rl.response!;
@@ -77,6 +104,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cer
         valid: true,
         source: 'club',
         theme,
+        template: await getTemplate(prisma, cert.templateId),
         certificate: {
           certificateId: cert.certificateId,
           memberName: cert.memberName,
@@ -107,6 +135,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cer
       return NextResponse.json({
         valid: true,
         source: 'studio',
+        template: await getTemplate(prisma, studioCert.templateId),
         certificate: {
           certificateId: studioCert.certificateId,
           memberName: studioCert.memberName,
@@ -124,6 +153,52 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cer
           organizationLogo: studioCert.org.logoUrl,
           organizationType: studioCert.org.type,
           organizationSlug: studioCert.org.slug,
+        },
+      });
+    }
+
+    // Third: check auto-generated contributor certificates
+    const contributorCert = await prisma.contributorCertificate.findUnique({
+      where: { certificateId: upperId },
+    });
+    if (contributorCert) {
+      let snapshot: any = null;
+      let signatories: any[] = [];
+      try { snapshot = JSON.parse(contributorCert.contributionData || 'null'); } catch {}
+      try { signatories = JSON.parse(contributorCert.signatories || '[]'); } catch {}
+      return NextResponse.json({
+        valid: true,
+        source: 'contributor',
+        theme: null,
+        template: await getTemplate(prisma, contributorCert.templateId),
+        certificate: {
+          certificateId: contributorCert.certificateId,
+          memberName: contributorCert.memberName,
+          universityId: contributorCert.universityId || contributorCert.githubLogin,
+          department: contributorCert.department || 'IIUC-ARMS Contributors',
+          session: null,
+          post: contributorCert.role || 'Contributor',
+          eventName: 'Open Source Contribution',
+          servicePeriod: formatPeriod(snapshot?.firstContribution, snapshot?.lastContribution),
+          signatories,
+          issuedAt: contributorCert.issuedAt,
+          issuedBy: contributorCert.issuedBy,
+          issuer: signatories.find((s: any) => s?.name)
+            ? {
+                userId: '',
+                name: signatories.find((s: any) => s?.name).name,
+                title: signatories.find((s: any) => s?.name).title || signatories.find((s: any) => s?.name).designation || null,
+                department: null,
+                clubMemberships: [],
+              }
+            : null,
+          organization: 'IIUC-ARMS',
+          organizationLogo: '/iiuc-logo.png',
+          organizationSlug: 'iiuc-arms',
+          githubLogin: contributorCert.githubLogin,
+          githubUrl: contributorCert.githubUrl,
+          avatarUrl: contributorCert.avatarUrl,
+          contributionData: snapshot,
         },
       });
     }

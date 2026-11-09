@@ -6,6 +6,7 @@ import { config } from '@/lib/config';
 import StatTip from './StatTip';
 import SystemRoleBadge from './SystemRoleBadge';
 import ContactButton from './ContactButton';
+import CertificateButton from './CertificateButton';
 
 function semesterLabel(id: string) {
   if (id === 'graduated') return 'Grad';
@@ -84,6 +85,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           >
             <i className="fas fa-circle-info text-[0.7rem]"></i>
           </button>
+          <CertificateButton c={c} />
         </div>
 
         {/* Row 2: Dept + Semester + Section + Contact */}
@@ -119,6 +121,7 @@ export default function RankedCard({ c, rank, settings, onShowHistory }: { c: an
           <button onClick={() => onShowHistory?.(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all flex-shrink-0" title="History">
             <i className="fas fa-circle-info text-[0.6rem]"></i>
           </button>
+          <CertificateButton c={c} />
         </div>
         {/* Badges */}
         <div className="flex flex-wrap items-center gap-1 mb-1.5 ml-[46px]">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/lib/store';
 
 const ORG_TYPES = [
@@ -13,6 +14,7 @@ const ORG_TYPES = [
 ];
 
 export default function CertificateStudioPage() {
+  const router = useRouter();
   const profile = useAppStore(s => s.profile);
   const [orgs, setOrgs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,10 +76,16 @@ export default function CertificateStudioPage() {
               Issue verifiable certificates under your organization, batch, or society. Every certificate gets a unique ID and QR code.
             </p>
           </div>
-          <button onClick={() => setShowCreate(true)}
-            className="rounded-xl bg-qsis px-4 py-2 text-[0.78rem] font-semibold text-white transition hover:brightness-110 cursor-pointer">
-            <i className="fas fa-plus mr-1"></i>New Organization
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => router.push('/studio/certificates/templates')}
+              className="rounded-xl border border-qsis/40 bg-qsis/10 px-4 py-2 text-[0.78rem] font-semibold text-qsis transition hover:bg-qsis/20 cursor-pointer">
+              <i className="fas fa-palette mr-1"></i>Design Templates
+            </button>
+            <button onClick={() => setShowCreate(true)}
+              className="rounded-xl bg-qsis px-4 py-2 text-[0.78rem] font-semibold text-white transition hover:brightness-110 cursor-pointer">
+              <i className="fas fa-plus mr-1"></i>New Organization
+            </button>
+          </div>
         </div>
       </div>
 

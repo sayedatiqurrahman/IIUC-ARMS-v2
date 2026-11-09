@@ -5,6 +5,7 @@ import { Settings } from './types';
 import SystemRoleBadge from './SystemRoleBadge';
 import SocialIcons from './SocialIcons';
 import ContactButton from './ContactButton';
+import CertificateButton from './CertificateButton';
 
 export default function GridCard({ c, settings, onShowHistory }: { c: any; settings: Settings; onShowHistory?: (c: any) => void }) {
   const isDev = c.v2Contributions > 0;
@@ -105,6 +106,7 @@ export default function GridCard({ c, settings, onShowHistory }: { c: any; setti
             <button onClick={() => onShowHistory?.(c)} className="w-5 h-5 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
               <i className="fas fa-circle-info text-[0.6rem]"></i>
             </button>
+            <CertificateButton c={c} />
             <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="w-5 h-5 rounded bg-dark-bg flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="GitHub">
               <i className="fab fa-github text-[0.6rem]"></i>
             </a>

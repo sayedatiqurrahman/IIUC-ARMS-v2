@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { config } from '@/lib/config';
 import StatTip from './StatTip';
 import SocialIcons from './SocialIcons';
+import CertificateButton from './CertificateButton';
 
 const CODE_TIP = 'Commits to the IIUC-ARMS-v2 source-code repo. Every commit you push there counts as 1.';
 const DATA_TIP = 'Files you uploaded to the Academic Files data repo. Every file you upload is committed to that repo and counts as 1.';
@@ -82,6 +83,7 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
           <button onClick={() => onShowHistory?.(c)} className="w-7 h-7 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text2 hover:text-qsis hover:bg-qsis/10 transition-all" title="Contribution history">
             <i className="fas fa-circle-info text-[0.7rem]"></i>
           </button>
+          <CertificateButton c={c} />
         </div>
         <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
           <span className="px-2 py-0.5 rounded-full bg-qsis/25 text-qsis text-[0.6rem] font-bold ring-1 ring-qsis/40">
@@ -126,6 +128,7 @@ export default function FounderCard({ c, onShowHistory }: { c: any; onShowHistor
             <button onClick={() => onShowHistory?.(c)} className="w-6 h-6 rounded-lg bg-dark-bg3 flex items-center justify-center text-dark-text3 hover:text-qsis hover:bg-qsis/10 transition-all" title="History">
               <i className="fas fa-circle-info text-[0.65rem]"></i>
             </button>
+            <CertificateButton c={c} />
             <span className="text-[0.65rem] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full" title={CODE_TIP}>
               <i className="fas fa-laptop-code mr-1"></i>{c.v2Contributions} Code
             </span>
